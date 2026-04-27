@@ -5,6 +5,7 @@ const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 
 export const supabase = createClient(supabaseUrl, supabaseKey)
 
+// Storage yardımcıları — Supabase kullanır
 export async function dbLoad(key, def) {
   try {
     const { data, error } = await supabase
