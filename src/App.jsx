@@ -1,3 +1,33 @@
+export default function Root() {
+  const [giris, setGiris] = useState(false);
+  if (!giris) return <GirisEkrani onGiris={()=>setGiris(true)} />;
+  return <Atolye />;
+}
+
+function Atolye() {
+function GirisEkrani({ onGiris }) {
+  const [sifre, setSifre] = useState("");
+  const [hata, setHata] = useState(false);
+  const kontrol = () => {
+    const aktifSifre = localStorage.getItem("atolye_sifre") || "19671967*Mm";
+    if (sifre === aktifSifre) { onGiris(); }
+    else setHata(true);
+  };
+  return (
+    <div style={{ minHeight:"100vh", background:"#110f0a", display:"flex", alignItems:"center", justifyContent:"center" }}>
+      <div style={{ background:"rgba(201,168,76,0.04)", border:"1px solid rgba(201,168,76,0.15)", borderRadius:16, padding:"40px 48px", textAlign:"center", maxWidth:360, width:"90%" }}>
+        <div style={{ fontSize:28, marginBottom:8 }}>💎</div>
+        <div style={{ fontSize:18, fontWeight:700, color:"#c9a84c", marginBottom:4 }}>Atölye Koleksiyon</div>
+        <div style={{ fontSize:11, color:"#665d4a", marginBottom:28 }}>Sisteme giriş yapın</div>
+        <input type="password" value={sifre} onChange={e=>{ setSifre(e.target.value); setHata(false); }}
+          onKeyDown={e=>e.key==="Enter"&&kontrol()} placeholder="Şifre" autoFocus
+          style={{ width:"100%", background:"rgba(0,0,0,0.3)", border:"1px solid "+(hata?"#e85a4f":"rgba(201,168,76,0.2)"), borderRadius:8, padding:"10px 14px", color:"#e8dcc8", fontSize:14, outline:"none", boxSizing:"border-box", marginBottom:8 }}/>
+        {hata && <div style={{ color:"#e85a4f", fontSize:11, marginBottom:8 }}>Şifre yanlış</div>}
+        <button onClick={kontrol} style={{ width:"100%", background:"rgba(201,168,76,0.15)", border:"1px solid rgba(201,168,76,0.3)", borderRadius:8, padding:"10px", color:"#c9a84c", fontSize:14, fontWeight:700, cursor:"pointer" }}>Giriş Yap</button>
+      </div>
+    </div>
+  );
+}
 import { dbLoad, dbSave } from "./supabase.js";
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 
