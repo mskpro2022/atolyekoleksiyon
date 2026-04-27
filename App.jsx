@@ -1,3 +1,4 @@
+import { dbLoad, dbSave } from "./supabase.js";
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 
 const uid = () => "x" + Date.now() + Math.random().toString(36).substr(2, 5);
@@ -144,8 +145,8 @@ function hesapla(m, secilenAyar, altinKgUSD, varsayilanMly) {
   };
 }
 
-async function ld(k, f) { try { const r = await window.storage.get(k, true); return r && r.value ? JSON.parse(r.value) : f; } catch { return f; } }
-async function sv(k, d) { try { await window.storage.set(k, JSON.stringify(d), true); } catch { } }
+async function ld(k, f) { try { const r = await dbLoad(k, f); return r ?? f; } catch { return f; } }
+async function sv(k, d) { try { await dbSave(k, d); } catch(e) { console.error("sv error:", e); } }
 
 function resizeImg(file) {
   return new Promise(resolve => {
@@ -1322,7 +1323,8 @@ function Atolye() {
                   const m = await ld("v7m", []);
                   const s = await ld("v7s", []);
                   const u = await ld("v7u", {});
-                  const data = { kollar:k, modeller:m, siparisler:s, musteriler:u, v: Date.now() };
+                  const ay = await ld("v7ay", {});
+                  const data = { kollar:k, modeller:m, siparisler:s, musteriler:u, ayarlar:ay, v: Date.now() };
                   const json = JSON.stringify(data, null, 2);
                   const blob = new Blob([json], { type: "application/json" });
                   const url = URL.createObjectURL(blob);
@@ -2833,6 +2835,18 @@ function Atolye() {
               if (d.kollar)     svK(d.kollar);
               if (d.siparisler) svS(d.siparisler);
               if (d.musteriler) svMus(d.musteriler);
+              // Ayarlar — özel taşlar, kategoriler, etiketler vs.
+              if (d.ayarlar) {
+                sv("v7ay", d.ayarlar);
+                if (d.ayarlar.ozelTaslar?.length) setOzelTaslar(d.ayarlar.ozelTaslar);
+                if (d.ayarlar.kategoriler?.length) setAyarKategoriler(d.ayarlar.kategoriler);
+                if (d.ayarlar.etiketler?.length) setAyarEtiketler(d.ayarlar.etiketler);
+                if (d.ayarlar.kayitliNotlar?.length) setKayitliNotlar(d.ayarlar.kayitliNotlar);
+                if (d.ayarlar.varsAltinKg) setAyarVarsAltinKg(d.ayarlar.varsAltinKg);
+                if (d.ayarlar.varsMc) setAyarVarsMc(d.ayarlar.varsMc);
+                if (d.ayarlar.varsIscilik) setAyarVarsIscilik(d.ayarlar.varsIscilik);
+                if (d.ayarlar.varsIscilikBirim) setAyarVarsIscilikBirim(d.ayarlar.varsIscilikBirim);
+              }
               setShowYedek(false);
               setYedekJson("");
             } catch {}
