@@ -1,33 +1,3 @@
-export default function Root() {
-  const [giris, setGiris] = useState(false);
-  if (!giris) return <GirisEkrani onGiris={()=>setGiris(true)} />;
-  return <Atolye />;
-}
-
-function Atolye() {
-function GirisEkrani({ onGiris }) {
-  const [sifre, setSifre] = useState("");
-  const [hata, setHata] = useState(false);
-  const kontrol = () => {
-    const aktifSifre = localStorage.getItem("atolye_sifre") || "19671967*Mm";
-    if (sifre === aktifSifre) { onGiris(); }
-    else setHata(true);
-  };
-  return (
-    <div style={{ minHeight:"100vh", background:"#110f0a", display:"flex", alignItems:"center", justifyContent:"center" }}>
-      <div style={{ background:"rgba(201,168,76,0.04)", border:"1px solid rgba(201,168,76,0.15)", borderRadius:16, padding:"40px 48px", textAlign:"center", maxWidth:360, width:"90%" }}>
-        <div style={{ fontSize:28, marginBottom:8 }}>💎</div>
-        <div style={{ fontSize:18, fontWeight:700, color:"#c9a84c", marginBottom:4 }}>Atölye Koleksiyon</div>
-        <div style={{ fontSize:11, color:"#665d4a", marginBottom:28 }}>Sisteme giriş yapın</div>
-        <input type="password" value={sifre} onChange={e=>{ setSifre(e.target.value); setHata(false); }}
-          onKeyDown={e=>e.key==="Enter"&&kontrol()} placeholder="Şifre" autoFocus
-          style={{ width:"100%", background:"rgba(0,0,0,0.3)", border:"1px solid "+(hata?"#e85a4f":"rgba(201,168,76,0.2)"), borderRadius:8, padding:"10px 14px", color:"#e8dcc8", fontSize:14, outline:"none", boxSizing:"border-box", marginBottom:8 }}/>
-        {hata && <div style={{ color:"#e85a4f", fontSize:11, marginBottom:8 }}>Şifre yanlış</div>}
-        <button onClick={kontrol} style={{ width:"100%", background:"rgba(201,168,76,0.15)", border:"1px solid rgba(201,168,76,0.3)", borderRadius:8, padding:"10px", color:"#c9a84c", fontSize:14, fontWeight:700, cursor:"pointer" }}>Giriş Yap</button>
-      </div>
-    </div>
-  );
-}
 import { dbLoad, dbSave } from "./supabase.js";
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 
@@ -176,7 +146,7 @@ function hesapla(m, secilenAyar, altinKgUSD, varsayilanMly) {
 }
 
 async function ld(k, f) { try { const r = await dbLoad(k, f); return r ?? f; } catch { return f; } }
-async function sv(k, d) { try { await dbSave(k, d); } catch(e) { console.error('sv error:', e); } }
+async function sv(k, d) { try { await dbSave(k, d); } catch(e) { console.error("sv error:", e); } }
 
 function resizeImg(file) {
   return new Promise(resolve => {
@@ -669,7 +639,10 @@ function AiIsimlendir({ foto, onResult }) {
       const kat = KATEGORILER.map(k => k.id).join(", ");
       const response = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "anthropic-dangerous-direct-browser-access": "true"
+        },
         body: JSON.stringify({
           model: "claude-sonnet-4-20250514",
           max_tokens: 80,
@@ -777,7 +750,69 @@ function OnizlemeBox({ m, altinKgUSD, mc }) {
   );
 }
 
-export default function Atolye() {
+function GirisEkrani({ onGiris }) {
+  const [sifre, setSifre] = useState("");
+  const [hata, setHata] = useState(false);
+  const kontrol = () => {
+    const aktifSifre = localStorage.getItem("atolye_sifre") || "19671967*Mm";
+    if (sifre === aktifSifre) { onGiris(); }
+    else setHata(true);
+  };
+  return (
+    <div style={{ minHeight:"100vh", background:"#110f0a", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"'Segoe UI',Arial,sans-serif" }}>
+      <div style={{ background:"rgba(201,168,76,0.04)", border:"1px solid rgba(201,168,76,0.15)", borderRadius:16, padding:"40px 48px", textAlign:"center", maxWidth:360, width:"90%" }}>
+        <div style={{ fontSize:28, marginBottom:8 }}>💎</div>
+        <div style={{ fontSize:18, fontWeight:700, color:"#c9a84c", marginBottom:4 }}>Atölye Koleksiyon</div>
+        <div style={{ fontSize:11, color:"#665d4a", marginBottom:28 }}>Sisteme giriş yapın</div>
+        <input type="password" value={sifre} onChange={e=>{ setSifre(e.target.value); setHata(false); }}
+          onKeyDown={e=>e.key==="Enter"&&kontrol()}
+          placeholder="Şifre" autoFocus
+          style={{ width:"100%", background:"rgba(0,0,0,0.3)", border:"1px solid "+(hata?"#e85a4f":"rgba(201,168,76,0.2)"), borderRadius:8, padding:"10px 14px", color:"#e8dcc8", fontSize:14, outline:"none", boxSizing:"border-box", marginBottom:8 }}/>
+        {hata && <div style={{ color:"#e85a4f", fontSize:11, marginBottom:8 }}>Şifre yanlış</div>}
+        <button onClick={kontrol} style={{ width:"100%", background:"rgba(201,168,76,0.15)", border:"1px solid rgba(201,168,76,0.3)", borderRadius:8, padding:"10px", color:"#c9a84c", fontSize:14, fontWeight:700, cursor:"pointer" }}>Giriş Yap</button>
+      </div>
+    </div>
+  );
+}
+
+function SifreDegistir() {
+  const IS2 = { background:"rgba(0,0,0,0.25)", border:"1px solid rgba(201,168,76,0.15)", borderRadius:7, padding:"7px 10px", color:"#e8dcc8", fontSize:11, outline:"none", width:"100%" };
+  const [eskiSifre,  setEskiSifre]  = useState("");
+  const [yeniSifre,  setYeniSifre]  = useState("");
+  const [yeniSifre2, setYeniSifre2] = useState("");
+  const [mesaj,      setMesaj]      = useState(null);
+  const kaydet = () => {
+    const aktif = localStorage.getItem("atolye_sifre") || "19671967*Mm";
+    if (eskiSifre !== aktif) { setMesaj({ok:false,txt:"Mevcut şifre yanlış!"}); return; }
+    if (yeniSifre.length < 6) { setMesaj({ok:false,txt:"En az 6 karakter olmalı!"}); return; }
+    if (yeniSifre !== yeniSifre2) { setMesaj({ok:false,txt:"Şifreler eşleşmiyor!"}); return; }
+    localStorage.setItem("atolye_sifre", yeniSifre);
+    setEskiSifre(""); setYeniSifre(""); setYeniSifre2("");
+    setMesaj({ok:true,txt:"Şifre değiştirildi!"});
+    setTimeout(()=>setMesaj(null), 3000);
+  };
+  return (
+    <div style={{ background:"rgba(232,90,79,0.03)", border:"1px solid rgba(232,90,79,0.1)", borderRadius:12, padding:"14px 16px", marginBottom:14 }}>
+      <div style={{ fontSize:10, fontWeight:700, color:"#e85a4f", marginBottom:12 }}>🔒 ŞİFRE DEĞİŞTİR</div>
+      <div style={{ display:"flex", flexDirection:"column", gap:8, maxWidth:320 }}>
+        <input type="password" value={eskiSifre}  onChange={e=>setEskiSifre(e.target.value)}  placeholder="Mevcut şifre"      style={IS2}/>
+        <input type="password" value={yeniSifre}  onChange={e=>setYeniSifre(e.target.value)}  placeholder="Yeni şifre"         style={IS2}/>
+        <input type="password" value={yeniSifre2} onChange={e=>setYeniSifre2(e.target.value)} placeholder="Yeni şifre (tekrar)" style={IS2}/>
+        {mesaj && <div style={{ fontSize:9, color:mesaj.ok?"#6abf69":"#e85a4f", fontWeight:700 }}>{mesaj.txt}</div>}
+        <button onClick={kaydet} style={{ background:"rgba(201,168,76,0.12)", border:"1px solid rgba(201,168,76,0.25)", borderRadius:7, padding:"7px 14px", color:"#c9a84c", fontSize:10, fontWeight:700, cursor:"pointer" }}>Şifreyi Değiştir</button>
+      </div>
+    </div>
+  );
+}
+
+export default function Root() {
+  const [giris, setGiris] = useState(false);
+  if (!giris) return <GirisEkrani onGiris={()=>setGiris(true)} />;
+  return <Atolye />;
+}
+
+function Atolye() {
+
   const [kollar,    setKollar]    = useState([]);
   const [modeller,  setModeller]  = useState([]);
   const [siparisler,setSiparisler]= useState([]);
@@ -2400,6 +2435,9 @@ export default function Atolye() {
           <div style={{ animation:"fadein .3s", maxWidth:700 }}>
             <h2 style={{ margin:"0 0 16px", fontSize:15, fontWeight:700, color:"#e8dcc8" }}>⚙ Ayarlar</h2>
 
+            {/* ŞİFRE DEĞİŞTİR */}
+            <SifreDegistir />
+
             {/* VARSAYILAN DEGERLER */}
             <div style={{ background:"rgba(201,168,76,0.04)", border:"1px solid rgba(201,168,76,0.1)", borderRadius:12, padding:"14px 16px", marginBottom:14 }}>
               <div style={{ fontSize:10, fontWeight:700, color:GOLD, marginBottom:12 }}>💰 VARSAYILAN DEGERLER</div>
@@ -2878,8 +2916,14 @@ export default function Atolye() {
               setFGram(String(a.gram||""));
               setFRefAyar(a.refAyar||"14K");
               setFTasGram(String(a.tasGram||""));
+              setFTaslar(a.taslar||[]);
               setFTasBoy(a.tasBoy||"");
+              setFTasSekil(a.tasSekil||"ROUND");
+              setFTasTur(a.tasTur||"N");
+              setFTasBoyut(a.tasBoyut||"");
+              setFTasAdet(String(a.tasAdet||""));
               setFIscilikDolar(String(a.iscilikDolar||""));
+              setFIscilikBirim(a.iscilikBirim||"dolar");
               setFEkMaliyet(String(a.ekMaliyet||""));
               setFMadenC(String(a.madenCarpan||""));
               setFKategori(a.kategori||"yuzuk");
