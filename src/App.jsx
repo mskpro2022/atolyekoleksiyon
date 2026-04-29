@@ -641,6 +641,8 @@ function AiIsimlendir({ foto, onResult }) {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          "x-api-key": import.meta.env.VITE_ANTHROPIC_KEY || "",
+          "anthropic-version": "2023-06-01",
           "anthropic-dangerous-direct-browser-access": "true"
         },
         body: JSON.stringify({
@@ -936,14 +938,35 @@ function Atolye() {
     };
 
     const k = await tryKeys(["v7k", "v5k", "atl5-k"], []);
-    const m = await tryKeys(["v7m", "v5m", "atl5-m"], []);
+    // Modelleri parçalı yükle
+    // Önce chunk sistemi dene, sonra eski tek parça
+    let m = [];
+    const mMeta = await ld("v7m_meta", null);
+    if (mMeta && mMeta.chunks) {
+      const allChunks = await Promise.all(
+        Array.from({length: mMeta.chunks}, (_, i) => ld("v7m_" + i, []))
+      );
+      m = allChunks.flat();
+    } else {
+      // Meta yoksa chunk'ları direkt dene (0'dan başla, null gelene kadar)
+      const chunkList = [];
+      for (let i = 0; i < 20; i++) {
+        const chunk = await ld("v7m_chunk_" + i, null);
+        if (chunk === null) break;
+        chunkList.push(chunk);
+      }
+      if (chunkList.length > 0) {
+        m = chunkList.flat();
+      } else {
+        m = await tryKeys(["v7m", "v5m", "atl5-m"], []);
+      }
+    }
     const s = await tryKeys(["v7s", "v5s", "atl5-s"], []);
     const c = await tryKeysObj(["v7c", "v5c", "atl5-c"], {});
     const u = await tryKeys(["v7u"], {}) || {};
 
     // Bulduklarımızı v7 key'lerine kaydet (shared)
     if (k.length > 0) await sv("v7k", k);
-    if (m.length > 0) await sv("v7m", m);
     if (s.length > 0) await sv("v7s", s);
 
     const ay = await ld("v7ay", {});
@@ -962,11 +985,12 @@ function Atolye() {
 
   const svK = useCallback(async d => { setKollar(d);    await sv("v7k", d); }, []);
   // Fotoğraf sıkıştırma — kaliteyi koruyarak boyutu küçültür
-  const fotoSikistir = (base64, maxW=800, quality=0.82) => new Promise(resolve => {
-    if (!base64 || base64.length < 50000) { resolve(base64); return; }
+  const fotoSikistir = (base64, maxW=1200, quality=0.90) => new Promise(resolve => {
+    if (!base64 || base64.length < 100000) { resolve(base64); return; } // 100KB altını dokunma
     const img = new Image();
     img.onload = () => {
       const ratio = Math.min(maxW/img.width, maxW/img.height, 1);
+      if (ratio >= 1) { resolve(base64); return; } // Zaten küçükse dokunma
       const w = Math.round(img.width*ratio), h = Math.round(img.height*ratio);
       const canvas = document.createElement("canvas");
       canvas.width = w; canvas.height = h;
@@ -979,14 +1003,13 @@ function Atolye() {
 
   const svM = useCallback(async d => {
     setModeller(d);
-    // Fotoğrafları sıkıştırarak kaydet
-    const sikistirilmis = await Promise.all(d.map(async m => ({
-      ...m,
-      foto: await fotoSikistir(m.foto)
-    })));
-    await sv("v7m", sikistirilmis);
-    // Sıkıştırılmış fotoları state'e de yansıt
-    setModeller(sikistirilmis);
+    try {
+      const chunkSize = 40;
+      const chunks = [];
+      for (let i = 0; i < d.length; i += chunkSize) chunks.push(d.slice(i, i + chunkSize));
+      await Promise.all(chunks.map((chunk, i) => sv("v7m_" + i, chunk)));
+      await sv("v7m_meta", { chunks: chunks.length, total: d.length });
+    } catch(e) { console.error("svM error:", e); }
   }, []);
   const svS = useCallback(async d => { setSiparisler(d); await sv("v7s", d); }, []);
 
@@ -1323,7 +1346,8 @@ function Atolye() {
                   const m = await ld("v7m", []);
                   const s = await ld("v7s", []);
                   const u = await ld("v7u", {});
-                  const data = { kollar:k, modeller:m, siparisler:s, musteriler:u, v: Date.now() };
+                  const ay = await ld("v7ay", {});
+                  const data = { kollar:k, modeller:m, siparisler:s, musteriler:u, ayarlar:ay, v: Date.now() };
                   const json = JSON.stringify(data, null, 2);
                   const blob = new Blob([json], { type: "application/json" });
                   const url = URL.createObjectURL(blob);
@@ -2827,21 +2851,48 @@ function Atolye() {
           }
         })()}
         <button
-          onClick={() => {
+          onClick={async () => {
             try {
               const d = JSON.parse(yedekJson);
-              if (d.modeller)   svM(d.modeller);
-              if (d.kollar)     svK(d.kollar);
-              if (d.siparisler) svS(d.siparisler);
-              if (d.musteriler) svMus(d.musteriler);
+              setDriveYukleniyor("yukle");
+              // Sırayla kaydet — hepsini bekle
+              if (d.kollar)     await svK(d.kollar);
+              if (d.siparisler) await svS(d.siparisler);
+              if (d.musteriler) await svMus(d.musteriler);
+              // Modelleri parça parça kaydet
+              if (d.modeller) {
+                setModeller(d.modeller);
+                const chunkSize = 40;
+                const chunks = [];
+                for (let i = 0; i < d.modeller.length; i += chunkSize) chunks.push(d.modeller.slice(i, i + chunkSize));
+                await Promise.all(chunks.map((chunk, i) => sv("v7m_" + i, chunk)));
+                await sv("v7m_meta", { chunks: chunks.length, total: d.modeller.length });
+              }
+              // Ayarlar
+              if (d.ayarlar) {
+                await sv("v7ay", d.ayarlar);
+                if (d.ayarlar.ozelTaslar?.length) setOzelTaslar(d.ayarlar.ozelTaslar);
+                if (d.ayarlar.kategoriler?.length) setAyarKategoriler(d.ayarlar.kategoriler);
+                if (d.ayarlar.etiketler?.length) setAyarEtiketler(d.ayarlar.etiketler);
+                if (d.ayarlar.kayitliNotlar?.length) setKayitliNotlar(d.ayarlar.kayitliNotlar);
+                if (d.ayarlar.varsAltinKg) setAyarVarsAltinKg(d.ayarlar.varsAltinKg);
+                if (d.ayarlar.varsMc) setAyarVarsMc(d.ayarlar.varsMc);
+                if (d.ayarlar.varsIscilik) setAyarVarsIscilik(d.ayarlar.varsIscilik);
+                if (d.ayarlar.varsIscilikBirim) setAyarVarsIscilikBirim(d.ayarlar.varsIscilikBirim);
+              }
+              setDriveYukleniyor(null);
               setShowYedek(false);
               setYedekJson("");
-            } catch {}
+              alert("✓ Yükleme tamamlandı! " + (d.modeller?.length||0) + " model Supabase'e kaydedildi.");
+            } catch(e) {
+              setDriveYukleniyor(null);
+              alert("Hata: " + e.message);
+            }
           }}
           disabled={(() => { try { JSON.parse(yedekJson); return false; } catch { return true; } })()}
           style={{ ...BG, width:"100%", marginTop:8, opacity: (() => { try { JSON.parse(yedekJson); return 1; } catch { return 0.3; } })() }}
         >
-          Yukle
+          {driveYukleniyor==="yukle" ? "Supabase'e kaydediliyor..." : "Yukle"}
         </button>
       </Modal>
 
