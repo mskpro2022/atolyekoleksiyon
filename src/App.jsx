@@ -32,8 +32,17 @@ const DURUMLAR = [
 
 const MIN_KAR = 0.05;
 const MIN_MLY = 0.020; // milyem/gr — bu altındaki modeller düşük karlı sayılır
-const GOLD = "#c9a84c";
-const DARK = "#110f0a";
+const TEMALAR = {
+  altin:   { id:"altin",   l:"✨ Altın",   bg:"linear-gradient(165deg,#110f0a,#16140e,#141210)", bg2:"#110f0a", gold:"#c9a84c", text:"#e8dcc8", sub:"#998a6e", dim:"#665d4a", card:"rgba(201,168,76,0.03)", border:"rgba(201,168,76,0.08)", header:"rgba(201,168,76,0.04)", headerBorder:"rgba(201,168,76,0.07)" },
+  gumus:   { id:"gumus",   l:"🥈 Gümüş",   bg:"linear-gradient(165deg,#0d0f12,#12141a,#0f1115)", bg2:"#0d0f12", gold:"#a0b4c8", text:"#dce8f0", sub:"#7a96aa", dim:"#556070", card:"rgba(160,180,200,0.03)", border:"rgba(160,180,200,0.08)", header:"rgba(160,180,200,0.04)", headerBorder:"rgba(160,180,200,0.07)" },
+  lacivert:{ id:"lacivert",l:"🌙 Lacivert", bg:"linear-gradient(165deg,#060b18,#0a1020,#080e1c)", bg2:"#060b18", gold:"#c9a84c", text:"#d0dff0", sub:"#6a85aa", dim:"#445570", card:"rgba(100,140,200,0.04)", border:"rgba(100,140,200,0.1)",  header:"rgba(100,140,200,0.05)", headerBorder:"rgba(100,140,200,0.08)" },
+  krem:    { id:"krem",    l:"☀️ Krem",    bg:"linear-gradient(165deg,#f5f0e8,#f0ebe0,#ede8dc)", bg2:"#f5f0e8", gold:"#8a6a20", text:"#2a1f0a", sub:"#7a6040", dim:"#9a8060", card:"rgba(138,106,32,0.04)", border:"rgba(138,106,32,0.12)", header:"rgba(138,106,32,0.05)", headerBorder:"rgba(138,106,32,0.08)" },
+};
+
+let _tema = TEMALAR.altin;
+try { const t = localStorage.getItem("atolye_tema"); if (t && TEMALAR[t]) _tema = TEMALAR[t]; } catch {}
+let GOLD = _tema.gold;
+let DARK = _tema.bg2;
 
 // ═══ BOY TABLOLARI ═══
 const BOY_YUZUK = {
@@ -851,6 +860,14 @@ export default function Root() {
 }
 
 function Atolye() {
+  const [tema, setTema] = useState(() => {
+    try { const t = localStorage.getItem("atolye_tema"); return TEMALAR[t] || TEMALAR.altin; } catch { return TEMALAR.altin; }
+  });
+  const T = tema; // kısa erişim
+  const temaUygula = (t) => {
+    setTema(t);
+    try { localStorage.setItem("atolye_tema", t.id); } catch {}
+  };
 
   const [kollar,    setKollar]    = useState([]);
   const [modeller,  setModeller]  = useState([]);
@@ -1322,7 +1339,7 @@ function Atolye() {
   if (!loaded) return <div style={{ minHeight:"100vh", background:DARK, display:"flex", alignItems:"center", justifyContent:"center" }}><div style={{ color:GOLD, fontSize:16 }}>Yukleniyor...</div></div>;
 
   return (
-    <div style={{ minHeight:"100vh", background:"linear-gradient(165deg,#110f0a,#16140e,#141210)", color:"#e8dcc8", fontFamily:"sans-serif" }}>
+    <div style={{ minHeight:"100vh", background:T.bg, color:T.text, fontFamily:"sans-serif" }}>
       <style>{"@keyframes fadein{from{opacity:0}to{opacity:1}}@keyframes cardin{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}*{box-sizing:border-box}::-webkit-scrollbar{width:4px}::-webkit-scrollbar-thumb{background:rgba(201,168,76,.15);border-radius:2px}select option{background:#1c1a15;color:#e8dcc8}"}</style>
 
       {/* HEADER */}
@@ -2503,7 +2520,26 @@ function Atolye() {
         {/* AYARLAR */}
         {sayfa==="ayarlar" && (
           <div style={{ animation:"fadein .3s", maxWidth:700 }}>
-            <h2 style={{ margin:"0 0 16px", fontSize:15, fontWeight:700, color:"#e8dcc8" }}>⚙ Ayarlar</h2>
+            <h2 style={{ margin:"0 0 16px", fontSize:15, fontWeight:700, color:T.text }}>⚙ Ayarlar</h2>
+
+            {/* TEMA SEÇİCİ */}
+            <div style={{ background:T.card, border:"1px solid "+T.border, borderRadius:12, padding:"14px 16px", marginBottom:14 }}>
+              <div style={{ fontSize:10, fontWeight:700, color:T.gold, marginBottom:12 }}>🎨 UYGULAMA TEMASI</div>
+              <div style={{ display:"flex", gap:10, flexWrap:"wrap" }}>
+                {Object.values(TEMALAR).map(t => (
+                  <button key={t.id} onClick={()=>temaUygula(t)} style={{
+                    background: tema.id===t.id ? t.gold : "rgba(0,0,0,0.2)",
+                    border: "2px solid " + (tema.id===t.id ? t.gold : "rgba(255,255,255,0.1)"),
+                    borderRadius: 10, padding:"10px 18px", cursor:"pointer",
+                    color: tema.id===t.id ? "#1a1a1a" : T.text,
+                    fontSize:12, fontWeight: tema.id===t.id ? 800 : 400,
+                    transition:"all .2s",
+                    boxShadow: tema.id===t.id ? "0 0 16px "+t.gold+"66" : "none"
+                  }}>{t.l}</button>
+                ))}
+              </div>
+              <div style={{ fontSize:9, color:T.sub, marginTop:10 }}>Tema seçimi tarayıcıya kaydedilir.</div>
+            </div>
 
             {/* ŞİFRE DEĞİŞTİR */}
             <SifreDegistir />
