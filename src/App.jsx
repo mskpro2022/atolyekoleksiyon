@@ -33,10 +33,10 @@ const DURUMLAR = [
 const MIN_KAR = 0.05;
 const MIN_MLY = 0.020; // milyem/gr — bu altındaki modeller düşük karlı sayılır
 const TEMALAR = {
-  altin:   { id:"altin",   l:"✨ Altın",   bg:"linear-gradient(165deg,#110f0a,#16140e,#141210)", bg2:"#110f0a", gold:"#c9a84c", text:"#e8dcc8", sub:"#998a6e", dim:"#665d4a", card:"rgba(201,168,76,0.03)", border:"rgba(201,168,76,0.08)", header:"rgba(201,168,76,0.04)", headerBorder:"rgba(201,168,76,0.07)" },
-  gumus:   { id:"gumus",   l:"🥈 Gümüş",   bg:"linear-gradient(165deg,#0d0f12,#12141a,#0f1115)", bg2:"#0d0f12", gold:"#a0b4c8", text:"#dce8f0", sub:"#7a96aa", dim:"#556070", card:"rgba(160,180,200,0.03)", border:"rgba(160,180,200,0.08)", header:"rgba(160,180,200,0.04)", headerBorder:"rgba(160,180,200,0.07)" },
-  lacivert:{ id:"lacivert",l:"🌙 Lacivert", bg:"linear-gradient(165deg,#060b18,#0a1020,#080e1c)", bg2:"#060b18", gold:"#c9a84c", text:"#d0dff0", sub:"#6a85aa", dim:"#445570", card:"rgba(100,140,200,0.04)", border:"rgba(100,140,200,0.1)",  header:"rgba(100,140,200,0.05)", headerBorder:"rgba(100,140,200,0.08)" },
-  krem:    { id:"krem",    l:"☀️ Krem",    bg:"linear-gradient(165deg,#f5f0e8,#f0ebe0,#ede8dc)", bg2:"#f5f0e8", gold:"#8a6a20", text:"#2a1f0a", sub:"#7a6040", dim:"#9a8060", card:"rgba(138,106,32,0.04)", border:"rgba(138,106,32,0.12)", header:"rgba(138,106,32,0.05)", headerBorder:"rgba(138,106,32,0.08)" },
+  altin:    { id:"altin",    l:"◆ Klasik Altın",  bg:"linear-gradient(165deg,#110f0a,#16140e,#141210)", bg2:"#110f0a", gold:"#c9a84c", text:"#e8dcc8", sub:"#998a6e", dim:"#665d4a", card:"rgba(201,168,76,0.03)", border:"rgba(201,168,76,0.08)", header:"rgba(201,168,76,0.04)", headerBorder:"rgba(201,168,76,0.07)" },
+  obsidyen: { id:"obsidyen", l:"◆ Obsidyen",       bg:"linear-gradient(165deg,#080808,#0f0f0f,#0a0a0a)", bg2:"#080808", gold:"#ffffff", text:"#f0f0f0", sub:"#888888", dim:"#555555", card:"rgba(255,255,255,0.03)", border:"rgba(255,255,255,0.08)", header:"rgba(255,255,255,0.03)", headerBorder:"rgba(255,255,255,0.06)" },
+  slate:    { id:"slate",    l:"◆ Slate",          bg:"linear-gradient(165deg,#0f1923,#141f2e,#111a28)", bg2:"#0f1923", gold:"#5b9bd5", text:"#d0dff0", sub:"#6a85aa", dim:"#445570", card:"rgba(91,155,213,0.04)", border:"rgba(91,155,213,0.1)",  header:"rgba(91,155,213,0.04)", headerBorder:"rgba(91,155,213,0.08)" },
+  beyaz:    { id:"beyaz",    l:"◆ Beyaz",          bg:"linear-gradient(165deg,#f8f8f8,#f2f2f2,#efefef)", bg2:"#f8f8f8", gold:"#1a1a1a", text:"#1a1a1a", sub:"#666666", dim:"#999999", card:"rgba(0,0,0,0.02)", border:"rgba(0,0,0,0.08)", header:"rgba(0,0,0,0.03)", headerBorder:"rgba(0,0,0,0.06)" },
 };
 
 let _tema = TEMALAR.altin;
@@ -1419,7 +1419,7 @@ function Atolye() {
                     style={{ background:"rgba(201,168,76,0.03)", border:"1px solid rgba(201,168,76,0.08)", borderRadius:12, overflow:"hidden", cursor:"pointer", transition:"all .25s", animation:"cardin .4s ease "+(i*.05)+"s both" }}
                     onMouseOver={e => { e.currentTarget.style.borderColor="rgba(201,168,76,0.22)"; e.currentTarget.style.transform="translateY(-2px)"; }}
                     onMouseOut={e  => { e.currentTarget.style.borderColor="rgba(201,168,76,0.08)"; e.currentTarget.style.transform="none"; }}>
-                    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", height:80, background:"rgba(0,0,0,0.2)" }}>
+                    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", height:140, background:"rgba(0,0,0,0.2)" }}>
                       {[0,1,2,3].map(x => (
                         <div key={x} style={{ overflow:"hidden", borderRight:x%2===0?"1px solid rgba(201,168,76,0.05)":"none", borderBottom:x<2?"1px solid rgba(201,168,76,0.05)":"none" }}>
                           {ft[x] ? <img src={ft[x].foto} alt="" style={{ width:"100%", height:"100%", objectFit:"cover", display:"block" }}/> : <div style={{ width:"100%", height:"100%", display:"flex", alignItems:"center", justifyContent:"center", color:"rgba(201,168,76,0.1)", fontSize:14 }}>-</div>}
