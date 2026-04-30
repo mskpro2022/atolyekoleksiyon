@@ -1037,11 +1037,8 @@ function Atolye() {
   const svM = useCallback(async d => {
     setModeller(d);
     try {
-      const chunkSize = 40;
-      const chunks = [];
-      for (let i = 0; i < d.length; i += chunkSize) chunks.push(d.slice(i, i + chunkSize));
-      await Promise.all(chunks.map((chunk, i) => sv("v7m_" + i, chunk)));
-      await sv("v7m_meta", { chunks: chunks.length, total: d.length });
+      // supabase.js dbSave otomatik chunk'lar — sadece v7m'ye kaydet
+      await sv("v7m", d);
     } catch(e) { console.error("svM error:", e); }
   }, []);
   const svS = useCallback(async d => { setSiparisler(d); await sv("v7s", d); }, []);
