@@ -5,7 +5,7 @@ const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 
 export const supabase = createClient(supabaseUrl, supabaseKey)
 
-const CHUNK_SIZE = 40
+const CHUNK_SIZE = 25 // Daha küçük chunk — güvenli
 
 async function rawSave(key, value) {
   const { error } = await supabase
@@ -43,7 +43,7 @@ export async function dbSave(key, value) {
         }
       }
 
-      // Chunk'ları kaydet
+      // Chunk'ları SIRAYLA kaydet (paralel değil — hata önleme)
       for (let i = 0; i < chunks.length; i++) {
         await rawSave(key + '_chunk_' + i, chunks[i])
       }
@@ -51,8 +51,17 @@ export async function dbSave(key, value) {
       // Meta kaydet
       await rawSave(key + '_meta', { chunks: newChunkCount, total: value.length })
       await rawSave(key, { _chunked: true, chunks: newChunkCount, total: value.length })
+
     } else {
       await rawSave(key, value)
+      // Eski chunk'ları temizle
+      const oldMeta = await rawLoad(key + '_meta')
+      if (oldMeta && oldMeta.chunks) {
+        for (let i = 0; i < oldMeta.chunks; i++) {
+          await supabase.from('storage').delete().eq('key', key + '_chunk_' + i)
+        }
+        await supabase.from('storage').delete().eq('key', key + '_meta')
+      }
     }
   } catch(e) {
     console.error('dbSave error:', key, e)
