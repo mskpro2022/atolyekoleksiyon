@@ -158,21 +158,10 @@ async function ld(k, f) { try { const r = await dbLoad(k, f); return r ?? f; } c
 async function sv(k, d) { try { await dbSave(k, d); } catch(e) { console.error("sv error:", e); } }
 
 function resizeImg(file) {
+  // Sıkıştırma YOK — orijinal kalite
   return new Promise(resolve => {
     const rd = new FileReader();
-    rd.onload = e => {
-      const img = new Image();
-      img.onload = () => {
-        const c = document.createElement("canvas");
-        let w = img.width, h = img.height;
-        if (w > 800) { h = Math.round(h * 800 / w); w = 800; }
-        if (h > 800) { w = Math.round(w * 800 / h); h = 800; }
-        c.width = w; c.height = h;
-        c.getContext("2d").drawImage(img, 0, 0, w, h);
-        resolve(c.toDataURL("image/jpeg", 0.82));
-      };
-      img.src = e.target.result;
-    };
+    rd.onload = e => resolve(e.target.result);
     rd.readAsDataURL(file);
   });
 }
@@ -1018,12 +1007,11 @@ function Atolye() {
 
   const svK = useCallback(async d => { setKollar(d);    await sv("v7k", d); }, []);
   // Fotoğraf sıkıştırma — kaliteyi koruyarak boyutu küçültür
-  const fotoSikistir = (base64, maxW=1200, quality=0.90) => new Promise(resolve => {
-    if (!base64 || base64.length < 100000) { resolve(base64); return; } // 100KB altını dokunma
+  const fotoSikistir = (base64, maxW=800, quality=0.70) => new Promise(resolve => {
+    if (!base64 || !base64.startsWith('data:image')) { resolve(base64); return; }
     const img = new Image();
     img.onload = () => {
       const ratio = Math.min(maxW/img.width, maxW/img.height, 1);
-      if (ratio >= 1) { resolve(base64); return; } // Zaten küçükse dokunma
       const w = Math.round(img.width*ratio), h = Math.round(img.height*ratio);
       const canvas = document.createElement("canvas");
       canvas.width = w; canvas.height = h;
@@ -1036,10 +1024,8 @@ function Atolye() {
 
   const svM = useCallback(async d => {
     setModeller(d);
-    try {
-      // supabase.js dbSave otomatik chunk'lar — sadece v7m'ye kaydet
-      await sv("v7m", d);
-    } catch(e) { console.error("svM error:", e); }
+    // supabase.js otomatik bucket'a yükler ve chunk'lar
+    await sv("v7m", d);
   }, []);
   const svS = useCallback(async d => { setSiparisler(d); await sv("v7s", d); }, []);
 
