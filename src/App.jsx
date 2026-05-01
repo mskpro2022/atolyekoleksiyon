@@ -1373,7 +1373,8 @@ function Atolye() {
                 setDriveYukleniyor("yedek");
                 try {
                   const k = await ld("v7k", []);
-                  const m = await ld("v7m", []);
+                  // Modelleri state'den al — Supabase chunk sorununu önler
+                  const m = modeller; 
                   const s = await ld("v7s", []);
                   const u = await ld("v7u", {});
                   const ay = await ld("v7ay", {});
@@ -1383,11 +1384,12 @@ function Atolye() {
                   const url = URL.createObjectURL(blob);
                   const a = document.createElement("a");
                   a.href = url;
-                  a.download = "atolye-yedek-" + new Date().toISOString().slice(0,10) + ".json";
+                  a.download = "atolye-yedek-" + new Date().toISOString().slice(0,10) + "-" + m.length + "model.json";
                   document.body.appendChild(a);
                   a.click();
                   document.body.removeChild(a);
                   URL.revokeObjectURL(url);
+                  alert("✓ Yedek alındı!\n" + m.length + " model\n" + k.length + " koleksiyon\n" + s.length + " sipariş");
                 } catch(e) { alert("Indirme hatasi: " + e.message); }
                 setDriveYukleniyor(null);
               }} style={{ background: driveYukleniyor==="yedek" ? "rgba(106,191,105,0.3)" : "rgba(106,191,105,0.1)", border:"1px solid rgba(106,191,105,0.2)", borderRadius:7, padding:"4px 10px", color:"#6abf69", fontSize:9, fontWeight:700, cursor:"pointer" }}>
