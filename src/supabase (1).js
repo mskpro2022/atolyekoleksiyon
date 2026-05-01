@@ -5,7 +5,7 @@ const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 
 export const supabase = createClient(supabaseUrl, supabaseKey)
 
-const CHUNK_SIZE = 15 // Daha küçük — 500 hata önleme
+const CHUNK_SIZE = 5 // Daha küçük — 500 hata önleme
 
 async function rawSave(key, value) {
   const json = JSON.stringify(value)
