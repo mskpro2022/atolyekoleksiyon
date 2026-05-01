@@ -407,10 +407,17 @@ function buildKonfHTML(siparis, altinKgUSD, mc, fiyatli) {
     tIscilik += iscilikTop;
     const katLabel = r.kategori ? r.kategori.charAt(0).toUpperCase()+r.kategori.slice(1) : "";
     const boyLabel = r.boy&&r.boy.deger ? "Boy: "+r.boy.sistem+" "+r.boy.deger+(r.boy.sistem!=="mm"&&r.boy.sistem!=="Beden"&&r.boy.sistem!=="mm (iç çap)"&&r.boy.sistem!=="mm (iç çevre)"?" (≈"+boyToMM(r.boy.sistem,r.boy.deger)+"mm)":"") : "";
+    // Kolye/bileklik için boyListesi
+    let boyListesiHTML = "";
+    if (r.boyListesi && r.boyListesi.length > 0) {
+      boyListesiHTML = "<div class='boy' style='margin-top:3px'><b>Boylar:</b> " + r.boyListesi.map(b => 
+        (b.uzunluk||"-") + (b.birim||"cm") + " · " + (b.gram||"-") + "gr × " + (b.adet||1) + "ad"
+      ).join(" / ") + "</div>";
+    }
     h += "<tr>";
     h += "<td>" + (r.foto ? "<img src='"+r.foto+"' style='width:66px;height:66px;object-fit:cover;border-radius:6px;display:block'/>" : "<div style='width:66px;height:66px;background:#eef4fa;border-radius:6px'></div>") + "</td>";
     h += "<td class='kod'>" + (r.kod||"-") + "</td>";
-    h += "<td>" + (katLabel?"<div class='nm'>"+katLabel+"</div>":"") + (r.sipNot?"<div class='nt'>"+r.sipNot+"</div>":"") + (boyLabel?"<div class='boy'>"+boyLabel+"</div>":"") + "</td>";
+    h += "<td>" + (katLabel?"<div class='nm'>"+katLabel+"</div>":"") + (r.sipNot?"<div class='nt'>"+r.sipNot+"</div>":"") + (boyLabel?"<div class='boy'>"+boyLabel+"</div>":"") + boyListesiHTML + "</td>";
     h += "<td class='r dim'>" + (r.renk||"Sari") + "</td>";
     h += "<td class='r'>" + r.adet + "</td>";
     h += "<td class='r'>" + fN(topGram,2) + " gr</td>";
@@ -1181,7 +1188,10 @@ function Atolye() {
   const konfNotSec   = (id, val) => setKonfNot(p => ({ ...p, [id]: val }));
   const konfBoySet   = (id, val) => setKonfBoylar(p => ({ ...p, [id]: val }));
   const konfBoyEkle  = (id, kategori) => {
-    const def = kategori==="yuzuk" ? { sistem:"US", deger:"", adet:1 } : { sistem:"mm (iç çap)", deger:"", adet:1 };
+    let def;
+    if (kategori==="yuzuk") def = { sistem:"US", deger:"", adet:1 };
+    else if (kategori==="kolye" || kategori==="bileklik") def = { uzunluk:"", birim:"cm", gram:"", adet:1 };
+    else def = { sistem:"mm (iç çap)", deger:"", adet:1 };
     setKonfBoylar(p => ({ ...p, [id]: [...(p[id]||[]), def] }));
   };
   const konfBoySil   = (id, idx) => setKonfBoylar(p => ({ ...p, [id]: (p[id]||[]).filter((_,i)=>i!==idx) }));
@@ -1194,7 +1204,17 @@ function Atolye() {
       const boylar = konfBoylar[m.id] || [];
       const genelBoyAktif = konfGenelBoy.aktif && konfGenelBoy.deger;
       const temel = { ...m, secilenAyar: konfAyar, renk: konfRenkler[m.id]||"Sari", sipNot: konfNot[m.id]||"" };
-      if (boylar.length > 0) {
+      
+      // Kolye ve bileklik: tek satır, boyListesi içeride
+      if ((m.kategori==="kolye" || m.kategori==="bileklik") && boylar.length > 0) {
+        const topAdet = boylar.reduce((s,b)=>s+(Number(b.adet)||1),0);
+        const topGram = boylar.reduce((s,b)=>s+(Number(b.gram)||Number(m.gram)||0)*(Number(b.adet)||1),0);
+        // Ortalama gram (toplam/adet)
+        const ortGram = topAdet > 0 ? topGram/topAdet : (Number(m.gram)||0);
+        satirlar.push({ ...temel, adet: topAdet, boyListesi: boylar, gram: ortGram, boy: null });
+      }
+      // Yüzük: her boy için ayrı satır (mevcut davranış)
+      else if (boylar.length > 0) {
         boylar.forEach((b, bi) => satirlar.push({ ...temel, adet: b.adet||1, boy: b, _boyIdx: bi }));
       } else if (genelBoyAktif) {
         satirlar.push({ ...temel, adet: konfAdet[m.id]||1, boy: konfGenelBoy });
@@ -1744,9 +1764,32 @@ function Atolye() {
                               ))}
                             </div>
                           )}
-                          {/* Boy listesi — yüzük veya bilezik ise göster */}
-                          {(m.kategori==="yuzuk" || m.kategori==="bilezik") && !konfGenelBoy.aktif && (() => {
-                            const boyTablosu = m.kategori==="yuzuk" ? BOY_YUZUK : BOY_BILEZIK;
+                          {/* KOLYE/BİLEKLİK — uzunluk + gram */}
+                          {(m.kategori==="kolye" || m.kategori==="bileklik") && !konfGenelBoy.aktif && (() => {
+                            const boylar = konfBoylar[m.id] || [];
+                            return (
+                              <div style={{ marginTop:5 }}>
+                                <div style={{ fontSize:7, color:"#a78bfa", fontWeight:700, marginBottom:3 }}>BOY/UZUNLUK + GRAM:</div>
+                                {boylar.map((b, bi) => (
+                                  <div key={bi} style={{ display:"flex", gap:4, alignItems:"center", marginBottom:3 }}>
+                                    <input type="number" placeholder="Uz." value={b.uzunluk||""} onChange={e=>{e.stopPropagation();konfBoyGuncelle(m.id,bi,"uzunluk",e.target.value);}} style={{ ...IS, width:50, padding:"2px 4px", fontSize:8, textAlign:"center" }}/>
+                                    <select value={b.birim||"cm"} onChange={e=>{e.stopPropagation();konfBoyGuncelle(m.id,bi,"birim",e.target.value);}} style={{ ...IS, width:42, padding:"2px 2px", fontSize:8 }}>
+                                      <option value="cm">cm</option>
+                                      <option value="mm">mm</option>
+                                    </select>
+                                    <input type="number" step="0.01" placeholder="gr" value={b.gram||""} onChange={e=>{e.stopPropagation();konfBoyGuncelle(m.id,bi,"gram",e.target.value);}} style={{ ...IS, width:55, padding:"2px 4px", fontSize:8, textAlign:"center" }}/>
+                                    <span style={{ fontSize:7, color:"#665d4a" }}>×</span>
+                                    <input type="number" min="1" placeholder="ad" value={b.adet||1} onChange={e=>{e.stopPropagation();konfBoyGuncelle(m.id,bi,"adet",Number(e.target.value)||1);}} style={{ ...IS, width:38, padding:"2px 4px", fontSize:8, textAlign:"center" }}/>
+                                    <button onClick={e=>{e.stopPropagation();konfBoySil(m.id,bi);}} style={{ background:"none", border:"none", color:"#e85a4f", cursor:"pointer", fontSize:11, padding:0, lineHeight:1 }}>×</button>
+                                  </div>
+                                ))}
+                                <button onClick={e=>{e.stopPropagation();konfBoyEkle(m.id, m.kategori);}} style={{ background:"rgba(167,139,250,0.08)", border:"1px dashed rgba(167,139,250,0.25)", borderRadius:5, padding:"2px 8px", color:"#a78bfa", fontSize:8, cursor:"pointer" }}>+ Boy/Uzunluk Ekle</button>
+                              </div>
+                            );
+                          })()}
+                          {/* Boy listesi — sadece yüzük için (bileklik kolye yukarıda) */}
+                          {m.kategori==="yuzuk" && !konfGenelBoy.aktif && (() => {
+                            const boyTablosu = BOY_YUZUK;
                             const boylar = konfBoylar[m.id] || [];
                             return (
                               <div style={{ marginTop:5 }}>
@@ -1761,7 +1804,7 @@ function Atolye() {
                                       {(boyTablosu[b.sistem]||[]).map(v=><option key={v} value={v}>{v}</option>)}
                                     </select>
                                     <input type="number" min="1" value={b.adet||1} onChange={e=>{e.stopPropagation();konfBoyGuncelle(m.id,bi,"adet",Number(e.target.value)||1);}} style={{ ...IS, width:40, padding:"2px 4px", fontSize:8, textAlign:"center" }}/>
-                                    {b.deger && b.sistem!=="mm" && b.sistem!=="Beden" && m.kategori==="yuzuk" && (
+                                    {b.deger && b.sistem!=="mm" && (
                                       <span style={{ fontSize:7, color:"#5b9bd5", whiteSpace:"nowrap" }}>≈{boyToMM(b.sistem,b.deger)}mm</span>
                                     )}
                                     <button onClick={e=>{e.stopPropagation();konfBoySil(m.id,bi);}} style={{ background:"none", border:"none", color:"#e85a4f", cursor:"pointer", fontSize:11, padding:0, lineHeight:1 }}>×</button>
