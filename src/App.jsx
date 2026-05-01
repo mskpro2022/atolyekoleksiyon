@@ -1391,7 +1391,7 @@ function Atolye() {
                 } catch(e) { alert("Indirme hatasi: " + e.message); }
                 setDriveYukleniyor(null);
               }} style={{ background: driveYukleniyor==="yedek" ? "rgba(106,191,105,0.3)" : "rgba(106,191,105,0.1)", border:"1px solid rgba(106,191,105,0.2)", borderRadius:7, padding:"4px 10px", color:"#6abf69", fontSize:9, fontWeight:700, cursor:"pointer" }}>
-                {driveYukleniyor==="yedek" ? "İndiriliyor..." : "💾 PC'ye İndir (" + modeller.length + " model)"}
+                {driveYukleniyor==="yedek" ? "İndiriliyor..." : "💾 PC'ye İndir (" + modeller.length + " model · " + kollar.length + " kol · " + siparisler.length + " sip)"}
               </button>
               {/* DRIVE GERİ YÜKLEfixture */}
               <button onClick={() => { setYedekJson(""); setShowYedek(true); }} style={{ background:"rgba(91,155,213,0.1)", border:"1px solid rgba(91,155,213,0.2)", borderRadius:7, padding:"4px 10px", color:"#5b9bd5", fontSize:9, fontWeight:700, cursor:"pointer" }}>Geri Yukle</button>
@@ -2922,7 +2922,7 @@ function Atolye() {
             const d = JSON.parse(yedekJson);
             return (
               <div style={{ fontSize:9, color:"#6abf69", margin:"6px 0", padding:"5px 8px", background:"rgba(106,191,105,0.08)", borderRadius:5 }}>
-                ✓ Gecerli — {d.modeller?.length||0} model · {d.kollar?.length||0} koleksiyon · {d.siparisler?.length||0} siparis
+                ✓ Geçerli — <b>{d.modeller?.length||0} model</b> · <b>{d.kollar?.length||0} koleksiyon</b> · <b>{d.siparisler?.length||0} sipariş</b> · <b>{d.musteriler ? Object.keys(d.musteriler).length : 0} müşteri</b>
               </div>
             );
           } catch(e) {
