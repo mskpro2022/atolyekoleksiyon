@@ -5,13 +5,21 @@ const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 
 export const supabase = createClient(supabaseUrl, supabaseKey)
 
-const CHUNK_SIZE = 25 // Daha küçük chunk — güvenli
+const CHUNK_SIZE = 15 // Daha küçük — 500 hata önleme
 
 async function rawSave(key, value) {
+  const json = JSON.stringify(value)
+  // 4MB üzerinde uyarı
+  if (json.length > 4000000) {
+    console.warn('Büyük veri:', key, (json.length/1024/1024).toFixed(2)+'MB')
+  }
   const { error } = await supabase
     .from('storage')
-    .upsert({ key, value: JSON.stringify(value) }, { onConflict: 'key' })
-  if (error) throw error
+    .upsert({ key, value: json }, { onConflict: 'key' })
+  if (error) {
+    console.error('rawSave hata:', key, error)
+    throw error
+  }
 }
 
 async function rawLoad(key) {
@@ -43,28 +51,29 @@ export async function dbSave(key, value) {
         }
       }
 
-      // Chunk'ları SIRAYLA kaydet (paralel değil — hata önleme)
+      // Chunk'ları SIRAYLA kaydet
+      let basariliSayisi = 0
       for (let i = 0; i < chunks.length; i++) {
-        await rawSave(key + '_chunk_' + i, chunks[i])
+        try {
+          await rawSave(key + '_chunk_' + i, chunks[i])
+          basariliSayisi++
+        } catch(e) {
+          console.error('Chunk ' + i + ' kaydedilemedi:', e)
+          throw new Error('Chunk ' + i + ' kaydedilemedi: ' + e.message)
+        }
       }
 
       // Meta kaydet
       await rawSave(key + '_meta', { chunks: newChunkCount, total: value.length })
       await rawSave(key, { _chunked: true, chunks: newChunkCount, total: value.length })
 
+      console.log('✓ Kaydedildi: ' + key + ' (' + value.length + ' kayıt, ' + newChunkCount + ' chunk)')
     } else {
       await rawSave(key, value)
-      // Eski chunk'ları temizle
-      const oldMeta = await rawLoad(key + '_meta')
-      if (oldMeta && oldMeta.chunks) {
-        for (let i = 0; i < oldMeta.chunks; i++) {
-          await supabase.from('storage').delete().eq('key', key + '_chunk_' + i)
-        }
-        await supabase.from('storage').delete().eq('key', key + '_meta')
-      }
     }
   } catch(e) {
     console.error('dbSave error:', key, e)
+    throw e // hatayı yukarı fırlat
   }
 }
 
