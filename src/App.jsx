@@ -1465,34 +1465,35 @@ function Atolye() {
               <button onClick={() => { rkf(); setEditK(null); setShowKM(true); }} style={BG}>+ Koleksiyon</button>
             </div>
             {kollar.length===0 && <p style={{ color:"#665d4a", textAlign:"center", padding:"40px" }}>Henuz koleksiyon yok</p>}
-            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(230px,1fr))", gap:12 }}>
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))", gap:16 }}>
               {kollar.map((kol,i) => {
                 const km = modeller.filter(m => m.ki===kol.id);
                 const ft = km.filter(m => m.foto).slice(0,4);
                 return (
                   <div key={kol.id} onClick={() => { setAktifKol(kol); setSayfa("modeller"); setFiltre("all"); setEtiketF(""); setArama(""); setSirala("varsayilan"); }}
-                    style={{ background:"rgba(201,168,76,0.03)", border:"1px solid rgba(201,168,76,0.08)", borderRadius:12, overflow:"hidden", cursor:"pointer", transition:"all .25s", animation:"cardin .4s ease "+(i*.05)+"s both" }}
-                    onMouseOver={e => { e.currentTarget.style.borderColor="rgba(201,168,76,0.22)"; e.currentTarget.style.transform="translateY(-2px)"; }}
-                    onMouseOut={e  => { e.currentTarget.style.borderColor="rgba(201,168,76,0.08)"; e.currentTarget.style.transform="none"; }}>
-                    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", height:140, background:"rgba(0,0,0,0.2)" }}>
+                    style={{ background:"rgba(255,255,255,0.06)", backdropFilter:"blur(10px)", border:"1px solid rgba(255,255,255,0.08)", borderRadius:20, overflow:"hidden", cursor:"pointer", transition:"all .3s ease", animation:"cardin .4s ease "+(i*.05)+"s both", boxShadow:"0 2px 16px rgba(0,0,0,0.15)" }}
+                    onMouseOver={e => { e.currentTarget.style.boxShadow="0 8px 32px rgba(0,0,0,0.25)"; e.currentTarget.style.transform="translateY(-4px)"; e.currentTarget.style.borderColor="rgba(255,255,255,0.15)"; }}
+                    onMouseOut={e  => { e.currentTarget.style.boxShadow="0 2px 16px rgba(0,0,0,0.15)"; e.currentTarget.style.transform="none"; e.currentTarget.style.borderColor="rgba(255,255,255,0.08)"; }}>
+                    {/* FOTOĞRAF ALANI */}
+                    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", height:160, background:"rgba(0,0,0,0.15)", borderRadius:"20px 20px 0 0", overflow:"hidden" }}>
                       {[0,1,2,3].map(x => (
-                        <div key={x} style={{ overflow:"hidden", borderRight:x%2===0?"1px solid rgba(201,168,76,0.05)":"none", borderBottom:x<2?"1px solid rgba(201,168,76,0.05)":"none" }}>
-                          {ft[x] ? <img src={ft[x].foto} alt="" style={{ width:"100%", height:"100%", objectFit:"cover", display:"block" }}/> : <div style={{ width:"100%", height:"100%", display:"flex", alignItems:"center", justifyContent:"center", color:"rgba(201,168,76,0.1)", fontSize:14 }}>-</div>}
+                        <div key={x} style={{ overflow:"hidden", borderRight:x%2===0?"1px solid rgba(255,255,255,0.04)":"none", borderBottom:x<2?"1px solid rgba(255,255,255,0.04)":"none" }}>
+                          {ft[x] ? <img src={ft[x].foto} alt="" style={{ width:"100%", height:"100%", objectFit:"cover", display:"block", transition:"transform .3s" }}/> : <div style={{ width:"100%", height:"100%", display:"flex", alignItems:"center", justifyContent:"center", color:"rgba(255,255,255,0.06)", fontSize:18 }}>◇</div>}
                         </div>
                       ))}
                     </div>
-                    <div style={{ padding:"8px 10px" }}>
-                      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-                        <h3 style={{ margin:0, fontSize:12, fontWeight:700, color:"#e8dcc8" }}>{kol.ad}</h3>
-                        {kol.on && <span style={{ background:"rgba(201,168,76,0.1)", color:GOLD, padding:"1px 5px", borderRadius:4, fontSize:7, fontWeight:700 }}>{kol.on}-</span>}
+                    {/* BİLGİ ALANI */}
+                    <div style={{ padding:"12px 14px 14px" }}>
+                      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
+                        <h3 style={{ margin:0, fontSize:13, fontWeight:700, color:T.text, letterSpacing:"0.02em" }}>{kol.ad}</h3>
+                        {kol.on && <span style={{ background:"rgba(201,168,76,0.12)", color:GOLD, padding:"2px 8px", borderRadius:8, fontSize:8, fontWeight:700, letterSpacing:"0.05em" }}>{kol.on}</span>}
                       </div>
-                      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginTop:7 }}>
-                        <div style={{ display:"flex", flexDirection:"column", gap:3 }}>
-                          <span style={{ fontSize:9, color:"#998a6e" }}>{km.length} model</span>
+                      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-end" }}>
+                        <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
+                          <span style={{ fontSize:10, color:T.sub, fontWeight:500 }}>{km.length} model</span>
                           {altinKgUSD > 0 && km.length > 0 && (() => {
                             const topGram = km.reduce((s,m) => s + (Number(m.gram)||0), 0);
                             const topKar  = km.reduce((s,m) => { const h = hesapla(m, m.refAyar, altinKgUSD, madenCarpan); return s + h.karHas; }, 0);
-                            // Ortalama milyem: her modelin karHas/mamulGram ortalaması
                             const milyemler = km.map(m => {
                               const h = hesapla(m, m.refAyar, altinKgUSD, madenCarpan);
                               return h.mamulGram > 0 ? h.karHas / h.mamulGram : 0;
@@ -1501,25 +1502,25 @@ function Atolye() {
                             const minMly = milyemler.length > 0 ? Math.min(...milyemler) : 0;
                             const maxMly = milyemler.length > 0 ? Math.max(...milyemler) : 0;
                             return (
-                              <div style={{ display:"flex", flexDirection:"column", gap:2 }}>
-                                <div style={{ display:"flex", gap:6 }}>
-                                  <span style={{ fontSize:8, color:"#5b9bd5", fontWeight:600 }}>{fN(topGram,1)} gr</span>
-                                  <span style={{ fontSize:8, color:"#6abf69", fontWeight:600 }}>{fN(topKar,3)} has kar</span>
+                              <div style={{ display:"flex", flexDirection:"column", gap:3 }}>
+                                <div style={{ display:"flex", gap:8 }}>
+                                  <span style={{ fontSize:9, color:"#5b9bd5", fontWeight:600 }}>{fN(topGram,1)} gr</span>
+                                  <span style={{ fontSize:9, color:"#6abf69", fontWeight:600 }}>{fN(topKar,3)} has kar</span>
                                 </div>
                                 <div style={{ display:"flex", gap:4, alignItems:"center" }}>
-                                  <span style={{ fontSize:7, color:"#998a6e" }}>Ort. karlılık:</span>
-                                  <span style={{ fontSize:9, color:GOLD, fontWeight:800 }}>{fN(ortMly,3)} mly/gr</span>
-                                  <span style={{ fontSize:7, color:"#665d4a" }}>({fN(minMly,3)}–{fN(maxMly,3)})</span>
+                                  <span style={{ fontSize:8, color:T.dim }}>Ort. karlılık:</span>
+                                  <span style={{ fontSize:10, color:GOLD, fontWeight:800 }}>{fN(ortMly,3)}</span>
+                                  <span style={{ fontSize:7, color:T.dim }}>mly/gr ({fN(minMly,3)}–{fN(maxMly,3)})</span>
                                 </div>
                               </div>
                             );
                           })()}
                         </div>
-                        <div style={{ display:"flex", gap:3 }} onClick={e => e.stopPropagation()}>
-                          <button onClick={() => openEK(kol)} style={{ ...GH, padding:"2px 6px", fontSize:8 }}>Edit</button>
-                          <button onClick={() => { setKatalogKol(kol); setKatalogSiraliModeller([...km].sort(dogalSirala)); setKatalogSutun(3); setKatalogSiralaModal(true); }} style={{ background:"rgba(91,155,213,0.1)", border:"none", borderRadius:5, padding:"2px 6px", color:"#5b9bd5", fontSize:8, fontWeight:700, cursor:"pointer" }}>PDF 3</button>
-                          <button onClick={() => { setKatalogKol(kol); setKatalogSiraliModeller([...km].sort(dogalSirala)); setKatalogSutun(4); setKatalogSiralaModal(true); }} style={{ background:"rgba(167,139,250,0.1)", border:"none", borderRadius:5, padding:"2px 6px", color:"#a78bfa", fontSize:8, fontWeight:700, cursor:"pointer" }}>PDF 4</button>
-                          <button onClick={() => setDelOnay({ type:"kol", id:kol.id })} style={{ ...RD, padding:"2px 6px", fontSize:8 }}>Sil</button>
+                        <div style={{ display:"flex", gap:4 }} onClick={e => e.stopPropagation()}>
+                          <button onClick={() => openEK(kol)} style={{ background:"rgba(255,255,255,0.06)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:8, padding:"4px 10px", color:T.text, fontSize:8, fontWeight:600, cursor:"pointer", transition:"all .2s" }}>Edit</button>
+                          <button onClick={() => { setKatalogKol(kol); setKatalogSiraliModeller([...km].sort(dogalSirala)); setKatalogSutun(3); setKatalogSiralaModal(true); }} style={{ background:"rgba(91,155,213,0.08)", border:"1px solid rgba(91,155,213,0.15)", borderRadius:8, padding:"4px 8px", color:"#5b9bd5", fontSize:8, fontWeight:700, cursor:"pointer" }}>PDF 3</button>
+                          <button onClick={() => { setKatalogKol(kol); setKatalogSiraliModeller([...km].sort(dogalSirala)); setKatalogSutun(4); setKatalogSiralaModal(true); }} style={{ background:"rgba(167,139,250,0.08)", border:"1px solid rgba(167,139,250,0.15)", borderRadius:8, padding:"4px 8px", color:"#a78bfa", fontSize:8, fontWeight:700, cursor:"pointer" }}>PDF 4</button>
+                          <button onClick={() => setDelOnay({ type:"kol", id:kol.id })} style={{ background:"rgba(239,68,68,0.06)", border:"1px solid rgba(239,68,68,0.12)", borderRadius:8, padding:"4px 8px", color:"#ef4444", fontSize:8, fontWeight:600, cursor:"pointer" }}>Sil</button>
                         </div>
                       </div>
                     </div>
