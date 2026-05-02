@@ -2939,14 +2939,22 @@ function Atolye() {
 
       {/* YEDEK MODAL */}
       <Modal open={showYedek} onClose={()=>setShowYedek(false)} title="Geri Yukle">
-        <div style={{ fontSize:10, color:"#998a6e", marginBottom:8 }}>
-          PC'ye indirdiginiz JSON dosyasini acin, icerigi kopyalayip (Ctrl+A, Ctrl+C) asagiya yapistirin.
+        <div style={{ fontSize:10, color:"#998a6e", marginBottom:10 }}>
+          PC'ye indirdiğiniz JSON dosyasını seçin (kopyala-yapıştır gerekmez!).
         </div>
-        <textarea
-          value={yedekJson}
-          onChange={e=>setYedekJson(e.target.value)}
-          placeholder="Buraya yapistirin... (Ctrl+V)"
-          style={{ width:"100%", height:200, background:"rgba(0,0,0,0.3)", border:"1px solid rgba(201,168,76,0.2)", borderRadius:8, color:"#6abf69", fontSize:10, fontFamily:"monospace", padding:10, outline:"none", resize:"vertical", boxSizing:"border-box" }}
+        <input
+          type="file"
+          accept=".json,application/json"
+          onChange={e => {
+            const f = e.target.files && e.target.files[0];
+            if (!f) return;
+            const reader = new FileReader();
+            reader.onload = ev => {
+              setYedekJson(ev.target.result);
+            };
+            reader.readAsText(f);
+          }}
+          style={{ display:"block", width:"100%", padding:12, background:"rgba(91,155,213,0.06)", border:"2px dashed rgba(91,155,213,0.3)", borderRadius:8, color:"#5b9bd5", fontSize:11, cursor:"pointer", marginBottom:10 }}
         />
         {yedekJson.length > 10 && (() => {
           try {
