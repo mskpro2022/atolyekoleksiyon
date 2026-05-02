@@ -1030,9 +1030,34 @@ function Atolye() {
   });
 
   const svM = useCallback(async d => {
-    setModeller(d);
-    // supabase.js otomatik bucket'a yükler ve chunk'lar
-    await sv("v7m", d);
+    // DUPLICATE TEMİZLEME — aynı kod/ID varsa son eklenen kazanır
+    const idMap = new Map();
+    const kodMap = new Map();
+    const temiz = [];
+    
+    // Sondan başa git — son eklenen olan kazanır
+    for (let i = d.length - 1; i >= 0; i--) {
+      const m = d[i];
+      if (!m) continue;
+      
+      const kodKey = m.kod ? m.kod.trim().toUpperCase() : null;
+      const idKey = m.id;
+      
+      // Daha önce bu kod veya ID görüldü mü?
+      if (kodKey && kodMap.has(kodKey)) continue; // duplicate, atla
+      if (idKey && idMap.has(idKey)) continue;
+      
+      if (kodKey) kodMap.set(kodKey, true);
+      if (idKey) idMap.set(idKey, true);
+      temiz.unshift(m); // başa ekle (sıra korunsun)
+    }
+    
+    if (temiz.length !== d.length) {
+      console.log("🧹 " + (d.length - temiz.length) + " duplicate temizlendi: " + d.length + " → " + temiz.length);
+    }
+    
+    setModeller(temiz);
+    await sv("v7m", temiz);
   }, []);
   const svS = useCallback(async d => { setSiparisler(d); await sv("v7s", d); }, []);
 
