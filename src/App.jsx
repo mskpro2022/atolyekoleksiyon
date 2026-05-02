@@ -33,10 +33,10 @@ const DURUMLAR = [
 const MIN_KAR = 0.05;
 const MIN_MLY = 0.020; // milyem/gr — bu altındaki modeller düşük karlı sayılır
 const TEMALAR = {
-  altin:    { id:"altin",    l:"◆ Klasik Altın",  bg:"linear-gradient(165deg,#110f0a,#16140e,#141210)", bg2:"#110f0a", gold:"#c9a84c", text:"#e8dcc8", sub:"#998a6e", dim:"#665d4a", card:"rgba(201,168,76,0.03)", border:"rgba(201,168,76,0.08)", header:"rgba(201,168,76,0.04)", headerBorder:"rgba(201,168,76,0.07)" },
-  obsidyen: { id:"obsidyen", l:"◆ Obsidyen",       bg:"linear-gradient(165deg,#080808,#0f0f0f,#0a0a0a)", bg2:"#080808", gold:"#ffffff", text:"#f0f0f0", sub:"#888888", dim:"#555555", card:"rgba(255,255,255,0.03)", border:"rgba(255,255,255,0.08)", header:"rgba(255,255,255,0.03)", headerBorder:"rgba(255,255,255,0.06)" },
-  slate:    { id:"slate",    l:"◆ Slate",          bg:"linear-gradient(165deg,#0f1923,#141f2e,#111a28)", bg2:"#0f1923", gold:"#5b9bd5", text:"#d0dff0", sub:"#6a85aa", dim:"#445570", card:"rgba(91,155,213,0.04)", border:"rgba(91,155,213,0.1)",  header:"rgba(91,155,213,0.04)", headerBorder:"rgba(91,155,213,0.08)" },
-  beyaz:    { id:"beyaz",    l:"◆ Beyaz",          bg:"linear-gradient(165deg,#f8f8f8,#f2f2f2,#efefef)", bg2:"#f8f8f8", gold:"#1a1a1a", text:"#1a1a1a", sub:"#666666", dim:"#999999", card:"rgba(0,0,0,0.02)", border:"rgba(0,0,0,0.08)", header:"rgba(0,0,0,0.03)", headerBorder:"rgba(0,0,0,0.06)" },
+  altin:    { id:"altin",    l:"◆ Klasik Altın",  ac:"Koyu zemin, altın vurgular", bg:"linear-gradient(165deg,#110f0a,#16140e,#141210)", bg2:"#110f0a", gold:"#c9a84c", text:"#e8dcc8", sub:"#998a6e", dim:"#665d4a", card:"rgba(201,168,76,0.03)", border:"rgba(201,168,76,0.08)", header:"rgba(201,168,76,0.04)", headerBorder:"rgba(201,168,76,0.07)", btnBg:"rgba(201,168,76,0.08)", btnBorder:"rgba(201,168,76,0.15)", accent:"#c9a84c", danger:"#e85a4f", success:"#6abf69", info:"#5b9bd5" },
+  obsidyen: { id:"obsidyen", l:"◆ Obsidyen",      ac:"Tam siyah, sade beyaz",     bg:"linear-gradient(165deg,#080808,#0e0e0e,#0a0a0a)", bg2:"#080808", gold:"#e0e0e0", text:"#f0f0f0", sub:"#777777", dim:"#4a4a4a", card:"rgba(255,255,255,0.03)", border:"rgba(255,255,255,0.07)", header:"rgba(255,255,255,0.03)", headerBorder:"rgba(255,255,255,0.06)", btnBg:"rgba(255,255,255,0.05)", btnBorder:"rgba(255,255,255,0.1)", accent:"#e0e0e0", danger:"#ff6b6b", success:"#69db7c", info:"#74c0fc" },
+  slate:    { id:"slate",    l:"◆ Slate",         ac:"Lacivert-gri, profesyonel", bg:"linear-gradient(165deg,#0f1923,#141f2e,#111a28)", bg2:"#0f1923", gold:"#5b9bd5", text:"#d0dff0", sub:"#6a85aa", dim:"#445570", card:"rgba(91,155,213,0.04)", border:"rgba(91,155,213,0.08)", header:"rgba(91,155,213,0.04)", headerBorder:"rgba(91,155,213,0.07)", btnBg:"rgba(91,155,213,0.06)", btnBorder:"rgba(91,155,213,0.12)", accent:"#5b9bd5", danger:"#e85a4f", success:"#6abf69", info:"#5b9bd5" },
+  beyaz:    { id:"beyaz",    l:"◆ Beyaz",         ac:"Apple tarzı, minimal açık",  bg:"linear-gradient(165deg,#f5f5f7,#f0f0f2,#eeeef0)", bg2:"#f5f5f7", gold:"#1d1d1f", text:"#1d1d1f", sub:"#86868b", dim:"#aeaeb2", card:"rgba(0,0,0,0.02)", border:"rgba(0,0,0,0.06)", header:"rgba(0,0,0,0.02)", headerBorder:"rgba(0,0,0,0.05)", btnBg:"rgba(0,0,0,0.04)", btnBorder:"rgba(0,0,0,0.1)", accent:"#0066cc", danger:"#ff3b30", success:"#34c759", info:"#007aff" },
 };
 
 let _tema = TEMALAR.altin;
@@ -2599,22 +2599,31 @@ function Atolye() {
             <h2 style={{ margin:"0 0 16px", fontSize:15, fontWeight:700, color:T.text }}>⚙ Ayarlar</h2>
 
             {/* TEMA SEÇİCİ */}
-            <div style={{ background:T.card, border:"1px solid "+T.border, borderRadius:12, padding:"14px 16px", marginBottom:14 }}>
-              <div style={{ fontSize:10, fontWeight:700, color:T.gold, marginBottom:12 }}>🎨 UYGULAMA TEMASI</div>
-              <div style={{ display:"flex", gap:10, flexWrap:"wrap" }}>
+            <div style={{ background:T.card, border:"1px solid "+T.border, borderRadius:16, padding:"16px 18px", marginBottom:14 }}>
+              <div style={{ fontSize:11, fontWeight:700, color:T.gold, marginBottom:14, letterSpacing:"0.03em" }}>🎨 UYGULAMA TEMASI</div>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
                 {Object.values(TEMALAR).map(t => (
                   <button key={t.id} onClick={()=>temaUygula(t)} style={{
-                    background: tema.id===t.id ? t.gold : "rgba(0,0,0,0.2)",
-                    border: "2px solid " + (tema.id===t.id ? t.gold : "rgba(255,255,255,0.1)"),
-                    borderRadius: 10, padding:"10px 18px", cursor:"pointer",
-                    color: tema.id===t.id ? "#1a1a1a" : T.text,
-                    fontSize:12, fontWeight: tema.id===t.id ? 800 : 400,
-                    transition:"all .2s",
-                    boxShadow: tema.id===t.id ? "0 0 16px "+t.gold+"66" : "none"
-                  }}>{t.l}</button>
+                    background: t.bg, border: tema.id===t.id ? "2px solid "+t.accent : "1px solid "+t.border,
+                    borderRadius:14, padding:0, cursor:"pointer", overflow:"hidden", textAlign:"left",
+                    transition:"all .25s", opacity: tema.id===t.id ? 1 : 0.75,
+                    boxShadow: tema.id===t.id ? "0 0 20px "+t.accent+"44" : "0 2px 8px rgba(0,0,0,0.1)"
+                  }}>
+                    {/* Mini önizleme */}
+                    <div style={{ display:"flex", gap:4, padding:"8px 10px 4px" }}>
+                      <div style={{ width:22, height:16, borderRadius:4, background:t.card, border:"1px solid "+t.border }}/>
+                      <div style={{ width:22, height:16, borderRadius:4, background:t.card, border:"1px solid "+t.border }}/>
+                      <div style={{ width:22, height:16, borderRadius:4, background:t.card, border:"1px solid "+t.border }}/>
+                    </div>
+                    <div style={{ padding:"4px 10px 8px" }}>
+                      <div style={{ fontSize:11, fontWeight:700, color:t.text }}>{t.l}</div>
+                      <div style={{ fontSize:8, color:t.sub, marginTop:2 }}>{t.ac}</div>
+                    </div>
+                    {tema.id===t.id && <div style={{ background:t.accent, padding:"2px 0", textAlign:"center", fontSize:8, fontWeight:700, color:t.bg2, letterSpacing:"0.05em" }}>AKTİF</div>}
+                  </button>
                 ))}
               </div>
-              <div style={{ fontSize:9, color:T.sub, marginTop:10 }}>Tema seçimi tarayıcıya kaydedilir.</div>
+              <div style={{ fontSize:8, color:T.dim, marginTop:10, textAlign:"center" }}>Tema seçimi tarayıcıya kaydedilir</div>
             </div>
 
             {/* ŞİFRE DEĞİŞTİR */}
