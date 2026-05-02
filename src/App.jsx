@@ -158,10 +158,21 @@ async function ld(k, f) { try { const r = await dbLoad(k, f); return r ?? f; } c
 async function sv(k, d) { try { await dbSave(k, d); } catch(e) { console.error("sv error:", e); } }
 
 function resizeImg(file) {
-  // Sıkıştırma YOK — orijinal kalite
   return new Promise(resolve => {
     const rd = new FileReader();
-    rd.onload = e => resolve(e.target.result);
+    rd.onload = e => {
+      const img = new Image();
+      img.onload = () => {
+        const c = document.createElement("canvas");
+        let w = img.width, h = img.height;
+        if (w > 1200) { h = Math.round(h * 1200 / w); w = 1200; }
+        if (h > 1200) { w = Math.round(w * 1200 / h); h = 1200; }
+        c.width = w; c.height = h;
+        c.getContext("2d").drawImage(img, 0, 0, w, h);
+        resolve(c.toDataURL("image/jpeg", 0.75));
+      };
+      img.src = e.target.result;
+    };
     rd.readAsDataURL(file);
   });
 }
@@ -227,6 +238,13 @@ function downloadPDF(html, filename) {
       alert("PDF acilamadi. Tarayici popup izni verin.");
     }
   }
+}
+
+// Doğal sıralama: ALT1, ALT2, ALT10 (numara sırasıyla)
+function dogalSirala(a, b) {
+  const ka = (a.kod || "ZZZ").toUpperCase();
+  const kb = (b.kod || "ZZZ").toUpperCase();
+  return ka.localeCompare(kb, undefined, { numeric: true, sensitivity: 'base' });
 }
 
 function buildKatalogHTML(kol, modeller, sutun) {
@@ -886,6 +904,10 @@ function Atolye() {
   const [showKM,  setShowKM]  = useState(false);
   const [showMM,  setShowMM]  = useState(false);
   const [showYedek, setShowYedek] = useState(false);
+  const [katalogSiralaModal, setKatalogSiralaModal] = useState(false);
+  const [katalogSiraliModeller, setKatalogSiraliModeller] = useState([]);
+  const [katalogSutun, setKatalogSutun] = useState(3);
+  const [katalogKol, setKatalogKol] = useState(null);
   const [yedekJson, setYedekJson] = useState("");
   const [driveYukleniyor, setDriveYukleniyor] = useState(null);
   const [hurdaModal, setHurdaModal] = useState(null); // {sipId, kalemId, kalemAd, maxAdet, mevcAdet}
@@ -1495,8 +1517,8 @@ function Atolye() {
                         </div>
                         <div style={{ display:"flex", gap:3 }} onClick={e => e.stopPropagation()}>
                           <button onClick={() => openEK(kol)} style={{ ...GH, padding:"2px 6px", fontSize:8 }}>Edit</button>
-                          <button onClick={() => downloadPDF(buildKatalogHTML(kol, km, 3), kol.ad+"-katalog-3")} style={{ background:"rgba(91,155,213,0.1)", border:"none", borderRadius:5, padding:"2px 6px", color:"#5b9bd5", fontSize:8, fontWeight:700, cursor:"pointer" }}>PDF 3</button>
-                          <button onClick={() => downloadPDF(buildKatalogHTML(kol, km, 4), kol.ad+"-katalog-4")} style={{ background:"rgba(167,139,250,0.1)", border:"none", borderRadius:5, padding:"2px 6px", color:"#a78bfa", fontSize:8, fontWeight:700, cursor:"pointer" }}>PDF 4</button>
+                          <button onClick={() => { setKatalogKol(kol); setKatalogSiraliModeller([...km].sort(dogalSirala)); setKatalogSutun(3); setKatalogSiralaModal(true); }} style={{ background:"rgba(91,155,213,0.1)", border:"none", borderRadius:5, padding:"2px 6px", color:"#5b9bd5", fontSize:8, fontWeight:700, cursor:"pointer" }}>PDF 3</button>
+                          <button onClick={() => { setKatalogKol(kol); setKatalogSiraliModeller([...km].sort(dogalSirala)); setKatalogSutun(4); setKatalogSiralaModal(true); }} style={{ background:"rgba(167,139,250,0.1)", border:"none", borderRadius:5, padding:"2px 6px", color:"#a78bfa", fontSize:8, fontWeight:700, cursor:"pointer" }}>PDF 4</button>
                           <button onClick={() => setDelOnay({ type:"kol", id:kol.id })} style={{ ...RD, padding:"2px 6px", fontSize:8 }}>Sil</button>
                         </div>
                       </div>
@@ -1517,8 +1539,8 @@ function Atolye() {
                 <h2 style={{ margin:0, fontSize:14, fontWeight:700, color:"#e8dcc8" }}>{aktifKol ? aktifKol.ad : "Tum Modeller"} <span style={{ fontSize:10, color:"#7a6f5a" }}>({gorunen.length})</span></h2>
               </div>
               <div style={{ display:"flex", gap:4 }}>
-                {aktifKol && <button onClick={() => downloadPDF(buildKatalogHTML(aktifKol, aktMod, 3), aktifKol.ad+"-katalog-3")} style={{ ...GH, fontSize:9, padding:"5px 9px" }}>PDF 3'lü</button>}
-                {aktifKol && <button onClick={() => downloadPDF(buildKatalogHTML(aktifKol, aktMod, 4), aktifKol.ad+"-katalog-4")} style={{ background:"rgba(167,139,250,0.06)", border:"1px solid rgba(167,139,250,0.15)", borderRadius:9, padding:"5px 9px", color:"#a78bfa", fontSize:9, fontWeight:700, cursor:"pointer" }}>PDF 4'lü</button>}
+                {aktifKol && <button onClick={() => { setKatalogKol(aktifKol); setKatalogSiraliModeller([...aktMod].sort(dogalSirala)); setKatalogSutun(3); setKatalogSiralaModal(true); }} style={{ ...GH, fontSize:9, padding:"5px 9px" }}>PDF 3'lü</button>}
+                {aktifKol && <button onClick={() => { setKatalogKol(aktifKol); setKatalogSiraliModeller([...aktMod].sort(dogalSirala)); setKatalogSutun(4); setKatalogSiralaModal(true); }} style={{ background:"rgba(167,139,250,0.06)", border:"1px solid rgba(167,139,250,0.15)", borderRadius:9, padding:"5px 9px", color:"#a78bfa", fontSize:9, fontWeight:700, cursor:"pointer" }}>PDF 4'lü</button>}
                 {seciliModeller.size > 0 && (
                   <>
                     <button onClick={()=>{ const hepsi = new Set(gorunen.map(m=>m.id)); setSeciliModeller(hepsi); }} style={{ ...GH, fontSize:9, padding:"5px 9px" }}>Tümünü Seç ({gorunen.length})</button>
@@ -2963,6 +2985,42 @@ function Atolye() {
       )}
 
       {/* YEDEK MODAL */}
+      {/* KATALOG SIRALAMA ÖNİZLEME */}
+      <Modal open={katalogSiralaModal} onClose={()=>setKatalogSiralaModal(false)} title={"Katalog Sıralama — " + (katalogKol?.ad||"")}>
+        <div style={{ fontSize:10, color:"#998a6e", marginBottom:8 }}>
+          Modeller kod sırasına göre dizildi. Sırayı düzeltmek için ↑↓ butonlarını kullanın, sonra PDF Al'a basın.
+        </div>
+        <div style={{ maxHeight:400, overflowY:"auto", marginBottom:10 }}>
+          {katalogSiraliModeller.map((m, i) => (
+            <div key={m.id} style={{ display:"flex", alignItems:"center", gap:6, padding:"4px 6px", background: i%2===0 ? "rgba(201,168,76,0.03)" : "transparent", borderRadius:5 }}>
+              <span style={{ fontSize:8, color:"#665d4a", width:22, textAlign:"right" }}>{i+1}.</span>
+              {m.foto && <img src={m.foto} style={{ width:30, height:30, objectFit:"cover", borderRadius:4 }}/>}
+              <span style={{ fontSize:10, color:"#c9a84c", fontWeight:700, flex:1 }}>{m.kod || "—"}</span>
+              <span style={{ fontSize:8, color:"#998a6e" }}>{m.ad || ""}</span>
+              <button onClick={() => {
+                if (i === 0) return;
+                const y = [...katalogSiraliModeller];
+                [y[i-1], y[i]] = [y[i], y[i-1]];
+                setKatalogSiraliModeller(y);
+              }} style={{ background:"none", border:"1px solid rgba(201,168,76,0.2)", borderRadius:4, color:"#c9a84c", cursor:"pointer", fontSize:10, padding:"1px 5px", opacity: i===0?0.3:1 }}>↑</button>
+              <button onClick={() => {
+                if (i === katalogSiraliModeller.length-1) return;
+                const y = [...katalogSiraliModeller];
+                [y[i], y[i+1]] = [y[i+1], y[i]];
+                setKatalogSiraliModeller(y);
+              }} style={{ background:"none", border:"1px solid rgba(201,168,76,0.2)", borderRadius:4, color:"#c9a84c", cursor:"pointer", fontSize:10, padding:"1px 5px", opacity: i===katalogSiraliModeller.length-1?0.3:1 }}>↓</button>
+            </div>
+          ))}
+        </div>
+        <div style={{ display:"flex", gap:8 }}>
+          <button onClick={() => { setKatalogSiraliModeller([...katalogSiraliModeller].sort(dogalSirala)); }} style={{ background:"rgba(91,155,213,0.1)", border:"1px solid rgba(91,155,213,0.2)", borderRadius:7, padding:"6px 14px", color:"#5b9bd5", fontSize:10, fontWeight:700, cursor:"pointer" }}>A-Z Sırala</button>
+          <button onClick={() => {
+            downloadPDF(buildKatalogHTML(katalogKol, katalogSiraliModeller, katalogSutun), katalogKol.ad+"-katalog-"+katalogSutun);
+            setKatalogSiralaModal(false);
+          }} style={{ background:"#c9a84c", border:"none", borderRadius:7, padding:"6px 20px", color:"#110f0a", fontSize:11, fontWeight:800, cursor:"pointer", flex:1 }}>📄 PDF Al ({katalogSutun}'lü · {katalogSiraliModeller.length} model)</button>
+        </div>
+      </Modal>
+
       <Modal open={showYedek} onClose={()=>setShowYedek(false)} title="Geri Yukle">
         <div style={{ fontSize:10, color:"#998a6e", marginBottom:10 }}>
           PC'ye indirdiğiniz JSON dosyasını seçin (kopyala-yapıştır gerekmez!).
