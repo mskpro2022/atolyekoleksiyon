@@ -247,11 +247,12 @@ function dogalSirala(a, b) {
   return ka.localeCompare(kb, undefined, { numeric: true, sensitivity: 'base' });
 }
 
-function buildKatalogHTML(kol, modeller, sutun) {
+function buildKatalogHTML(kol, modeller, sutun, hedefAyar) {
   // sutun: 3 veya 4 (kullanıcı seçer)
+  // hedefAyar: "8K", "10K", "14K", "18K" vb — gram dönüşümü yapılır
   // bileklik kategorisi → otomatik 2'li geniş layout
   const cols = sutun || 3;
-  const perPage = cols === 4 ? 16 : 12; // 4'lü: 4x4=16, 3'lü: 3x4=12
+  const perPage = cols === 4 ? 16 : 12;
 
   // Modelleri ikiye ayır: bileklik ve diğerleri
   const bileklikler = modeller.filter(m => m.kategori === "bileklik");
@@ -291,12 +292,18 @@ function buildKatalogHTML(kol, modeller, sutun) {
 
   // Kart HTML'i oluştur
   const kartHTML = (m, extraCls) => {
+    // Gram dönüşümü: hedefAyar farklıysa gramı çevir
+    const gosterAyar = hedefAyar || m.refAyar || "14K";
+    const gosterGram = hedefAyar && hedefAyar !== m.refAyar
+      ? gramDonustur(Number(m.gram)||0, m.refAyar||"14K", hedefAyar).toFixed(2)
+      : (m.gram || "—");
+    
     let h = "<div class='cd" + (extraCls?" "+extraCls:"") + "'>";
     h += "<div class='ph'>";
     h += m.foto ? "<img src='" + m.foto + "'/>" : "<div class='ni'>◇</div>";
     h += "</div><div class='inf'><div class='r1'>";
     h += "<span class='kod'>" + (m.kod || "—") + "</span>";
-    h += "<span class='gram'>" + (m.gram || "—") + "gr · " + (m.refAyar || "") + "</span>";
+    h += "<span class='gram'>" + gosterGram + "gr · " + gosterAyar + "</span>";
     h += "</div>";
     if (m.ac) h += "<div class='ac'>" + m.ac + "</div>";
     h += "</div></div>";
@@ -305,6 +312,7 @@ function buildKatalogHTML(kol, modeller, sutun) {
 
   let h = "<!DOCTYPE html><html><head><meta charset='utf-8'><title>" + kol.ad + "</title><style>" + css + "</style></head><body>";
   h += "<div class='cv'><div class='ln'></div><h1>" + kol.ad + "</h1>";
+  if (hedefAyar) h += "<p style='margin-top:6px;font-size:14px;color:#c9a84c;letter-spacing:.08em'>" + hedefAyar + "</p>";
   if (kol.ac) h += "<p style='margin-top:8px'>" + kol.ac + "</p>";
   h += "<div class='ln'></div></div>";
 
@@ -908,6 +916,7 @@ function Atolye() {
   const [katalogSiraliModeller, setKatalogSiraliModeller] = useState([]);
   const [katalogSutun, setKatalogSutun] = useState(3);
   const [katalogKol, setKatalogKol] = useState(null);
+  const [katalogAyar, setKatalogAyar] = useState("14K");
   const [yedekJson, setYedekJson] = useState("");
   const [driveYukleniyor, setDriveYukleniyor] = useState(null);
   const [hurdaModal, setHurdaModal] = useState(null); // {sipId, kalemId, kalemAd, maxAdet, mevcAdet}
@@ -2997,7 +3006,18 @@ function Atolye() {
       {/* YEDEK MODAL */}
       {/* KATALOG SIRALAMA ÖNİZLEME */}
       <Modal open={katalogSiralaModal} onClose={()=>setKatalogSiralaModal(false)} title={"Katalog Sıralama — " + (katalogKol?.ad||"")}>
-        <div style={{ fontSize:10, color:"#998a6e", marginBottom:8 }}>
+        <div style={{ display:"flex", gap:8, marginBottom:10, alignItems:"center", flexWrap:"wrap" }}>
+          <span style={{ fontSize:9, color:T.sub }}>Ayar:</span>
+          {["8K","10K","14K","18K","22K","925"].map(a => (
+            <button key={a} onClick={()=>setKatalogAyar(a)} style={{
+              background: katalogAyar===a ? T.gold : T.btnBg,
+              border: "1px solid " + (katalogAyar===a ? T.gold : T.btnBorder),
+              borderRadius:6, padding:"3px 10px", fontSize:9, fontWeight: katalogAyar===a ? 800 : 400,
+              color: katalogAyar===a ? T.bg2 : T.text, cursor:"pointer", transition:"all .2s"
+            }}>{a}</button>
+          ))}
+        </div>
+        <div style={{ fontSize:10, color:T.sub, marginBottom:8 }}>
           Modeller kod sırasına göre dizildi. Sırayı düzeltmek için ↑↓ butonlarını kullanın, sonra PDF Al'a basın.
         </div>
         <div style={{ maxHeight:400, overflowY:"auto", marginBottom:10 }}>
@@ -3025,9 +3045,9 @@ function Atolye() {
         <div style={{ display:"flex", gap:8 }}>
           <button onClick={() => { setKatalogSiraliModeller([...katalogSiraliModeller].sort(dogalSirala)); }} style={{ background:"rgba(91,155,213,0.1)", border:"1px solid rgba(91,155,213,0.2)", borderRadius:7, padding:"6px 14px", color:"#5b9bd5", fontSize:10, fontWeight:700, cursor:"pointer" }}>A-Z Sırala</button>
           <button onClick={() => {
-            downloadPDF(buildKatalogHTML(katalogKol, katalogSiraliModeller, katalogSutun), katalogKol.ad+"-katalog-"+katalogSutun);
+            downloadPDF(buildKatalogHTML(katalogKol, katalogSiraliModeller, katalogSutun, katalogAyar), katalogKol.ad+"-"+katalogAyar+"-katalog-"+katalogSutun);
             setKatalogSiralaModal(false);
-          }} style={{ background:"#c9a84c", border:"none", borderRadius:7, padding:"6px 20px", color:"#110f0a", fontSize:11, fontWeight:800, cursor:"pointer", flex:1 }}>📄 PDF Al ({katalogSutun}'lü · {katalogSiraliModeller.length} model)</button>
+          }} style={{ background:"#c9a84c", border:"none", borderRadius:7, padding:"6px 20px", color:"#110f0a", fontSize:11, fontWeight:800, cursor:"pointer", flex:1 }}>📄 PDF Al ({katalogSutun}'lü · {katalogAyar} · {katalogSiraliModeller.length} model)</button>
         </div>
       </Modal>
 
