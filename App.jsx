@@ -84,11 +84,19 @@ const KATEGORILER = [
   { id: "diger",    l: "Diger" },
 ];
 
-function gramDonustur(refGram, refAyar, hedefAyar) {
+function gramDonustur(refGram, refAyar, hedefAyar, tasGram) {
   if (refAyar === hedefAyar) return refGram;
-  const y1 = YOGUNLUKLAR[refAyar] || 13.40;
-  const y2 = YOGUNLUKLAR[hedefAyar] || 13.40;
-  return refGram * (y2 / y1);
+  // Karat sayıları
+  const karatMap = { "8K":8, "10K":10, "14K":14, "18K":18, "22K":22, "24K":24, "925":9.25 };
+  const eskiK = karatMap[refAyar] || 14;
+  const yeniK = karatMap[hedefAyar] || 14;
+  // Taş gramını ayır (taş değişmez!)
+  const tas = Number(tasGram) || 0;
+  const madenGram = Math.max(0, Number(refGram) - tas);
+  // Atölye katsayısı: maden gramı × (yeniK / eskiK)
+  const yeniMadenGram = madenGram * (yeniK / eskiK);
+  // Taşı geri ekle
+  return yeniMadenGram + tas;
 }
 
 // ═══ HESAPLAMA — Tüm sonuçlar HAS GRAM cinsinden ═══
@@ -104,7 +112,7 @@ function hesapla(m, secilenAyar, altinKgUSD, varsayilanMly) {
   const refGram    = Number(m.gram) || 0;
   const tasGram    = Number(m.tasGram) || 0;
   const aktifAyar  = secilenAyar || refAyar;
-  const mamulGram  = gramDonustur(refGram, refAyar, aktifAyar);
+  const mamulGram  = gramDonustur(refGram, refAyar, aktifAyar, tasGram);
   const ayarOran   = (AYARLAR.find(a => a.id === aktifAyar) || { o: 0.585 }).o;
   const malMly     = Number(m.madenCarpan) || Number(varsayilanMly) || 0.030;
   const hasGramUSD = altinKgUSD > 0 ? altinKgUSD / 1000 : 0;
@@ -302,7 +310,7 @@ function buildKatalogHTML(kol, modeller, sutun, hedefAyar) {
     // Gram dönüşümü: hedefAyar farklıysa gramı çevir
     const gosterAyar = hedefAyar || m.refAyar || "14K";
     const gosterGram = hedefAyar && hedefAyar !== m.refAyar
-      ? gramDonustur(Number(m.gram)||0, m.refAyar||"14K", hedefAyar).toFixed(2)
+      ? gramDonustur(Number(m.gram)||0, m.refAyar||"14K", hedefAyar, m.tasGram||0).toFixed(2)
       : (m.gram || "—");
     
     let h = "<div class='cd" + (extraCls?" "+extraCls:"") + "'>";
