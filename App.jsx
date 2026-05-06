@@ -32,8 +32,17 @@ const DURUMLAR = [
 
 const MIN_KAR = 0.05;
 const MIN_MLY = 0.020; // milyem/gr — bu altındaki modeller düşük karlı sayılır
-const GOLD = "#c9a84c";
-const DARK = "#110f0a";
+const TEMALAR = {
+  altin:    { id:"altin",    l:"◆ Klasik Altın",  ac:"Koyu zemin, altın vurgular", bg:"linear-gradient(165deg,#110f0a,#16140e,#141210)", bg2:"#110f0a", gold:"#c9a84c", text:"#e8dcc8", sub:"#998a6e", dim:"#665d4a", card:"rgba(201,168,76,0.03)", border:"rgba(201,168,76,0.08)", header:"rgba(201,168,76,0.04)", headerBorder:"rgba(201,168,76,0.07)", btnBg:"rgba(201,168,76,0.08)", btnBorder:"rgba(201,168,76,0.15)", accent:"#c9a84c", danger:"#e85a4f", success:"#6abf69", info:"#5b9bd5" },
+  obsidyen: { id:"obsidyen", l:"◆ Obsidyen",      ac:"Tam siyah, sade beyaz",     bg:"linear-gradient(165deg,#080808,#0e0e0e,#0a0a0a)", bg2:"#080808", gold:"#e0e0e0", text:"#f0f0f0", sub:"#777777", dim:"#4a4a4a", card:"rgba(255,255,255,0.03)", border:"rgba(255,255,255,0.07)", header:"rgba(255,255,255,0.03)", headerBorder:"rgba(255,255,255,0.06)", btnBg:"rgba(255,255,255,0.05)", btnBorder:"rgba(255,255,255,0.1)", accent:"#e0e0e0", danger:"#ff6b6b", success:"#69db7c", info:"#74c0fc" },
+  slate:    { id:"slate",    l:"◆ Slate",         ac:"Lacivert-gri, profesyonel", bg:"linear-gradient(165deg,#0f1923,#141f2e,#111a28)", bg2:"#0f1923", gold:"#5b9bd5", text:"#d0dff0", sub:"#6a85aa", dim:"#445570", card:"rgba(91,155,213,0.04)", border:"rgba(91,155,213,0.08)", header:"rgba(91,155,213,0.04)", headerBorder:"rgba(91,155,213,0.07)", btnBg:"rgba(91,155,213,0.06)", btnBorder:"rgba(91,155,213,0.12)", accent:"#5b9bd5", danger:"#e85a4f", success:"#6abf69", info:"#5b9bd5" },
+  beyaz:    { id:"beyaz",    l:"◆ Beyaz",         ac:"Apple tarzı, minimal açık",  bg:"linear-gradient(165deg,#f5f5f7,#f0f0f2,#eeeef0)", bg2:"#f5f5f7", gold:"#1d1d1f", text:"#1d1d1f", sub:"#86868b", dim:"#aeaeb2", card:"rgba(0,0,0,0.02)", border:"rgba(0,0,0,0.06)", header:"rgba(0,0,0,0.02)", headerBorder:"rgba(0,0,0,0.05)", btnBg:"rgba(0,0,0,0.04)", btnBorder:"rgba(0,0,0,0.1)", accent:"#0066cc", danger:"#ff3b30", success:"#34c759", info:"#007aff" },
+};
+
+let _tema = TEMALAR.altin;
+try { const t = localStorage.getItem("atolye_tema"); if (t && TEMALAR[t]) _tema = TEMALAR[t]; } catch {}
+let GOLD = _tema.gold;
+let DARK = _tema.bg2;
 
 // ═══ BOY TABLOLARI ═══
 const BOY_YUZUK = {
@@ -156,11 +165,11 @@ function resizeImg(file) {
       img.onload = () => {
         const c = document.createElement("canvas");
         let w = img.width, h = img.height;
-        if (w > 800) { h = Math.round(h * 800 / w); w = 800; }
-        if (h > 800) { w = Math.round(w * 800 / h); h = 800; }
+        if (w > 1200) { h = Math.round(h * 1200 / w); w = 1200; }
+        if (h > 1200) { w = Math.round(w * 1200 / h); h = 1200; }
         c.width = w; c.height = h;
         c.getContext("2d").drawImage(img, 0, 0, w, h);
-        resolve(c.toDataURL("image/jpeg", 0.82));
+        resolve(c.toDataURL("image/jpeg", 0.75));
       };
       img.src = e.target.result;
     };
@@ -231,7 +240,25 @@ function downloadPDF(html, filename) {
   }
 }
 
-function buildKatalogHTML(kol, modeller) {
+// Doğal sıralama: ALT1, ALT2, ALT10 (numara sırasıyla)
+function dogalSirala(a, b) {
+  const ka = (a.kod || "ZZZ").toUpperCase();
+  const kb = (b.kod || "ZZZ").toUpperCase();
+  return ka.localeCompare(kb, undefined, { numeric: true, sensitivity: 'base' });
+}
+
+function buildKatalogHTML(kol, modeller, sutun, hedefAyar) {
+  // sutun: 3 veya 4 (kullanıcı seçer)
+  // hedefAyar: "8K", "10K", "14K", "18K" vb — gram dönüşümü yapılır
+  // bileklik kategorisi → otomatik 2'li geniş layout
+  const cols = sutun || 3;
+  const perPage = cols === 4 ? 16 : 12;
+
+  // Modelleri üçe ayır: bileklik, kolye ve diğerleri
+  const bileklikler = modeller.filter(m => m.kategori === "bileklik");
+  const kolyeler    = modeller.filter(m => m.kategori === "kolye");
+  const digerler    = modeller.filter(m => m.kategori !== "bileklik" && m.kategori !== "kolye");
+
   const css = "*{margin:0;padding:0;box-sizing:border-box}"
     + "body{font-family:Arial,Helvetica,sans-serif;background:#f3f3f3;color:#1a1a1a}"
     + "@media print{.np{display:none!important}@page{size:A4 portrait;margin:6mm}}"
@@ -241,56 +268,115 @@ function buildKatalogHTML(kol, modeller) {
     + ".cv p{font-size:11px;color:#aaa;letter-spacing:.1em;text-transform:uppercase}"
     + ".pg{padding:7px 16px 5px;page-break-after:always;height:99vh;display:flex;flex-direction:column;background:#f3f3f3}"
     + ".pg:last-child{page-break-after:auto}"
-    + ".grid{display:grid;grid-template-columns:1fr 1fr 1fr;grid-template-rows:1fr 1fr 1fr 1fr;gap:5px;flex:1;min-height:0}"
+    + ".grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px;flex:1;min-height:0}"
+    + ".grid4{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:4px;flex:1;min-height:0}"
+    + ".grid2{display:grid;grid-template-columns:1fr 1fr;gap:6px;flex:1;min-height:0}"
+    + ".grid2x2{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;gap:6px;flex:1;min-height:0}"
     + ".cd{background:#fff;border:1px solid #e0e0e0;border-radius:12px;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 2px 8px rgba(0,0,0,0.10)}"
     + ".cd.full{grid-column:1/-1}"
     + ".cd.span2{grid-column:span 2}"
+    + ".cd.big{grid-column:span 2;grid-row:span 2}" // kolye 2x2
     + ".ph{flex:1;min-height:0;position:relative;background:#f3f3f3;overflow:hidden}"
     + ".ph img{position:absolute;top:50%;left:50%;width:100%;height:100%;object-fit:contain;object-position:center;display:block;transform:translate(-50%,-50%)}"
     + ".ph .ni{position:absolute;top:0;left:0;width:100%;height:100%;background:#f3f3f3;display:flex;align-items:center;justify-content:center;color:#ddd;font-size:20px}"
+    + ".cd2 .ph{min-height:180px}"
+    + ".cd-kolye .ph{min-height:280px}"
+    + ".cd-bileklik{grid-column:1/-1}"
+    + ".cd-bileklik .ph{min-height:120px}"
+    + ".cd-bileklik .ph img{object-fit:contain}"
     + ".inf{padding:6px 9px 7px 10px;flex-shrink:0;background:#fff;border-top:1px solid #f0f0f0;border-left:3px solid #c9a84c}"
     + ".r1{display:flex;justify-content:space-between;align-items:baseline}"
     + ".kod{font-size:13px;color:#c9a84c;font-weight:700;letter-spacing:.04em}"
     + ".gram{font-size:10px;font-weight:700;color:#333}"
     + ".ac{font-size:8px;color:#aaa;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}"
     + ".ft{display:flex;justify-content:space-between;align-items:center;padding:5px 3px 0;border-top:1px solid #e0e0e0;flex-shrink:0}"
-    + ".ft span{font-size:9px;color:#c9a84c;font-weight:700;letter-spacing:.08em;text-transform:uppercase}"
-    + ".ft small{font-size:9px;color:#ccc}"
     + ".ft span{font-size:7px;color:#c9a84c;font-weight:700;letter-spacing:.08em;text-transform:uppercase}"
     + ".ft small{font-size:7px;color:#ccc}"
+    + ".sec-title{font-size:9px;color:#c9a84c;font-weight:700;letter-spacing:.1em;text-transform:uppercase;margin:8px 0 4px;padding-left:2px;border-left:3px solid #c9a84c;padding-left:6px}"
     + ".pb{position:fixed;bottom:16px;right:16px;background:#c9a84c;border:none;border-radius:8px;padding:10px 20px;color:#fff;font-size:13px;cursor:pointer;font-family:sans-serif}";
+
+  const gridClass = cols === 4 ? "grid4" : "grid3";
+
+  // Kart HTML'i oluştur
+  const kartHTML = (m, extraCls) => {
+    // Gram dönüşümü: hedefAyar farklıysa gramı çevir
+    const gosterAyar = hedefAyar || m.refAyar || "14K";
+    const gosterGram = hedefAyar && hedefAyar !== m.refAyar
+      ? gramDonustur(Number(m.gram)||0, m.refAyar||"14K", hedefAyar).toFixed(2)
+      : (m.gram || "—");
+    
+    let h = "<div class='cd" + (extraCls?" "+extraCls:"") + "'>";
+    h += "<div class='ph'>";
+    h += m.foto ? "<img src='" + m.foto + "'/>" : "<div class='ni'>◇</div>";
+    h += "</div><div class='inf'><div class='r1'>";
+    h += "<span class='kod'>" + (m.kod || "—") + "</span>";
+    h += "<span class='gram'>" + gosterGram + "gr · " + gosterAyar + "</span>";
+    h += "</div>";
+    if (m.ac) h += "<div class='ac'>" + m.ac + "</div>";
+    h += "</div></div>";
+    return h;
+  };
 
   let h = "<!DOCTYPE html><html><head><meta charset='utf-8'><title>" + kol.ad + "</title><style>" + css + "</style></head><body>";
   h += "<div class='cv'><div class='ln'></div><h1>" + kol.ad + "</h1>";
+  if (hedefAyar) h += "<p style='margin-top:6px;font-size:14px;color:#c9a84c;letter-spacing:.08em'>" + hedefAyar + "</p>";
   if (kol.ac) h += "<p style='margin-top:8px'>" + kol.ac + "</p>";
   h += "<div class='ln'></div></div>";
 
-  const pages = [];
-  for (let i = 0; i < modeller.length; i += 12) pages.push(modeller.slice(i, i + 12));
+  let pageNum = 0;
+  const kolyePerPage = cols === 4 ? 4 : 2; // 4'lü gridde 4 kolye, 3'lü gridde 2
+  const totalPages = Math.ceil(digerler.length / perPage) + Math.ceil(kolyeler.length / kolyePerPage) + Math.ceil(bileklikler.length / 3);
 
-  pages.forEach((pg, pi) => {
-    h += "<div class='pg'><div class='grid'>";
+  // DİĞER ÜRÜNLER — seçilen grid (3 veya 4 sütun)
+  const digerPages = [];
+  for (let i = 0; i < digerler.length; i += perPage) digerPages.push(digerler.slice(i, i + perPage));
+
+  digerPages.forEach((pg, pi) => {
+    pageNum++;
+    h += "<div class='pg'><div class='" + gridClass + "'>";
     pg.forEach((m, idx) => {
-      const rem = pg.length % 3;
-      let cls = "cd";
-      if (rem === 1 && idx === pg.length - 1) cls = "cd full";
-      else if (rem === 2 && idx === pg.length - 2) cls = "cd span2";
-      h += "<div class='" + cls + "'>";
-      h += "<div class='ph'>";
-      h += m.foto ? "<img src='" + m.foto + "'/>" : "<div class='ni'>◇</div>";
-      h += "</div><div class='inf'><div class='r1'>";
-      h += "<span class='kod'>" + (m.kod || "—") + "</span>";
-      h += "<span class='gram'>" + (m.gram || "—") + "gr · " + (m.refAyar || "") + "</span>";
-      h += "</div>";
-      const ac = m.ac || "";
-      if (ac) h += "<div class='ac'>" + ac + "</div>";
-      h += "</div></div>";
+      const rem = pg.length % cols;
+      let cls = "";
+      if (rem === 1 && idx === pg.length - 1) cls = "full";
+      else if (cols === 3 && rem === 2 && idx === pg.length - 2) cls = "span2";
+      h += kartHTML(m, cls);
     });
-    const r4 = pg.length % 3;
-    if (r4 === 1) h += "<div></div><div></div>";
-    else if (r4 === 2) h += "<div></div>";
-    h += "</div><div class='ft'><span>" + kol.ad + "</span><small>" + (pi + 1) + " / " + pages.length + "</small></div></div>";
+    // Boş hücreler
+    const rem = pg.length % cols;
+    if (rem > 0) for (let i = 0; i < cols - rem; i++) h += "<div></div>";
+    h += "</div><div class='ft'><span>" + kol.ad + "</span><small>" + pageNum + " / " + totalPages + "</small></div></div>";
   });
+
+  // KOLYE — 2x2 büyük kart (sayfada 2-4 kolye)
+  if (kolyeler.length > 0) {
+    const kolyePages = [];
+    for (let i = 0; i < kolyeler.length; i += kolyePerPage) kolyePages.push(kolyeler.slice(i, i + kolyePerPage));
+
+    kolyePages.forEach((pg, pi) => {
+      pageNum++;
+      h += "<div class='pg'>";
+      if (pi === 0) h += "<div class='sec-title'>Kolye</div>";
+      h += "<div class='grid2x2'>";
+      pg.forEach(m => h += kartHTML(m, "cd-kolye"));
+      if (pg.length % 2 !== 0) h += "<div></div>";
+      h += "</div><div class='ft'><span>" + kol.ad + " · Kolye</span><small>" + pageNum + " / " + totalPages + "</small></div></div>";
+    });
+  }
+
+  // BİLEKLİK — tam satır (sayfada 3 bileklik)
+  if (bileklikler.length > 0) {
+    const bileklikPages = [];
+    for (let i = 0; i < bileklikler.length; i += 3) bileklikPages.push(bileklikler.slice(i, i + 3));
+
+    bileklikPages.forEach((pg, pi) => {
+      pageNum++;
+      h += "<div class='pg'>";
+      if (pi === 0) h += "<div class='sec-title'>Bileklik</div>";
+      h += "<div style='display:flex;flex-direction:column;gap:6px;flex:1;min-height:0'>";
+      pg.forEach(m => h += kartHTML(m, "cd-bileklik"));
+      h += "</div><div class='ft'><span>" + kol.ad + " · Bileklik</span><small>" + pageNum + " / " + totalPages + "</small></div></div>";
+    });
+  }
 
   h += "<button class='np pb' onclick='window.print()'>Yazdir / PDF</button></body></html>";
   return h;
@@ -372,10 +458,17 @@ function buildKonfHTML(siparis, altinKgUSD, mc, fiyatli) {
     tIscilik += iscilikTop;
     const katLabel = r.kategori ? r.kategori.charAt(0).toUpperCase()+r.kategori.slice(1) : "";
     const boyLabel = r.boy&&r.boy.deger ? "Boy: "+r.boy.sistem+" "+r.boy.deger+(r.boy.sistem!=="mm"&&r.boy.sistem!=="Beden"&&r.boy.sistem!=="mm (iç çap)"&&r.boy.sistem!=="mm (iç çevre)"?" (≈"+boyToMM(r.boy.sistem,r.boy.deger)+"mm)":"") : "";
+    // Kolye/bileklik için boyListesi
+    let boyListesiHTML = "";
+    if (r.boyListesi && r.boyListesi.length > 0) {
+      boyListesiHTML = "<div class='boy' style='margin-top:3px'><b>Boylar:</b> " + r.boyListesi.map(b => 
+        (b.uzunluk||"-") + (b.birim||"cm") + " · " + (b.gram||"-") + "gr × " + (b.adet||1) + "ad"
+      ).join(" / ") + "</div>";
+    }
     h += "<tr>";
     h += "<td>" + (r.foto ? "<img src='"+r.foto+"' style='width:66px;height:66px;object-fit:cover;border-radius:6px;display:block'/>" : "<div style='width:66px;height:66px;background:#eef4fa;border-radius:6px'></div>") + "</td>";
     h += "<td class='kod'>" + (r.kod||"-") + "</td>";
-    h += "<td>" + (katLabel?"<div class='nm'>"+katLabel+"</div>":"") + (r.sipNot?"<div class='nt'>"+r.sipNot+"</div>":"") + (boyLabel?"<div class='boy'>"+boyLabel+"</div>":"") + "</td>";
+    h += "<td>" + (katLabel?"<div class='nm'>"+katLabel+"</div>":"") + (r.sipNot?"<div class='nt'>"+r.sipNot+"</div>":"") + (boyLabel?"<div class='boy'>"+boyLabel+"</div>":"") + boyListesiHTML + "</td>";
     h += "<td class='r dim'>" + (r.renk||"Sari") + "</td>";
     h += "<td class='r'>" + r.adet + "</td>";
     h += "<td class='r'>" + fN(topGram,2) + " gr</td>";
@@ -641,6 +734,8 @@ function AiIsimlendir({ foto, onResult }) {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          "x-api-key": import.meta.env.VITE_ANTHROPIC_KEY || "",
+          "anthropic-version": "2023-06-01",
           "anthropic-dangerous-direct-browser-access": "true"
         },
         body: JSON.stringify({
@@ -812,6 +907,14 @@ export default function Root() {
 }
 
 function Atolye() {
+  const [tema, setTema] = useState(() => {
+    try { const t = localStorage.getItem("atolye_tema"); return TEMALAR[t] || TEMALAR.altin; } catch { return TEMALAR.altin; }
+  });
+  const T = tema; // kısa erişim
+  const temaUygula = (t) => {
+    setTema(t);
+    try { localStorage.setItem("atolye_tema", t.id); } catch {}
+  };
 
   const [kollar,    setKollar]    = useState([]);
   const [modeller,  setModeller]  = useState([]);
@@ -834,6 +937,11 @@ function Atolye() {
   const [showKM,  setShowKM]  = useState(false);
   const [showMM,  setShowMM]  = useState(false);
   const [showYedek, setShowYedek] = useState(false);
+  const [katalogSiralaModal, setKatalogSiralaModal] = useState(false);
+  const [katalogSiraliModeller, setKatalogSiraliModeller] = useState([]);
+  const [katalogSutun, setKatalogSutun] = useState(3);
+  const [katalogKol, setKatalogKol] = useState(null);
+  const [katalogAyar, setKatalogAyar] = useState("14K");
   const [yedekJson, setYedekJson] = useState("");
   const [driveYukleniyor, setDriveYukleniyor] = useState(null);
   const [hurdaModal, setHurdaModal] = useState(null); // {sipId, kalemId, kalemAd, maxAdet, mevcAdet}
@@ -936,14 +1044,14 @@ function Atolye() {
     };
 
     const k = await tryKeys(["v7k", "v5k", "atl5-k"], []);
-    const m = await tryKeys(["v7m", "v5m", "atl5-m"], []);
+    // Modelleri yükle — supabase.js chunk sistemi otomatik halleder
+    const m = await ld("v7m", []);
     const s = await tryKeys(["v7s", "v5s", "atl5-s"], []);
     const c = await tryKeysObj(["v7c", "v5c", "atl5-c"], {});
     const u = await tryKeys(["v7u"], {}) || {};
 
     // Bulduklarımızı v7 key'lerine kaydet (shared)
     if (k.length > 0) await sv("v7k", k);
-    if (m.length > 0) await sv("v7m", m);
     if (s.length > 0) await sv("v7s", s);
 
     const ay = await ld("v7ay", {});
@@ -962,8 +1070,8 @@ function Atolye() {
 
   const svK = useCallback(async d => { setKollar(d);    await sv("v7k", d); }, []);
   // Fotoğraf sıkıştırma — kaliteyi koruyarak boyutu küçültür
-  const fotoSikistir = (base64, maxW=800, quality=0.82) => new Promise(resolve => {
-    if (!base64 || base64.length < 50000) { resolve(base64); return; }
+  const fotoSikistir = (base64, maxW=800, quality=0.70) => new Promise(resolve => {
+    if (!base64 || !base64.startsWith('data:image')) { resolve(base64); return; }
     const img = new Image();
     img.onload = () => {
       const ratio = Math.min(maxW/img.width, maxW/img.height, 1);
@@ -978,15 +1086,26 @@ function Atolye() {
   });
 
   const svM = useCallback(async d => {
-    setModeller(d);
-    // Fotoğrafları sıkıştırarak kaydet
-    const sikistirilmis = await Promise.all(d.map(async m => ({
-      ...m,
-      foto: await fotoSikistir(m.foto)
-    })));
-    await sv("v7m", sikistirilmis);
-    // Sıkıştırılmış fotoları state'e de yansıt
-    setModeller(sikistirilmis);
+    // DUPLICATE TEMİZLEME — aynı kod/ID varsa son eklenen kazanır
+    const idMap = new Map();
+    const kodMap = new Map();
+    const temiz = [];
+    for (let i = d.length - 1; i >= 0; i--) {
+      const m = d[i];
+      if (!m) continue;
+      const kodKey = m.kod ? m.kod.trim().toUpperCase() : null;
+      const idKey = m.id;
+      if (kodKey && kodMap.has(kodKey)) continue;
+      if (idKey && idMap.has(idKey)) continue;
+      if (kodKey) kodMap.set(kodKey, true);
+      if (idKey) idMap.set(idKey, true);
+      temiz.unshift(m);
+    }
+    if (temiz.length !== d.length) {
+      console.log("🧹 " + (d.length - temiz.length) + " duplicate temizlendi");
+    }
+    setModeller(temiz);
+    await sv("v7m", temiz);
   }, []);
   const svS = useCallback(async d => { setSiparisler(d); await sv("v7s", d); }, []);
 
@@ -1142,7 +1261,10 @@ function Atolye() {
   const konfNotSec   = (id, val) => setKonfNot(p => ({ ...p, [id]: val }));
   const konfBoySet   = (id, val) => setKonfBoylar(p => ({ ...p, [id]: val }));
   const konfBoyEkle  = (id, kategori) => {
-    const def = kategori==="yuzuk" ? { sistem:"US", deger:"", adet:1 } : { sistem:"mm (iç çap)", deger:"", adet:1 };
+    let def;
+    if (kategori==="yuzuk") def = { sistem:"US", deger:"", adet:1 };
+    else if (kategori==="kolye" || kategori==="bileklik") def = { uzunluk:"", birim:"cm", gram:"", adet:1 };
+    else def = { sistem:"mm (iç çap)", deger:"", adet:1 };
     setKonfBoylar(p => ({ ...p, [id]: [...(p[id]||[]), def] }));
   };
   const konfBoySil   = (id, idx) => setKonfBoylar(p => ({ ...p, [id]: (p[id]||[]).filter((_,i)=>i!==idx) }));
@@ -1155,7 +1277,17 @@ function Atolye() {
       const boylar = konfBoylar[m.id] || [];
       const genelBoyAktif = konfGenelBoy.aktif && konfGenelBoy.deger;
       const temel = { ...m, secilenAyar: konfAyar, renk: konfRenkler[m.id]||"Sari", sipNot: konfNot[m.id]||"" };
-      if (boylar.length > 0) {
+      
+      // Kolye ve bileklik: tek satır, boyListesi içeride
+      if ((m.kategori==="kolye" || m.kategori==="bileklik") && boylar.length > 0) {
+        const topAdet = boylar.reduce((s,b)=>s+(Number(b.adet)||1),0);
+        const topGram = boylar.reduce((s,b)=>s+(Number(b.gram)||Number(m.gram)||0)*(Number(b.adet)||1),0);
+        // Ortalama gram (toplam/adet)
+        const ortGram = topAdet > 0 ? topGram/topAdet : (Number(m.gram)||0);
+        satirlar.push({ ...temel, adet: topAdet, boyListesi: boylar, gram: ortGram, boy: null });
+      }
+      // Yüzük: her boy için ayrı satır (mevcut davranış)
+      else if (boylar.length > 0) {
         boylar.forEach((b, bi) => satirlar.push({ ...temel, adet: b.adet||1, boy: b, _boyIdx: bi }));
       } else if (genelBoyAktif) {
         satirlar.push({ ...temel, adet: konfAdet[m.id]||1, boy: konfGenelBoy });
@@ -1283,7 +1415,7 @@ function Atolye() {
   if (!loaded) return <div style={{ minHeight:"100vh", background:DARK, display:"flex", alignItems:"center", justifyContent:"center" }}><div style={{ color:GOLD, fontSize:16 }}>Yukleniyor...</div></div>;
 
   return (
-    <div style={{ minHeight:"100vh", background:"linear-gradient(165deg,#110f0a,#16140e,#141210)", color:"#e8dcc8", fontFamily:"sans-serif" }}>
+    <div style={{ minHeight:"100vh", background:T.bg, color:T.text, fontFamily:"sans-serif" }}>
       <style>{"@keyframes fadein{from{opacity:0}to{opacity:1}}@keyframes cardin{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}*{box-sizing:border-box}::-webkit-scrollbar{width:4px}::-webkit-scrollbar-thumb{background:rgba(201,168,76,.15);border-radius:2px}select option{background:#1c1a15;color:#e8dcc8}"}</style>
 
       {/* HEADER */}
@@ -1320,7 +1452,8 @@ function Atolye() {
                 setDriveYukleniyor("yedek");
                 try {
                   const k = await ld("v7k", []);
-                  const m = await ld("v7m", []);
+                  // Modelleri state'den al — Supabase chunk sorununu önler
+                  const m = modeller; 
                   const s = await ld("v7s", []);
                   const u = await ld("v7u", {});
                   const ay = await ld("v7ay", {});
@@ -1330,15 +1463,16 @@ function Atolye() {
                   const url = URL.createObjectURL(blob);
                   const a = document.createElement("a");
                   a.href = url;
-                  a.download = "atolye-yedek-" + new Date().toISOString().slice(0,10) + ".json";
+                  a.download = "atolye-yedek-" + new Date().toISOString().slice(0,10) + "-" + m.length + "model.json";
                   document.body.appendChild(a);
                   a.click();
                   document.body.removeChild(a);
                   URL.revokeObjectURL(url);
+                  alert("✓ Yedek alındı!\n" + m.length + " model\n" + k.length + " koleksiyon\n" + s.length + " sipariş");
                 } catch(e) { alert("Indirme hatasi: " + e.message); }
                 setDriveYukleniyor(null);
               }} style={{ background: driveYukleniyor==="yedek" ? "rgba(106,191,105,0.3)" : "rgba(106,191,105,0.1)", border:"1px solid rgba(106,191,105,0.2)", borderRadius:7, padding:"4px 10px", color:"#6abf69", fontSize:9, fontWeight:700, cursor:"pointer" }}>
-                {driveYukleniyor==="yedek" ? "İndiriliyor..." : "💾 PC'ye İndir (" + modeller.length + " model)"}
+                {driveYukleniyor==="yedek" ? "İndiriliyor..." : "💾 PC'ye İndir (" + modeller.length + " model · " + kollar.length + " kol · " + siparisler.length + " sip)"}
               </button>
               {/* DRIVE GERİ YÜKLEfixture */}
               <button onClick={() => { setYedekJson(""); setShowYedek(true); }} style={{ background:"rgba(91,155,213,0.1)", border:"1px solid rgba(91,155,213,0.2)", borderRadius:7, padding:"4px 10px", color:"#5b9bd5", fontSize:9, fontWeight:700, cursor:"pointer" }}>Geri Yukle</button>
@@ -1357,34 +1491,35 @@ function Atolye() {
               <button onClick={() => { rkf(); setEditK(null); setShowKM(true); }} style={BG}>+ Koleksiyon</button>
             </div>
             {kollar.length===0 && <p style={{ color:"#665d4a", textAlign:"center", padding:"40px" }}>Henuz koleksiyon yok</p>}
-            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(230px,1fr))", gap:12 }}>
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))", gap:16 }}>
               {kollar.map((kol,i) => {
                 const km = modeller.filter(m => m.ki===kol.id);
                 const ft = km.filter(m => m.foto).slice(0,4);
                 return (
                   <div key={kol.id} onClick={() => { setAktifKol(kol); setSayfa("modeller"); setFiltre("all"); setEtiketF(""); setArama(""); setSirala("varsayilan"); }}
-                    style={{ background:"rgba(201,168,76,0.03)", border:"1px solid rgba(201,168,76,0.08)", borderRadius:12, overflow:"hidden", cursor:"pointer", transition:"all .25s", animation:"cardin .4s ease "+(i*.05)+"s both" }}
-                    onMouseOver={e => { e.currentTarget.style.borderColor="rgba(201,168,76,0.22)"; e.currentTarget.style.transform="translateY(-2px)"; }}
-                    onMouseOut={e  => { e.currentTarget.style.borderColor="rgba(201,168,76,0.08)"; e.currentTarget.style.transform="none"; }}>
-                    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", height:80, background:"rgba(0,0,0,0.2)" }}>
+                    style={{ background:"rgba(255,255,255,0.06)", backdropFilter:"blur(10px)", border:"1px solid rgba(255,255,255,0.08)", borderRadius:20, overflow:"hidden", cursor:"pointer", transition:"all .3s ease", animation:"cardin .4s ease "+(i*.05)+"s both", boxShadow:"0 2px 16px rgba(0,0,0,0.15)" }}
+                    onMouseOver={e => { e.currentTarget.style.boxShadow="0 8px 32px rgba(0,0,0,0.25)"; e.currentTarget.style.transform="translateY(-4px)"; e.currentTarget.style.borderColor="rgba(255,255,255,0.15)"; }}
+                    onMouseOut={e  => { e.currentTarget.style.boxShadow="0 2px 16px rgba(0,0,0,0.15)"; e.currentTarget.style.transform="none"; e.currentTarget.style.borderColor="rgba(255,255,255,0.08)"; }}>
+                    {/* FOTOĞRAF ALANI */}
+                    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", height:160, background:"rgba(0,0,0,0.15)", borderRadius:"20px 20px 0 0", overflow:"hidden" }}>
                       {[0,1,2,3].map(x => (
-                        <div key={x} style={{ overflow:"hidden", borderRight:x%2===0?"1px solid rgba(201,168,76,0.05)":"none", borderBottom:x<2?"1px solid rgba(201,168,76,0.05)":"none" }}>
-                          {ft[x] ? <img src={ft[x].foto} alt="" style={{ width:"100%", height:"100%", objectFit:"cover", display:"block" }}/> : <div style={{ width:"100%", height:"100%", display:"flex", alignItems:"center", justifyContent:"center", color:"rgba(201,168,76,0.1)", fontSize:14 }}>-</div>}
+                        <div key={x} style={{ overflow:"hidden", borderRight:x%2===0?"1px solid rgba(255,255,255,0.04)":"none", borderBottom:x<2?"1px solid rgba(255,255,255,0.04)":"none" }}>
+                          {ft[x] ? <img src={ft[x].foto} alt="" style={{ width:"100%", height:"100%", objectFit:"cover", display:"block", transition:"transform .3s" }}/> : <div style={{ width:"100%", height:"100%", display:"flex", alignItems:"center", justifyContent:"center", color:"rgba(255,255,255,0.06)", fontSize:18 }}>◇</div>}
                         </div>
                       ))}
                     </div>
-                    <div style={{ padding:"8px 10px" }}>
-                      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-                        <h3 style={{ margin:0, fontSize:12, fontWeight:700, color:"#e8dcc8" }}>{kol.ad}</h3>
-                        {kol.on && <span style={{ background:"rgba(201,168,76,0.1)", color:GOLD, padding:"1px 5px", borderRadius:4, fontSize:7, fontWeight:700 }}>{kol.on}-</span>}
+                    {/* BİLGİ ALANI */}
+                    <div style={{ padding:"12px 14px 14px" }}>
+                      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
+                        <h3 style={{ margin:0, fontSize:13, fontWeight:700, color:T.text, letterSpacing:"0.02em" }}>{kol.ad}</h3>
+                        {kol.on && <span style={{ background:"rgba(201,168,76,0.12)", color:GOLD, padding:"2px 8px", borderRadius:8, fontSize:8, fontWeight:700, letterSpacing:"0.05em" }}>{kol.on}</span>}
                       </div>
-                      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginTop:7 }}>
-                        <div style={{ display:"flex", flexDirection:"column", gap:3 }}>
-                          <span style={{ fontSize:9, color:"#998a6e" }}>{km.length} model</span>
+                      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-end" }}>
+                        <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
+                          <span style={{ fontSize:10, color:T.sub, fontWeight:500 }}>{km.length} model</span>
                           {altinKgUSD > 0 && km.length > 0 && (() => {
                             const topGram = km.reduce((s,m) => s + (Number(m.gram)||0), 0);
                             const topKar  = km.reduce((s,m) => { const h = hesapla(m, m.refAyar, altinKgUSD, madenCarpan); return s + h.karHas; }, 0);
-                            // Ortalama milyem: her modelin karHas/mamulGram ortalaması
                             const milyemler = km.map(m => {
                               const h = hesapla(m, m.refAyar, altinKgUSD, madenCarpan);
                               return h.mamulGram > 0 ? h.karHas / h.mamulGram : 0;
@@ -1393,24 +1528,25 @@ function Atolye() {
                             const minMly = milyemler.length > 0 ? Math.min(...milyemler) : 0;
                             const maxMly = milyemler.length > 0 ? Math.max(...milyemler) : 0;
                             return (
-                              <div style={{ display:"flex", flexDirection:"column", gap:2 }}>
-                                <div style={{ display:"flex", gap:6 }}>
-                                  <span style={{ fontSize:8, color:"#5b9bd5", fontWeight:600 }}>{fN(topGram,1)} gr</span>
-                                  <span style={{ fontSize:8, color:"#6abf69", fontWeight:600 }}>{fN(topKar,3)} has kar</span>
+                              <div style={{ display:"flex", flexDirection:"column", gap:3 }}>
+                                <div style={{ display:"flex", gap:8 }}>
+                                  <span style={{ fontSize:9, color:"#5b9bd5", fontWeight:600 }}>{fN(topGram,1)} gr</span>
+                                  <span style={{ fontSize:9, color:"#6abf69", fontWeight:600 }}>{fN(topKar,3)} has kar</span>
                                 </div>
                                 <div style={{ display:"flex", gap:4, alignItems:"center" }}>
-                                  <span style={{ fontSize:7, color:"#998a6e" }}>Ort. karlılık:</span>
-                                  <span style={{ fontSize:9, color:GOLD, fontWeight:800 }}>{fN(ortMly,3)} mly/gr</span>
-                                  <span style={{ fontSize:7, color:"#665d4a" }}>({fN(minMly,3)}–{fN(maxMly,3)})</span>
+                                  <span style={{ fontSize:8, color:T.dim }}>Ort. karlılık:</span>
+                                  <span style={{ fontSize:10, color:GOLD, fontWeight:800 }}>{fN(ortMly,3)}</span>
+                                  <span style={{ fontSize:7, color:T.dim }}>mly/gr ({fN(minMly,3)}–{fN(maxMly,3)})</span>
                                 </div>
                               </div>
                             );
                           })()}
                         </div>
-                        <div style={{ display:"flex", gap:3 }} onClick={e => e.stopPropagation()}>
-                          <button onClick={() => openEK(kol)} style={{ ...GH, padding:"2px 6px", fontSize:8 }}>Edit</button>
-                          <button onClick={() => downloadPDF(buildKatalogHTML(kol, km), kol.ad+"-katalog")} style={{ background:"rgba(91,155,213,0.1)", border:"none", borderRadius:5, padding:"2px 6px", color:"#5b9bd5", fontSize:8, fontWeight:700, cursor:"pointer" }}>PDF</button>
-                          <button onClick={() => setDelOnay({ type:"kol", id:kol.id })} style={{ ...RD, padding:"2px 6px", fontSize:8 }}>Sil</button>
+                        <div style={{ display:"flex", gap:4 }} onClick={e => e.stopPropagation()}>
+                          <button onClick={() => openEK(kol)} style={{ background:"rgba(255,255,255,0.06)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:8, padding:"4px 10px", color:T.text, fontSize:8, fontWeight:600, cursor:"pointer", transition:"all .2s" }}>Edit</button>
+                          <button onClick={() => { setKatalogKol(kol); setKatalogSiraliModeller([...km].sort(dogalSirala)); setKatalogSutun(3); setKatalogSiralaModal(true); }} style={{ background:"rgba(91,155,213,0.08)", border:"1px solid rgba(91,155,213,0.15)", borderRadius:8, padding:"4px 8px", color:"#5b9bd5", fontSize:8, fontWeight:700, cursor:"pointer" }}>PDF 3</button>
+                          <button onClick={() => { setKatalogKol(kol); setKatalogSiraliModeller([...km].sort(dogalSirala)); setKatalogSutun(4); setKatalogSiralaModal(true); }} style={{ background:"rgba(167,139,250,0.08)", border:"1px solid rgba(167,139,250,0.15)", borderRadius:8, padding:"4px 8px", color:"#a78bfa", fontSize:8, fontWeight:700, cursor:"pointer" }}>PDF 4</button>
+                          <button onClick={() => setDelOnay({ type:"kol", id:kol.id })} style={{ background:"rgba(239,68,68,0.06)", border:"1px solid rgba(239,68,68,0.12)", borderRadius:8, padding:"4px 8px", color:"#ef4444", fontSize:8, fontWeight:600, cursor:"pointer" }}>Sil</button>
                         </div>
                       </div>
                     </div>
@@ -1430,7 +1566,8 @@ function Atolye() {
                 <h2 style={{ margin:0, fontSize:14, fontWeight:700, color:"#e8dcc8" }}>{aktifKol ? aktifKol.ad : "Tum Modeller"} <span style={{ fontSize:10, color:"#7a6f5a" }}>({gorunen.length})</span></h2>
               </div>
               <div style={{ display:"flex", gap:4 }}>
-                {aktifKol && <button onClick={() => downloadPDF(buildKatalogHTML(aktifKol, aktMod), aktifKol.ad+"-katalog")} style={{ ...GH, fontSize:9, padding:"5px 9px" }}>PDF Katalog</button>}
+                {aktifKol && <button onClick={() => { setKatalogKol(aktifKol); setKatalogSiraliModeller([...aktMod].sort(dogalSirala)); setKatalogSutun(3); setKatalogSiralaModal(true); }} style={{ ...GH, fontSize:9, padding:"5px 9px" }}>PDF 3'lü</button>}
+                {aktifKol && <button onClick={() => { setKatalogKol(aktifKol); setKatalogSiraliModeller([...aktMod].sort(dogalSirala)); setKatalogSutun(4); setKatalogSiralaModal(true); }} style={{ background:"rgba(167,139,250,0.06)", border:"1px solid rgba(167,139,250,0.15)", borderRadius:9, padding:"5px 9px", color:"#a78bfa", fontSize:9, fontWeight:700, cursor:"pointer" }}>PDF 4'lü</button>}
                 {seciliModeller.size > 0 && (
                   <>
                     <button onClick={()=>{ const hepsi = new Set(gorunen.map(m=>m.id)); setSeciliModeller(hepsi); }} style={{ ...GH, fontSize:9, padding:"5px 9px" }}>Tümünü Seç ({gorunen.length})</button>
@@ -1701,9 +1838,32 @@ function Atolye() {
                               ))}
                             </div>
                           )}
-                          {/* Boy listesi — yüzük veya bilezik ise göster */}
-                          {(m.kategori==="yuzuk" || m.kategori==="bilezik") && !konfGenelBoy.aktif && (() => {
-                            const boyTablosu = m.kategori==="yuzuk" ? BOY_YUZUK : BOY_BILEZIK;
+                          {/* KOLYE/BİLEKLİK — uzunluk + gram */}
+                          {(m.kategori==="kolye" || m.kategori==="bileklik") && !konfGenelBoy.aktif && (() => {
+                            const boylar = konfBoylar[m.id] || [];
+                            return (
+                              <div style={{ marginTop:5 }}>
+                                <div style={{ fontSize:7, color:"#a78bfa", fontWeight:700, marginBottom:3 }}>BOY/UZUNLUK + GRAM:</div>
+                                {boylar.map((b, bi) => (
+                                  <div key={bi} style={{ display:"flex", gap:4, alignItems:"center", marginBottom:3 }}>
+                                    <input type="number" placeholder="Uz." value={b.uzunluk||""} onChange={e=>{e.stopPropagation();konfBoyGuncelle(m.id,bi,"uzunluk",e.target.value);}} style={{ ...IS, width:50, padding:"2px 4px", fontSize:8, textAlign:"center" }}/>
+                                    <select value={b.birim||"cm"} onChange={e=>{e.stopPropagation();konfBoyGuncelle(m.id,bi,"birim",e.target.value);}} style={{ ...IS, width:42, padding:"2px 2px", fontSize:8 }}>
+                                      <option value="cm">cm</option>
+                                      <option value="mm">mm</option>
+                                    </select>
+                                    <input type="number" step="0.01" placeholder="gr" value={b.gram||""} onChange={e=>{e.stopPropagation();konfBoyGuncelle(m.id,bi,"gram",e.target.value);}} style={{ ...IS, width:55, padding:"2px 4px", fontSize:8, textAlign:"center" }}/>
+                                    <span style={{ fontSize:7, color:"#665d4a" }}>×</span>
+                                    <input type="number" min="1" placeholder="ad" value={b.adet||1} onChange={e=>{e.stopPropagation();konfBoyGuncelle(m.id,bi,"adet",Number(e.target.value)||1);}} style={{ ...IS, width:38, padding:"2px 4px", fontSize:8, textAlign:"center" }}/>
+                                    <button onClick={e=>{e.stopPropagation();konfBoySil(m.id,bi);}} style={{ background:"none", border:"none", color:"#e85a4f", cursor:"pointer", fontSize:11, padding:0, lineHeight:1 }}>×</button>
+                                  </div>
+                                ))}
+                                <button onClick={e=>{e.stopPropagation();konfBoyEkle(m.id, m.kategori);}} style={{ background:"rgba(167,139,250,0.08)", border:"1px dashed rgba(167,139,250,0.25)", borderRadius:5, padding:"2px 8px", color:"#a78bfa", fontSize:8, cursor:"pointer" }}>+ Boy/Uzunluk Ekle</button>
+                              </div>
+                            );
+                          })()}
+                          {/* Boy listesi — sadece yüzük için (bileklik kolye yukarıda) */}
+                          {m.kategori==="yuzuk" && !konfGenelBoy.aktif && (() => {
+                            const boyTablosu = BOY_YUZUK;
                             const boylar = konfBoylar[m.id] || [];
                             return (
                               <div style={{ marginTop:5 }}>
@@ -1718,7 +1878,7 @@ function Atolye() {
                                       {(boyTablosu[b.sistem]||[]).map(v=><option key={v} value={v}>{v}</option>)}
                                     </select>
                                     <input type="number" min="1" value={b.adet||1} onChange={e=>{e.stopPropagation();konfBoyGuncelle(m.id,bi,"adet",Number(e.target.value)||1);}} style={{ ...IS, width:40, padding:"2px 4px", fontSize:8, textAlign:"center" }}/>
-                                    {b.deger && b.sistem!=="mm" && b.sistem!=="Beden" && m.kategori==="yuzuk" && (
+                                    {b.deger && b.sistem!=="mm" && (
                                       <span style={{ fontSize:7, color:"#5b9bd5", whiteSpace:"nowrap" }}>≈{boyToMM(b.sistem,b.deger)}mm</span>
                                     )}
                                     <button onClick={e=>{e.stopPropagation();konfBoySil(m.id,bi);}} style={{ background:"none", border:"none", color:"#e85a4f", cursor:"pointer", fontSize:11, padding:0, lineHeight:1 }}>×</button>
@@ -1885,6 +2045,34 @@ function Atolye() {
                             })()}
                             <button onClick={()=>downloadPDF(buildKonfHTML(s,s.altinKgUSD||altinKgUSD,s.mc||madenCarpan,false),(s.musteri||"siparis")+"-musteri")} style={{ ...GH, fontSize:8, padding:"3px 7px" }}>PDF</button>
                             <button onClick={()=>downloadPDF(buildKonfHTML(s,s.altinKgUSD||altinKgUSD,s.mc||madenCarpan,true),(s.musteri||"siparis")+"-ic")} style={{ background:"rgba(232,90,79,0.08)", border:"1px solid rgba(232,90,79,0.2)", borderRadius:9, padding:"3px 7px", color:"#e85a4f", fontSize:8, fontWeight:700, cursor:"pointer" }}>IC</button>
+                            <button onClick={()=>{
+                              if (!window.confirm("Sipariş silinip konfirmasyona geri alınacak. Emin misiniz?")) return;
+                              // Kalemlerden benzersiz modelleri konfirmasyona al
+                              const benzersizModeller = [];
+                              const goruldu = new Set();
+                              (s.kalemler||[]).forEach(k => {
+                                if (!goruldu.has(k.id)) {
+                                  goruldu.add(k.id);
+                                  benzersizModeller.push(k);
+                                }
+                              });
+                              setKonfList(benzersizModeller);
+                              setKonfMus(s.musteri||"");
+                              setKonfTeslim(s.teslimTarihi||"");
+                              setKonfAyar(s.kalemler?.[0]?.secilenAyar||"14K");
+                              // Adetleri, notları, renkleri geri yükle
+                              const yeniAdet = {}, yeniNot = {}, yeniRenk = {};
+                              (s.kalemler||[]).forEach(k => {
+                                yeniAdet[k.id] = k.adet||1;
+                                yeniNot[k.id] = k.sipNot||"";
+                                yeniRenk[k.id] = k.renk||"Sari";
+                              });
+                              setKonfAdet(yeniAdet);
+                              setKonfNot(yeniNot);
+                              setKonfRenkler(yeniRenk);
+                              delSip(s.id);
+                              setSayfa("konfirmasyon");
+                            }} style={{ background:"rgba(232,131,58,0.1)", border:"1px solid rgba(232,131,58,0.2)", borderRadius:9, padding:"3px 7px", color:"#e8833a", fontSize:8, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap" }}>↩ Düzenle</button>
                             <button onClick={()=>setDelOnay({ type:"siparis", id:s.id })} style={{ ...RD, fontSize:8, padding:"3px 7px" }}>Sil</button>
                             <span style={{ fontSize:10, color:"#665d4a", marginLeft:4 }}>{acik?"▲":"▼"}</span>
                           </div>
@@ -2434,7 +2622,35 @@ function Atolye() {
         {/* AYARLAR */}
         {sayfa==="ayarlar" && (
           <div style={{ animation:"fadein .3s", maxWidth:700 }}>
-            <h2 style={{ margin:"0 0 16px", fontSize:15, fontWeight:700, color:"#e8dcc8" }}>⚙ Ayarlar</h2>
+            <h2 style={{ margin:"0 0 16px", fontSize:15, fontWeight:700, color:T.text }}>⚙ Ayarlar</h2>
+
+            {/* TEMA SEÇİCİ */}
+            <div style={{ background:T.card, border:"1px solid "+T.border, borderRadius:16, padding:"16px 18px", marginBottom:14 }}>
+              <div style={{ fontSize:11, fontWeight:700, color:T.gold, marginBottom:14, letterSpacing:"0.03em" }}>🎨 UYGULAMA TEMASI</div>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+                {Object.values(TEMALAR).map(t => (
+                  <button key={t.id} onClick={()=>temaUygula(t)} style={{
+                    background: t.bg, border: tema.id===t.id ? "2px solid "+t.accent : "1px solid "+t.border,
+                    borderRadius:14, padding:0, cursor:"pointer", overflow:"hidden", textAlign:"left",
+                    transition:"all .25s", opacity: tema.id===t.id ? 1 : 0.75,
+                    boxShadow: tema.id===t.id ? "0 0 20px "+t.accent+"44" : "0 2px 8px rgba(0,0,0,0.1)"
+                  }}>
+                    {/* Mini önizleme */}
+                    <div style={{ display:"flex", gap:4, padding:"8px 10px 4px" }}>
+                      <div style={{ width:22, height:16, borderRadius:4, background:t.card, border:"1px solid "+t.border }}/>
+                      <div style={{ width:22, height:16, borderRadius:4, background:t.card, border:"1px solid "+t.border }}/>
+                      <div style={{ width:22, height:16, borderRadius:4, background:t.card, border:"1px solid "+t.border }}/>
+                    </div>
+                    <div style={{ padding:"4px 10px 8px" }}>
+                      <div style={{ fontSize:11, fontWeight:700, color:t.text }}>{t.l}</div>
+                      <div style={{ fontSize:8, color:t.sub, marginTop:2 }}>{t.ac}</div>
+                    </div>
+                    {tema.id===t.id && <div style={{ background:t.accent, padding:"2px 0", textAlign:"center", fontSize:8, fontWeight:700, color:t.bg2, letterSpacing:"0.05em" }}>AKTİF</div>}
+                  </button>
+                ))}
+              </div>
+              <div style={{ fontSize:8, color:T.dim, marginTop:10, textAlign:"center" }}>Tema seçimi tarayıcıya kaydedilir</div>
+            </div>
 
             {/* ŞİFRE DEĞİŞTİR */}
             <SifreDegistir />
@@ -2805,22 +3021,77 @@ function Atolye() {
       )}
 
       {/* YEDEK MODAL */}
-      <Modal open={showYedek} onClose={()=>setShowYedek(false)} title="Geri Yukle">
-        <div style={{ fontSize:10, color:"#998a6e", marginBottom:8 }}>
-          PC'ye indirdiginiz JSON dosyasini acin, icerigi kopyalayip (Ctrl+A, Ctrl+C) asagiya yapistirin.
+      {/* KATALOG SIRALAMA ÖNİZLEME */}
+      <Modal open={katalogSiralaModal} onClose={()=>setKatalogSiralaModal(false)} title={"Katalog Sıralama — " + (katalogKol?.ad||"")}>
+        <div style={{ display:"flex", gap:8, marginBottom:10, alignItems:"center", flexWrap:"wrap" }}>
+          <span style={{ fontSize:9, color:T.sub }}>Ayar:</span>
+          {["8K","10K","14K","18K","22K","925"].map(a => (
+            <button key={a} onClick={()=>setKatalogAyar(a)} style={{
+              background: katalogAyar===a ? T.gold : T.btnBg,
+              border: "1px solid " + (katalogAyar===a ? T.gold : T.btnBorder),
+              borderRadius:6, padding:"3px 10px", fontSize:9, fontWeight: katalogAyar===a ? 800 : 400,
+              color: katalogAyar===a ? T.bg2 : T.text, cursor:"pointer", transition:"all .2s"
+            }}>{a}</button>
+          ))}
         </div>
-        <textarea
-          value={yedekJson}
-          onChange={e=>setYedekJson(e.target.value)}
-          placeholder="Buraya yapistirin... (Ctrl+V)"
-          style={{ width:"100%", height:200, background:"rgba(0,0,0,0.3)", border:"1px solid rgba(201,168,76,0.2)", borderRadius:8, color:"#6abf69", fontSize:10, fontFamily:"monospace", padding:10, outline:"none", resize:"vertical", boxSizing:"border-box" }}
+        <div style={{ fontSize:10, color:T.sub, marginBottom:8 }}>
+          Modeller kod sırasına göre dizildi. Sırayı düzeltmek için ↑↓ butonlarını kullanın, sonra PDF Al'a basın.
+        </div>
+        <div style={{ maxHeight:400, overflowY:"auto", marginBottom:10 }}>
+          {katalogSiraliModeller.map((m, i) => (
+            <div key={m.id} style={{ display:"flex", alignItems:"center", gap:6, padding:"4px 6px", background: i%2===0 ? "rgba(201,168,76,0.03)" : "transparent", borderRadius:5 }}>
+              <span style={{ fontSize:8, color:"#665d4a", width:22, textAlign:"right" }}>{i+1}.</span>
+              {m.foto && <img src={m.foto} style={{ width:30, height:30, objectFit:"cover", borderRadius:4 }}/>}
+              <span style={{ fontSize:10, color:"#c9a84c", fontWeight:700, flex:1 }}>{m.kod || "—"}</span>
+              <span style={{ fontSize:8, color:"#998a6e" }}>{m.ad || ""}</span>
+              <button onClick={() => {
+                if (i === 0) return;
+                const y = [...katalogSiraliModeller];
+                [y[i-1], y[i]] = [y[i], y[i-1]];
+                setKatalogSiraliModeller(y);
+              }} style={{ background:"none", border:"1px solid rgba(201,168,76,0.2)", borderRadius:4, color:"#c9a84c", cursor:"pointer", fontSize:10, padding:"1px 5px", opacity: i===0?0.3:1 }}>↑</button>
+              <button onClick={() => {
+                if (i === katalogSiraliModeller.length-1) return;
+                const y = [...katalogSiraliModeller];
+                [y[i], y[i+1]] = [y[i+1], y[i]];
+                setKatalogSiraliModeller(y);
+              }} style={{ background:"none", border:"1px solid rgba(201,168,76,0.2)", borderRadius:4, color:"#c9a84c", cursor:"pointer", fontSize:10, padding:"1px 5px", opacity: i===katalogSiraliModeller.length-1?0.3:1 }}>↓</button>
+            </div>
+          ))}
+        </div>
+        <div style={{ display:"flex", gap:8 }}>
+          <button onClick={() => { setKatalogSiraliModeller([...katalogSiraliModeller].sort(dogalSirala)); }} style={{ background:"rgba(91,155,213,0.1)", border:"1px solid rgba(91,155,213,0.2)", borderRadius:7, padding:"6px 14px", color:"#5b9bd5", fontSize:10, fontWeight:700, cursor:"pointer" }}>A-Z Sırala</button>
+          <button onClick={() => {
+            downloadPDF(buildKatalogHTML(katalogKol, katalogSiraliModeller, katalogSutun, katalogAyar), katalogKol.ad+"-"+katalogAyar+"-katalog-"+katalogSutun);
+            setKatalogSiralaModal(false);
+          }} style={{ background:"#c9a84c", border:"none", borderRadius:7, padding:"6px 20px", color:"#110f0a", fontSize:11, fontWeight:800, cursor:"pointer", flex:1 }}>📄 PDF Al ({katalogSutun}'lü · {katalogAyar} · {katalogSiraliModeller.length} model)</button>
+        </div>
+      </Modal>
+
+      <Modal open={showYedek} onClose={()=>setShowYedek(false)} title="Geri Yukle">
+        <div style={{ fontSize:10, color:"#998a6e", marginBottom:10 }}>
+          PC'ye indirdiğiniz JSON dosyasını seçin (kopyala-yapıştır gerekmez!).
+        </div>
+        <input
+          type="file"
+          accept=".json,application/json"
+          onChange={e => {
+            const f = e.target.files && e.target.files[0];
+            if (!f) return;
+            const reader = new FileReader();
+            reader.onload = ev => {
+              setYedekJson(ev.target.result);
+            };
+            reader.readAsText(f);
+          }}
+          style={{ display:"block", width:"100%", padding:12, background:"rgba(91,155,213,0.06)", border:"2px dashed rgba(91,155,213,0.3)", borderRadius:8, color:"#5b9bd5", fontSize:11, cursor:"pointer", marginBottom:10 }}
         />
         {yedekJson.length > 10 && (() => {
           try {
             const d = JSON.parse(yedekJson);
             return (
               <div style={{ fontSize:9, color:"#6abf69", margin:"6px 0", padding:"5px 8px", background:"rgba(106,191,105,0.08)", borderRadius:5 }}>
-                ✓ Gecerli — {d.modeller?.length||0} model · {d.kollar?.length||0} koleksiyon · {d.siparisler?.length||0} siparis
+                ✓ Geçerli — <b>{d.modeller?.length||0} model</b> · <b>{d.kollar?.length||0} koleksiyon</b> · <b>{d.siparisler?.length||0} sipariş</b> · <b>{d.musteriler ? Object.keys(d.musteriler).length : 0} müşteri</b>
               </div>
             );
           } catch(e) {
@@ -2828,16 +3099,21 @@ function Atolye() {
           }
         })()}
         <button
-          onClick={() => {
+          onClick={async () => {
             try {
               const d = JSON.parse(yedekJson);
-              if (d.modeller)   svM(d.modeller);
-              if (d.kollar)     svK(d.kollar);
-              if (d.siparisler) svS(d.siparisler);
-              if (d.musteriler) svMus(d.musteriler);
-              // Ayarlar — özel taşlar, kategoriler, etiketler vs.
+              setDriveYukleniyor("yukle");
+              // Sırayla kaydet — hepsini bekle
+              if (d.kollar)     await svK(d.kollar);
+              if (d.siparisler) await svS(d.siparisler);
+              if (d.musteriler) await svMus(d.musteriler);
+              // Modelleri parça parça kaydet
+              if (d.modeller) {
+                await svM(d.modeller);
+              }
+              // Ayarlar
               if (d.ayarlar) {
-                sv("v7ay", d.ayarlar);
+                await sv("v7ay", d.ayarlar);
                 if (d.ayarlar.ozelTaslar?.length) setOzelTaslar(d.ayarlar.ozelTaslar);
                 if (d.ayarlar.kategoriler?.length) setAyarKategoriler(d.ayarlar.kategoriler);
                 if (d.ayarlar.etiketler?.length) setAyarEtiketler(d.ayarlar.etiketler);
@@ -2847,14 +3123,19 @@ function Atolye() {
                 if (d.ayarlar.varsIscilik) setAyarVarsIscilik(d.ayarlar.varsIscilik);
                 if (d.ayarlar.varsIscilikBirim) setAyarVarsIscilikBirim(d.ayarlar.varsIscilikBirim);
               }
+              setDriveYukleniyor(null);
               setShowYedek(false);
               setYedekJson("");
-            } catch {}
+              alert("✓ Yükleme tamamlandı! " + (d.modeller?.length||0) + " model Supabase'e kaydedildi.");
+            } catch(e) {
+              setDriveYukleniyor(null);
+              alert("Hata: " + e.message);
+            }
           }}
           disabled={(() => { try { JSON.parse(yedekJson); return false; } catch { return true; } })()}
           style={{ ...BG, width:"100%", marginTop:8, opacity: (() => { try { JSON.parse(yedekJson); return 1; } catch { return 0.3; } })() }}
         >
-          Yukle
+          {driveYukleniyor==="yukle" ? "Supabase'e kaydediliyor..." : "Yukle"}
         </button>
       </Modal>
 
@@ -2892,9 +3173,28 @@ function Atolye() {
         {/* Kod uyarısı */}
         {kodKontrol?.tip==="tekrar" && (
           <div style={{ background:"rgba(232,90,79,0.06)", border:"1px solid rgba(232,90,79,0.2)", borderRadius:8, padding:"8px 10px", marginTop:-4, marginBottom:6 }}>
-            <div style={{ fontSize:9, color:"#e85a4f", fontWeight:700, marginBottom:5 }}>⚠ Bu kod zaten mevcut: {kodKontrol.eslesme.ad}</div>
-            <div style={{ fontSize:8, color:"#998a6e", marginBottom:5 }}>Versiyon olarak kaydetmek ister misiniz?</div>
-              <div style={{ display:"flex", gap:4, flexWrap:"wrap" }}>
+            <div style={{ fontSize:9, color:"#e85a4f", fontWeight:700, marginBottom:3 }}>⚠ Bu kod zaten mevcut: {kodKontrol.eslesme.ad}</div>
+            <div style={{ fontSize:8, color:"#998a6e", marginBottom:6 }}>Ne yapmak istersiniz?</div>
+            <div style={{ display:"flex", gap:6, marginBottom:6 }}>
+              {/* Üzerine yaz */}
+              <button onClick={() => {
+                const m = kodKontrol.eslesme;
+                setEditM(m);
+                // Mevcut modelin bilgilerini forma doldur ama kodu değiştirme
+              }} style={{ background:"rgba(232,90,79,0.15)", border:"1px solid rgba(232,90,79,0.3)", borderRadius:6, padding:"4px 12px", color:"#e85a4f", fontSize:9, fontWeight:700, cursor:"pointer" }}
+              onClick={() => {
+                // Mevcut modeli düzenle moduna al
+                const m = kodKontrol.eslesme;
+                setEditM(m);
+                setFAd(m.ad||""); setFKod(m.kod||""); setFGram(String(m.gram||"")); setFRefAyar(m.refAyar||"14K");
+                setFTasGram(String(m.tasGram||"")); setFTasBoy(m.tasBoy||""); setFIscilikDolar(String(m.iscilikDolar||""));
+                setFEkMaliyet(String(m.ekMaliyet||"")); setFMadenC(String(m.madenCarpan||""));
+                setFKategori(m.kategori||"yuzuk"); setFKolId(m.ki||""); setFDurum(m.durum||"baslanmadi");
+                setFEtiketler(m.etiketler||[]); setFFoto(m.foto||"");
+              }}>✏ Mevcut modeli düzenle</button>
+            </div>
+            <div style={{ fontSize:8, color:"#998a6e", marginBottom:4 }}>Veya versiyon olarak kaydet:</div>
+            <div style={{ display:"flex", gap:4, flexWrap:"wrap" }}>
               {kodKontrol.versiyonlar.slice(0,5).map(v => (
                 <button key={v} onClick={()=>{
                   handleKod(v);
