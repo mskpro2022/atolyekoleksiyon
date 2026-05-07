@@ -339,18 +339,36 @@ function buildKatalogHTML(kol, modeller, sutun, hedefAyar) {
   const totalPages = Math.ceil(digerler.length / perPage) + Math.ceil(kolyeler.length / kolyePerPage) + Math.ceil(bileklikler.length / 3);
 
   // DİĞER ÜRÜNLER — seçilen grid (3 veya 4 sütun)
+  // Bileklikler kendi satırını tamamen kaplar
   const digerPages = [];
   for (let i = 0; i < digerler.length; i += perPage) digerPages.push(digerler.slice(i, i + perPage));
 
   digerPages.forEach((pg, pi) => {
     pageNum++;
     h += "<div class='pg'><div class='" + gridClass + "'>";
-    pg.forEach((m, idx) => {
-      h += kartHTML(m, "");
+    pg.forEach((m) => {
+      if (m.kategori === "bileklik") {
+        // Bileklik → tam satır, yatay kart, kendi yüksekliğinde
+        const gosterAyar = hedefAyar || m.refAyar || "14K";
+        const gosterGram = hedefAyar && hedefAyar !== m.refAyar
+          ? gramDonustur(Number(m.gram)||0, m.refAyar||"14K", hedefAyar, m.tasGram||0).toFixed(2)
+          : (m.gram || "—");
+        h += "<div class='cd' style='grid-column:1/-1;display:flex;flex-direction:column'>"
+          + "<div class='ph' style='min-height:90px;position:relative;overflow:hidden'>"
+          + (m.foto ? "<img src='" + m.foto + "' style='position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;object-position:center;display:block;transform:none'/>" : "<div class='ni'>◇</div>")
+          + "</div><div class='inf'><div class='r1'>"
+          + "<span class='kod'>" + (m.kod||"—") + "</span>"
+          + "<span class='gram'>" + gosterGram + "gr · " + gosterAyar + "</span>"
+          + "</div>" + (m.ac ? "<div class='ac'>" + m.ac + "</div>" : "")
+          + "</div></div>";
+      } else {
+        h += kartHTML(m, "");
+      }
     });
-    // Boş placeholder kutular — grid düzeni korusun
-    const rem = pg.length % cols;
-    if (rem > 0) {
+    // Boş placeholder kutular — grid düzeni korusun (bileklik hariç)
+    const sonBileklikDegil = pg.filter(m => m.kategori !== "bileklik");
+    const rem = sonBileklikDegil.length % cols;
+    if (rem > 0 && pg[pg.length-1]?.kategori !== "bileklik") {
       for (let i = 0; i < cols - rem; i++) {
         h += "<div class='cd' style='opacity:0;pointer-events:none'></div>";
       }
