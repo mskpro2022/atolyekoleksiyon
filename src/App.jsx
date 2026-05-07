@@ -348,13 +348,15 @@ function buildKatalogHTML(kol, modeller, sutun, hedefAyar) {
     h += "<div class='pg'><div class='" + gridClass + "'>";
     pg.forEach((m) => {
       if (m.kategori === "bileklik") {
-        // Bileklik → tam satır, yatay kart, kendi yüksekliğinde
+        // Bileklik → tam satır, normal kart yüksekliğinde, fotoğraf köşelere değer
         const gosterAyar = hedefAyar || m.refAyar || "14K";
         const gosterGram = hedefAyar && hedefAyar !== m.refAyar
           ? gramDonustur(Number(m.gram)||0, m.refAyar||"14K", hedefAyar, m.tasGram||0).toFixed(2)
           : (m.gram || "—");
-        h += "<div class='cd' style='grid-column:1/-1;display:flex;flex-direction:column'>"
-          + "<div class='ph' style='min-height:90px;position:relative;overflow:hidden'>"
+        // Normal kart yüksekliği = aspect-ratio 1/1 (3'lü için)
+        // Bileklik tam satırı kaplar = 3 kart genişliğinde, ama 1 kart yüksekliğinde
+        h += "<div class='cd' style='grid-column:1/-1;aspect-ratio:" + (cols * 1.0) + "/1;display:flex;flex-direction:column;overflow:hidden'>"
+          + "<div style='flex:1;min-height:0;position:relative;overflow:hidden;background:#f3f3f3'>"
           + (m.foto ? "<img src='" + m.foto + "' style='position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;object-position:center;display:block;transform:none'/>" : "<div class='ni'>◇</div>")
           + "</div><div class='inf'><div class='r1'>"
           + "<span class='kod'>" + (m.kod||"—") + "</span>"
