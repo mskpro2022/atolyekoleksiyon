@@ -371,7 +371,7 @@ function buildKatalogHTML(kol, modeller, sutun, hedefAyar) {
     });
   }
 
-  // BİLEKLİK — tam satır, sayfada perPage kadar (normal grid gibi)
+  // BİLEKLİK — tam genişlik, sayfada 12 tane
   if (bileklikler.length > 0) {
     const bileklikPerPage = 12;
     const bileklikPages = [];
@@ -379,22 +379,27 @@ function buildKatalogHTML(kol, modeller, sutun, hedefAyar) {
 
     bileklikPages.forEach((pg, pi) => {
       pageNum++;
+      const satirYuksekligi = Math.floor(88 / pg.length); // vh cinsinden her satır
       h += "<div class='pg'>";
       if (pi === 0) h += "<div class='sec-title'>Bileklik</div>";
-      h += "<div style='display:flex;flex-direction:column;gap:5px;flex:1;min-height:0'>";
+      h += "<div style='display:flex;flex-direction:column;gap:4px;flex:1;min-height:0;overflow:hidden'>";
       pg.forEach(m => {
         const gosterAyar = hedefAyar || m.refAyar || "14K";
         const gosterGram = hedefAyar && hedefAyar !== m.refAyar
           ? gramDonustur(Number(m.gram)||0, m.refAyar||"14K", hedefAyar, m.tasGram||0).toFixed(2)
           : (m.gram || "—");
-        h += "<div class='cd' style='display:flex;flex-direction:column;flex:1;overflow:hidden'>"
-          + "<div class='ph' style='flex:1;position:relative;overflow:hidden'>"
-          + (m.foto ? "<img src='" + m.foto + "' style='position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;object-position:center'/>" : "<div class='ni'>◇</div>")
+        h += "<div style='display:flex;flex-direction:column;flex:1;background:#fff;border:1px solid #e0e0e0;border-radius:8px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.08)'>"
+          + "<div style='flex:1;overflow:hidden;position:relative;min-height:0'>"
+          + (m.foto 
+            ? "<img src='" + m.foto + "' style='width:100%;height:100%;object-fit:cover;object-position:center;display:block;position:absolute;top:0;left:0'/>"
+            : "<div style='width:100%;height:100%;background:#f3f3f3;display:flex;align-items:center;justify-content:center;color:#ddd;font-size:14px;position:absolute;top:0;left:0'>◇</div>")
           + "</div>"
-          + "<div class='inf'><div class='r1'>"
-          + "<span class='kod'>" + (m.kod||"—") + "</span>"
-          + "<span class='gram'>" + gosterGram + "gr · " + gosterAyar + "</span>"
-          + "</div>" + (m.ac ? "<div class='ac'>" + m.ac + "</div>" : "")
+          + "<div style='padding:3px 8px 4px;border-top:1px solid #f0f0f0;border-left:3px solid #c9a84c;display:flex;justify-content:space-between;align-items:baseline;flex-shrink:0'>"
+          + "<div>"
+          + "<span style='font-size:11px;color:#c9a84c;font-weight:700;letter-spacing:.04em'>" + (m.kod||"—") + "</span>"
+          + (m.ac ? "<span style='font-size:8px;color:#aaa;margin-left:6px'>" + m.ac + "</span>" : "")
+          + "</div>"
+          + "<span style='font-size:9px;font-weight:700;color:#333'>" + gosterGram + "gr · " + gosterAyar + "</span>"
           + "</div></div>";
       });
       h += "</div><div class='ft'><span>" + kol.ad + " · Bileklik</span><small>" + pageNum + " / " + totalPages + "</small></div></div>";
