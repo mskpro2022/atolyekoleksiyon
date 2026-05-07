@@ -289,8 +289,8 @@ function buildKatalogHTML(kol, modeller, sutun, hedefAyar) {
     + ".ph .ni{position:absolute;top:0;left:0;width:100%;height:100%;background:#f3f3f3;display:flex;align-items:center;justify-content:center;color:#ddd;font-size:20px}"
     + ".cd2 .ph{min-height:180px}"
     + ".cd-kolye .ph{min-height:280px}"
-    + ".cd-bileklik{grid-column:1/-1;overflow:hidden}"
-    + ".cd-bileklik .ph{min-height:140px;padding:0}"
+    + ".cd-bileklik{grid-column:1/-1;overflow:hidden;display:flex;flex-direction:column;flex:1}"
+    + ".cd-bileklik .ph{flex:1;padding:0;position:relative;overflow:hidden}"
     + ".cd-bileklik .ph img{object-fit:cover;object-position:center;width:100%;height:100%;position:absolute;top:0;left:0;transform:none}"
     + ".inf{padding:6px 9px 7px 10px;flex-shrink:0;background:#fff;border-top:1px solid #f0f0f0;border-left:3px solid #c9a84c}"
     + ".r1{display:flex;justify-content:space-between;align-items:baseline}"
@@ -371,17 +371,32 @@ function buildKatalogHTML(kol, modeller, sutun, hedefAyar) {
     });
   }
 
-  // BİLEKLİK — tam satır (sayfada 3 bileklik)
+  // BİLEKLİK — tam satır, sayfada perPage kadar (normal grid gibi)
   if (bileklikler.length > 0) {
+    const bileklikPerPage = 12;
     const bileklikPages = [];
-    for (let i = 0; i < bileklikler.length; i += 3) bileklikPages.push(bileklikler.slice(i, i + 3));
+    for (let i = 0; i < bileklikler.length; i += bileklikPerPage) bileklikPages.push(bileklikler.slice(i, i + bileklikPerPage));
 
     bileklikPages.forEach((pg, pi) => {
       pageNum++;
       h += "<div class='pg'>";
       if (pi === 0) h += "<div class='sec-title'>Bileklik</div>";
-      h += "<div style='display:flex;flex-direction:column;gap:6px;flex:1;min-height:0'>";
-      pg.forEach(m => h += kartHTML(m, "cd-bileklik"));
+      h += "<div style='display:flex;flex-direction:column;gap:5px;flex:1;min-height:0'>";
+      pg.forEach(m => {
+        const gosterAyar = hedefAyar || m.refAyar || "14K";
+        const gosterGram = hedefAyar && hedefAyar !== m.refAyar
+          ? gramDonustur(Number(m.gram)||0, m.refAyar||"14K", hedefAyar, m.tasGram||0).toFixed(2)
+          : (m.gram || "—");
+        h += "<div class='cd' style='display:flex;flex-direction:column;flex:1;overflow:hidden'>"
+          + "<div class='ph' style='flex:1;position:relative;overflow:hidden'>"
+          + (m.foto ? "<img src='" + m.foto + "' style='position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;object-position:center'/>" : "<div class='ni'>◇</div>")
+          + "</div>"
+          + "<div class='inf'><div class='r1'>"
+          + "<span class='kod'>" + (m.kod||"—") + "</span>"
+          + "<span class='gram'>" + gosterGram + "gr · " + gosterAyar + "</span>"
+          + "</div>" + (m.ac ? "<div class='ac'>" + m.ac + "</div>" : "")
+          + "</div></div>";
+      });
       h += "</div><div class='ft'><span>" + kol.ad + " · Bileklik</span><small>" + pageNum + " / " + totalPages + "</small></div></div>";
     });
   }
@@ -1464,7 +1479,12 @@ function Atolye() {
                   const m = modeller; 
                   const s = await ld("v7s", []);
                   const u = await ld("v7u", {});
-                  const ay = await ld("v7ay", {});
+                  const ay = {
+                    kategoriler: ayarKategoriler,
+                    etiketler: ayarEtiketler,
+                    ozelTaslar: ozelTaslar,
+                    kayitliNotlar: kayitliNotlar,
+                  };
                   const data = { kollar:k, modeller:m, siparisler:s, musteriler:u, ayarlar:ay, v: Date.now() };
                   const json = JSON.stringify(data, null, 2);
                   const blob = new Blob([json], { type: "application/json" });
