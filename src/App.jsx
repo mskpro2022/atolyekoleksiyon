@@ -84,11 +84,19 @@ const KATEGORILER = [
   { id: "diger",    l: "Diger" },
 ];
 
-function gramDonustur(refGram, refAyar, hedefAyar) {
+function gramDonustur(refGram, refAyar, hedefAyar, tasGram) {
   if (refAyar === hedefAyar) return refGram;
-  const y1 = YOGUNLUKLAR[refAyar] || 13.40;
-  const y2 = YOGUNLUKLAR[hedefAyar] || 13.40;
-  return refGram * (y2 / y1);
+  // Karat sayıları
+  const karatMap = { "8K":8, "10K":10, "14K":14, "18K":18, "22K":22, "24K":24, "925":9.25 };
+  const eskiK = karatMap[refAyar] || 14;
+  const yeniK = karatMap[hedefAyar] || 14;
+  // Taş gramını ayır (taş değişmez!)
+  const tas = Number(tasGram) || 0;
+  const madenGram = Math.max(0, Number(refGram) - tas);
+  // Atölye katsayısı: maden gramı × (yeniK / eskiK)
+  const yeniMadenGram = madenGram * (yeniK / eskiK);
+  // Taşı geri ekle
+  return yeniMadenGram + tas;
 }
 
 // ═══ HESAPLAMA — Tüm sonuçlar HAS GRAM cinsinden ═══
@@ -104,7 +112,7 @@ function hesapla(m, secilenAyar, altinKgUSD, varsayilanMly) {
   const refGram    = Number(m.gram) || 0;
   const tasGram    = Number(m.tasGram) || 0;
   const aktifAyar  = secilenAyar || refAyar;
-  const mamulGram  = gramDonustur(refGram, refAyar, aktifAyar);
+  const mamulGram  = gramDonustur(refGram, refAyar, aktifAyar, tasGram);
   const ayarOran   = (AYARLAR.find(a => a.id === aktifAyar) || { o: 0.585 }).o;
   const malMly     = Number(m.madenCarpan) || Number(varsayilanMly) || 0.030;
   const hasGramUSD = altinKgUSD > 0 ? altinKgUSD / 1000 : 0;
@@ -281,9 +289,9 @@ function buildKatalogHTML(kol, modeller, sutun, hedefAyar) {
     + ".ph .ni{position:absolute;top:0;left:0;width:100%;height:100%;background:#f3f3f3;display:flex;align-items:center;justify-content:center;color:#ddd;font-size:20px}"
     + ".cd2 .ph{min-height:180px}"
     + ".cd-kolye .ph{min-height:280px}"
-    + ".cd-bileklik{grid-column:1/-1}"
-    + ".cd-bileklik .ph{min-height:120px}"
-    + ".cd-bileklik .ph img{object-fit:contain}"
+    + ".cd-bileklik{grid-column:1/-1;overflow:hidden}"
+    + ".cd-bileklik .ph{min-height:140px;padding:0}"
+    + ".cd-bileklik .ph img{object-fit:cover;object-position:center;width:100%;height:100%;position:absolute;top:0;left:0;transform:none}"
     + ".inf{padding:6px 9px 7px 10px;flex-shrink:0;background:#fff;border-top:1px solid #f0f0f0;border-left:3px solid #c9a84c}"
     + ".r1{display:flex;justify-content:space-between;align-items:baseline}"
     + ".kod{font-size:13px;color:#c9a84c;font-weight:700;letter-spacing:.04em}"
@@ -302,7 +310,7 @@ function buildKatalogHTML(kol, modeller, sutun, hedefAyar) {
     // Gram dönüşümü: hedefAyar farklıysa gramı çevir
     const gosterAyar = hedefAyar || m.refAyar || "14K";
     const gosterGram = hedefAyar && hedefAyar !== m.refAyar
-      ? gramDonustur(Number(m.gram)||0, m.refAyar||"14K", hedefAyar).toFixed(2)
+      ? gramDonustur(Number(m.gram)||0, m.refAyar||"14K", hedefAyar, m.tasGram||0).toFixed(2)
       : (m.gram || "—");
     
     let h = "<div class='cd" + (extraCls?" "+extraCls:"") + "'>";
@@ -335,15 +343,15 @@ function buildKatalogHTML(kol, modeller, sutun, hedefAyar) {
     pageNum++;
     h += "<div class='pg'><div class='" + gridClass + "'>";
     pg.forEach((m, idx) => {
-      const rem = pg.length % cols;
-      let cls = "";
-      if (rem === 1 && idx === pg.length - 1) cls = "full";
-      else if (cols === 3 && rem === 2 && idx === pg.length - 2) cls = "span2";
-      h += kartHTML(m, cls);
+      h += kartHTML(m, "");
     });
-    // Boş hücreler
+    // Boş placeholder kutular — grid düzeni korusun
     const rem = pg.length % cols;
-    if (rem > 0) for (let i = 0; i < cols - rem; i++) h += "<div></div>";
+    if (rem > 0) {
+      for (let i = 0; i < cols - rem; i++) {
+        h += "<div class='cd' style='opacity:0;pointer-events:none'></div>";
+      }
+    }
     h += "</div><div class='ft'><span>" + kol.ad + "</span><small>" + pageNum + " / " + totalPages + "</small></div></div>";
   });
 
@@ -1090,28 +1098,20 @@ function Atolye() {
     const idMap = new Map();
     const kodMap = new Map();
     const temiz = [];
-    
-    // Sondan başa git — son eklenen olan kazanır
     for (let i = d.length - 1; i >= 0; i--) {
       const m = d[i];
       if (!m) continue;
-      
       const kodKey = m.kod ? m.kod.trim().toUpperCase() : null;
       const idKey = m.id;
-      
-      // Daha önce bu kod veya ID görüldü mü?
-      if (kodKey && kodMap.has(kodKey)) continue; // duplicate, atla
+      if (kodKey && kodMap.has(kodKey)) continue;
       if (idKey && idMap.has(idKey)) continue;
-      
       if (kodKey) kodMap.set(kodKey, true);
       if (idKey) idMap.set(idKey, true);
-      temiz.unshift(m); // başa ekle (sıra korunsun)
+      temiz.unshift(m);
     }
-    
     if (temiz.length !== d.length) {
-      console.log("🧹 " + (d.length - temiz.length) + " duplicate temizlendi: " + d.length + " → " + temiz.length);
+      console.log("🧹 " + (d.length - temiz.length) + " duplicate temizlendi");
     }
-    
     setModeller(temiz);
     await sv("v7m", temiz);
   }, []);
@@ -1552,8 +1552,8 @@ function Atolye() {
                         </div>
                         <div style={{ display:"flex", gap:4 }} onClick={e => e.stopPropagation()}>
                           <button onClick={() => openEK(kol)} style={{ background:"rgba(255,255,255,0.06)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:8, padding:"4px 10px", color:T.text, fontSize:8, fontWeight:600, cursor:"pointer", transition:"all .2s" }}>Edit</button>
-                          <button onClick={() => { setKatalogKol(kol); setKatalogSiraliModeller([...km].sort(dogalSirala)); setKatalogSutun(3); setKatalogSiralaModal(true); }} style={{ background:"rgba(91,155,213,0.08)", border:"1px solid rgba(91,155,213,0.15)", borderRadius:8, padding:"4px 8px", color:"#5b9bd5", fontSize:8, fontWeight:700, cursor:"pointer" }}>PDF 3</button>
-                          <button onClick={() => { setKatalogKol(kol); setKatalogSiraliModeller([...km].sort(dogalSirala)); setKatalogSutun(4); setKatalogSiralaModal(true); }} style={{ background:"rgba(167,139,250,0.08)", border:"1px solid rgba(167,139,250,0.15)", borderRadius:8, padding:"4px 8px", color:"#a78bfa", fontSize:8, fontWeight:700, cursor:"pointer" }}>PDF 4</button>
+                          <button onClick={() => { setKatalogKol(kol); setKatalogSiraliModeller([]); setKatalogSutun(3); setKatalogAyar("14K"); setKatalogSiralaModal(true); }} style={{ background:"rgba(91,155,213,0.08)", border:"1px solid rgba(91,155,213,0.15)", borderRadius:8, padding:"4px 8px", color:"#5b9bd5", fontSize:8, fontWeight:700, cursor:"pointer" }}>PDF 3</button>
+                          <button onClick={() => { setKatalogKol(kol); setKatalogSiraliModeller([]); setKatalogSutun(4); setKatalogAyar("14K"); setKatalogSiralaModal(true); }} style={{ background:"rgba(167,139,250,0.08)", border:"1px solid rgba(167,139,250,0.15)", borderRadius:8, padding:"4px 8px", color:"#a78bfa", fontSize:8, fontWeight:700, cursor:"pointer" }}>PDF 4</button>
                           <button onClick={() => setDelOnay({ type:"kol", id:kol.id })} style={{ background:"rgba(239,68,68,0.06)", border:"1px solid rgba(239,68,68,0.12)", borderRadius:8, padding:"4px 8px", color:"#ef4444", fontSize:8, fontWeight:600, cursor:"pointer" }}>Sil</button>
                         </div>
                       </div>
@@ -1574,8 +1574,8 @@ function Atolye() {
                 <h2 style={{ margin:0, fontSize:14, fontWeight:700, color:"#e8dcc8" }}>{aktifKol ? aktifKol.ad : "Tum Modeller"} <span style={{ fontSize:10, color:"#7a6f5a" }}>({gorunen.length})</span></h2>
               </div>
               <div style={{ display:"flex", gap:4 }}>
-                {aktifKol && <button onClick={() => { setKatalogKol(aktifKol); setKatalogSiraliModeller([...aktMod].sort(dogalSirala)); setKatalogSutun(3); setKatalogSiralaModal(true); }} style={{ ...GH, fontSize:9, padding:"5px 9px" }}>PDF 3'lü</button>}
-                {aktifKol && <button onClick={() => { setKatalogKol(aktifKol); setKatalogSiraliModeller([...aktMod].sort(dogalSirala)); setKatalogSutun(4); setKatalogSiralaModal(true); }} style={{ background:"rgba(167,139,250,0.06)", border:"1px solid rgba(167,139,250,0.15)", borderRadius:9, padding:"5px 9px", color:"#a78bfa", fontSize:9, fontWeight:700, cursor:"pointer" }}>PDF 4'lü</button>}
+                {aktifKol && <button onClick={() => { setKatalogKol(aktifKol); setKatalogSiraliModeller([]); setKatalogSutun(3); setKatalogAyar("14K"); setKatalogSiralaModal(true); }} style={{ ...GH, fontSize:9, padding:"5px 9px" }}>PDF 3'lü</button>}
+                {aktifKol && <button onClick={() => { setKatalogKol(aktifKol); setKatalogSiraliModeller([]); setKatalogSutun(4); setKatalogAyar("14K"); setKatalogSiralaModal(true); }} style={{ background:"rgba(167,139,250,0.06)", border:"1px solid rgba(167,139,250,0.15)", borderRadius:9, padding:"5px 9px", color:"#a78bfa", fontSize:9, fontWeight:700, cursor:"pointer" }}>PDF 4'lü</button>}
                 {seciliModeller.size > 0 && (
                   <>
                     <button onClick={()=>{ const hepsi = new Set(gorunen.map(m=>m.id)); setSeciliModeller(hepsi); }} style={{ ...GH, fontSize:9, padding:"5px 9px" }}>Tümünü Seç ({gorunen.length})</button>
@@ -3030,50 +3030,106 @@ function Atolye() {
 
       {/* YEDEK MODAL */}
       {/* KATALOG SIRALAMA ÖNİZLEME */}
-      <Modal open={katalogSiralaModal} onClose={()=>setKatalogSiralaModal(false)} title={"Katalog Sıralama — " + (katalogKol?.ad||"")}>
-        <div style={{ display:"flex", gap:8, marginBottom:10, alignItems:"center", flexWrap:"wrap" }}>
-          <span style={{ fontSize:9, color:T.sub }}>Ayar:</span>
+      <Modal open={katalogSiralaModal} onClose={()=>setKatalogSiralaModal(false)} title={"Katalog — " + (katalogKol?.ad||"")}>
+        {/* AYAR SEÇİCİ */}
+        <div style={{ display:"flex", gap:6, marginBottom:10, alignItems:"center", flexWrap:"wrap" }}>
+          <span style={{ fontSize:9, color:T.sub, fontWeight:700 }}>Ayar:</span>
           {["8K","10K","14K","18K","22K","925"].map(a => (
             <button key={a} onClick={()=>setKatalogAyar(a)} style={{
-              background: katalogAyar===a ? T.gold : T.btnBg,
-              border: "1px solid " + (katalogAyar===a ? T.gold : T.btnBorder),
-              borderRadius:6, padding:"3px 10px", fontSize:9, fontWeight: katalogAyar===a ? 800 : 400,
-              color: katalogAyar===a ? T.bg2 : T.text, cursor:"pointer", transition:"all .2s"
+              background: katalogAyar===a ? T.gold : T.btnBg, border:"1px solid "+(katalogAyar===a?T.gold:T.btnBorder),
+              borderRadius:6, padding:"3px 10px", fontSize:9, fontWeight:katalogAyar===a?800:400,
+              color:katalogAyar===a?T.bg2:T.text, cursor:"pointer"
             }}>{a}</button>
           ))}
         </div>
-        <div style={{ fontSize:10, color:T.sub, marginBottom:8 }}>
-          Modeller kod sırasına göre dizildi. Sırayı düzeltmek için ↑↓ butonlarını kullanın, sonra PDF Al'a basın.
+
+        {/* HIZLI FİLTRE */}
+        <div style={{ display:"flex", gap:6, marginBottom:8, flexWrap:"wrap", alignItems:"center" }}>
+          <span style={{ fontSize:9, color:T.sub, fontWeight:700 }}>Filtre:</span>
+          {/* Tümünü seç/kaldır */}
+          <button onClick={() => {
+            if (katalogKol) {
+              const km = modeller.filter(m => m.ki===katalogKol.id);
+              setKatalogSiraliModeller([...km].sort(dogalSirala));
+            }
+          }} style={{ background:"rgba(106,191,105,0.1)", border:"1px solid rgba(106,191,105,0.2)", borderRadius:6, padding:"3px 10px", color:"#6abf69", fontSize:9, fontWeight:700, cursor:"pointer" }}>✓ Tümünü Ekle</button>
+          <button onClick={() => setKatalogSiraliModeller([])} style={{ background:"rgba(232,90,79,0.1)", border:"1px solid rgba(232,90,79,0.2)", borderRadius:6, padding:"3px 10px", color:"#e85a4f", fontSize:9, fontWeight:700, cursor:"pointer" }}>✕ Tümünü Kaldır</button>
+          {/* Kategoriye göre */}
+          {["yuzuk","kolye","bileklik","kupe","pendant","set"].map(kat => {
+            const km = modeller.filter(m => m.ki===katalogKol?.id && m.kategori===kat);
+            if (km.length === 0) return null;
+            return (
+              <button key={kat} onClick={() => {
+                const mevcutIdler = new Set(katalogSiraliModeller.map(m => m.id));
+                const eklenecekler = km.filter(m => !mevcutIdler.has(m.id));
+                setKatalogSiraliModeller([...katalogSiraliModeller, ...eklenecekler].sort(dogalSirala));
+              }} style={{ background:T.btnBg, border:"1px solid "+T.btnBorder, borderRadius:6, padding:"3px 10px", color:T.text, fontSize:9, cursor:"pointer" }}>
+                + {kat} ({km.length})
+              </button>
+            );
+          })}
         </div>
-        <div style={{ maxHeight:400, overflowY:"auto", marginBottom:10 }}>
+
+        {/* ETİKET FİLTRESİ */}
+        {(() => {
+          const tumEtiketler = [...new Set((modeller.filter(m=>m.ki===katalogKol?.id)).flatMap(m=>m.etiketler||[]))];
+          if (tumEtiketler.length === 0) return null;
+          return (
+            <div style={{ display:"flex", gap:4, marginBottom:8, flexWrap:"wrap", alignItems:"center" }}>
+              <span style={{ fontSize:9, color:T.sub, fontWeight:700 }}>Etiket:</span>
+              {tumEtiketler.map(et => {
+                const km = modeller.filter(m => m.ki===katalogKol?.id && (m.etiketler||[]).includes(et));
+                return (
+                  <button key={et} onClick={() => {
+                    const mevcutIdler = new Set(katalogSiraliModeller.map(m => m.id));
+                    const eklenecekler = km.filter(m => !mevcutIdler.has(m.id));
+                    setKatalogSiraliModeller([...katalogSiraliModeller, ...eklenecekler].sort(dogalSirala));
+                  }} style={{ background:"rgba(167,139,250,0.08)", border:"1px solid rgba(167,139,250,0.15)", borderRadius:6, padding:"2px 8px", color:"#a78bfa", fontSize:8, cursor:"pointer" }}>
+                    #{et} ({km.length})
+                  </button>
+                );
+              })}
+            </div>
+          );
+        })()}
+
+        {/* SEÇİLİ MODEL SAYISI */}
+        <div style={{ fontSize:9, color:T.sub, marginBottom:6, display:"flex", justifyContent:"space-between" }}>
+          <span><b style={{ color:T.gold }}>{katalogSiraliModeller.length}</b> model seçili — PDF'e girecek</span>
+          <button onClick={() => setKatalogSiraliModeller([...katalogSiraliModeller].sort(dogalSirala))} style={{ background:"rgba(91,155,213,0.1)", border:"1px solid rgba(91,155,213,0.2)", borderRadius:5, padding:"2px 8px", color:"#5b9bd5", fontSize:8, fontWeight:700, cursor:"pointer" }}>A-Z Sırala</button>
+        </div>
+
+        {/* MODEL LİSTESİ */}
+        <div style={{ maxHeight:320, overflowY:"auto", marginBottom:10, border:"1px solid "+T.border, borderRadius:8 }}>
+          {katalogSiraliModeller.length === 0 && (
+            <div style={{ padding:"20px", textAlign:"center", color:T.dim, fontSize:10 }}>Henüz model seçilmedi — yukarıdan ekleyin</div>
+          )}
           {katalogSiraliModeller.map((m, i) => (
-            <div key={m.id} style={{ display:"flex", alignItems:"center", gap:6, padding:"4px 6px", background: i%2===0 ? "rgba(201,168,76,0.03)" : "transparent", borderRadius:5 }}>
-              <span style={{ fontSize:8, color:"#665d4a", width:22, textAlign:"right" }}>{i+1}.</span>
-              {m.foto && <img src={m.foto} style={{ width:30, height:30, objectFit:"cover", borderRadius:4 }}/>}
-              <span style={{ fontSize:10, color:"#c9a84c", fontWeight:700, flex:1 }}>{m.kod || "—"}</span>
-              <span style={{ fontSize:8, color:"#998a6e" }}>{m.ad || ""}</span>
+            <div key={m.id} style={{ display:"flex", alignItems:"center", gap:6, padding:"4px 8px", background: i%2===0 ? T.card : "transparent", borderBottom:"1px solid "+T.border }}>
+              <span style={{ fontSize:8, color:T.dim, width:22, textAlign:"right", flexShrink:0 }}>{i+1}.</span>
+              {m.foto && <img src={m.foto} style={{ width:28, height:28, objectFit:"cover", borderRadius:4, flexShrink:0 }}/>}
+              <span style={{ fontSize:9, color:T.gold, fontWeight:700, width:70, flexShrink:0 }}>{m.kod || "—"}</span>
+              <span style={{ fontSize:8, color:T.sub, flex:1, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{m.ad || ""}</span>
+              <span style={{ fontSize:7, color:T.dim, flexShrink:0 }}>{m.kategori||""}</span>
               <button onClick={() => {
-                if (i === 0) return;
-                const y = [...katalogSiraliModeller];
-                [y[i-1], y[i]] = [y[i], y[i-1]];
-                setKatalogSiraliModeller(y);
-              }} style={{ background:"none", border:"1px solid rgba(201,168,76,0.2)", borderRadius:4, color:"#c9a84c", cursor:"pointer", fontSize:10, padding:"1px 5px", opacity: i===0?0.3:1 }}>↑</button>
+                const y = [...katalogSiraliModeller]; [y[i-1], y[i]] = [y[i], y[i-1]]; setKatalogSiraliModeller(y);
+              }} disabled={i===0} style={{ background:"none", border:"1px solid "+T.btnBorder, borderRadius:3, color:T.text, cursor:"pointer", fontSize:9, padding:"1px 4px", opacity:i===0?0.3:1, flexShrink:0 }}>↑</button>
               <button onClick={() => {
-                if (i === katalogSiraliModeller.length-1) return;
-                const y = [...katalogSiraliModeller];
-                [y[i], y[i+1]] = [y[i+1], y[i]];
-                setKatalogSiraliModeller(y);
-              }} style={{ background:"none", border:"1px solid rgba(201,168,76,0.2)", borderRadius:4, color:"#c9a84c", cursor:"pointer", fontSize:10, padding:"1px 5px", opacity: i===katalogSiraliModeller.length-1?0.3:1 }}>↓</button>
+                const y = [...katalogSiraliModeller]; [y[i], y[i+1]] = [y[i+1], y[i]]; setKatalogSiraliModeller(y);
+              }} disabled={i===katalogSiraliModeller.length-1} style={{ background:"none", border:"1px solid "+T.btnBorder, borderRadius:3, color:T.text, cursor:"pointer", fontSize:9, padding:"1px 4px", opacity:i===katalogSiraliModeller.length-1?0.3:1, flexShrink:0 }}>↓</button>
+              <button onClick={() => setKatalogSiraliModeller(katalogSiraliModeller.filter((_,j)=>j!==i))} style={{ background:"rgba(232,90,79,0.08)", border:"1px solid rgba(232,90,79,0.15)", borderRadius:3, color:"#e85a4f", cursor:"pointer", fontSize:9, padding:"1px 5px", flexShrink:0 }}>✕</button>
             </div>
           ))}
         </div>
-        <div style={{ display:"flex", gap:8 }}>
-          <button onClick={() => { setKatalogSiraliModeller([...katalogSiraliModeller].sort(dogalSirala)); }} style={{ background:"rgba(91,155,213,0.1)", border:"1px solid rgba(91,155,213,0.2)", borderRadius:7, padding:"6px 14px", color:"#5b9bd5", fontSize:10, fontWeight:700, cursor:"pointer" }}>A-Z Sırala</button>
-          <button onClick={() => {
-            downloadPDF(buildKatalogHTML(katalogKol, katalogSiraliModeller, katalogSutun, katalogAyar), katalogKol.ad+"-"+katalogAyar+"-katalog-"+katalogSutun);
-            setKatalogSiralaModal(false);
-          }} style={{ background:"#c9a84c", border:"none", borderRadius:7, padding:"6px 20px", color:"#110f0a", fontSize:11, fontWeight:800, cursor:"pointer", flex:1 }}>📄 PDF Al ({katalogSutun}'lü · {katalogAyar} · {katalogSiraliModeller.length} model)</button>
-        </div>
+
+        {/* PDF AL */}
+        <button onClick={() => {
+          if (katalogSiraliModeller.length === 0) { alert("Hiç model seçilmedi!"); return; }
+          downloadPDF(buildKatalogHTML(katalogKol, katalogSiraliModeller, katalogSutun, katalogAyar), katalogKol.ad+"-"+katalogAyar+"-katalog");
+          setKatalogSiralaModal(false);
+        }} style={{ background:T.gold, border:"none", borderRadius:8, padding:"8px 0", color:T.bg2, fontSize:12, fontWeight:800, cursor:"pointer", width:"100%" }}>
+          📄 PDF Al — {katalogSutun}'lü · {katalogAyar} · {katalogSiraliModeller.length} model
+        </button>
       </Modal>
 
       <Modal open={showYedek} onClose={()=>setShowYedek(false)} title="Geri Yukle">
@@ -3181,9 +3237,28 @@ function Atolye() {
         {/* Kod uyarısı */}
         {kodKontrol?.tip==="tekrar" && (
           <div style={{ background:"rgba(232,90,79,0.06)", border:"1px solid rgba(232,90,79,0.2)", borderRadius:8, padding:"8px 10px", marginTop:-4, marginBottom:6 }}>
-            <div style={{ fontSize:9, color:"#e85a4f", fontWeight:700, marginBottom:5 }}>⚠ Bu kod zaten mevcut: {kodKontrol.eslesme.ad}</div>
-            <div style={{ fontSize:8, color:"#998a6e", marginBottom:5 }}>Versiyon olarak kaydetmek ister misiniz?</div>
-              <div style={{ display:"flex", gap:4, flexWrap:"wrap" }}>
+            <div style={{ fontSize:9, color:"#e85a4f", fontWeight:700, marginBottom:3 }}>⚠ Bu kod zaten mevcut: {kodKontrol.eslesme.ad}</div>
+            <div style={{ fontSize:8, color:"#998a6e", marginBottom:6 }}>Ne yapmak istersiniz?</div>
+            <div style={{ display:"flex", gap:6, marginBottom:6 }}>
+              {/* Üzerine yaz */}
+              <button onClick={() => {
+                const m = kodKontrol.eslesme;
+                setEditM(m);
+                // Mevcut modelin bilgilerini forma doldur ama kodu değiştirme
+              }} style={{ background:"rgba(232,90,79,0.15)", border:"1px solid rgba(232,90,79,0.3)", borderRadius:6, padding:"4px 12px", color:"#e85a4f", fontSize:9, fontWeight:700, cursor:"pointer" }}
+              onClick={() => {
+                // Mevcut modeli düzenle moduna al
+                const m = kodKontrol.eslesme;
+                setEditM(m);
+                setFAd(m.ad||""); setFKod(m.kod||""); setFGram(String(m.gram||"")); setFRefAyar(m.refAyar||"14K");
+                setFTasGram(String(m.tasGram||"")); setFTasBoy(m.tasBoy||""); setFIscilikDolar(String(m.iscilikDolar||""));
+                setFEkMaliyet(String(m.ekMaliyet||"")); setFMadenC(String(m.madenCarpan||""));
+                setFKategori(m.kategori||"yuzuk"); setFKolId(m.ki||""); setFDurum(m.durum||"baslanmadi");
+                setFEtiketler(m.etiketler||[]); setFFoto(m.foto||"");
+              }}>✏ Mevcut modeli düzenle</button>
+            </div>
+            <div style={{ fontSize:8, color:"#998a6e", marginBottom:4 }}>Veya versiyon olarak kaydet:</div>
+            <div style={{ display:"flex", gap:4, flexWrap:"wrap" }}>
               {kodKontrol.versiyonlar.slice(0,5).map(v => (
                 <button key={v} onClick={()=>{
                   handleKod(v);
