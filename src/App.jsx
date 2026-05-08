@@ -248,35 +248,13 @@ function downloadPDF(html, filename) {
   }
 }
 
-// Kategori öncelik sırası
-const KATEGORI_SIRASI = { yuzuk: 1, kolye: 2, kupe: 3, bilezik: 4, bileklik: 5, pendant: 6, set: 7, diger: 8 };
-
-// Doğal sıralama: ÖNCE kategori (yüzük→kolye→küpe...), SONRA sayı, SONRA harf prefix
+// Sıralama: SADECE koddaki rakam (sayısal)
 function dogalSirala(a, b) {
-  // ÖNCELİK 1: Kategori
-  const katA = KATEGORI_SIRASI[a.kategori] || 99;
-  const katB = KATEGORI_SIRASI[b.kategori] || 99;
-  if (katA !== katB) return katA - katB;
-
-  const ka = (a.kod || "ZZZ").toUpperCase().trim();
-  const kb = (b.kod || "ZZZ").toUpperCase().trim();
-  
-  // Harf prefix'i çıkar (ilk rakama kadar)
-  const harfA = ka.match(/^[A-ZÇĞİÖŞÜ]+/)?.[0] || "";
-  const harfB = kb.match(/^[A-ZÇĞİÖŞÜ]+/)?.[0] || "";
-  
-  // İlk rakamı çıkar
+  const ka = (a.kod || "").toUpperCase();
+  const kb = (b.kod || "").toUpperCase();
   const sayiA = parseInt((ka.match(/\d+/) || ["999999"])[0], 10);
   const sayiB = parseInt((kb.match(/\d+/) || ["999999"])[0], 10);
-  
-  // ÖNCELİK 2: Sayı (105'ler bir grupta toplanır)
-  if (sayiA !== sayiB) return sayiA - sayiB;
-  
-  // ÖNCELİK 3: Harf prefix (aynı sayıdaysalar alfabetik)
-  if (harfA !== harfB) return harfA.localeCompare(harfB);
-  
-  // ÖNCELİK 4: Sufix farkı için (MRB105 vs MRB105-B)
-  return ka.localeCompare(kb, undefined, { numeric: true });
+  return sayiA - sayiB;
 }
 
 function buildKatalogHTML(kol, modeller, sutun, hedefAyar) {
