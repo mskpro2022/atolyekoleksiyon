@@ -248,28 +248,27 @@ function downloadPDF(html, filename) {
   }
 }
 
-// Doğal sıralama: ÖNCE kodun içindeki rakam (sayısal), SONRA harfler alfabetik
-// Örnek: ALT1, ALT2, ALT10, ALT100, FER5 → 1,2,10,100,5
-// Önce sayıya göre sıralar (1<2<5<10<100), sonra harf prefiksine göre
+// Doğal sıralama: ÖNCE harf prefix (alfabetik), SONRA içindeki rakam (sayısal)
+// Örnek: MRB105, MRB106, MRE105, MRE121, MRR105 (harfler gruplanır, içlerinde sayıya göre)
 function dogalSirala(a, b) {
   const ka = (a.kod || "ZZZ").toUpperCase().trim();
   const kb = (b.kod || "ZZZ").toUpperCase().trim();
+  
+  // Harf prefix'i çıkar (ilk rakama kadar olan kısım)
+  const harfA = ka.match(/^[A-ZÇĞİÖŞÜ]+/)?.[0] || "";
+  const harfB = kb.match(/^[A-ZÇĞİÖŞÜ]+/)?.[0] || "";
   
   // Koddan ilk rakamı çıkar
   const sayiA = parseInt((ka.match(/\d+/) || ["999999"])[0], 10);
   const sayiB = parseInt((kb.match(/\d+/) || ["999999"])[0], 10);
   
-  // Koddan harf kısmını çıkar (rakam olmayanlar)
-  const harfA = ka.replace(/\d+.*$/, ""); // ilk rakamdan sonrasını kes
-  const harfB = kb.replace(/\d+.*$/, "");
-  
-  // ÖNCELİK 1: Sayı karşılaştırması
-  if (sayiA !== sayiB) return sayiA - sayiB;
-  
-  // ÖNCELİK 2: Harf karşılaştırması (aynı sayı varsa)
+  // ÖNCELİK 1: Harf prefix'i (alfabetik)
   if (harfA !== harfB) return harfA.localeCompare(harfB);
   
-  // ÖNCELİK 3: Tüm kodu karşılaştır (aynı sayı + aynı harf, sufix farkı için: ALT1, ALT1-B)
+  // ÖNCELİK 2: Sayı (sayısal)
+  if (sayiA !== sayiB) return sayiA - sayiB;
+  
+  // ÖNCELİK 3: Tüm kodu karşılaştır (ALT1 vs ALT1-B gibi sufix farkı için)
   return ka.localeCompare(kb, undefined, { numeric: true });
 }
 
