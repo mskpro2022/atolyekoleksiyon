@@ -248,9 +248,16 @@ function downloadPDF(html, filename) {
   }
 }
 
-// Doğal sıralama: ÖNCE sayı (105'ler bir arada), SONRA harf prefix (alfabetik)
-// Örnek: MRB105, MRE105, MRP105, MRR105 → MRB106, MRE106...
+// Kategori öncelik sırası
+const KATEGORI_SIRASI = { yuzuk: 1, kolye: 2, kupe: 3, bilezik: 4, bileklik: 5, pendant: 6, set: 7, diger: 8 };
+
+// Doğal sıralama: ÖNCE kategori (yüzük→kolye→küpe...), SONRA sayı, SONRA harf prefix
 function dogalSirala(a, b) {
+  // ÖNCELİK 1: Kategori
+  const katA = KATEGORI_SIRASI[a.kategori] || 99;
+  const katB = KATEGORI_SIRASI[b.kategori] || 99;
+  if (katA !== katB) return katA - katB;
+
   const ka = (a.kod || "ZZZ").toUpperCase().trim();
   const kb = (b.kod || "ZZZ").toUpperCase().trim();
   
@@ -262,13 +269,13 @@ function dogalSirala(a, b) {
   const sayiA = parseInt((ka.match(/\d+/) || ["999999"])[0], 10);
   const sayiB = parseInt((kb.match(/\d+/) || ["999999"])[0], 10);
   
-  // ÖNCELİK 1: Sayı (105'ler bir grupta toplanır)
+  // ÖNCELİK 2: Sayı (105'ler bir grupta toplanır)
   if (sayiA !== sayiB) return sayiA - sayiB;
   
-  // ÖNCELİK 2: Harf prefix (aynı sayıdaysalar alfabetik)
+  // ÖNCELİK 3: Harf prefix (aynı sayıdaysalar alfabetik)
   if (harfA !== harfB) return harfA.localeCompare(harfB);
   
-  // ÖNCELİK 3: Sufix farkı için (MRB105 vs MRB105-B)
+  // ÖNCELİK 4: Sufix farkı için (MRB105 vs MRB105-B)
   return ka.localeCompare(kb, undefined, { numeric: true });
 }
 
