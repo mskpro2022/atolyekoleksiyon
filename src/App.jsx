@@ -248,11 +248,29 @@ function downloadPDF(html, filename) {
   }
 }
 
-// Doğal sıralama: ALT1, ALT2, ALT10 (numara sırasıyla)
+// Doğal sıralama: ÖNCE kodun içindeki rakam (sayısal), SONRA harfler alfabetik
+// Örnek: ALT1, ALT2, ALT10, ALT100, FER5 → 1,2,10,100,5
+// Önce sayıya göre sıralar (1<2<5<10<100), sonra harf prefiksine göre
 function dogalSirala(a, b) {
-  const ka = (a.kod || "ZZZ").toUpperCase();
-  const kb = (b.kod || "ZZZ").toUpperCase();
-  return ka.localeCompare(kb, undefined, { numeric: true, sensitivity: 'base' });
+  const ka = (a.kod || "ZZZ").toUpperCase().trim();
+  const kb = (b.kod || "ZZZ").toUpperCase().trim();
+  
+  // Koddan ilk rakamı çıkar
+  const sayiA = parseInt((ka.match(/\d+/) || ["999999"])[0], 10);
+  const sayiB = parseInt((kb.match(/\d+/) || ["999999"])[0], 10);
+  
+  // Koddan harf kısmını çıkar (rakam olmayanlar)
+  const harfA = ka.replace(/\d+.*$/, ""); // ilk rakamdan sonrasını kes
+  const harfB = kb.replace(/\d+.*$/, "");
+  
+  // ÖNCELİK 1: Sayı karşılaştırması
+  if (sayiA !== sayiB) return sayiA - sayiB;
+  
+  // ÖNCELİK 2: Harf karşılaştırması (aynı sayı varsa)
+  if (harfA !== harfB) return harfA.localeCompare(harfB);
+  
+  // ÖNCELİK 3: Tüm kodu karşılaştır (aynı sayı + aynı harf, sufix farkı için: ALT1, ALT1-B)
+  return ka.localeCompare(kb, undefined, { numeric: true });
 }
 
 function buildKatalogHTML(kol, modeller, sutun, hedefAyar) {
