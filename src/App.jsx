@@ -3062,7 +3062,15 @@ function Atolye() {
           <button onClick={() => {
             if (katalogKol) {
               const km = modeller.filter(m => m.ki===katalogKol.id);
-              setKatalogSiraliModeller([...km].sort(dogalSirala));
+              // Vercel'deki gibi kategoriye göre grupla, içlerinde koda göre sırala
+              const KAT_SIRA = { yuzuk:1, kolye:2, kupe:3, bileklik:4, bilezik:5, pendant:6, set:7, diger:8 };
+              const sirali = [...km].sort((a, b) => {
+                const ka = KAT_SIRA[a.kategori] || 99;
+                const kb = KAT_SIRA[b.kategori] || 99;
+                if (ka !== kb) return ka - kb;
+                return dogalSirala(a, b);
+              });
+              setKatalogSiraliModeller(sirali);
             }
           }} style={{ background:"rgba(106,191,105,0.1)", border:"1px solid rgba(106,191,105,0.2)", borderRadius:6, padding:"3px 10px", color:"#6abf69", fontSize:9, fontWeight:700, cursor:"pointer" }}>✓ Tümünü Ekle</button>
           <button onClick={() => setKatalogSiraliModeller([])} style={{ background:"rgba(232,90,79,0.1)", border:"1px solid rgba(232,90,79,0.2)", borderRadius:6, padding:"3px 10px", color:"#e85a4f", fontSize:9, fontWeight:700, cursor:"pointer" }}>✕ Tümünü Kaldır</button>
@@ -3074,7 +3082,7 @@ function Atolye() {
               <button key={kat} onClick={() => {
                 const mevcutIdler = new Set(katalogSiraliModeller.map(m => m.id));
                 const eklenecekler = km.filter(m => !mevcutIdler.has(m.id));
-                setKatalogSiraliModeller([...katalogSiraliModeller, ...eklenecekler].sort(dogalSirala));
+                setKatalogSiraliModeller([...katalogSiraliModeller, ...eklenecekler]);
               }} style={{ background:T.btnBg, border:"1px solid "+T.btnBorder, borderRadius:6, padding:"3px 10px", color:T.text, fontSize:9, cursor:"pointer" }}>
                 + {kat} ({km.length})
               </button>
@@ -3095,7 +3103,7 @@ function Atolye() {
                   <button key={et} onClick={() => {
                     const mevcutIdler = new Set(katalogSiraliModeller.map(m => m.id));
                     const eklenecekler = km.filter(m => !mevcutIdler.has(m.id));
-                    setKatalogSiraliModeller([...katalogSiraliModeller, ...eklenecekler].sort(dogalSirala));
+                    setKatalogSiraliModeller([...katalogSiraliModeller, ...eklenecekler]);
                   }} style={{ background:"rgba(167,139,250,0.08)", border:"1px solid rgba(167,139,250,0.15)", borderRadius:6, padding:"2px 8px", color:"#a78bfa", fontSize:8, cursor:"pointer" }}>
                     #{et} ({km.length})
                   </button>
