@@ -755,11 +755,12 @@ function AiIsimlendir({ foto, onResult }) {
   );
 }
 
-function Modal({ open, onClose, title, children }) {
+function Modal({ open, onClose, title, children, wide }) {
   if (!open) return null;
+  const maxW = wide ? "min(1100px,96vw)" : "min(580px,94vw)";
   return (
     <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.72)", backdropFilter: "blur(8px)" }}>
-      <div onClick={e => e.stopPropagation()} style={{ background: "linear-gradient(170deg,#1c1a15,#15130f)", border: "1px solid rgba(201,168,76,0.14)", borderRadius: 18, padding: "22px 26px", width: "min(580px,94vw)", maxHeight: "90vh", overflowY: "auto" }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: "linear-gradient(170deg,#1c1a15,#15130f)", border: "1px solid rgba(201,168,76,0.14)", borderRadius: 18, padding: "22px 26px", width: maxW, maxHeight: "92vh", overflowY: "auto" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
           <h2 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: "#e8dcc8" }}>{title}</h2>
           <button onClick={onClose} style={{ background: "rgba(201,168,76,0.08)", border: "none", color: "#998a6e", width: 30, height: 30, borderRadius: 8, cursor: "pointer" }}>X</button>
@@ -1054,14 +1055,15 @@ function Atolye() {
   });
 
   const svM = useCallback(async d => {
-    // DUPLICATE TEMİZLEME — aynı kod/ID varsa son eklenen kazanır
+    // DUPLICATE TEMİZLEME — aynı koleksiyonda aynı kod/ID varsa son eklenen kazanır
+    // FARKLI KOLEKSİYONLARDA aynı kod NORMAL (kopyalama için)
     const idMap = new Map();
-    const kodMap = new Map();
+    const kodMap = new Map(); // key: "koleksiyonId|kod"
     const temiz = [];
     for (let i = d.length - 1; i >= 0; i--) {
       const m = d[i];
       if (!m) continue;
-      const kodKey = m.kod ? m.kod.trim().toUpperCase() : null;
+      const kodKey = m.kod ? (m.ki || "") + "|" + m.kod.trim().toUpperCase() : null;
       const idKey = m.id;
       if (kodKey && kodMap.has(kodKey)) continue;
       if (idKey && idMap.has(idKey)) continue;
@@ -3028,7 +3030,7 @@ function Atolye() {
 
       {/* YEDEK MODAL */}
       {/* KATALOG SIRALAMA ÖNİZLEME */}
-      <Modal open={katalogSiralaModal} onClose={()=>setKatalogSiralaModal(false)} title={"Katalog — " + (katalogKol?.ad||"")}>
+      <Modal open={katalogSiralaModal} onClose={()=>setKatalogSiralaModal(false)} title={"Katalog — " + (katalogKol?.ad||"")} wide>
         {/* AYAR SEÇİCİ */}
         <div style={{ display:"flex", gap:6, marginBottom:10, alignItems:"center", flexWrap:"wrap" }}>
           <span style={{ fontSize:9, color:T.sub, fontWeight:700 }}>Ayar:</span>
@@ -3098,24 +3100,25 @@ function Atolye() {
         </div>
 
         {/* MODEL LİSTESİ */}
-        <div style={{ maxHeight:320, overflowY:"auto", marginBottom:10, border:"1px solid "+T.border, borderRadius:8 }}>
+        <div style={{ maxHeight:520, overflowY:"auto", marginBottom:10, border:"1px solid "+T.border, borderRadius:8 }}>
           {katalogSiraliModeller.length === 0 && (
             <div style={{ padding:"20px", textAlign:"center", color:T.dim, fontSize:10 }}>Henüz model seçilmedi — yukarıdan ekleyin</div>
           )}
           {katalogSiraliModeller.map((m, i) => (
-            <div key={m.id} style={{ display:"flex", alignItems:"center", gap:6, padding:"4px 8px", background: i%2===0 ? T.card : "transparent", borderBottom:"1px solid "+T.border }}>
-              <span style={{ fontSize:8, color:T.dim, width:22, textAlign:"right", flexShrink:0 }}>{i+1}.</span>
-              {m.foto && <img src={m.foto} style={{ width:28, height:28, objectFit:"cover", borderRadius:4, flexShrink:0 }}/>}
-              <span style={{ fontSize:9, color:T.gold, fontWeight:700, width:70, flexShrink:0 }}>{m.kod || "—"}</span>
-              <span style={{ fontSize:8, color:T.sub, flex:1, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{m.ad || ""}</span>
-              <span style={{ fontSize:7, color:T.dim, flexShrink:0 }}>{m.kategori||""}</span>
+            <div key={m.id} style={{ display:"flex", alignItems:"center", gap:8, padding:"6px 10px", background: i%2===0 ? T.card : "transparent", borderBottom:"1px solid "+T.border }}>
+              <span style={{ fontSize:10, color:T.dim, width:30, textAlign:"right", flexShrink:0, fontWeight:700 }}>{i+1}.</span>
+              {m.foto ? <img src={m.foto} style={{ width:44, height:44, objectFit:"cover", borderRadius:6, flexShrink:0 }}/> : <div style={{ width:44, height:44, background:T.card, borderRadius:6, flexShrink:0 }}/>}
+              <span style={{ fontSize:12, color:T.gold, fontWeight:800, width:110, flexShrink:0 }}>{m.kod || "—"}</span>
+              <span style={{ fontSize:10, color:T.sub, flex:1, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{m.ad || ""}</span>
+              <span style={{ fontSize:9, color:T.dim, flexShrink:0, padding:"2px 7px", background:T.card, borderRadius:4 }}>{m.kategori||""}</span>
+              <span style={{ fontSize:9, color:T.text, flexShrink:0, fontWeight:700 }}>{m.gram||"—"}gr</span>
               <button onClick={() => {
                 const y = [...katalogSiraliModeller]; [y[i-1], y[i]] = [y[i], y[i-1]]; setKatalogSiraliModeller(y);
-              }} disabled={i===0} style={{ background:"none", border:"1px solid "+T.btnBorder, borderRadius:3, color:T.text, cursor:"pointer", fontSize:9, padding:"1px 4px", opacity:i===0?0.3:1, flexShrink:0 }}>↑</button>
+              }} disabled={i===0} style={{ background:"none", border:"1px solid "+T.btnBorder, borderRadius:5, color:T.text, cursor:"pointer", fontSize:13, padding:"3px 8px", opacity:i===0?0.3:1, flexShrink:0, fontWeight:700 }}>↑</button>
               <button onClick={() => {
                 const y = [...katalogSiraliModeller]; [y[i], y[i+1]] = [y[i+1], y[i]]; setKatalogSiraliModeller(y);
-              }} disabled={i===katalogSiraliModeller.length-1} style={{ background:"none", border:"1px solid "+T.btnBorder, borderRadius:3, color:T.text, cursor:"pointer", fontSize:9, padding:"1px 4px", opacity:i===katalogSiraliModeller.length-1?0.3:1, flexShrink:0 }}>↓</button>
-              <button onClick={() => setKatalogSiraliModeller(katalogSiraliModeller.filter((_,j)=>j!==i))} style={{ background:"rgba(232,90,79,0.08)", border:"1px solid rgba(232,90,79,0.15)", borderRadius:3, color:"#e85a4f", cursor:"pointer", fontSize:9, padding:"1px 5px", flexShrink:0 }}>✕</button>
+              }} disabled={i===katalogSiraliModeller.length-1} style={{ background:"none", border:"1px solid "+T.btnBorder, borderRadius:5, color:T.text, cursor:"pointer", fontSize:13, padding:"3px 8px", opacity:i===katalogSiraliModeller.length-1?0.3:1, flexShrink:0, fontWeight:700 }}>↓</button>
+              <button onClick={() => setKatalogSiraliModeller(katalogSiraliModeller.filter((_,j)=>j!==i))} style={{ background:"rgba(232,90,79,0.1)", border:"1px solid rgba(232,90,79,0.2)", borderRadius:5, color:"#e85a4f", cursor:"pointer", fontSize:11, padding:"3px 8px", flexShrink:0, fontWeight:700 }}>✕</button>
             </div>
           ))}
         </div>
