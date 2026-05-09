@@ -258,16 +258,97 @@ function dogalSirala(a, b) {
 }
 
 function buildKatalogHTML(kol, modeller, sutun, hedefAyar) {
-  // sutun: 3 veya 4 (kullanıcı seçer)
-  // hedefAyar: "8K", "10K", "14K", "18K" vb — gram dönüşümü yapılır
-  // bileklik kategorisi → otomatik 2'li geniş layout
   const cols = sutun || 3;
   const perPage = cols === 4 ? 16 : 12;
 
-  // Modelleri üçe ayır: bileklik, kolye ve diğerleri
-  const bileklikler = modeller.filter(m => m.kategori === "bileklik");
-  const kolyeler    = modeller.filter(m => m.kategori === "kolye");
-  const digerler    = modeller.filter(m => m.kategori !== "bileklik" && m.kategori !== "kolye");
+  const css = "*{margin:0;padding:0;box-sizing:border-box}"
+    + "body{font-family:Arial,Helvetica,sans-serif;background:#f3f3f3;color:#1a1a1a}"
+    + "@media print{.np{display:none!important}@page{size:A4 portrait;margin:6mm}}"
+    + ".cv{height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;page-break-after:always;background:#f3f3f3}"
+    + ".cv .ln{width:44px;height:1px;background:#c9a84c;margin:14px 0}"
+    + ".cv h1{font-size:28px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;text-align:center}"
+    + ".cv p{font-size:11px;color:#aaa;letter-spacing:.1em;text-transform:uppercase}"
+    + ".pg{padding:7px 16px 5px;page-break-after:always;height:99vh;display:flex;flex-direction:column;background:#f3f3f3}"
+    + ".pg:last-child{page-break-after:auto}"
+    + ".grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px;flex:1;min-height:0;grid-auto-rows:1fr}"
+    + ".grid4{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:4px;flex:1;min-height:0;grid-auto-rows:1fr}"
+    + ".cd{background:#fff;border:1px solid #e0e0e0;border-radius:12px;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 2px 8px rgba(0,0,0,0.10)}"
+    + ".cd-bileklik{grid-column:1/-1}"
+    + ".ph{flex:1;min-height:0;position:relative;background:#f3f3f3;overflow:hidden}"
+    + ".ph img{position:absolute;top:50%;left:50%;width:100%;height:100%;object-fit:contain;object-position:center;display:block;transform:translate(-50%,-50%)}"
+    + ".ph .ni{position:absolute;top:0;left:0;width:100%;height:100%;background:#f3f3f3;display:flex;align-items:center;justify-content:center;color:#ddd;font-size:20px}"
+    + ".cd-bileklik .ph img{object-fit:cover;transform:none;top:0;left:0}"
+    + ".inf{padding:6px 9px 7px 10px;flex-shrink:0;background:#fff;border-top:1px solid #f0f0f0;border-left:3px solid #c9a84c}"
+    + ".r1{display:flex;justify-content:space-between;align-items:baseline}"
+    + ".kod{font-size:13px;color:#c9a84c;font-weight:700;letter-spacing:.04em}"
+    + ".gram{font-size:10px;font-weight:700;color:#333}"
+    + ".ac{font-size:8px;color:#aaa;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}"
+    + ".ft{display:flex;justify-content:space-between;align-items:center;padding:5px 3px 0;border-top:1px solid #e0e0e0;flex-shrink:0}"
+    + ".ft span{font-size:7px;color:#c9a84c;font-weight:700;letter-spacing:.08em;text-transform:uppercase}"
+    + ".ft small{font-size:7px;color:#ccc}"
+    + ".pb{position:fixed;bottom:16px;right:16px;background:#c9a84c;border:none;border-radius:8px;padding:10px 20px;color:#fff;font-size:13px;cursor:pointer;font-family:sans-serif}";
+
+  const gridClass = cols === 4 ? "grid4" : "grid3";
+
+  const kartHTML = (m) => {
+    const gosterAyar = hedefAyar || m.refAyar || "14K";
+    const gosterGram = hedefAyar && hedefAyar !== m.refAyar
+      ? gramDonustur(Number(m.gram)||0, m.refAyar||"14K", hedefAyar, m.tasGram||0).toFixed(2)
+      : (m.gram || "—");
+
+    const isBileklik = m.kategori === "bileklik";
+    const cls = "cd" + (isBileklik ? " cd-bileklik" : "");
+
+    let h = "<div class='" + cls + "'>";
+    h += "<div class='ph'>";
+    h += m.foto ? "<img src='" + m.foto + "'/>" : "<div class='ni'>◇</div>";
+    h += "</div><div class='inf'><div class='r1'>";
+    h += "<span class='kod'>" + (m.kod || "—") + "</span>";
+    h += "<span class='gram'>" + gosterGram + "gr · " + gosterAyar + "</span>";
+    h += "</div>";
+    if (m.ac) h += "<div class='ac'>" + m.ac + "</div>";
+    h += "</div></div>";
+    return h;
+  };
+
+  let h = "<!DOCTYPE html><html><head><meta charset='utf-8'><title>" + kol.ad + "</title><style>" + css + "</style></head><body>";
+  h += "<div class='cv'><div class='ln'></div><h1>" + kol.ad + "</h1>";
+  if (hedefAyar) h += "<p style='margin-top:6px;font-size:14px;color:#c9a84c;letter-spacing:.08em'>" + hedefAyar + "</p>";
+  if (kol.ac) h += "<p style='margin-top:8px'>" + kol.ac + "</p>";
+  h += "<div class='ln'></div></div>";
+
+  // SAYFALARI OLUŞTUR — bileklik 1 satır, normal kart 1 hücre yer kaplar
+  // Her sayfada toplam "kapasite" = perPage (12 veya 16)
+  // Bileklik = cols hücre değerinde (3'lü gridde 3, 4'lü gridde 4)
+  const sayfalar = [];
+  let mevcutSayfa = [];
+  let mevcutKapasite = 0;
+  
+  modeller.forEach(m => {
+    const yer = m.kategori === "bileklik" ? cols : 1;
+    if (mevcutKapasite + yer > perPage) {
+      sayfalar.push(mevcutSayfa);
+      mevcutSayfa = [];
+      mevcutKapasite = 0;
+    }
+    mevcutSayfa.push(m);
+    mevcutKapasite += yer;
+  });
+  if (mevcutSayfa.length > 0) sayfalar.push(mevcutSayfa);
+
+  const totalPages = sayfalar.length;
+  let pageNum = 0;
+
+  sayfalar.forEach((pg) => {
+    pageNum++;
+    h += "<div class='pg'><div class='" + gridClass + "'>";
+    pg.forEach(m => h += kartHTML(m));
+    h += "</div><div class='ft'><span>" + kol.ad + "</span><small>" + pageNum + " / " + totalPages + "</small></div></div>";
+  });
+
+  h += "<button class='np pb' onclick='window.print()'>Yazdir / PDF</button></body></html>";
+  return h;
+}
 
   const css = "*{margin:0;padding:0;box-sizing:border-box}"
     + "body{font-family:Arial,Helvetica,sans-serif;background:#f3f3f3;color:#1a1a1a}"
