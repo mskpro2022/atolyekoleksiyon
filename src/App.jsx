@@ -2881,7 +2881,13 @@ function Atolye() {
               [...seciliModeller].forEach(id => {
                 const m = modeller.find(x=>x.id===id);
                 if (!m) return;
-                yeniModeller.push({ ...m, id:uid(), ki:topluHedefKolId, t:Date.now() });
+                yeniModeller.push({ 
+                  ...m, 
+                  id:uid(), 
+                  ki:topluHedefKolId, 
+                  kaynakKi: m.kaynakKi || m.ki, // orijinal kaynak
+                  t:Date.now() 
+                });
               });
               
               svM(yeniModeller);
@@ -2943,22 +2949,22 @@ function Atolye() {
               const ayniKodModel = modeller.find(m => m.ki === kopyalaModal.hedefKolId && m.kod === kopyalaModal.model.kod);
               
               if (ayniKodModel) {
-                // Aynı kod var → onay iste, sonra üzerine yaz (eski modeli sil, yeni kopyayı ekle)
                 if (!confirm("Hedef koleksiyonda " + kopyalaModal.model.kod + " kodlu model var.\n\nÜzerine yazılsın mı?")) return;
                 const yeniListe = modeller.filter(m => m.id !== ayniKodModel.id);
                 const kopya = {
                   ...kopyalaModal.model,
                   id: uid(),
-                  ki: kopyalaModal.hedefKolId, // hedef koleksiyon
+                  ki: kopyalaModal.hedefKolId,
+                  kaynakKi: kopyalaModal.model.kaynakKi || kopyalaModal.model.ki, // orijinal kaynak
                   t: Date.now(),
                 };
                 svM([...yeniListe, kopya]);
               } else {
-                // Aynı kod yok → direkt kopyala
                 const kopya = {
                   ...kopyalaModal.model,
                   id: uid(),
                   ki: kopyalaModal.hedefKolId,
+                  kaynakKi: kopyalaModal.model.kaynakKi || kopyalaModal.model.ki, // orijinal kaynak
                   t: Date.now(),
                 };
                 svM([...modeller, kopya]);
@@ -3094,9 +3100,25 @@ function Atolye() {
         })()}
 
         {/* SEÇİLİ MODEL SAYISI */}
-        <div style={{ fontSize:9, color:T.sub, marginBottom:6, display:"flex", justifyContent:"space-between" }}>
+        <div style={{ fontSize:9, color:T.sub, marginBottom:6, display:"flex", justifyContent:"space-between", alignItems:"center", gap:8, flexWrap:"wrap" }}>
           <span><b style={{ color:T.gold }}>{katalogSiraliModeller.length}</b> model seçili — PDF'e girecek</span>
-          <button onClick={() => setKatalogSiraliModeller([...katalogSiraliModeller].sort(dogalSirala))} style={{ background:"rgba(91,155,213,0.1)", border:"1px solid rgba(91,155,213,0.2)", borderRadius:5, padding:"2px 8px", color:"#5b9bd5", fontSize:8, fontWeight:700, cursor:"pointer" }}>A-Z Sırala</button>
+          <div style={{ display:"flex", gap:5 }}>
+            <button onClick={() => setKatalogSiraliModeller([...katalogSiraliModeller].sort(dogalSirala))} style={{ background:"rgba(91,155,213,0.1)", border:"1px solid rgba(91,155,213,0.2)", borderRadius:5, padding:"4px 10px", color:"#5b9bd5", fontSize:9, fontWeight:700, cursor:"pointer" }}>↕ Koda Göre</button>
+            <button onClick={() => {
+              // Koleksiyona göre grupla — kaynakKi varsa o, yoksa ki
+              const sortByKol = [...katalogSiraliModeller].sort((a, b) => {
+                const kolA = a.kaynakKi || a.ki || "";
+                const kolB = b.kaynakKi || b.ki || "";
+                // Koleksiyon adına göre alfabetik
+                const kolAdA = kollar.find(k => k.id === kolA)?.ad || "ZZZ";
+                const kolAdB = kollar.find(k => k.id === kolB)?.ad || "ZZZ";
+                if (kolAdA !== kolAdB) return kolAdA.localeCompare(kolAdB, "tr");
+                // Aynı koleksiyondaysalar koda göre
+                return dogalSirala(a, b);
+              });
+              setKatalogSiraliModeller(sortByKol);
+            }} style={{ background:"rgba(167,139,250,0.1)", border:"1px solid rgba(167,139,250,0.25)", borderRadius:5, padding:"4px 10px", color:"#a78bfa", fontSize:9, fontWeight:700, cursor:"pointer" }}>📁 Koleksiyona Göre</button>
+          </div>
         </div>
 
         {/* MODEL LİSTESİ */}
@@ -3104,12 +3126,17 @@ function Atolye() {
           {katalogSiraliModeller.length === 0 && (
             <div style={{ padding:"20px", textAlign:"center", color:T.dim, fontSize:10 }}>Henüz model seçilmedi — yukarıdan ekleyin</div>
           )}
-          {katalogSiraliModeller.map((m, i) => (
+          {katalogSiraliModeller.map((m, i) => {
+            const kaynakKolId = m.kaynakKi || m.ki;
+            const kaynakKol = kollar.find(k => k.id === kaynakKolId);
+            const kaynakAd = kaynakKol?.ad || "—";
+            return (
             <div key={m.id} style={{ display:"flex", alignItems:"center", gap:8, padding:"6px 10px", background: i%2===0 ? T.card : "transparent", borderBottom:"1px solid "+T.border }}>
               <span style={{ fontSize:10, color:T.dim, width:30, textAlign:"right", flexShrink:0, fontWeight:700 }}>{i+1}.</span>
               {m.foto ? <img src={m.foto} style={{ width:44, height:44, objectFit:"cover", borderRadius:6, flexShrink:0 }}/> : <div style={{ width:44, height:44, background:T.card, borderRadius:6, flexShrink:0 }}/>}
               <span style={{ fontSize:12, color:T.gold, fontWeight:800, width:110, flexShrink:0 }}>{m.kod || "—"}</span>
               <span style={{ fontSize:10, color:T.sub, flex:1, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{m.ad || ""}</span>
+              <span style={{ fontSize:9, color:"#a78bfa", flexShrink:0, padding:"2px 7px", background:"rgba(167,139,250,0.08)", borderRadius:4, fontWeight:700, maxWidth:120, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>📁 {kaynakAd}</span>
               <span style={{ fontSize:9, color:T.dim, flexShrink:0, padding:"2px 7px", background:T.card, borderRadius:4 }}>{m.kategori||""}</span>
               <span style={{ fontSize:9, color:T.text, flexShrink:0, fontWeight:700 }}>{m.gram||"—"}gr</span>
               <button onClick={() => {
@@ -3120,7 +3147,8 @@ function Atolye() {
               }} disabled={i===katalogSiraliModeller.length-1} style={{ background:"none", border:"1px solid "+T.btnBorder, borderRadius:5, color:T.text, cursor:"pointer", fontSize:13, padding:"3px 8px", opacity:i===katalogSiraliModeller.length-1?0.3:1, flexShrink:0, fontWeight:700 }}>↓</button>
               <button onClick={() => setKatalogSiraliModeller(katalogSiraliModeller.filter((_,j)=>j!==i))} style={{ background:"rgba(232,90,79,0.1)", border:"1px solid rgba(232,90,79,0.2)", borderRadius:5, color:"#e85a4f", cursor:"pointer", fontSize:11, padding:"3px 8px", flexShrink:0, fontWeight:700 }}>✕</button>
             </div>
-          ))}
+            );
+          })}
         </div>
 
         {/* PDF AL */}
