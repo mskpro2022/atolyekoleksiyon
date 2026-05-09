@@ -274,11 +274,13 @@ function buildKatalogHTML(kol, modeller, sutun, hedefAyar) {
     + ".grid4{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:4px;flex:1;min-height:0;grid-auto-rows:1fr}"
     + ".cd{background:#fff;border:1px solid #e0e0e0;border-radius:12px;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 2px 8px rgba(0,0,0,0.10)}"
     + ".cd-bileklik{grid-column:1/-1}"
-    + ".cd-kolye{grid-column:span 2;grid-row:span 2}"
+    + ".cd-kolye-3{grid-column:span 3;grid-row:span 2}"
+    + ".cd-kolye-4{grid-column:span 4;grid-row:span 2}"
     + ".ph{flex:1;min-height:0;position:relative;background:#f3f3f3;overflow:hidden}"
     + ".ph img{position:absolute;top:50%;left:50%;width:100%;height:100%;object-fit:contain;object-position:center;display:block;transform:translate(-50%,-50%)}"
     + ".ph .ni{position:absolute;top:0;left:0;width:100%;height:100%;background:#f3f3f3;display:flex;align-items:center;justify-content:center;color:#ddd;font-size:20px}"
     + ".cd-bileklik .ph img{object-fit:cover;transform:none;top:0;left:0}"
+    + ".cd-kolye-3 .ph img,.cd-kolye-4 .ph img{width:115%;height:115%;object-fit:contain}"
     + ".inf{padding:6px 9px 7px 10px;flex-shrink:0;background:#fff;border-top:1px solid #f0f0f0;border-left:3px solid #c9a84c}"
     + ".r1{display:flex;justify-content:space-between;align-items:baseline}"
     + ".kod{font-size:13px;color:#c9a84c;font-weight:700;letter-spacing:.04em}"
@@ -301,7 +303,7 @@ function buildKatalogHTML(kol, modeller, sutun, hedefAyar) {
     const isKolye = m.kategori === "kolye";
     let cls = "cd";
     if (isBileklik) cls += " cd-bileklik";
-    if (isKolye) cls += " cd-kolye";
+    if (isKolye) cls += cols === 4 ? " cd-kolye-4" : " cd-kolye-3";
 
     let h = "<div class='" + cls + "'>";
     h += "<div class='ph'>";
@@ -330,7 +332,7 @@ function buildKatalogHTML(kol, modeller, sutun, hedefAyar) {
   modeller.forEach(m => {
     let yer = 1;
     if (m.kategori === "bileklik") yer = cols; // tam satır
-    else if (m.kategori === "kolye") yer = 4;  // 2x2
+    else if (m.kategori === "kolye") yer = cols * 2;  // 3x2 veya 4x2 (yarım sayfa)
     
     if (mevcutKapasite + yer > perPage) {
       sayfalar.push(mevcutSayfa);
