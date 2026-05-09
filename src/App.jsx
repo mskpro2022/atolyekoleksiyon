@@ -2880,7 +2880,7 @@ function Atolye() {
       {topluKopyalaModal && (
         <Modal open={topluKopyalaModal} onClose={()=>{ setTopluKopyalaModal(false); setTopluHedefKolId(""); }} title={"Toplu Kopyala ("+seciliModeller.size+" model)"}>
           <div style={{ fontSize:9, color:"#998a6e", marginBottom:10 }}>
-            Seçilen modeller aşağıdaki koleksiyona kopyalanacak. Kodlar otomatik atanır.
+            Seçilen modeller hedef koleksiyona <b>aynı kodlarla</b> kopyalanacak.
           </div>
           {/* Seçili modeller özeti */}
           <div style={{ display:"flex", flexWrap:"wrap", gap:4, marginBottom:12, maxHeight:100, overflowY:"auto" }}>
@@ -2907,28 +2907,52 @@ function Atolye() {
               ))}
             </select>
           </Fl>
+
+          {/* Çakışma uyarısı */}
+          {topluHedefKolId && (() => {
+            const hedefKodlari = new Set(modeller.filter(m=>m.ki===topluHedefKolId).map(m=>m.kod));
+            const cakisanlar = [...seciliModeller].map(id=>modeller.find(x=>x.id===id)).filter(m=>m && hedefKodlari.has(m.kod));
+            if (cakisanlar.length > 0) {
+              return (
+                <div style={{ background:"rgba(232,90,79,0.08)", border:"1px solid rgba(232,90,79,0.25)", borderRadius:8, padding:"8px 12px", marginTop:8, fontSize:10, color:"#e85a4f" }}>
+                  ⚠ Hedef koleksiyonda <b>{cakisanlar.length}</b> aynı kodlu model var: {cakisanlar.slice(0,5).map(m=>m.kod).join(", ")}{cakisanlar.length>5?"...":""}
+                  <br/>Devam ederseniz üzerlerine yazılacak.
+                </div>
+              );
+            }
+            return null;
+          })()}
+
           <button
             disabled={!topluHedefKolId}
             onClick={() => {
               const hedefKol = kollar.find(k=>k.id===topluHedefKolId);
-              const mevcKodlar = modeller.filter(m=>m.ki===topluHedefKolId);
-              let sayac = mevcKodlar.length + 1;
-              const yeniModeller = [...modeller];
+              const hedefKodlari = new Map(); // kod -> mevcut model
+              modeller.filter(m=>m.ki===topluHedefKolId).forEach(m => hedefKodlari.set(m.kod, m));
+              
+              // Çakışma var mı kontrol et
+              const cakisanlar = [...seciliModeller].map(id=>modeller.find(x=>x.id===id)).filter(m=>m && hedefKodlari.has(m.kod));
+              if (cakisanlar.length > 0) {
+                if (!confirm(cakisanlar.length + " modelin aynı kodu hedef koleksiyonda mevcut.\n\nÜzerlerine yazılsın mı?")) return;
+              }
+
+              // Çakışan ID'leri topla (silinecekler)
+              const silinecekIdler = new Set();
+              [...seciliModeller].forEach(id => {
+                const m = modeller.find(x=>x.id===id);
+                if (m && hedefKodlari.has(m.kod)) {
+                  silinecekIdler.add(hedefKodlari.get(m.kod).id);
+                }
+              });
+
+              // Çakışan modelleri çıkar, yeni kopyaları ekle (aynı kodla)
+              const yeniModeller = modeller.filter(m => !silinecekIdler.has(m.id));
               [...seciliModeller].forEach(id => {
                 const m = modeller.find(x=>x.id===id);
                 if (!m) return;
-                let yeniKod = hedefKol?.on
-                  ? hedefKol.on + "-" + String(sayac).padStart(3,"0")
-                  : m.kod + "-K" + sayac;
-                while (yeniModeller.find(x=>x.kod===yeniKod)) {
-                  sayac++;
-                  yeniKod = hedefKol?.on
-                    ? hedefKol.on + "-" + String(sayac).padStart(3,"0")
-                    : m.kod + "-K" + sayac;
-                }
-                yeniModeller.push({ ...m, id:uid(), kod:yeniKod, ki:topluHedefKolId, t:Date.now(), durum:"baslanmadi" });
-                sayac++;
+                yeniModeller.push({ ...m, id:uid(), ki:topluHedefKolId, t:Date.now() });
               });
+              
               svM(yeniModeller);
               setTopluKopyalaModal(false);
               setTopluHedefKolId("");
@@ -2936,7 +2960,7 @@ function Atolye() {
               if (hedefKol) { setAktifKol(hedefKol); setSayfa("modeller"); }
             }}
             style={{ ...BG, width:"100%", marginTop:10, opacity:topluHedefKolId?1:0.4 }}>
-            {seciliModeller.size} Modeli Kopyala
+            {seciliModeller.size} Modeli Aynı Kod ile Kopyala
           </button>
         </Modal>
       )}
@@ -2965,47 +2989,56 @@ function Atolye() {
             </select>
           </Fl>
 
-          {/* Yeni kod */}
+          {/* Hedef koleksiyonda aynı kod var mı uyarısı */}
           {kopyalaModal.hedefKolId && (() => {
-            const hedefKol = kollar.find(k=>k.id===kopyalaModal.hedefKolId);
-            const mevcKodlar = modeller.filter(m=>m.ki===kopyalaModal.hedefKolId).map(m=>m.kod);
-            const oneri = hedefKol?.on
-              ? hedefKol.on + "-" + String(mevcKodlar.length+1).padStart(3,"0")
-              : kopyalaModal.model.kod + "-K";
+            const ayniKod = modeller.find(m => m.ki === kopyalaModal.hedefKolId && m.kod === kopyalaModal.model.kod);
+            if (ayniKod) {
+              return (
+                <div style={{ background:"rgba(232,90,79,0.08)", border:"1px solid rgba(232,90,79,0.25)", borderRadius:8, padding:"8px 12px", marginTop:8, fontSize:10, color:"#e85a4f" }}>
+                  ⚠ Bu koleksiyonda <b>{kopyalaModal.model.kod}</b> kodlu model zaten var: <b>{ayniKod.ad}</b>. Devam ederseniz üzerine yazılacak.
+                </div>
+              );
+            }
             return (
-              <Fl label="Yeni kod" hint="Kopya için farklı bir kod">
-                <input value={kopyalaModal.yeniKod ?? oneri}
-                  onChange={e=>setKopyalaModal(p=>({...p,yeniKod:e.target.value.toUpperCase()}))}
-                  style={{ ...IS, padding:"8px 10px", fontSize:12 }}/>
-              </Fl>
+              <div style={{ background:"rgba(106,191,105,0.06)", border:"1px solid rgba(106,191,105,0.2)", borderRadius:8, padding:"8px 12px", marginTop:8, fontSize:10, color:"#6abf69" }}>
+                ✓ Hedef koleksiyonda aynı kod yok, sorunsuz kopyalanacak.
+              </div>
             );
           })()}
 
           <button
             disabled={!kopyalaModal.hedefKolId}
             onClick={() => {
-              const hedefKol = kollar.find(k=>k.id===kopyalaModal.hedefKolId);
-              const mevcKodlar = modeller.filter(m=>m.ki===kopyalaModal.hedefKolId).map(m=>m.kod);
-              const oneriKod = hedefKol?.on
-                ? hedefKol.on + "-" + String(mevcKodlar.length+1).padStart(3,"0")
-                : kopyalaModal.model.kod + "-K";
-              const yeniKod = (kopyalaModal.yeniKod ?? oneriKod).trim().toUpperCase();
-              const kopya = {
-                ...kopyalaModal.model,
-                id: uid(),
-                kod: yeniKod,
-                ki: kopyalaModal.hedefKolId,
-                t: Date.now(),
-                durum: "baslanmadi",
-              };
-              svM([...modeller, kopya]);
+              const ayniKodModel = modeller.find(m => m.ki === kopyalaModal.hedefKolId && m.kod === kopyalaModal.model.kod);
+              
+              if (ayniKodModel) {
+                // Aynı kod var → onay iste, sonra üzerine yaz (eski modeli sil, yeni kopyayı ekle)
+                if (!confirm("Hedef koleksiyonda " + kopyalaModal.model.kod + " kodlu model var.\n\nÜzerine yazılsın mı?")) return;
+                const yeniListe = modeller.filter(m => m.id !== ayniKodModel.id);
+                const kopya = {
+                  ...kopyalaModal.model,
+                  id: uid(),
+                  ki: kopyalaModal.hedefKolId, // hedef koleksiyon
+                  t: Date.now(),
+                };
+                svM([...yeniListe, kopya]);
+              } else {
+                // Aynı kod yok → direkt kopyala
+                const kopya = {
+                  ...kopyalaModal.model,
+                  id: uid(),
+                  ki: kopyalaModal.hedefKolId,
+                  t: Date.now(),
+                };
+                svM([...modeller, kopya]);
+              }
+              
               setKopyalaModal(null);
-              // Kopyalanınan koleksiyona git
               const hedef = kollar.find(k=>k.id===kopyalaModal.hedefKolId);
               if (hedef) { setAktifKol(hedef); setSayfa("modeller"); }
             }}
             style={{ ...BG, width:"100%", marginTop:10, opacity:kopyalaModal.hedefKolId?1:0.4 }}>
-            Kopyala
+            Aynı Kod ile Kopyala
           </button>
         </Modal>
       )}
