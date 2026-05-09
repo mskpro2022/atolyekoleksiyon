@@ -274,6 +274,7 @@ function buildKatalogHTML(kol, modeller, sutun, hedefAyar) {
     + ".grid4{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:4px;flex:1;min-height:0;grid-auto-rows:1fr}"
     + ".cd{background:#fff;border:1px solid #e0e0e0;border-radius:12px;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 2px 8px rgba(0,0,0,0.10)}"
     + ".cd-bileklik{grid-column:1/-1}"
+    + ".cd-kolye{grid-column:span 2;grid-row:span 2}"
     + ".ph{flex:1;min-height:0;position:relative;background:#f3f3f3;overflow:hidden}"
     + ".ph img{position:absolute;top:50%;left:50%;width:100%;height:100%;object-fit:contain;object-position:center;display:block;transform:translate(-50%,-50%)}"
     + ".ph .ni{position:absolute;top:0;left:0;width:100%;height:100%;background:#f3f3f3;display:flex;align-items:center;justify-content:center;color:#ddd;font-size:20px}"
@@ -297,7 +298,10 @@ function buildKatalogHTML(kol, modeller, sutun, hedefAyar) {
       : (m.gram || "—");
 
     const isBileklik = m.kategori === "bileklik";
-    const cls = "cd" + (isBileklik ? " cd-bileklik" : "");
+    const isKolye = m.kategori === "kolye";
+    let cls = "cd";
+    if (isBileklik) cls += " cd-bileklik";
+    if (isKolye) cls += " cd-kolye";
 
     let h = "<div class='" + cls + "'>";
     h += "<div class='ph'>";
@@ -317,15 +321,17 @@ function buildKatalogHTML(kol, modeller, sutun, hedefAyar) {
   if (kol.ac) h += "<p style='margin-top:8px'>" + kol.ac + "</p>";
   h += "<div class='ln'></div></div>";
 
-  // SAYFALARI OLUŞTUR — bileklik 1 satır, normal kart 1 hücre yer kaplar
+  // SAYFALARI OLUŞTUR — bileklik 1 satır (cols hücre), kolye 2x2 (4 hücre), normal kart 1 hücre
   // Her sayfada toplam "kapasite" = perPage (12 veya 16)
-  // Bileklik = cols hücre değerinde (3'lü gridde 3, 4'lü gridde 4)
   const sayfalar = [];
   let mevcutSayfa = [];
   let mevcutKapasite = 0;
   
   modeller.forEach(m => {
-    const yer = m.kategori === "bileklik" ? cols : 1;
+    let yer = 1;
+    if (m.kategori === "bileklik") yer = cols; // tam satır
+    else if (m.kategori === "kolye") yer = 4;  // 2x2
+    
     if (mevcutKapasite + yer > perPage) {
       sayfalar.push(mevcutSayfa);
       mevcutSayfa = [];
