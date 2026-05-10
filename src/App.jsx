@@ -947,6 +947,8 @@ function Atolye() {
 
   const [showKM,  setShowKM]  = useState(false);
   const [hizalaModal, setHizalaModal] = useState(false);
+  const [dragKolIdx, setDragKolIdx] = useState(null);
+  const [dragOverKolIdx, setDragOverKolIdx] = useState(null);
   const [showMM,  setShowMM]  = useState(false);
   const [showYedek, setShowYedek] = useState(false);
   const [katalogSiralaModal, setKatalogSiralaModal] = useState(false);
@@ -3430,7 +3432,7 @@ function Atolye() {
         </div>
 
         {/* MANUEL SIRALAMA LİSTESİ */}
-        <div style={{ fontSize:10, color:"#c9a84c", fontWeight:700, marginBottom:6 }}>↕ Manuel Sıralama (↑↓ butonlarıyla)</div>
+        <div style={{ fontSize:10, color:"#c9a84c", fontWeight:700, marginBottom:6 }}>↕ Manuel Sıralama (sürükle-bırak veya ↑↓)</div>
         <div style={{ maxHeight:520, overflowY:"auto", border:"1px solid rgba(255,255,255,0.06)", borderRadius:8 }}>
           {kollar.map((k, i) => {
             const km = modeller.filter(m => m.ki === k.id);
@@ -3438,8 +3440,51 @@ function Atolye() {
             const sayac = {};
             km.forEach(m => { sayac[m.kategori] = (sayac[m.kategori]||0) + 1; });
             const enCokKat = Object.entries(sayac).sort((a,b)=>b[1]-a[1])[0]?.[0] || "—";
+            const isDragging = dragKolIdx === i;
+            const isDragOver = dragOverKolIdx === i && dragKolIdx !== null && dragKolIdx !== i;
             return (
-              <div key={k.id} style={{ display:"flex", alignItems:"center", gap:8, padding:"8px 10px", background: i%2===0 ? "rgba(255,255,255,0.02)" : "transparent", borderBottom:"1px solid rgba(255,255,255,0.04)" }}>
+              <div key={k.id}
+                draggable
+                onDragStart={(e) => {
+                  setDragKolIdx(i);
+                  e.dataTransfer.effectAllowed = "move";
+                }}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  if (dragOverKolIdx !== i) setDragOverKolIdx(i);
+                }}
+                onDragLeave={() => {
+                  if (dragOverKolIdx === i) setDragOverKolIdx(null);
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  if (dragKolIdx === null || dragKolIdx === i) {
+                    setDragKolIdx(null);
+                    setDragOverKolIdx(null);
+                    return;
+                  }
+                  const yeniSira = [...kollar];
+                  const [tasinan] = yeniSira.splice(dragKolIdx, 1);
+                  yeniSira.splice(i, 0, tasinan);
+                  svK(yeniSira);
+                  setDragKolIdx(null);
+                  setDragOverKolIdx(null);
+                }}
+                onDragEnd={() => {
+                  setDragKolIdx(null);
+                  setDragOverKolIdx(null);
+                }}
+                style={{
+                  display:"flex", alignItems:"center", gap:8, padding:"10px 10px",
+                  background: isDragOver ? "rgba(167,139,250,0.15)" : (i%2===0 ? "rgba(255,255,255,0.02)" : "transparent"),
+                  borderBottom:"1px solid rgba(255,255,255,0.04)",
+                  borderTop: isDragOver ? "2px solid #a78bfa" : "none",
+                  opacity: isDragging ? 0.4 : 1,
+                  cursor: "grab",
+                  transition: "background 0.15s",
+                  userSelect: "none"
+                }}>
+                <span style={{ fontSize:14, color:"#665d4a", width:20, textAlign:"center", cursor:"grab" }}>⋮⋮</span>
                 <span style={{ fontSize:10, color:"#665d4a", width:24, textAlign:"right", fontWeight:700 }}>{i+1}.</span>
                 <span style={{ flex:1, fontSize:12, color:"#e8dcc8", fontWeight:600 }}>{k.ad || "—"}</span>
                 <span style={{ fontSize:9, color:"#a78bfa", padding:"2px 8px", background:"rgba(167,139,250,0.1)", borderRadius:4, fontWeight:600 }}>{enCokKat}</span>
