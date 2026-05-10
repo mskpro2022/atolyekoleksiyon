@@ -1156,8 +1156,16 @@ function Atolye() {
   };
 
   const delKol = id => {
+    const koldakiModelSayi = modeller.filter(m => m.ki === id).length;
+    if (koldakiModelSayi > 0) {
+      if (!confirm("Bu koleksiyonda " + koldakiModelSayi + " model var.\n\nKoleksiyon silinince içindeki modeller de SİLİNECEK!\n\nDevam etmek istiyor musunuz?")) {
+        setDelOnay(null);
+        return;
+      }
+    }
     svK(kollar.filter(k => k.id !== id));
-    svM(modeller.map(m => m.ki === id ? { ...m, ki: "" } : m));
+    // Koleksiyondaki modelleri de sil (hayalet model kalmasın)
+    svM(modeller.filter(m => m.ki !== id));
     if (aktifKol && aktifKol.id === id) { setAktifKol(null); setSayfa("koleksiyonlar"); }
     setDelOnay(null);
   };
