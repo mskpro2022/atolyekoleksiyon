@@ -280,7 +280,7 @@ function buildKatalogHTML(kol, modeller, sutun, hedefAyar) {
     + ".ph img{position:absolute;top:50%;left:50%;width:100%;height:100%;object-fit:contain;object-position:center;display:block;transform:translate(-50%,-50%)}"
     + ".ph .ni{position:absolute;top:0;left:0;width:100%;height:100%;background:#f3f3f3;display:flex;align-items:center;justify-content:center;color:#ddd;font-size:20px}"
     + ".cd-bileklik .ph img{object-fit:cover;transform:none;top:0;left:0}"
-    + ".cd-kolye-3 .ph img,.cd-kolye-4 .ph img{width:115%;height:115%;object-fit:contain}"
+    + ".cd-kolye-3 .ph img,.cd-kolye-4 .ph img{width:105%;height:105%;object-fit:contain}"
     + ".inf{padding:6px 9px 7px 10px;flex-shrink:0;background:#fff;border-top:1px solid #f0f0f0;border-left:3px solid #c9a84c}"
     + ".r1{display:flex;justify-content:space-between;align-items:baseline}"
     + ".kod{font-size:13px;color:#c9a84c;font-weight:700;letter-spacing:.04em}"
@@ -3166,6 +3166,70 @@ function Atolye() {
             );
           })}
         </div>
+
+        {/* SAYFA HARİTASI — hangi koleksiyon hangi sayfalarda */}
+        {katalogSiraliModeller.length > 0 && (() => {
+          const cols = katalogSutun;
+          const perPage = cols === 4 ? 16 : 12;
+          // 1. sayfa kapak
+          let pageNum = 1; // kapak
+          let kapasite = 0;
+          // her modelin sayfa numarasını hesapla
+          const sayfaMap = []; // [{kolAd, baslangic, bitis}]
+          let mevcutKol = null;
+          
+          katalogSiraliModeller.forEach(m => {
+            let yer = 1;
+            if (m.kategori === "bileklik") yer = cols;
+            else if (m.kategori === "kolye") yer = cols * 2;
+            
+            if (kapasite + yer > perPage) {
+              pageNum++;
+              kapasite = 0;
+            }
+            if (kapasite === 0 && mevcutKol === null) pageNum++; // ilk sayfa içerik
+            
+            const kolId = m.kaynakKi || m.ki;
+            const kol = kollar.find(k => k.id === kolId);
+            const kolAd = kol?.ad || "—";
+            
+            const sayfa = pageNum;
+            const son = sayfaMap[sayfaMap.length - 1];
+            if (son && son.kolAd === kolAd) {
+              son.bitis = sayfa;
+            } else {
+              sayfaMap.push({ kolAd, baslangic: sayfa, bitis: sayfa });
+            }
+            
+            kapasite += yer;
+          });
+          
+          // Tekrarlanan koleksiyonları birleştir
+          const birlesik = {};
+          sayfaMap.forEach(s => {
+            if (!birlesik[s.kolAd]) birlesik[s.kolAd] = { baslangic: s.baslangic, bitis: s.bitis };
+            else {
+              birlesik[s.kolAd].baslangic = Math.min(birlesik[s.kolAd].baslangic, s.baslangic);
+              birlesik[s.kolAd].bitis = Math.max(birlesik[s.kolAd].bitis, s.bitis);
+            }
+          });
+          
+          return (
+            <div style={{ background:"rgba(167,139,250,0.05)", border:"1px solid rgba(167,139,250,0.15)", borderRadius:8, padding:"8px 10px", marginBottom:8 }}>
+              <div style={{ fontSize:9, color:"#a78bfa", fontWeight:700, marginBottom:5 }}>📑 Sayfa Haritası (Toplam {pageNum} sayfa)</div>
+              <div style={{ display:"flex", flexDirection:"column", gap:3 }}>
+                {Object.entries(birlesik).map(([ad, r]) => (
+                  <div key={ad} style={{ display:"flex", justifyContent:"space-between", fontSize:10 }}>
+                    <span style={{ color:T.text, fontWeight:600 }}>{ad}</span>
+                    <span style={{ color:T.gold, fontWeight:700 }}>
+                      {r.baslangic === r.bitis ? "Sayfa " + r.baslangic : "Sayfa " + r.baslangic + " – " + r.bitis}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
 
         {/* PDF AL */}
         <button onClick={() => {
