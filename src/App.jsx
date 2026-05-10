@@ -949,6 +949,8 @@ function Atolye() {
   const [hizalaModal, setHizalaModal] = useState(false);
   const [dragKolIdx, setDragKolIdx] = useState(null);
   const [dragOverKolIdx, setDragOverKolIdx] = useState(null);
+  const [dragHaritaKol, setDragHaritaKol] = useState(null);
+  const [dragOverHaritaKol, setDragOverHaritaKol] = useState(null);
   const [showMM,  setShowMM]  = useState(false);
   const [showYedek, setShowYedek] = useState(false);
   const [katalogSiralaModal, setKatalogSiralaModal] = useState(false);
@@ -3285,16 +3287,80 @@ function Atolye() {
           
           return (
             <div style={{ background:"rgba(167,139,250,0.05)", border:"1px solid rgba(167,139,250,0.15)", borderRadius:8, padding:"8px 10px", marginBottom:8 }}>
-              <div style={{ fontSize:9, color:"#a78bfa", fontWeight:700, marginBottom:5 }}>📑 Sayfa Haritası (Toplam {pageNum} sayfa · {katalogSiraliModeller.length} model)</div>
+              <div style={{ fontSize:9, color:"#a78bfa", fontWeight:700, marginBottom:5, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                <span>📑 Sayfa Haritası (Toplam {pageNum} sayfa · {katalogSiraliModeller.length} model)</span>
+                <span style={{ fontSize:8, color:T.dim, fontWeight:400 }}>⋮⋮ Sürükle-bırak ile koleksiyon sırasını değiştir</span>
+              </div>
               <div style={{ display:"flex", flexDirection:"column", gap:3 }}>
-                {Object.entries(birlesik).map(([ad, r]) => (
-                  <div key={ad} style={{ display:"flex", justifyContent:"space-between", fontSize:10, alignItems:"center" }}>
-                    <span style={{ color:T.text, fontWeight:600 }}>{ad} <span style={{ color:T.dim, fontSize:9, fontWeight:400 }}>({r.sayi} model)</span></span>
-                    <span style={{ color:T.gold, fontWeight:700 }}>
-                      {r.baslangic === r.bitis ? "Sayfa " + r.baslangic : "Sayfa " + r.baslangic + " – " + r.bitis}
-                    </span>
-                  </div>
-                ))}
+                {Object.entries(birlesik).map(([ad, r], i) => {
+                  const isDragging = dragHaritaKol === ad;
+                  const isDragOver = dragOverHaritaKol === ad && dragHaritaKol !== null && dragHaritaKol !== ad;
+                  return (
+                    <div key={ad}
+                      draggable
+                      onDragStart={(e) => {
+                        setDragHaritaKol(ad);
+                        e.dataTransfer.effectAllowed = "move";
+                      }}
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        if (dragOverHaritaKol !== ad) setDragOverHaritaKol(ad);
+                      }}
+                      onDragLeave={() => {
+                        if (dragOverHaritaKol === ad) setDragOverHaritaKol(null);
+                      }}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        if (!dragHaritaKol || dragHaritaKol === ad) {
+                          setDragHaritaKol(null);
+                          setDragOverHaritaKol(null);
+                          return;
+                        }
+                        // Koleksiyon sırasını değiştir → modelleri o sıraya göre yeniden diz
+                        const koleksiyonSirasi = Object.keys(birlesik);
+                        const eskiIdx = koleksiyonSirasi.indexOf(dragHaritaKol);
+                        const yeniIdx = koleksiyonSirasi.indexOf(ad);
+                        if (eskiIdx === -1 || yeniIdx === -1) return;
+                        const yeniKolSira = [...koleksiyonSirasi];
+                        const [tasinan] = yeniKolSira.splice(eskiIdx, 1);
+                        yeniKolSira.splice(yeniIdx, 0, tasinan);
+                        // Şimdi modelleri bu yeni koleksiyon sırasına göre diz
+                        const yeniModelSira = [];
+                        yeniKolSira.forEach(kolAd => {
+                          katalogSiraliModeller.forEach(m => {
+                            const kolId = m.kaynakKi || m.ki;
+                            const kol = kollar.find(k => k.id === kolId);
+                            const mAd = kol?.ad || "—";
+                            if (mAd === kolAd) yeniModelSira.push(m);
+                          });
+                        });
+                        setKatalogSiraliModeller(yeniModelSira);
+                        setDragHaritaKol(null);
+                        setDragOverHaritaKol(null);
+                      }}
+                      onDragEnd={() => {
+                        setDragHaritaKol(null);
+                        setDragOverHaritaKol(null);
+                      }}
+                      style={{
+                        display:"flex", justifyContent:"space-between", fontSize:10, alignItems:"center",
+                        padding:"4px 6px", borderRadius:4, cursor:"grab",
+                        background: isDragOver ? "rgba(167,139,250,0.25)" : "transparent",
+                        borderTop: isDragOver ? "2px solid #a78bfa" : "2px solid transparent",
+                        opacity: isDragging ? 0.4 : 1,
+                        transition: "background 0.15s",
+                        userSelect: "none"
+                      }}>
+                      <span style={{ display:"flex", gap:6, alignItems:"center" }}>
+                        <span style={{ color:"#665d4a", fontSize:11 }}>⋮⋮</span>
+                        <span style={{ color:T.text, fontWeight:600 }}>{ad} <span style={{ color:T.dim, fontSize:9, fontWeight:400 }}>({r.sayi} model)</span></span>
+                      </span>
+                      <span style={{ color:T.gold, fontWeight:700 }}>
+                        {r.baslangic === r.bitis ? "Sayfa " + r.baslangic : "Sayfa " + r.baslangic + " – " + r.bitis}
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           );
