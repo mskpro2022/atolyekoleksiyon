@@ -257,7 +257,7 @@ function dogalSirala(a, b) {
   return sayiA - sayiB;
 }
 
-function buildKatalogHTML(kol, modeller, sutun, hedefAyar) {
+function buildKatalogHTML(kol, modeller, sutun, hedefAyar, kollar) {
   const cols = sutun || 3;
   const perPage = cols === 4 ? 16 : 12;
 
@@ -318,21 +318,16 @@ function buildKatalogHTML(kol, modeller, sutun, hedefAyar) {
   };
 
   let h = "<!DOCTYPE html><html><head><meta charset='utf-8'><title>" + kol.ad + "</title><style>" + css + "</style></head><body>";
-  h += "<div class='cv'><div class='ln'></div><h1>" + kol.ad + "</h1>";
-  if (hedefAyar) h += "<p style='margin-top:6px;font-size:14px;color:#c9a84c;letter-spacing:.08em'>" + hedefAyar + "</p>";
-  if (kol.ac) h += "<p style='margin-top:8px'>" + kol.ac + "</p>";
-  h += "<div class='ln'></div></div>";
 
-  // SAYFALARI OLUŞTUR — bileklik 1 satır (cols hücre), kolye 2x2 (4 hücre), normal kart 1 hücre
-  // Her sayfada toplam "kapasite" = perPage (12 veya 16)
+  // SAYFALARI ÖNCE OLUŞTUR (sayfa haritası için)
   const sayfalar = [];
   let mevcutSayfa = [];
   let mevcutKapasite = 0;
   
   modeller.forEach(m => {
     let yer = 1;
-    if (m.kategori === "bileklik") yer = cols; // tam satır
-    else if (m.kategori === "kolye") yer = cols * 2;  // 3x2 veya 4x2 (yarım sayfa)
+    if (m.kategori === "bileklik") yer = cols;
+    else if (m.kategori === "kolye") yer = cols * 2;
     
     if (mevcutKapasite + yer > perPage) {
       sayfalar.push(mevcutSayfa);
@@ -344,8 +339,47 @@ function buildKatalogHTML(kol, modeller, sutun, hedefAyar) {
   });
   if (mevcutSayfa.length > 0) sayfalar.push(mevcutSayfa);
 
-  const totalPages = sayfalar.length;
-  let pageNum = 0;
+  // Sayfa haritası: hangi koleksiyon hangi sayfalarda
+  const haritaMap = {};
+  sayfalar.forEach((pg, idx) => {
+    const sayfaNo = idx + 2; // kapak sayfa 1, içerik 2'den başlar
+    pg.forEach(m => {
+      const kolId = m.kaynakKi || m.ki;
+      const kaynakKol = (kollar || []).find(k => k.id === kolId);
+      const kolAd = kaynakKol?.ad || "—";
+      if (!haritaMap[kolAd]) haritaMap[kolAd] = { baslangic: sayfaNo, bitis: sayfaNo, sayi: 0 };
+      haritaMap[kolAd].baslangic = Math.min(haritaMap[kolAd].baslangic, sayfaNo);
+      haritaMap[kolAd].bitis = Math.max(haritaMap[kolAd].bitis, sayfaNo);
+      haritaMap[kolAd].sayi++;
+    });
+  });
+  const haritaListesi = Object.entries(haritaMap);
+
+  // KAPAK SAYFASI
+  h += "<div class='cv'><div class='ln'></div><h1>" + kol.ad + "</h1>";
+  if (hedefAyar) h += "<p style='margin-top:6px;font-size:14px;color:#c9a84c;letter-spacing:.08em'>" + hedefAyar + "</p>";
+  if (kol.ac) h += "<p style='margin-top:8px'>" + kol.ac + "</p>";
+  h += "<div class='ln'></div>";
+
+  // SAYFA HARİTASI (kapakta)
+  if (haritaListesi.length > 1) {
+    h += "<div style='margin-top:30px;max-width:480px;width:90%'>";
+    h += "<div style='font-size:10px;color:#999;letter-spacing:.15em;text-transform:uppercase;text-align:center;margin-bottom:14px;font-weight:700'>İçindekiler</div>";
+    h += "<div style='display:flex;flex-direction:column;gap:8px'>";
+    haritaListesi.forEach(([ad, r]) => {
+      h += "<div style='display:flex;justify-content:space-between;align-items:baseline;padding:8px 14px;background:rgba(201,168,76,0.04);border-left:3px solid #c9a84c;border-radius:4px'>";
+      h += "<div><span style='font-size:13px;color:#1a1a1a;font-weight:700'>" + ad + "</span> <span style='font-size:9px;color:#999'>(" + r.sayi + " model)</span></div>";
+      h += "<span style='font-size:11px;color:#c9a84c;font-weight:700'>";
+      h += r.baslangic === r.bitis ? "Sayfa " + r.baslangic : "Sayfa " + r.baslangic + " – " + r.bitis;
+      h += "</span></div>";
+    });
+    h += "</div></div>";
+  }
+
+  h += "</div>";
+
+  const totalPages = sayfalar.length + 1; // +1 kapak
+  let pageNum = 1; // kapak 1, içerik 2'den başlar
 
   sayfalar.forEach((pg) => {
     pageNum++;
@@ -3240,7 +3274,7 @@ function Atolye() {
         {/* PDF AL */}
         <button onClick={() => {
           if (katalogSiraliModeller.length === 0) { alert("Hiç model seçilmedi!"); return; }
-          downloadPDF(buildKatalogHTML(katalogKol, katalogSiraliModeller, katalogSutun, katalogAyar), katalogKol.ad+"-"+katalogAyar+"-katalog");
+          downloadPDF(buildKatalogHTML(katalogKol, katalogSiraliModeller, katalogSutun, katalogAyar, kollar), katalogKol.ad+"-"+katalogAyar+"-katalog");
           setKatalogSiralaModal(false);
         }} style={{ background:T.gold, border:"none", borderRadius:8, padding:"8px 0", color:T.bg2, fontSize:12, fontWeight:800, cursor:"pointer", width:"100%" }}>
           📄 PDF Al — {katalogSutun}'lü · {katalogAyar} · {katalogSiraliModeller.length} model
