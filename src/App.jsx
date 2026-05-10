@@ -946,6 +946,7 @@ function Atolye() {
   const [arama,     setArama]     = useState("");
 
   const [showKM,  setShowKM]  = useState(false);
+  const [hizalaModal, setHizalaModal] = useState(false);
   const [showMM,  setShowMM]  = useState(false);
   const [showYedek, setShowYedek] = useState(false);
   const [katalogSiralaModal, setKatalogSiralaModal] = useState(false);
@@ -1026,6 +1027,7 @@ function Atolye() {
   const [fIscilikBirim,setFIscilikBirim] = useState("dolar");
   const [fEkMaliyet,   setFEkMaliyet]  = useState("");
   const [fKategori,    setFKategori]   = useState("yuzuk");
+  const [fSetKodu,     setFSetKodu]    = useState(""); // set kodu - aynı sete ait modelleri eşler
   const [fAc,          setFAc]         = useState("");
   const [fFoto,        setFFoto]       = useState("");
   const [fKolId,       setFKolId]      = useState("");
@@ -1145,7 +1147,7 @@ function Atolye() {
   }, [kollar]);
 
   const rkf = () => { setFkAd(""); setFkAc(""); setFkOn(""); };
-  const rmf = () => { setFAd(""); setFKod(""); setFGram(""); setFRefAyar("14K"); setFTasGram(""); setFTasBoy(""); setFTaslar([]); setFTasSekil("ROUND"); setFTasTur("N"); setFTasBoyut(""); setFTasAdet(""); setFTasOzelIsim(""); setFMadenC(""); setFIscilikDolar(""); setFIscilikBirim("dolar"); setFEkMaliyet(""); setFKategori("yuzuk"); setFAc(""); setFFoto(""); setFKolId(""); setFDurum("baslanmadi"); setFEtiketler([]); setFYeniEtiket(""); };
+  const rmf = () => { setFAd(""); setFKod(""); setFGram(""); setFRefAyar("14K"); setFTasGram(""); setFTasBoy(""); setFTaslar([]); setFTasSekil("ROUND"); setFTasTur("N"); setFTasBoyut(""); setFTasAdet(""); setFTasOzelIsim(""); setFMadenC(""); setFIscilikDolar(""); setFIscilikBirim("dolar"); setFEkMaliyet(""); setFKategori("yuzuk"); setFSetKodu(""); setFAc(""); setFFoto(""); setFKolId(""); setFDurum("baslanmadi"); setFEtiketler([]); setFYeniEtiket(""); };
 
   const saveKol = () => {
     if (!fkAd.trim()) return;
@@ -1511,9 +1513,14 @@ function Atolye() {
         {/* KOLEKSİYONLAR */}
         {sayfa==="koleksiyonlar" && (
           <div style={{ animation:"fadein .3s" }}>
-            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14, flexWrap:"wrap", gap:8 }}>
               <h2 style={{ margin:0, fontSize:15, fontWeight:700, color:"#e8dcc8" }}>Koleksiyonlar</h2>
-              <button onClick={() => { rkf(); setEditK(null); setShowKM(true); }} style={BG}>+ Koleksiyon</button>
+              <div style={{ display:"flex", gap:6 }}>
+                {kollar.length > 1 && (
+                  <button onClick={() => setHizalaModal(true)} style={{ background:"rgba(167,139,250,0.1)", border:"1px solid rgba(167,139,250,0.25)", borderRadius:9, padding:"6px 12px", color:"#a78bfa", fontSize:11, fontWeight:700, cursor:"pointer" }}>↕ Hizala</button>
+                )}
+                <button onClick={() => { rkf(); setEditK(null); setShowKM(true); }} style={BG}>+ Koleksiyon</button>
+              </div>
             </div>
             {kollar.length===0 && <p style={{ color:"#665d4a", textAlign:"center", padding:"40px" }}>Henuz koleksiyon yok</p>}
             <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))", gap:16 }}>
@@ -3176,6 +3183,18 @@ function Atolye() {
               });
               setKatalogSiraliModeller(sortByKol);
             }} style={{ background:"rgba(167,139,250,0.1)", border:"1px solid rgba(167,139,250,0.25)", borderRadius:5, padding:"4px 10px", color:"#a78bfa", fontSize:9, fontWeight:700, cursor:"pointer" }}>📁 Koleksiyona Göre</button>
+            <button onClick={() => {
+              // Kategoriye göre grupla — yüzük → kolye → küpe → bileklik → bilezik → pendant → set → diğer
+              const KAT_SIRA = { yuzuk:1, kolye:2, kupe:3, bileklik:4, bilezik:5, pendant:6, set:7, diger:8 };
+              const sortByKat = [...katalogSiraliModeller].sort((a, b) => {
+                const ka = KAT_SIRA[a.kategori] || 99;
+                const kb = KAT_SIRA[b.kategori] || 99;
+                if (ka !== kb) return ka - kb;
+                // Aynı kategoride koda göre
+                return dogalSirala(a, b);
+              });
+              setKatalogSiraliModeller(sortByKat);
+            }} style={{ background:"rgba(232,167,79,0.1)", border:"1px solid rgba(232,167,79,0.25)", borderRadius:5, padding:"4px 10px", color:"#e8a74f", fontSize:9, fontWeight:700, cursor:"pointer" }}>🏷 Kategoriye Göre</button>
           </div>
         </div>
 
@@ -3361,6 +3380,90 @@ function Atolye() {
       </Modal>
 
       {/* KOL MODAL */}
+      {/* KOLEKSİYONLARI HİZALA MODAL */}
+      <Modal open={hizalaModal} onClose={()=>setHizalaModal(false)} title="Koleksiyonları Hizala" wide>
+        <div style={{ fontSize:10, color:"#998a6e", marginBottom:10 }}>
+          Koleksiyonların ana sayfada hangi sırayla görüneceğini belirleyin.
+        </div>
+
+        {/* OTOMATİK SIRALAMALAR */}
+        <div style={{ display:"flex", gap:6, marginBottom:14, flexWrap:"wrap" }}>
+          <span style={{ fontSize:10, color:"#c9a84c", fontWeight:700, alignSelf:"center" }}>Otomatik:</span>
+          <button onClick={() => {
+            // Yüzük → Kolye → Küpe → Bileklik → Bilezik → Pendant → Set → Diğer ağırlıklarına göre
+            const KAT_SIRA = { yuzuk:1, kolye:2, kupe:3, bileklik:4, bilezik:5, pendant:6, set:7, diger:8 };
+            const yeniSira = [...kollar].sort((a, b) => {
+              const aMod = modeller.filter(m => m.ki === a.id);
+              const bMod = modeller.filter(m => m.ki === b.id);
+              // Her koleksiyondaki en yaygın kategoriyi bul
+              const enCokKat = (mods) => {
+                const sayac = {};
+                mods.forEach(m => { sayac[m.kategori] = (sayac[m.kategori]||0) + 1; });
+                let max = 0, kat = "diger";
+                Object.entries(sayac).forEach(([k,v]) => { if (v > max) { max = v; kat = k; } });
+                return kat;
+              };
+              const katA = enCokKat(aMod);
+              const katB = enCokKat(bMod);
+              const sA = KAT_SIRA[katA] || 99;
+              const sB = KAT_SIRA[katB] || 99;
+              if (sA !== sB) return sA - sB;
+              // Aynı kategori ağırlığında ad sırası
+              return (a.ad || "").localeCompare(b.ad || "", "tr");
+            });
+            svK(yeniSira);
+          }} style={{ background:"rgba(91,155,213,0.1)", border:"1px solid rgba(91,155,213,0.25)", borderRadius:6, padding:"5px 12px", color:"#5b9bd5", fontSize:10, fontWeight:700, cursor:"pointer" }}>📊 Kategori Ağırlığına Göre</button>
+
+          <button onClick={() => {
+            const yeniSira = [...kollar].sort((a, b) => (a.ad || "").localeCompare(b.ad || "", "tr"));
+            svK(yeniSira);
+          }} style={{ background:"rgba(106,191,105,0.1)", border:"1px solid rgba(106,191,105,0.25)", borderRadius:6, padding:"5px 12px", color:"#6abf69", fontSize:10, fontWeight:700, cursor:"pointer" }}>🔤 A-Z (İsim)</button>
+
+          <button onClick={() => {
+            const yeniSira = [...kollar].sort((a, b) => {
+              const aSayi = modeller.filter(m => m.ki === a.id).length;
+              const bSayi = modeller.filter(m => m.ki === b.id).length;
+              return bSayi - aSayi; // çoktan aza
+            });
+            svK(yeniSira);
+          }} style={{ background:"rgba(232,167,79,0.1)", border:"1px solid rgba(232,167,79,0.25)", borderRadius:6, padding:"5px 12px", color:"#e8a74f", fontSize:10, fontWeight:700, cursor:"pointer" }}>📦 Model Sayısına Göre</button>
+        </div>
+
+        {/* MANUEL SIRALAMA LİSTESİ */}
+        <div style={{ fontSize:10, color:"#c9a84c", fontWeight:700, marginBottom:6 }}>↕ Manuel Sıralama (↑↓ butonlarıyla)</div>
+        <div style={{ maxHeight:520, overflowY:"auto", border:"1px solid rgba(255,255,255,0.06)", borderRadius:8 }}>
+          {kollar.map((k, i) => {
+            const km = modeller.filter(m => m.ki === k.id);
+            // En yaygın kategoriyi bul
+            const sayac = {};
+            km.forEach(m => { sayac[m.kategori] = (sayac[m.kategori]||0) + 1; });
+            const enCokKat = Object.entries(sayac).sort((a,b)=>b[1]-a[1])[0]?.[0] || "—";
+            return (
+              <div key={k.id} style={{ display:"flex", alignItems:"center", gap:8, padding:"8px 10px", background: i%2===0 ? "rgba(255,255,255,0.02)" : "transparent", borderBottom:"1px solid rgba(255,255,255,0.04)" }}>
+                <span style={{ fontSize:10, color:"#665d4a", width:24, textAlign:"right", fontWeight:700 }}>{i+1}.</span>
+                <span style={{ flex:1, fontSize:12, color:"#e8dcc8", fontWeight:600 }}>{k.ad || "—"}</span>
+                <span style={{ fontSize:9, color:"#a78bfa", padding:"2px 8px", background:"rgba(167,139,250,0.1)", borderRadius:4, fontWeight:600 }}>{enCokKat}</span>
+                <span style={{ fontSize:9, color:"#998a6e", fontWeight:600 }}>{km.length} model</span>
+                <button onClick={() => {
+                  if (i === 0) return;
+                  const y = [...kollar];
+                  [y[i-1], y[i]] = [y[i], y[i-1]];
+                  svK(y);
+                }} disabled={i===0} style={{ background:"none", border:"1px solid rgba(255,255,255,0.1)", borderRadius:5, color:"#e8dcc8", cursor:"pointer", fontSize:13, padding:"3px 9px", opacity:i===0?0.3:1, fontWeight:700 }}>↑</button>
+                <button onClick={() => {
+                  if (i === kollar.length-1) return;
+                  const y = [...kollar];
+                  [y[i], y[i+1]] = [y[i+1], y[i]];
+                  svK(y);
+                }} disabled={i===kollar.length-1} style={{ background:"none", border:"1px solid rgba(255,255,255,0.1)", borderRadius:5, color:"#e8dcc8", cursor:"pointer", fontSize:13, padding:"3px 9px", opacity:i===kollar.length-1?0.3:1, fontWeight:700 }}>↓</button>
+              </div>
+            );
+          })}
+        </div>
+
+        <button onClick={()=>setHizalaModal(false)} style={{ ...BG, width:"100%", marginTop:12 }}>Tamam</button>
+      </Modal>
+
       <Modal open={showKM} onClose={()=>{setShowKM(false);setEditK(null);}} title={editK?"Koleksiyonu Duzenle":"Yeni Koleksiyon"}>
         <Fl label="Koleksiyon Adi" req><input value={fkAd} onChange={e=>setFkAd(e.target.value)} placeholder="2025 Nisan Serisi" style={IS}/></Fl>
         <Fl label="Kod Oneki" hint={(fkOn||"XX")+"-001 girilince otomatik eslesir"}><input value={fkOn} onChange={e=>setFkOn(e.target.value.toUpperCase())} placeholder="NS" style={IS}/></Fl>
