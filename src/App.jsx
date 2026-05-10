@@ -3204,11 +3204,17 @@ function Atolye() {
             kapasite += yer;
           });
           
-          // Tekrarlanan koleksiyonları birleştir
+          // Tekrarlanan koleksiyonları birleştir + model sayısı say
           const birlesik = {};
+          katalogSiraliModeller.forEach(m => {
+            const kolId = m.kaynakKi || m.ki;
+            const kol = kollar.find(k => k.id === kolId);
+            const kolAd = kol?.ad || "—";
+            if (!birlesik[kolAd]) birlesik[kolAd] = { baslangic: 999, bitis: 0, sayi: 0 };
+            birlesik[kolAd].sayi++;
+          });
           sayfaMap.forEach(s => {
-            if (!birlesik[s.kolAd]) birlesik[s.kolAd] = { baslangic: s.baslangic, bitis: s.bitis };
-            else {
+            if (birlesik[s.kolAd]) {
               birlesik[s.kolAd].baslangic = Math.min(birlesik[s.kolAd].baslangic, s.baslangic);
               birlesik[s.kolAd].bitis = Math.max(birlesik[s.kolAd].bitis, s.bitis);
             }
@@ -3216,11 +3222,11 @@ function Atolye() {
           
           return (
             <div style={{ background:"rgba(167,139,250,0.05)", border:"1px solid rgba(167,139,250,0.15)", borderRadius:8, padding:"8px 10px", marginBottom:8 }}>
-              <div style={{ fontSize:9, color:"#a78bfa", fontWeight:700, marginBottom:5 }}>📑 Sayfa Haritası (Toplam {pageNum} sayfa)</div>
+              <div style={{ fontSize:9, color:"#a78bfa", fontWeight:700, marginBottom:5 }}>📑 Sayfa Haritası (Toplam {pageNum} sayfa · {katalogSiraliModeller.length} model)</div>
               <div style={{ display:"flex", flexDirection:"column", gap:3 }}>
                 {Object.entries(birlesik).map(([ad, r]) => (
-                  <div key={ad} style={{ display:"flex", justifyContent:"space-between", fontSize:10 }}>
-                    <span style={{ color:T.text, fontWeight:600 }}>{ad}</span>
+                  <div key={ad} style={{ display:"flex", justifyContent:"space-between", fontSize:10, alignItems:"center" }}>
+                    <span style={{ color:T.text, fontWeight:600 }}>{ad} <span style={{ color:T.dim, fontSize:9, fontWeight:400 }}>({r.sayi} model)</span></span>
                     <span style={{ color:T.gold, fontWeight:700 }}>
                       {r.baslangic === r.bitis ? "Sayfa " + r.baslangic : "Sayfa " + r.baslangic + " – " + r.bitis}
                     </span>
