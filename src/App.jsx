@@ -651,7 +651,9 @@ function buildSatisRaporuHTML(modeller, siparisler) {
       if (!mSatis[k.id]) mSatis[k.id] = { ad:k.ad, kod:k.kod||"", foto:k.foto||"", adet:0, kar:0, gram:0, hurda:0 };
       const hc = hesapla(k, k.secilenAyar||k.refAyar, s.altinKgUSD, s.mc);
       const hurdaAdet = ((s.kalemHurda)||{})[k.id] || 0;
-      const netAdet = (k.adet||1) - hurdaAdet;
+      const iadeAdet  = ((s.kalemIade)||{})[k.id] || 0;
+      const tamirAdet = ((s.kalemTamir)||{})[k.id] || 0;
+      const netAdet = Math.max(0, (k.adet||1) - hurdaAdet - iadeAdet - tamirAdet);
       mSatis[k.id].adet  += netAdet;
       mSatis[k.id].kar   += hc.karHas * netAdet;
       mSatis[k.id].gram  += hc.mamulGram * netAdet;
@@ -725,12 +727,14 @@ function buildSipListeRaporuHTML(siparisler, altinKgUSD, mc) {
   // Sipariş bazlı veri
   const sipData = siparisler.map(s => {
     let sipAdet = 0, sipGram = 0, sipKar = 0, sipKarUSD = 0;
-    let sipHurda = 0, sipHurdaGram = 0;
+    let sipHurda = 0, sipHurdaGram = 0, sipIade = 0, sipTamir = 0;
     const kalemDetay = (s.kalemler || []).map(k => {
       const hc = hesapla(k, k.secilenAyar || k.refAyar, s.altinKgUSD || altinKgUSD, s.mc || mc);
       const adet = k.adet || 1;
       const hurdaAdet = ((s.kalemHurda) || {})[k.id] || 0;
-      const netAdet = adet - hurdaAdet;
+      const iadeAdet  = ((s.kalemIade) || {})[k.id] || 0;
+      const tamirAdet = ((s.kalemTamir) || {})[k.id] || 0;
+      const netAdet = Math.max(0, adet - hurdaAdet - iadeAdet - tamirAdet);
       const mevcDurum = (s.kalemDurumlar || {})[k.id] || k.durum || "baslanmadi";
       const hurdaNeden = ((s.kalemHurdaNeden) || {})[k.id] || "";
       const karMly = hc.mamulGram > 0 ? hc.karHas / hc.mamulGram : 0;
@@ -740,24 +744,41 @@ function buildSipListeRaporuHTML(siparisler, altinKgUSD, mc) {
       sipKarUSD += hc.karHas * netAdet * hasGramUSD;
       sipHurda += hurdaAdet;
       sipHurdaGram += hc.mamulGram * hurdaAdet;
-      return { k, hc, adet, netAdet, hurdaAdet, mevcDurum, hurdaNeden, karMly };
+      sipIade += iadeAdet;
+      sipTamir += tamirAdet;
+      return { k, hc, adet, netAdet, hurdaAdet, iadeAdet, tamirAdet, mevcDurum, hurdaNeden, karMly };
     });
     topAdet += sipAdet; topGram += sipGram; topKar += sipKar; topKarUSD += sipKarUSD;
     topHurda += sipHurda; topHurdaGram += sipHurdaGram;
     const sipKarMly = sipGram > 0 ? sipKar / sipGram : 0;
-    return { s, kalemDetay, sipAdet, sipGram, sipKar, sipKarUSD, sipHurda, sipHurdaGram, sipKarMly };
+    return { s, kalemDetay, sipAdet, sipGram, sipKar, sipKarUSD, sipHurda, sipHurdaGram, sipIade, sipTamir, sipKarMly };
   });
 
-  // Hurda özeti
+  // Hurda + iade + tamir özeti
   const hurdaOzet = {};
   siparisler.forEach(s => {
     (s.kalemler || []).forEach(k => {
+      const etiket = k.kod || k.ad || "?";
       const hurdaAdet = ((s.kalemHurda) || {})[k.id] || 0;
+      const iadeAdet  = ((s.kalemIade) || {})[k.id] || 0;
+      const tamirAdet = ((s.kalemTamir) || {})[k.id] || 0;
       if (hurdaAdet > 0) {
-        const neden = ((s.kalemHurdaNeden) || {})[k.id] || "Belirtilmemiş";
+        const neden = "🔴 Hurda: " + (((s.kalemHurdaNeden) || {})[k.id] || "Belirtilmemiş");
         if (!hurdaOzet[neden]) hurdaOzet[neden] = { adet: 0, modeller: [] };
         hurdaOzet[neden].adet += hurdaAdet;
-        hurdaOzet[neden].modeller.push((k.kod || k.ad || "?") + " ×" + hurdaAdet);
+        hurdaOzet[neden].modeller.push(etiket + " ×" + hurdaAdet);
+      }
+      if (iadeAdet > 0) {
+        const neden = "↩ İade: " + (((s.kalemIadeNeden) || {})[k.id] || "Belirtilmemiş");
+        if (!hurdaOzet[neden]) hurdaOzet[neden] = { adet: 0, modeller: [] };
+        hurdaOzet[neden].adet += iadeAdet;
+        hurdaOzet[neden].modeller.push(etiket + " ×" + iadeAdet);
+      }
+      if (tamirAdet > 0) {
+        const neden = "🔧 Tamir: " + (((s.kalemTamirNeden) || {})[k.id] || "Belirtilmemiş");
+        if (!hurdaOzet[neden]) hurdaOzet[neden] = { adet: 0, modeller: [] };
+        hurdaOzet[neden].adet += tamirAdet;
+        hurdaOzet[neden].modeller.push(etiket + " ×" + tamirAdet);
       }
     });
   });
@@ -803,28 +824,31 @@ function buildSipListeRaporuHTML(siparisler, altinKgUSD, mc) {
 
   // ÖZET KUTUCULUKLAR
   const topKarMly = topGram > 0 ? topKar / topGram : 0;
+  const topIade  = sipData.reduce((s,d) => s + (d.sipIade||0), 0);
+  const topTamir = sipData.reduce((s,d) => s + (d.sipTamir||0), 0);
   h += "<div class='sum'>";
-  h += "<div class='sbox'><div class='lb'>Toplam Kalem</div><div class='vl'>" + topAdet + "</div></div>";
-  h += "<div class='sbox'><div class='lb'>Toplam Gram</div><div class='vl bl'>" + fN(topGram, 1) + " <span style='font-size:10px'>gr</span></div></div>";
+  h += "<div class='sbox'><div class='lb'>Net Kalem</div><div class='vl'>" + topAdet + "</div></div>";
+  h += "<div class='sbox'><div class='lb'>Net Gram</div><div class='vl bl'>" + fN(topGram, 1) + " <span style='font-size:10px'>gr</span></div></div>";
   h += "<div class='sbox'><div class='lb'>Toplam Kâr</div><div class='vl gn'>" + fN(topKar, 3) + " <span style='font-size:9px'>has</span></div></div>";
   h += "<div class='sbox'><div class='lb'>Ort. Karlılık</div><div class='vl " + (topKarMly >= 0.030 ? "gn" : topKarMly >= 0.020 ? "" : "rd") + "'>" + fN(topKarMly, 3) + " <span style='font-size:9px'>mly</span></div></div>";
-  h += "<div class='sbox'><div class='lb'>Toplam Hurda</div><div class='vl rd'>" + topHurda + " <span style='font-size:9px'>adet</span></div></div>";
+  h += "<div class='sbox'><div class='lb'>Hurda / İade / Tamir</div><div class='vl rd' style='font-size:12px'>" + topHurda + " / " + topIade + " / " + topTamir + "</div></div>";
   h += "</div>";
 
   // SİPARİŞ BAZLI TABLO
   h += "<div class='sec-title'>📋 Sipariş Bazlı Özet</div>";
   h += "<table class='main'><thead><tr>";
-  h += "<th style='width:130px'>Müşteri</th><th>Kalemler</th><th class='r' style='width:55px'>Adet</th><th class='r' style='width:62px'>Gram</th><th class='r' style='width:80px'>Kâr (has)</th><th class='r' style='width:65px'>mly/gr</th><th class='r' style='width:48px'>Hurda</th>";
+  h += "<th style='width:130px'>Müşteri</th><th>Kalemler</th><th class='r' style='width:55px'>Net Adet</th><th class='r' style='width:62px'>Gram</th><th class='r' style='width:80px'>Kâr (has)</th><th class='r' style='width:65px'>mly/gr</th><th class='r' style='width:60px'>H/İ/T</th>";
   h += "</tr></thead><tbody>";
 
-  sipData.forEach(({ s, kalemDetay, sipAdet, sipGram, sipKar, sipKarUSD, sipHurda, sipKarMly }) => {
+  sipData.forEach(({ s, kalemDetay, sipAdet, sipGram, sipKar, sipKarUSD, sipHurda, sipIade, sipTamir, sipKarMly }) => {
     const karClass = sipKarMly >= 0.030 ? "kar-ok" : sipKarMly >= 0.020 ? "kar-warn" : "kar-no";
     const tarih = new Date(s.tarih).toLocaleDateString("tr-TR", {day:"2-digit",month:"2-digit",year:"2-digit"});
     const sonDurum = s.durumGecmisi?.length ? s.durumGecmisi[s.durumGecmisi.length-1].durum : null;
     const durRenk = sonDurum ? (DURUM_RENK[sonDurum] || "#999") : "#ccc";
     const durLabel = sonDurum ? (DURUM_L[sonDurum] || sonDurum) : "—";
+    const hasKayip = sipHurda > 0 || sipIade > 0 || sipTamir > 0;
 
-    h += "<tr" + (sipHurda > 0 ? " class='hurda-row'" : "") + ">";
+    h += "<tr" + (hasKayip ? " class='hurda-row'" : "") + ">";
     // Müşteri
     h += "<td><div class='sip-ad'>" + (s.musKod || s.musteri || "İsimsiz") + "</div>";
     if (s.musKod && s.musteri && s.musKod !== s.musteri) h += "<div class='sip-meta'>" + s.musteri + "</div>";
@@ -833,12 +857,14 @@ function buildSipListeRaporuHTML(siparisler, altinKgUSD, mc) {
     h += "</td>";
     // Kalemler kısa listesi
     h += "<td><div style='display:flex;flex-wrap:wrap;gap:2px'>";
-    kalemDetay.forEach(({ k, hc, adet, hurdaAdet, karMly }) => {
-      const kMly = karMly;
-      const kc = kMly >= 0.030 ? "#2d8a4e" : kMly >= 0.020 ? "#b8600a" : "#c0392b";
-      const hurdaBadge = hurdaAdet > 0 ? " <span style='color:#e85a4f;font-weight:800'>⚠×" + hurdaAdet + "</span>" : "";
+    kalemDetay.forEach(({ k, hc, adet, hurdaAdet, iadeAdet, tamirAdet, karMly }) => {
+      const kc = karMly >= 0.030 ? "#2d8a4e" : karMly >= 0.020 ? "#b8600a" : "#c0392b";
+      let badges = "";
+      if (hurdaAdet > 0) badges += " <span style='color:#e85a4f;font-weight:800'>H×" + hurdaAdet + "</span>";
+      if (iadeAdet  > 0) badges += " <span style='color:#a78bfa;font-weight:800'>İ×" + iadeAdet  + "</span>";
+      if (tamirAdet > 0) badges += " <span style='color:#5b9bd5;font-weight:800'>T×" + tamirAdet  + "</span>";
       h += "<span style='background:" + kc + "18;border:1px solid " + kc + "44;border-radius:4px;padding:1px 5px;font-size:8px;color:" + kc + ";font-weight:700;white-space:nowrap'>";
-      h += (k.kod || k.ad || "?") + " ×" + adet + hurdaBadge;
+      h += (k.kod || k.ad || "?") + " ×" + adet + badges;
       h += "</span>";
     });
     h += "</div></td>";
@@ -847,7 +873,9 @@ function buildSipListeRaporuHTML(siparisler, altinKgUSD, mc) {
     h += "<td class='r'>" + fN(sipGram, 2) + " gr</td>";
     h += "<td class='r " + karClass + "'>" + fN(sipKar, 3) + (sipKarUSD > 0 ? "<br><span style='font-size:8px;color:#888'>≈$" + sipKarUSD.toFixed(0) + "</span>" : "") + "</td>";
     h += "<td class='r'><div class='" + karClass + "' style='font-size:11px'>" + fN(sipKarMly, 3) + "</div><div class='mly-bar'><div class='mly-fill' style='width:" + Math.min(100, Math.round(sipKarMly / 0.06 * 100)) + "%;background:" + (sipKarMly >= 0.030 ? "#2d8a4e" : sipKarMly >= 0.020 ? "#e8833a" : "#e85a4f") + "'></div></div></td>";
-    h += "<td class='r' style='color:" + (sipHurda > 0 ? "#e85a4f" : "#ccc") + ";font-weight:" + (sipHurda > 0 ? "800" : "400") + "'>" + (sipHurda > 0 ? sipHurda : "—") + "</td>";
+    // H/İ/T kolonu
+    const hit = [sipHurda>0?"H:"+sipHurda:"", sipIade>0?"İ:"+sipIade:"", sipTamir>0?"T:"+sipTamir:""].filter(Boolean).join(" ");
+    h += "<td class='r' style='font-size:9px;font-weight:800;color:" + (hasKayip?"#e85a4f":"#ccc") + "'>" + (hit||"—") + "</td>";
     h += "</tr>";
   });
 
@@ -2330,9 +2358,9 @@ function Atolye() {
                             <span style={{ fontSize:13, fontWeight:800, color:GOLD }}>{s.musKod||s.musteri||"Isimsiz"}</span>
                             <span style={{ fontSize:9, color:"#7a6f5a" }}>{new Date(s.tarih).toLocaleDateString("tr-TR")}</span>
                             <span style={{ fontSize:9, color:"#998a6e" }}>{toplamKalem} kalem</span>
-                            <span style={{ fontSize:9, color:"#5b9bd5", fontWeight:700 }}>{fN((s.kalemler||[]).reduce((acc,k)=>{const hc=hesapla(k,k.secilenAyar||k.refAyar,s.altinKgUSD,s.mc);return acc+hc.mamulGram*(k.adet||1);},0),2)} gr</span>
+                            <span style={{ fontSize:9, color:"#5b9bd5", fontWeight:700 }}>{fN((s.kalemler||[]).reduce((acc,k)=>{const hc=hesapla(k,k.secilenAyar||k.refAyar,s.altinKgUSD,s.mc);const du=((s.kalemHurda)||{})[k.id]||0;const ia=((s.kalemIade)||{})[k.id]||0;const ta=((s.kalemTamir)||{})[k.id]||0;const net=Math.max(0,(k.adet||1)-du-ia-ta);return acc+hc.mamulGram*net;},0),2)} gr</span>
                             {(() => {
-                              const topKar = (s.kalemler||[]).reduce((acc,k)=>{const hc=hesapla(k,k.secilenAyar||k.refAyar,s.altinKgUSD,s.mc);return acc+hc.karHas*(k.adet||1);},0);
+                              const topKar = (s.kalemler||[]).reduce((acc,k)=>{const hc=hesapla(k,k.secilenAyar||k.refAyar,s.altinKgUSD,s.mc);const du=((s.kalemHurda)||{})[k.id]||0;const ia=((s.kalemIade)||{})[k.id]||0;const ta=((s.kalemTamir)||{})[k.id]||0;const net=Math.max(0,(k.adet||1)-du-ia-ta);return acc+hc.karHas*net;},0);
                               const topKarUSD = topKar * ((s.altinKgUSD||0)/1000);
                               return <span style={{ fontSize:9, color:topKar>=0?"#6abf69":"#e85a4f", fontWeight:800 }}>{fN(topKar,2)} has {topKarUSD>0?"≈"+fUSD(topKarUSD):""}</span>;
                             })()}
