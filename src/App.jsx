@@ -423,8 +423,8 @@ function buildKonfHTML(siparis, altinKgUSD, mc, fiyatli) {
     + "th.r{text-align:right}"
     + "td{padding:11px 6px;border-bottom:.5px solid #f0f4f8;vertical-align:middle;font-size:11px;color:#1a1a1a}"
     + "td.r{text-align:right}"
-    + ".ic img{width:66px;height:66px;object-fit:cover;border-radius:6px;display:block}"
-    + ".ni2{width:66px;height:66px;background:#eef4fa;border-radius:6px}"
+    + ".ic img{width:100px;height:100px;object-fit:cover;border-radius:8px;display:block}"
+    + ".ni2{width:100px;height:100px;background:#eef4fa;border-radius:8px}"
     + ".kod{font-size:12px;font-weight:500;color:#1e3a5f}"
     + ".nm{font-size:11px;color:#1a1a1a}"
     + ".nt{font-size:9px;color:#aaa;margin-top:2px}"
@@ -457,18 +457,48 @@ function buildKonfHTML(siparis, altinKgUSD, mc, fiyatli) {
   // Tablo
   h += "<div class='tbl-wrap'><table>";
 
-  h += "<thead><tr><th style='width:74px'></th><th style='width:68px'>Kod</th><th>Kategori / Not</th><th class='r' style='width:50px'>Renk</th><th class='r' style='width:38px'>Adet</th><th class='r' style='width:56px'>Gram</th><th class='r' style='width:64px'>Iscilik</th></tr></thead><tbody>";
+  h += "<thead><tr><th style='width:110px'></th><th style='width:68px'>Kod</th><th>Kategori / Not</th><th class='r' style='width:50px'>Renk</th><th class='r' style='width:38px'>Adet</th><th class='r' style='width:56px'>Gram</th><th class='r' style='width:96px'>İşçilik Birim</th><th class='r' style='width:84px'>İşçilik Toplam</th></tr></thead><tbody>";
 
   let tIscilik = 0;
+  let tIscilikHas = 0;
   rows.forEach(r => {
     const topGram = r.hc.mamulGram * r.adet;
-    const iscilikTop = r.iscilikBirim==="milyem"
+    const isMilyem = r.iscilikBirim === "milyem";
+    // Birim işçilik: bir mamul için
+    const birimGram = r.hc.mamulGram;
+    const iscilikBirimVal = isMilyem
+      ? r.hc.iscilikHas * r.hc.hasGramUSD  // 1 adet için $ karşılığı
+      : (r.iscilikDolar||0) * birimGram;    // $/gr × gram
+    const iscilikBirimHas = isMilyem
+      ? r.hc.iscilikHas                      // 1 adet için has
+      : ((r.iscilikDolar||0) * birimGram) / (r.hc.hasGramUSD || 1);
+    // Toplam (adet ile çarpılı)
+    const iscilikTop = isMilyem
       ? r.hc.iscilikHas * r.hc.hasGramUSD * r.adet
-      : (r.iscilikDolar||0) * topGram * r.adet;
+      : (r.iscilikDolar||0) * topGram;
+    const iscilikTopHas = isMilyem
+      ? r.hc.iscilikHas * r.adet
+      : iscilikTop / (r.hc.hasGramUSD || 1);
     tIscilik += iscilikTop;
+    tIscilikHas += iscilikTopHas;
+    
+    // Birim formatlı: $/has karışık göster
+    let birimStr = "-";
+    let topStr = "-";
+    if (iscilikBirimVal > 0) {
+      if (isMilyem) {
+        // milyem girişi: x mly/gr → toplam has
+        birimStr = (r.iscilikDolar||0).toFixed(3) + " mly/gr<br/><span style='font-size:7px;color:#888'>" + fUSD(iscilikBirimVal) + "</span>";
+        topStr = iscilikBirimHas.toFixed(4) + " has × " + r.adet + "<br/><span style='font-size:7px;color:#888'>" + fUSD(iscilikTop) + "</span>";
+      } else {
+        // dolar girişi: $/gr → toplam $
+        birimStr = fUSD(r.iscilikDolar||0) + "/gr<br/><span style='font-size:7px;color:#888'>" + iscilikBirimHas.toFixed(4) + " has</span>";
+        topStr = fUSD(iscilikTop) + "<br/><span style='font-size:7px;color:#888'>" + iscilikTopHas.toFixed(4) + " has</span>";
+      }
+    }
+    
     const katLabel = r.kategori ? r.kategori.charAt(0).toUpperCase()+r.kategori.slice(1) : "";
     const boyLabel = r.boy&&r.boy.deger ? "Boy: "+r.boy.sistem+" "+r.boy.deger+(r.boy.sistem!=="mm"&&r.boy.sistem!=="Beden"&&r.boy.sistem!=="mm (iç çap)"&&r.boy.sistem!=="mm (iç çevre)"?" (≈"+boyToMM(r.boy.sistem,r.boy.deger)+"mm)":"") : "";
-    // Kolye/bileklik için boyListesi
     let boyListesiHTML = "";
     if (r.boyListesi && r.boyListesi.length > 0) {
       boyListesiHTML = "<div class='boy' style='margin-top:3px'><b>Boylar:</b> " + r.boyListesi.map(b => 
@@ -476,13 +506,14 @@ function buildKonfHTML(siparis, altinKgUSD, mc, fiyatli) {
       ).join(" / ") + "</div>";
     }
     h += "<tr>";
-    h += "<td>" + (r.foto ? "<img src='"+r.foto+"' style='width:66px;height:66px;object-fit:cover;border-radius:6px;display:block'/>" : "<div style='width:66px;height:66px;background:#eef4fa;border-radius:6px'></div>") + "</td>";
+    h += "<td>" + (r.foto ? "<img src='"+r.foto+"' style='width:100px;height:100px;object-fit:cover;border-radius:8px;display:block'/>" : "<div style='width:100px;height:100px;background:#eef4fa;border-radius:8px'></div>") + "</td>";
     h += "<td class='kod'>" + (r.kod||"-") + "</td>";
     h += "<td>" + (katLabel?"<div class='nm'>"+katLabel+"</div>":"") + (r.sipNot?"<div class='nt'>"+r.sipNot+"</div>":"") + (boyLabel?"<div class='boy'>"+boyLabel+"</div>":"") + boyListesiHTML + "</td>";
     h += "<td class='r dim'>" + (r.renk||"Sari") + "</td>";
     h += "<td class='r'>" + r.adet + "</td>";
     h += "<td class='r'>" + fN(topGram,2) + " gr</td>";
-    h += "<td class='r dim'>" + (iscilikTop>0 ? fUSD(iscilikTop) : "-") + "</td>";
+    h += "<td class='r' style='font-size:9px;line-height:1.3'>" + birimStr + "</td>";
+    h += "<td class='r' style='font-size:9px;line-height:1.3;font-weight:700;color:#1a1a1a'>" + topStr + "</td>";
     h += "</tr>";
   });
 
@@ -493,7 +524,10 @@ function buildKonfHTML(siparis, altinKgUSD, mc, fiyatli) {
   h += "<div class='tot-blok'><table class='tot-tbl'>";
   h += "<tr><td class='lc'>Toplam Gram</td><td class='rc'>" + fN(tGram,2) + " gr</td></tr>";
   h += "<tr><td class='lc'>Toplam Adet</td><td class='rc'>" + tAdet + " adet</td></tr>";
-  if (tIscilik > 0) h += "<tr><td class='lc'>Toplam Iscilik</td><td class='rc'>" + fUSD(tIscilik) + "</td></tr>";
+  if (tIscilik > 0) {
+    h += "<tr><td class='lc'>Toplam Işçilik ($)</td><td class='rc'>" + fUSD(tIscilik) + "</td></tr>";
+    h += "<tr><td class='lc'>Toplam Işçilik (Has)</td><td class='rc'>" + tIscilikHas.toFixed(4) + " has</td></tr>";
+  }
   if (!fiyatli && tIscilik > 0) h += "<tr class='grand'><td class='lc'>Genel Toplam</td><td class='rc'>" + fUSD(tIscilik) + "</td></tr>";
   h += "</table></div>";
 
@@ -951,6 +985,7 @@ function Atolye() {
   const [dragOverKolIdx, setDragOverKolIdx] = useState(null);
   const [dragHaritaKol, setDragHaritaKol] = useState(null);
   const [dragOverHaritaKol, setDragOverHaritaKol] = useState(null);
+  const [manuelTarihModal, setManuelTarihModal] = useState(null); // {sipId, gecmisIdx, durum, tarih}
   const [showMM,  setShowMM]  = useState(false);
   const [showYedek, setShowYedek] = useState(false);
   const [katalogSiralaModal, setKatalogSiralaModal] = useState(false);
@@ -1127,15 +1162,16 @@ function Atolye() {
   }, []);
   const svS = useCallback(async d => { setSiparisler(d); await sv("v7s", d); }, []);
 
-  // Sipariş durum geçmişini güncelle
-  const sipDurumKaydet = useCallback((sipId, yeniDurum) => {
+  // Sipariş durum geçmişini güncelle (opsiyonel manuel tarih)
+  const sipDurumKaydet = useCallback((sipId, yeniDurum, manuelTarih) => {
     setSiparisler(prev => {
       const yeni = prev.map(sp => {
         if (sp.id !== sipId) return sp;
         const gecmis = sp.durumGecmisi || [];
         const sonGecmis = gecmis[gecmis.length - 1];
-        if (sonGecmis && sonGecmis.durum === yeniDurum) return sp; // aynı durum
-        return { ...sp, durumGecmisi: [...gecmis, { durum: yeniDurum, tarih: Date.now() }] };
+        if (sonGecmis && sonGecmis.durum === yeniDurum && !manuelTarih) return sp; // aynı durum, manuel değilse atla
+        const tarih = manuelTarih || Date.now();
+        return { ...sp, durumGecmisi: [...gecmis, { durum: yeniDurum, tarih, manuel: !!manuelTarih }] };
       });
       sv("v7s", yeni);
       return yeni;
@@ -1855,9 +1891,9 @@ function Atolye() {
                     const topGram = hc.mamulGram * adet;
                     const renkRenk = renk==="Rose"?"#e8833a":renk==="Beyaz"?"#aaa":"#c9a84c";
                     return (
-                      <div key={m.id} style={{ display:"grid", gridTemplateColumns:"72px 80px 1fr 100px 60px 70px 50px", gap:0, padding:"8px 10px", borderBottom: idx < konfList.length-1 ? "1px solid rgba(201,168,76,0.06)" : "none", alignItems:"center" }}>
+                      <div key={m.id} style={{ display:"grid", gridTemplateColumns:"100px 80px 1fr 100px 60px 70px 50px", gap:0, padding:"8px 10px", borderBottom: idx < konfList.length-1 ? "1px solid rgba(201,168,76,0.06)" : "none", alignItems:"center" }}>
                         {/* Foto */}
-                        <div>{m.foto ? <img src={m.foto} alt="" style={{ width:64, height:64, objectFit:"cover", borderRadius:8 }}/> : <div style={{ width:64, height:64, background:"rgba(201,168,76,0.08)", borderRadius:8, display:"flex", alignItems:"center", justifyContent:"center", color:"rgba(201,168,76,0.3)", fontSize:20 }}>-</div>}</div>
+                        <div>{m.foto ? <img src={m.foto} alt="" style={{ width:92, height:92, objectFit:"cover", borderRadius:8 }}/> : <div style={{ width:92, height:92, background:"rgba(201,168,76,0.08)", borderRadius:8, display:"flex", alignItems:"center", justifyContent:"center", color:"rgba(201,168,76,0.3)", fontSize:24 }}>-</div>}</div>
                         {/* Kod */}
                         <div style={{ fontSize:10, fontWeight:800, color:GOLD }}>{m.kod||"—"}</div>
                         {/* Ürün + not */}
@@ -2170,13 +2206,22 @@ function Atolye() {
                                     const aktif = gi === gecmis.length - 1;
                                     return (
                                       <div key={gi} style={{ display:"flex", alignItems:"center", flexShrink:0 }}>
-                                        <div style={{ textAlign:"center", width:90 }}>
+                                        <div style={{ textAlign:"center", width:90, position:"relative" }}>
                                           <div style={{ width:32, height:32, borderRadius:16, background:durObj.c+"33", border:"2px solid "+durObj.c+(aktif&&!tamamlandi?"":"99"), margin:"0 auto 4px", display:"flex", alignItems:"center", justifyContent:"center", boxShadow:aktif&&!tamamlandi?"0 0 10px "+durObj.c+"88":"none" }}>
                                             <div style={{ width:12, height:12, borderRadius:6, background:durObj.c }}/>
                                           </div>
                                           <div style={{ fontSize:8, fontWeight:700, color:durObj.c, whiteSpace:"nowrap" }}>{durObj.l}</div>
                                           <div style={{ fontSize:8, color:"#6abf69", fontWeight:600, marginTop:1 }}>{sureFmt(buSure)}</div>
-                                          <div style={{ fontSize:7, color:"#554d3a" }}>{new Date(gec.tarih).toLocaleDateString("tr-TR")}</div>
+                                          <div style={{ fontSize:7, color:"#554d3a", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:3 }}
+                                            onClick={(e)=>{
+                                              e.stopPropagation();
+                                              const tarihStr = new Date(gec.tarih).toISOString().slice(0,16);
+                                              setManuelTarihModal({ sipId: s.id, gecmisIdx: gi, durum: gec.durum, durumL: durObj.l, tarih: tarihStr });
+                                            }}
+                                            title="Tarihi düzenle">
+                                            <span>{new Date(gec.tarih).toLocaleDateString("tr-TR")}</span>
+                                            <span style={{ color:"#998a6e", fontSize:9 }}>✏</span>
+                                          </div>
                                         </div>
                                         {gi < gecmis.length - 1 && (
                                           <div style={{ width:20, height:2, background:"rgba(201,168,76,0.25)", flexShrink:0, marginBottom:22 }}/>
@@ -2239,7 +2284,7 @@ function Atolye() {
                           const dur = DURUMLAR.find(d => d.id===mevcDurum) || DURUMLAR[0];
                           return (
                             <div key={k.id} style={{ display:"flex", alignItems:"center", gap:8, padding:"6px 0", borderBottom:"1px solid rgba(201,168,76,0.04)" }}>
-                              {k.foto ? <img src={k.foto} alt="" style={{ width:64, height:64, objectFit:"cover", borderRadius:8, flexShrink:0 }}/> : <div style={{ width:64, height:64, background:"rgba(201,168,76,0.06)", borderRadius:8, flexShrink:0 }}/>}
+                              {k.foto ? <img src={k.foto} alt="" style={{ width:92, height:92, objectFit:"cover", borderRadius:8, flexShrink:0 }}/> : <div style={{ width:92, height:92, background:"rgba(201,168,76,0.06)", borderRadius:8, flexShrink:0 }}/>}
                               <div style={{ flex:1, minWidth:0 }}>
                                 <div style={{ fontSize:10, fontWeight:700, color:"#e8dcc8" }}>
                                   <span style={{ color:GOLD, marginRight:4 }}>{k.kod||""}</span>{k.ad}
@@ -3448,6 +3493,44 @@ function Atolye() {
       </Modal>
 
       {/* KOL MODAL */}
+      {/* MANUEL TARİH DÜZENLEME MODAL */}
+      <Modal open={!!manuelTarihModal} onClose={()=>setManuelTarihModal(null)} title="Aşama Tarihini Düzenle">
+        {manuelTarihModal && (
+          <>
+            <div style={{ fontSize:11, color:"#998a6e", marginBottom:14, padding:"8px 10px", background:"rgba(91,155,213,0.05)", borderRadius:8 }}>
+              <b style={{ color:"#5b9bd5" }}>{manuelTarihModal.durumL}</b> aşamasının başlangıç tarihini değiştirebilirsiniz. Geçmişte unuttuğunuz siparişler için kullanın.
+            </div>
+            <Fl label="Tarih ve Saat">
+              <input type="datetime-local" value={manuelTarihModal.tarih}
+                onChange={e=>setManuelTarihModal(p=>({...p, tarih:e.target.value}))}
+                style={{ ...IS, padding:"8px 10px", fontSize:13 }}/>
+            </Fl>
+            <div style={{ display:"flex", gap:8, marginTop:14 }}>
+              <button onClick={()=>setManuelTarihModal(null)} style={{ flex:1, padding:"9px", background:"rgba(255,255,255,0.05)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:8, color:"#998a6e", fontSize:11, fontWeight:700, cursor:"pointer" }}>İptal</button>
+              <button onClick={()=>{
+                const yeniTarih = new Date(manuelTarihModal.tarih).getTime();
+                if (isNaN(yeniTarih)) { alert("Geçersiz tarih!"); return; }
+                setSiparisler(prev => {
+                  const yeni = prev.map(sp => {
+                    if (sp.id !== manuelTarihModal.sipId) return sp;
+                    const gecmis = [...(sp.durumGecmisi||[])];
+                    if (gecmis[manuelTarihModal.gecmisIdx]) {
+                      gecmis[manuelTarihModal.gecmisIdx] = { ...gecmis[manuelTarihModal.gecmisIdx], tarih: yeniTarih, manuel: true };
+                      // Tarihe göre yeniden sırala
+                      gecmis.sort((a,b) => a.tarih - b.tarih);
+                    }
+                    return { ...sp, durumGecmisi: gecmis };
+                  });
+                  sv("v7s", yeni);
+                  return yeni;
+                });
+                setManuelTarihModal(null);
+              }} style={{ flex:1, padding:"9px", background:"#c9a84c", border:"none", borderRadius:8, color:"#110f0a", fontSize:11, fontWeight:800, cursor:"pointer" }}>Kaydet</button>
+            </div>
+          </>
+        )}
+      </Modal>
+
       {/* KOLEKSİYONLARI HİZALA MODAL */}
       <Modal open={hizalaModal} onClose={()=>setHizalaModal(false)} title="Koleksiyonları Hizala" wide>
         <div style={{ fontSize:10, color:"#998a6e", marginBottom:10 }}>
