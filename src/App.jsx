@@ -998,6 +998,7 @@ function Atolye() {
   const [modeller,  setModeller]  = useState([]);
   const [siparisler,setSiparisler]= useState([]);
   const [iadeModal,  setIadeModal] = useState(null); // {sipId, kalemId, kalemAd, maxAdet, mevcAdet, iadeTuru, mevcNeden}
+  const [cizelgeModal, setCizelgeModal] = useState(null); // sipId — zaman çizelgesi modal'ı
   const [musteriler, setMusteriler] = useState({}); // { "Ahmet": "MUS-001", ... }
   const [loaded,    setLoaded]    = useState(false);
 
@@ -2225,92 +2226,43 @@ function Atolye() {
                     {acik && (
                       <div style={{ padding:"2px 14px 10px", borderTop:"1px solid rgba(201,168,76,0.07)" }}>
 
-                        {/* ZAMAN ÇİZELGESİ */}
+                        {/* ZAMAN ÇİZELGESİ — özet + buton (detay modal'da) */}
                         {s.durumGecmisi?.length > 0 && (() => {
                           const gecmis = s.durumGecmisi;
                           const toplamSure = isGunuSure(gecmis[0].tarih, Date.now());
-                          const sonDurumObj = DURUMLAR.find(d=>d.id===gecmis[gecmis.length-1].durum)||DURUMLAR[0];
-                          const tamamlandi = ["tamam","teslim"].includes(gecmis[gecmis.length-1].durum);
+                          const sonGec = gecmis[gecmis.length-1];
+                          const sonDurumObj = DURUMLAR.find(d=>d.id===sonGec.durum)||DURUMLAR[0];
+                          const tamamlandi = ["tamam","teslim"].includes(sonGec.durum);
+                          const sonSure = isGunuSure(sonGec.tarih, Date.now());
                           return (
-                            <div style={{ marginBottom:12, padding:"10px 12px", background:"rgba(91,155,213,0.05)", border:"1px solid rgba(91,155,213,0.12)", borderRadius:10 }}>
-                              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
-                                <span style={{ fontSize:9, fontWeight:700, color:"#5b9bd5" }}>⏱ ÜRETİM TAKİBİ</span>
-                                <div style={{ display:"flex", gap:8, alignItems:"center" }}>
-                                  <span style={{ fontSize:8, color:"#665d4a" }}>Toplam: <b style={{ color:"#e8dcc8" }}>{sureFmt(toplamSure)}</b></span>
-                                  {tamamlandi && <span style={{ fontSize:8, color:"#6abf69", fontWeight:700 }}>✓ Tamamlandı</span>}
-                                </div>
+                            <div style={{ marginBottom:12, padding:"8px 12px", background:"rgba(91,155,213,0.05)", border:"1px solid rgba(91,155,213,0.12)", borderRadius:10, display:"flex", alignItems:"center", justifyContent:"space-between", gap:10, flexWrap:"wrap" }}>
+                              <div style={{ display:"flex", alignItems:"center", gap:10, flexWrap:"wrap" }}>
+                                <span style={{ fontSize:9, fontWeight:700, color:"#5b9bd5" }}>⏱ ÜRETİM</span>
+                                <span style={{ background:sonDurumObj.c+"22", color:sonDurumObj.c, border:"1px solid "+sonDurumObj.c+"55", borderRadius:5, padding:"2px 8px", fontSize:9, fontWeight:700 }}>
+                                  {sonDurumObj.l}
+                                </span>
+                                {!tamamlandi && <span style={{ fontSize:8, color:"#998a6e" }}>{sureFmt(sonSure)} aşamada</span>}
+                                <span style={{ fontSize:8, color:"#665d4a" }}>Toplam: <b style={{ color:"#e8dcc8" }}>{sureFmt(toplamSure)}</b></span>
+                                <span style={{ fontSize:8, color:"#665d4a" }}>{gecmis.length} aşama</span>
+                                {tamamlandi && <span style={{ fontSize:8, color:"#6abf69", fontWeight:700 }}>✓ Tamamlandı</span>}
                               </div>
-
-                              {/* Aşamalar — yatay scroll */}
-                              <div style={{ overflowX:"auto", paddingBottom:4 }}>
-                                <div style={{ display:"flex", alignItems:"flex-start", gap:0, minWidth:"max-content" }}>
-                                  {gecmis.map((gec, gi) => {
-                                    const durObj = DURUMLAR.find(d=>d.id===gec.durum)||DURUMLAR[0];
-                                    const sonrakiGec = gecmis[gi+1];
-                                    const buSure = isGunuSure(gec.tarih, sonrakiGec ? sonrakiGec.tarih : Date.now());
-                                    const aktif = gi === gecmis.length - 1;
-                                    return (
-                                      <div key={gi} style={{ display:"flex", alignItems:"center", flexShrink:0 }}>
-                                        <div style={{ textAlign:"center", width:90, position:"relative" }}>
-                                          <div style={{ width:32, height:32, borderRadius:16, background:durObj.c+"33", border:"2px solid "+durObj.c+(aktif&&!tamamlandi?"":"99"), margin:"0 auto 4px", display:"flex", alignItems:"center", justifyContent:"center", boxShadow:aktif&&!tamamlandi?"0 0 10px "+durObj.c+"88":"none" }}>
-                                            <div style={{ width:12, height:12, borderRadius:6, background:durObj.c }}/>
-                                          </div>
-                                          <div style={{ fontSize:8, fontWeight:700, color:durObj.c, whiteSpace:"nowrap" }}>{durObj.l}</div>
-                                          <div style={{ fontSize:8, color:"#6abf69", fontWeight:600, marginTop:1 }}>{sureFmt(buSure)}</div>
-                                          <div style={{ fontSize:7, color:"#554d3a", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:3 }}
-                                            onClick={(e)=>{
-                                              e.stopPropagation();
-                                              const tarihStr = new Date(gec.tarih).toISOString().slice(0,16);
-                                              setManuelTarihModal({ sipId: s.id, gecmisIdx: gi, durum: gec.durum, durumL: durObj.l, tarih: tarihStr });
-                                            }}
-                                            title="Tarihi düzenle">
-                                            <span>{new Date(gec.tarih).toLocaleDateString("tr-TR")}</span>
-                                            <span style={{ color:"#998a6e", fontSize:9 }}>✏</span>
-                                          </div>
-                                        </div>
-                                        {gi < gecmis.length - 1 && (
-                                          <div style={{ width:20, height:2, background:"rgba(201,168,76,0.25)", flexShrink:0, marginBottom:22 }}/>
-                                        )}
-                                      </div>
-                                    );
-                                  })}
-                                  {/* → Sonraki aşama butonu */}
-                                  {sonrakiDurum && !tamamlandi && (
-                                    <div style={{ display:"flex", alignItems:"center", flexShrink:0 }}>
-                                      <div style={{ width:20, height:2, background:"rgba(201,168,76,0.1)", flexShrink:0, marginBottom:22 }}/>
-                                      <button onClick={e=>{
-                                        e.stopPropagation();
-                                        svS(siparisler.map(sp=>sp.id===s.id?{...sp,kalemDurumlar:Object.fromEntries((sp.kalemler||[]).map(k=>[(k.id),(sp.kalemDurumlar||{})[k.id]==="hurda"?"hurda":sonrakiDurum.id]))}:sp));
-                                        sipDurumKaydet(s.id, sonrakiDurum.id);
-                                      }} style={{ background:sonrakiDurum.c+"22", border:"2px dashed "+sonrakiDurum.c+"66", borderRadius:8, padding:"5px 10px", color:sonrakiDurum.c, fontSize:8, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap", marginBottom:22, textAlign:"center", width:90 }}>
-                                        → {sonrakiDurum.l}
-                                      </button>
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-
-                              {/* Süre özeti bar */}
-                              <div style={{ marginTop:8, borderTop:"1px solid rgba(91,155,213,0.1)", paddingTop:8 }}>
-                                <div style={{ fontSize:7, color:"#665d4a", marginBottom:4 }}>AŞAMA SÜRELERİ</div>
-                                <div style={{ display:"flex", flexDirection:"column", gap:3 }}>
-                                  {gecmis.map((gec, gi) => {
-                                    const durObj = DURUMLAR.find(d=>d.id===gec.durum)||DURUMLAR[0];
-                                    const sonrakiGec = gecmis[gi+1];
-                                    const buSure = isGunuSure(gec.tarih, sonrakiGec ? sonrakiGec.tarih : Date.now());
-                                    const pct = toplamSure > 0 ? Math.round(buSure/toplamSure*100) : 0;
-                                    return (
-                                      <div key={gi} style={{ display:"flex", alignItems:"center", gap:6 }}>
-                                        <div style={{ width:60, fontSize:7, color:durObj.c, fontWeight:600, flexShrink:0 }}>{durObj.l}</div>
-                                        <div style={{ flex:1, height:4, background:"rgba(255,255,255,0.05)", borderRadius:2, overflow:"hidden" }}>
-                                          <div style={{ height:"100%", width:pct+"%", background:durObj.c, borderRadius:2, opacity:0.7 }}/>
-                                        </div>
-                                        <div style={{ width:60, fontSize:7, color:"#998a6e", textAlign:"right", flexShrink:0 }}>{sureFmt(buSure)} ({pct}%)</div>
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                              </div>
+                              <button onClick={e=>{ e.stopPropagation(); setCizelgeModal(s.id); }} style={{ background:"rgba(91,155,213,0.15)", border:"1px solid rgba(91,155,213,0.3)", borderRadius:6, padding:"4px 10px", color:"#5b9bd5", fontSize:9, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap" }}>
+                                📊 Çizelgeyi Aç
+                              </button>
+                              {/* Sonraki aşama butonu (hızlı erişim) */}
+                              {!tamamlandi && (() => {
+                                const sonrakiDurum = DURUMLAR[DURUMLAR.findIndex(d=>d.id===sonGec.durum)+1];
+                                if (!sonrakiDurum) return null;
+                                return (
+                                  <button onClick={e=>{
+                                    e.stopPropagation();
+                                    svS(siparisler.map(sp=>sp.id===s.id?{...sp,kalemDurumlar:Object.fromEntries((sp.kalemler||[]).map(k=>[(k.id),(sp.kalemDurumlar||{})[k.id]==="hurda"?"hurda":sonrakiDurum.id]))}:sp));
+                                    sipDurumKaydet(s.id, sonrakiDurum.id);
+                                  }} style={{ background:sonrakiDurum.c+"22", border:"1px solid "+sonrakiDurum.c+"66", borderRadius:6, padding:"4px 10px", color:sonrakiDurum.c, fontSize:9, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap" }}>
+                                    → {sonrakiDurum.l}
+                                  </button>
+                                );
+                              })()}
                             </div>
                           );
                         })()}
@@ -3650,6 +3602,102 @@ function Atolye() {
       </Modal>
 
       {/* KOL MODAL */}
+      {/* ZAMAN ÇİZELGESİ MODAL */}
+      {cizelgeModal && (() => {
+        const s = siparisler.find(x => x.id === cizelgeModal);
+        if (!s) return null;
+        const gecmis = s.durumGecmisi || [];
+        if (!gecmis.length) return null;
+        const toplamSure = isGunuSure(gecmis[0].tarih, Date.now());
+        const sonGec = gecmis[gecmis.length-1];
+        const tamamlandi = ["tamam","teslim"].includes(sonGec.durum);
+        const sonrakiDurum = DURUMLAR[DURUMLAR.findIndex(d=>d.id===sonGec.durum)+1];
+        return (
+          <Modal open={!!cizelgeModal} onClose={()=>setCizelgeModal(null)} title={"⏱ Üretim Takibi — " + (s.musteri||"")} wide>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14, padding:"8px 12px", background:"rgba(91,155,213,0.08)", borderRadius:8 }}>
+              <div>
+                <div style={{ fontSize:11, color:"#5b9bd5", fontWeight:700 }}>Sipariş: {s.musteri}</div>
+                <div style={{ fontSize:9, color:"#998a6e", marginTop:2 }}>{(s.kalemler||[]).length} kalem · {gecmis.length} aşama</div>
+              </div>
+              <div style={{ textAlign:"right" }}>
+                <div style={{ fontSize:9, color:"#665d4a" }}>Toplam İş Günü Süresi</div>
+                <div style={{ fontSize:14, color:"#e8dcc8", fontWeight:800 }}>{sureFmt(toplamSure)}</div>
+                {tamamlandi && <div style={{ fontSize:9, color:"#6abf69", fontWeight:700, marginTop:2 }}>✓ Tamamlandı</div>}
+              </div>
+            </div>
+
+            {/* Aşamalar yatay */}
+            <div style={{ overflowX:"auto", paddingBottom:8, marginBottom:14 }}>
+              <div style={{ display:"flex", alignItems:"flex-start", gap:0, minWidth:"max-content", padding:"4px 0" }}>
+                {gecmis.map((gec, gi) => {
+                  const durObj = DURUMLAR.find(d=>d.id===gec.durum)||DURUMLAR[0];
+                  const sonrakiGec = gecmis[gi+1];
+                  const buSure = isGunuSure(gec.tarih, sonrakiGec ? sonrakiGec.tarih : Date.now());
+                  const aktif = gi === gecmis.length - 1;
+                  return (
+                    <div key={gi} style={{ display:"flex", alignItems:"center", flexShrink:0 }}>
+                      <div style={{ textAlign:"center", width:110 }}>
+                        <div style={{ width:42, height:42, borderRadius:21, background:durObj.c+"33", border:"2px solid "+durObj.c+(aktif&&!tamamlandi?"":"99"), margin:"0 auto 5px", display:"flex", alignItems:"center", justifyContent:"center", boxShadow:aktif&&!tamamlandi?"0 0 14px "+durObj.c+"88":"none" }}>
+                          <div style={{ width:16, height:16, borderRadius:8, background:durObj.c }}/>
+                        </div>
+                        <div style={{ fontSize:10, fontWeight:700, color:durObj.c, whiteSpace:"nowrap" }}>{durObj.l}</div>
+                        <div style={{ fontSize:10, color:"#6abf69", fontWeight:600, marginTop:2 }}>{sureFmt(buSure)}</div>
+                        <div style={{ fontSize:8, color:"#7a6f5a", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:3, marginTop:2 }}
+                          onClick={()=>{
+                            const tarihStr = new Date(gec.tarih).toISOString().slice(0,16);
+                            setManuelTarihModal({ sipId: s.id, gecmisIdx: gi, durum: gec.durum, durumL: durObj.l, tarih: tarihStr });
+                          }}
+                          title="Tarihi düzenle">
+                          <span>{new Date(gec.tarih).toLocaleDateString("tr-TR")}</span>
+                          <span style={{ color:"#998a6e", fontSize:10 }}>✏</span>
+                        </div>
+                      </div>
+                      {gi < gecmis.length - 1 && (
+                        <div style={{ width:30, height:2, background:"rgba(201,168,76,0.3)", flexShrink:0, marginBottom:36 }}/>
+                      )}
+                    </div>
+                  );
+                })}
+                {/* Sonraki aşama butonu */}
+                {sonrakiDurum && !tamamlandi && (
+                  <div style={{ display:"flex", alignItems:"center", flexShrink:0 }}>
+                    <div style={{ width:30, height:2, background:"rgba(201,168,76,0.12)", flexShrink:0, marginBottom:36 }}/>
+                    <button onClick={()=>{
+                      svS(siparisler.map(sp=>sp.id===s.id?{...sp,kalemDurumlar:Object.fromEntries((sp.kalemler||[]).map(k=>[(k.id),(sp.kalemDurumlar||{})[k.id]==="hurda"?"hurda":sonrakiDurum.id]))}:sp));
+                      sipDurumKaydet(s.id, sonrakiDurum.id);
+                    }} style={{ background:sonrakiDurum.c+"22", border:"2px dashed "+sonrakiDurum.c+"66", borderRadius:10, padding:"8px 14px", color:sonrakiDurum.c, fontSize:10, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap", marginBottom:36, textAlign:"center", width:110 }}>
+                      → {sonrakiDurum.l}
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Aşama süreleri bar grafiği */}
+            <div style={{ borderTop:"1px solid rgba(91,155,213,0.15)", paddingTop:12 }}>
+              <div style={{ fontSize:10, color:"#5b9bd5", marginBottom:8, fontWeight:700 }}>AŞAMA SÜRELERİ DAĞILIMI</div>
+              <div style={{ display:"flex", flexDirection:"column", gap:5 }}>
+                {gecmis.map((gec, gi) => {
+                  const durObj = DURUMLAR.find(d=>d.id===gec.durum)||DURUMLAR[0];
+                  const sonrakiGec = gecmis[gi+1];
+                  const buSure = isGunuSure(gec.tarih, sonrakiGec ? sonrakiGec.tarih : Date.now());
+                  const pct = toplamSure > 0 ? Math.round(buSure/toplamSure*100) : 0;
+                  return (
+                    <div key={gi} style={{ display:"flex", alignItems:"center", gap:8 }}>
+                      <div style={{ width:80, fontSize:9, color:durObj.c, fontWeight:700, flexShrink:0 }}>{durObj.l}</div>
+                      <div style={{ flex:1, height:8, background:"rgba(255,255,255,0.05)", borderRadius:4, overflow:"hidden" }}>
+                        <div style={{ height:"100%", width:pct+"%", background:durObj.c, borderRadius:4, opacity:0.8, transition:"width 0.3s" }}/>
+                      </div>
+                      <div style={{ width:120, fontSize:9, color:"#c0b399", textAlign:"right", flexShrink:0, fontWeight:600 }}>{sureFmt(buSure)} <span style={{ color:"#665d4a" }}>({pct}%)</span></div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </Modal>
+        );
+      })()}
+
       {/* İADE MODAL — kalem bazlı (hurda mantığında) */}
       {iadeModal && (
         <Modal open={!!iadeModal} onClose={()=>setIadeModal(null)} title="İade Kaydı">
