@@ -719,218 +719,237 @@ function buildSatisRaporuHTML(modeller, siparisler) {
 
 // ═══ SİPARİŞ LİSTESİ ÖZET RAPORU PDF ═══
 function buildSipListeRaporuHTML(siparisler, altinKgUSD, mc) {
-  // Tüm siparişler üzerinden hesaplama
-  let topAdet = 0, topGram = 0, topKar = 0, topKarUSD = 0;
-  let topHurda = 0, topHurdaGram = 0;
   const hasGramUSD = (altinKgUSD || 0) / 1000;
+  let topAdet = 0, topGram = 0, topKar = 0, topKarUSD = 0;
+  let topHurda = 0, topIade = 0, topTamir = 0;
 
-  // Sipariş bazlı veri
+  // ── Sipariş bazlı hesaplama ──
   const sipData = siparisler.map(s => {
     let sipAdet = 0, sipGram = 0, sipKar = 0, sipKarUSD = 0;
-    let sipHurda = 0, sipHurdaGram = 0, sipIade = 0, sipTamir = 0;
+    let sipHurda = 0, sipIade = 0, sipTamir = 0;
     const kalemDetay = (s.kalemler || []).map(k => {
-      const hc = hesapla(k, k.secilenAyar || k.refAyar, s.altinKgUSD || altinKgUSD, s.mc || mc);
-      const adet = k.adet || 1;
-      const hurdaAdet = ((s.kalemHurda) || {})[k.id] || 0;
-      const iadeAdet  = ((s.kalemIade) || {})[k.id] || 0;
-      const tamirAdet = ((s.kalemTamir) || {})[k.id] || 0;
-      const netAdet = Math.max(0, adet - hurdaAdet - iadeAdet - tamirAdet);
-      const mevcDurum = (s.kalemDurumlar || {})[k.id] || k.durum || "baslanmadi";
-      const hurdaNeden = ((s.kalemHurdaNeden) || {})[k.id] || "";
-      const karMly = hc.mamulGram > 0 ? hc.karHas / hc.mamulGram : 0;
-      sipAdet += netAdet;
-      sipGram += hc.mamulGram * netAdet;
-      sipKar  += hc.karHas * netAdet;
-      sipKarUSD += hc.karHas * netAdet * hasGramUSD;
-      sipHurda += hurdaAdet;
-      sipHurdaGram += hc.mamulGram * hurdaAdet;
-      sipIade += iadeAdet;
-      sipTamir += tamirAdet;
-      return { k, hc, adet, netAdet, hurdaAdet, iadeAdet, tamirAdet, mevcDurum, hurdaNeden, karMly };
+      const hc       = hesapla(k, k.secilenAyar || k.refAyar, s.altinKgUSD || altinKgUSD, s.mc || mc);
+      const adet     = k.adet || 1;
+      const hurda    = ((s.kalemHurda)  || {})[k.id] || 0;
+      const iade     = ((s.kalemIade)   || {})[k.id] || 0;
+      const tamir    = ((s.kalemTamir)  || {})[k.id] || 0;
+      const net      = Math.max(0, adet - hurda - iade - tamir);
+      const karMly   = hc.mamulGram > 0 ? hc.karHas / hc.mamulGram : 0;
+      sipAdet  += net;  sipGram  += hc.mamulGram * net;
+      sipKar   += hc.karHas * net;  sipKarUSD += hc.karHas * net * hasGramUSD;
+      sipHurda += hurda; sipIade += iade; sipTamir += tamir;
+      return { k, hc, adet, net, hurda, iade, tamir, karMly,
+        hurdaNeden: ((s.kalemHurdaNeden) || {})[k.id] || "",
+        iadeNeden:  ((s.kalemIadeNeden)  || {})[k.id] || "",
+        tamirNeden: ((s.kalemTamirNeden) || {})[k.id] || "" };
     });
     topAdet += sipAdet; topGram += sipGram; topKar += sipKar; topKarUSD += sipKarUSD;
-    topHurda += sipHurda; topHurdaGram += sipHurdaGram;
-    const sipKarMly = sipGram > 0 ? sipKar / sipGram : 0;
-    return { s, kalemDetay, sipAdet, sipGram, sipKar, sipKarUSD, sipHurda, sipHurdaGram, sipIade, sipTamir, sipKarMly };
+    topHurda += sipHurda; topIade += sipIade; topTamir += sipTamir;
+    return { s, kalemDetay, sipAdet, sipGram, sipKar, sipKarUSD,
+      sipHurda, sipIade, sipTamir,
+      sipKarMly: sipGram > 0 ? sipKar / sipGram : 0 };
   });
 
-  // Hurda + iade + tamir özeti
-  const hurdaOzet = {};
+  // ── Model bazlı kayıp listesi (hurda / iade / tamir) ──
+  // { modelKod: { ad, hurda:[{adet,neden}], iade:[...], tamir:[...] } }
+  const kayipMap = {};
   siparisler.forEach(s => {
     (s.kalemler || []).forEach(k => {
-      const etiket = k.kod || k.ad || "?";
-      const hurdaAdet = ((s.kalemHurda) || {})[k.id] || 0;
-      const iadeAdet  = ((s.kalemIade) || {})[k.id] || 0;
-      const tamirAdet = ((s.kalemTamir) || {})[k.id] || 0;
-      if (hurdaAdet > 0) {
-        const neden = "🔴 Hurda: " + (((s.kalemHurdaNeden) || {})[k.id] || "Belirtilmemiş");
-        if (!hurdaOzet[neden]) hurdaOzet[neden] = { adet: 0, modeller: [] };
-        hurdaOzet[neden].adet += hurdaAdet;
-        hurdaOzet[neden].modeller.push(etiket + " ×" + hurdaAdet);
-      }
-      if (iadeAdet > 0) {
-        const neden = "↩ İade: " + (((s.kalemIadeNeden) || {})[k.id] || "Belirtilmemiş");
-        if (!hurdaOzet[neden]) hurdaOzet[neden] = { adet: 0, modeller: [] };
-        hurdaOzet[neden].adet += iadeAdet;
-        hurdaOzet[neden].modeller.push(etiket + " ×" + iadeAdet);
-      }
-      if (tamirAdet > 0) {
-        const neden = "🔧 Tamir: " + (((s.kalemTamirNeden) || {})[k.id] || "Belirtilmemiş");
-        if (!hurdaOzet[neden]) hurdaOzet[neden] = { adet: 0, modeller: [] };
-        hurdaOzet[neden].adet += tamirAdet;
-        hurdaOzet[neden].modeller.push(etiket + " ×" + tamirAdet);
-      }
+      const key = k.kod || k.id;
+      if (!kayipMap[key]) kayipMap[key] = { ad: k.ad || k.kod || "?", kod: k.kod || "?", hurda:[], iade:[], tamir:[] };
+      const h = ((s.kalemHurda)  || {})[k.id] || 0;
+      const ia= ((s.kalemIade)   || {})[k.id] || 0;
+      const t = ((s.kalemTamir)  || {})[k.id] || 0;
+      if (h  > 0) kayipMap[key].hurda.push({ adet:h,  neden: ((s.kalemHurdaNeden) || {})[k.id] || "" });
+      if (ia > 0) kayipMap[key].iade.push ({ adet:ia, neden: ((s.kalemIadeNeden)  || {})[k.id] || "" });
+      if (t  > 0) kayipMap[key].tamir.push({ adet:t,  neden: ((s.kalemTamirNeden) || {})[k.id] || "" });
     });
   });
+  const kayipListesi = Object.values(kayipMap)
+    .filter(m => m.hurda.length || m.iade.length || m.tamir.length)
+    .sort((a,b) => {
+      const ta = a.hurda.reduce((s,x)=>s+x.adet,0) + a.iade.reduce((s,x)=>s+x.adet,0) + a.tamir.reduce((s,x)=>s+x.adet,0);
+      const tb = b.hurda.reduce((s,x)=>s+x.adet,0) + b.iade.reduce((s,x)=>s+x.adet,0) + b.tamir.reduce((s,x)=>s+x.adet,0);
+      return tb - ta;
+    });
 
+  // ── CSS ──
   const css = "*{margin:0;padding:0;box-sizing:border-box}"
-    + "body{font-family:'Segoe UI',Arial,sans-serif;background:#f0f0f0;padding:14px;display:flex;justify-content:center}"
-    + "@media print{.np{display:none!important}@page{size:A4;margin:7mm}body{background:#fff;padding:0;display:block}}"
-    + ".wrap{background:#fff;border-radius:10px;padding:14px 18px;width:100%;max-width:780px}"
-    + ".hdr{border-bottom:3px solid #c9a84c;padding-bottom:10px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:flex-end}"
-    + ".hdr h1{font-size:17px;font-weight:800;color:#1a1a1a;letter-spacing:.02em}"
-    + ".hdr .dt{font-size:9px;color:#999}"
-    + ".sum{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:14px}"
-    + ".sbox{background:#faf5e8;border:1px solid #e8d5a0;border-radius:8px;padding:7px 10px;text-align:center}"
-    + ".sbox .lb{font-size:7px;color:#999;text-transform:uppercase;letter-spacing:.07em;margin-bottom:2px}"
-    + ".sbox .vl{font-size:14px;font-weight:800;color:#1a1a1a}"
-    + ".sbox .gn{color:#2d8a4e}.sbox .rd{color:#c0392b}.sbox .bl{color:#1e5fa8}"
-    + "table.main{width:100%;border-collapse:collapse;margin-bottom:10px;font-size:10px}"
-    + "table.main th{background:#faf5e8;padding:5px 7px;font-size:7.5px;font-weight:700;color:#8a7d64;text-transform:uppercase;letter-spacing:.06em;border-bottom:2px solid #c9a84c;text-align:left}"
-    + "table.main th.r{text-align:right}"
-    + "table.main td{padding:6px 7px;border-bottom:1px solid #f5f0e8;vertical-align:top}"
-    + "table.main td.r{text-align:right;font-variant-numeric:tabular-nums}"
-    + "table.main tr.tot td{background:#faf5e8;font-weight:800;border-top:2px solid #c9a84c;font-size:11px}"
-    + "table.main tr.hurda-row{background:#fff8f8}"
-    + ".kar-ok{color:#2d8a4e;font-weight:700}.kar-no{color:#c0392b;font-weight:700}.kar-warn{color:#b8600a;font-weight:700}"
-    + ".mly-bar{height:3px;background:#eee;border-radius:2px;margin-top:2px;overflow:hidden}"
-    + ".mly-fill{height:100%;border-radius:2px}"
-    + ".sip-ad{font-weight:700;color:#1a1a1a;font-size:11px}"
-    + ".sip-meta{font-size:8px;color:#888;margin-top:1px}"
-    + ".hurda-sec{margin-top:14px;padding:10px 14px;background:#fff5f5;border:1.5px solid #e85a4f;border-radius:8px}"
-    + ".hurda-sec h2{font-size:12px;font-weight:800;color:#e85a4f;margin-bottom:8px;display:flex;align-items:center;gap:6px}"
-    + ".hurda-tag{display:inline-block;background:#fdecea;border:1px solid #f5b7b1;border-radius:4px;padding:1px 7px;font-size:8px;color:#c0392b;font-weight:700;margin:1px}"
-    + ".durum-dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:3px;vertical-align:middle}"
-    + ".sec-title{font-size:10px;font-weight:800;color:#c9a84c;text-transform:uppercase;letter-spacing:.08em;margin:12px 0 6px;padding-bottom:4px;border-bottom:1px solid #e8d5a0}"
+    + "body{font-family:'Segoe UI',Arial,sans-serif;background:#f3f3f3;padding:14px;display:flex;justify-content:center}"
+    + "@media print{.np{display:none!important}@page{size:A4;margin:8mm}body{background:#fff;padding:0;display:block}}"
+    + ".page{background:#fff;width:100%;max-width:740px;padding:16px 20px;border-radius:8px;margin-bottom:14px}"
+    + "@media print{.page{border-radius:0;margin:0;padding:12px 14px;page-break-after:always}.page:last-child{page-break-after:auto}}"
+    + "h1{font-size:16px;font-weight:800;color:#1a1a1a;margin-bottom:2px}"
+    + ".dt{font-size:9px;color:#999;margin-bottom:12px}"
+    + ".divider{border:none;border-top:2px solid #c9a84c;margin:10px 0}"
+    + ".sum{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px}"
+    + ".sbox{background:#faf5e8;border:1px solid #e8d5a0;border-radius:8px;padding:8px 10px;text-align:center}"
+    + ".sbox .lb{font-size:7px;color:#999;text-transform:uppercase;letter-spacing:.07em;margin-bottom:3px}"
+    + ".sbox .vl{font-size:15px;font-weight:800;color:#1a1a1a}"
+    + ".gn{color:#2d8a4e}.rd{color:#c0392b}.or{color:#b8600a}.bl{color:#1e5fa8}"
+    + ".kayip-sum{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px}"
+    + ".ksbox{border-radius:8px;padding:8px 12px;text-align:center}"
+    + ".ksbox .lb{font-size:7px;text-transform:uppercase;letter-spacing:.07em;margin-bottom:3px}"
+    + ".ksbox .vl{font-size:20px;font-weight:800}"
+    + ".kar-bar-wrap{margin-bottom:14px}"
+    + ".kar-bar-row{display:flex;align-items:center;gap:8px;margin-bottom:5px}"
+    + ".kar-bar-lbl{width:60px;font-size:9px;font-weight:700}"
+    + ".kar-bar-bg{flex:1;height:10px;background:#eee;border-radius:5px;overflow:hidden}"
+    + ".kar-bar-fill{height:100%;border-radius:5px}"
+    + ".kar-bar-val{width:30px;font-size:9px;font-weight:700;text-align:right}"
+    + "table{width:100%;border-collapse:collapse;font-size:10px}"
+    + "th{background:#faf5e8;padding:5px 7px;font-size:7.5px;font-weight:700;color:#8a7d64;text-transform:uppercase;letter-spacing:.05em;border-bottom:2px solid #c9a84c;text-align:left}"
+    + "th.r{text-align:right}"
+    + "td{padding:7px 7px;border-bottom:1px solid #f0ece4;vertical-align:middle}"
+    + "td.r{text-align:right}"
+    + "tr.tot td{background:#faf5e8;font-weight:800;border-top:2px solid #c9a84c}"
+    + "tr.kayip-row{background:#fff8f5}"
+    + ".mly{font-size:10px;font-weight:800}"
+    + ".sec{font-size:10px;font-weight:800;color:#c9a84c;text-transform:uppercase;letter-spacing:.06em;margin:14px 0 8px;padding-bottom:4px;border-bottom:1.5px solid #e8d5a0}"
+    + ".kayip-model{display:flex;align-items:flex-start;gap:10px;padding:7px 0;border-bottom:1px solid #f5f0e8}"
+    + ".km-kod{font-size:11px;font-weight:800;color:#c9a84c;width:90px;flex-shrink:0}"
+    + ".km-ad{font-size:10px;color:#555;flex:1}"
+    + ".km-badges{display:flex;gap:5px;flex-wrap:wrap}"
+    + ".badge{display:inline-flex;align-items:center;gap:3px;border-radius:5px;padding:2px 8px;font-size:9px;font-weight:700}"
+    + ".badge-h{background:#fdecea;color:#c0392b;border:1px solid #f5b7b1}"
+    + ".badge-i{background:#f3f0ff;color:#6d28d9;border:1px solid #ddd6fe}"
+    + ".badge-t{background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe}"
+    + ".neden{font-size:8px;font-weight:400;color:#888}"
     + ".pb{position:fixed;bottom:14px;right:14px;background:#c9a84c;border:none;border-radius:10px;padding:9px 20px;color:#fff;font-size:12px;cursor:pointer;font-family:sans-serif;font-weight:700}";
 
-  const DURUM_RENK = { baslanmadi:"#8a7d64", cizimde:"#a78bfa", mum_tas:"#f59e0b", dokum:"#e8833a", tezgah:"#5b9bd5", cila:"#c9a84c", tas_dus:"#c27ba0", kalite:"#9b59b6", tamam:"#6abf69", teslim:"#2ecc71", hurda:"#e85a4f" };
-  const DURUM_L = { baslanmadi:"Başlanmadı", cizimde:"Çizimde", mum_tas:"Muma Taş", dokum:"Dökümde", tezgah:"Tezgahta", cila:"Cilada", tas_dus:"Taş Düşük", kalite:"Kalite", tamam:"Tamamlandı", teslim:"Teslime Hazır", hurda:"Hurda" };
+  // ── HTML başlat ──
+  let h = "<!DOCTYPE html><html><head><meta charset='utf-8'><title>Karlilık & Kayıp Raporu</title><style>" + css + "</style></head><body>";
 
-  let h = "<!DOCTYPE html><html><head><meta charset='utf-8'><title>Siparis Listesi Raporu</title><style>" + css + "</style></head><body><div class='wrap'>";
+  // ════════════════════════════════════════════════
+  // SAYFA 1 — ÖZET
+  // ════════════════════════════════════════════════
+  h += "<div class='page'>";
+  h += "<h1>Karlılık & Kayıp Raporu</h1>";
+  h += "<div class='dt'>" + new Date().toLocaleDateString("tr-TR",{day:"2-digit",month:"long",year:"numeric"}) + " &nbsp;·&nbsp; " + siparisler.length + " sipariş" + (altinKgUSD ? " &nbsp;·&nbsp; $" + Number(altinKgUSD).toLocaleString("tr-TR") + "/kg" : "") + "</div>";
+  h += "<hr class='divider'/>";
 
-  // BAŞLIK
-  h += "<div class='hdr'><div><h1>🪙 Sipariş Listesi — Karlılık & Hurda Raporu</h1><div class='dt'>" + new Date().toLocaleDateString("tr-TR", {day:"2-digit",month:"long",year:"numeric"}) + " &nbsp;·&nbsp; " + siparisler.length + " sipariş &nbsp;·&nbsp; " + (altinKgUSD ? "$" + altinKgUSD.toLocaleString() + "/kg" : "Fiyat girilmemiş") + "</div></div></div>";
-
-  // ÖZET KUTUCULUKLAR
+  // Karlılık özeti kutuları
   const topKarMly = topGram > 0 ? topKar / topGram : 0;
-  const topIade  = sipData.reduce((s,d) => s + (d.sipIade||0), 0);
-  const topTamir = sipData.reduce((s,d) => s + (d.sipTamir||0), 0);
   h += "<div class='sum'>";
-  h += "<div class='sbox'><div class='lb'>Net Kalem</div><div class='vl'>" + topAdet + "</div></div>";
-  h += "<div class='sbox'><div class='lb'>Net Gram</div><div class='vl bl'>" + fN(topGram, 1) + " <span style='font-size:10px'>gr</span></div></div>";
-  h += "<div class='sbox'><div class='lb'>Toplam Kâr</div><div class='vl gn'>" + fN(topKar, 3) + " <span style='font-size:9px'>has</span></div></div>";
-  h += "<div class='sbox'><div class='lb'>Ort. Karlılık</div><div class='vl " + (topKarMly >= 0.030 ? "gn" : topKarMly >= 0.020 ? "" : "rd") + "'>" + fN(topKarMly, 3) + " <span style='font-size:9px'>mly</span></div></div>";
-  h += "<div class='sbox'><div class='lb'>Hurda / İade / Tamir</div><div class='vl rd' style='font-size:12px'>" + topHurda + " / " + topIade + " / " + topTamir + "</div></div>";
+  h += "<div class='sbox'><div class='lb'>Net Kalem</div><div class='vl bl'>" + topAdet + "</div></div>";
+  h += "<div class='sbox'><div class='lb'>Net Gram</div><div class='vl bl'>" + fN(topGram,1) + " gr</div></div>";
+  h += "<div class='sbox'><div class='lb'>Toplam Kâr</div><div class='vl gn'>" + fN(topKar,3) + " has" + (topKarUSD>0?"<br><span style='font-size:9px;color:#888'>≈$"+topKarUSD.toFixed(0)+"</span>":"") + "</div></div>";
+  h += "<div class='sbox'><div class='lb'>Ort. Karlılık</div><div class='vl " + (topKarMly>=0.030?"gn":topKarMly>=0.020?"or":"rd") + "'>" + fN(topKarMly,3) + " mly</div></div>";
   h += "</div>";
 
-  // SİPARİŞ BAZLI TABLO
-  h += "<div class='sec-title'>📋 Sipariş Bazlı Özet</div>";
-  h += "<table class='main'><thead><tr>";
-  h += "<th style='width:130px'>Müşteri</th><th>Kalemler</th><th class='r' style='width:55px'>Net Adet</th><th class='r' style='width:62px'>Gram</th><th class='r' style='width:80px'>Kâr (has)</th><th class='r' style='width:65px'>mly/gr</th><th class='r' style='width:60px'>H/İ/T</th>";
+  // Kayıp özeti kutuları
+  h += "<div class='kayip-sum'>";
+  h += "<div class='ksbox' style='background:#fdecea;border:1px solid #f5b7b1'><div class='lb rd'>Hurda</div><div class='vl rd'>" + topHurda + " adet</div></div>";
+  h += "<div class='ksbox' style='background:#f3f0ff;border:1px solid #ddd6fe'><div class='lb' style='color:#6d28d9'>İade</div><div class='vl' style='color:#6d28d9'>" + topIade + " adet</div></div>";
+  h += "<div class='ksbox' style='background:#eff6ff;border:1px solid #bfdbfe'><div class='lb' style='color:#1d4ed8'>Tamir</div><div class='vl' style='color:#1d4ed8'>" + topTamir + " adet</div></div>";
+  h += "</div>";
+
+  // Karlılık bar grafiği (sipariş bazlı dağılım)
+  const kIyi  = sipData.filter(d=>d.sipKarMly>=0.030).length;
+  const kOrta = sipData.filter(d=>d.sipKarMly>=0.020&&d.sipKarMly<0.030).length;
+  const kDus  = sipData.filter(d=>d.sipKarMly<0.020&&d.sipGram>0).length;
+  const kTop  = siparisler.length || 1;
+  h += "<div class='sec'>Karlılık Dağılımı</div>";
+  h += "<div class='kar-bar-wrap'>";
+  [["İyi  ≥0.030", kIyi,  "#2d8a4e"], ["Orta ≥0.020", kOrta, "#b8600a"], ["Düşük <0.020", kDus, "#c0392b"]].forEach(([lbl,sayi,renk]) => {
+    h += "<div class='kar-bar-row'>";
+    h += "<div class='kar-bar-lbl' style='color:"+renk+"'>"+lbl+"</div>";
+    h += "<div class='kar-bar-bg'><div class='kar-bar-fill' style='width:"+Math.round(sayi/kTop*100)+"%;background:"+renk+"'></div></div>";
+    h += "<div class='kar-bar-val' style='color:"+renk+"'>"+sayi+"</div>";
+    h += "</div>";
+  });
+  h += "<div style='font-size:8px;color:#aaa;margin-top:4px'>Toplam " + kTop + " sipariş · mly/gr = karlılık milyemi (maliyet düşüldükten sonra net kâr)</div>";
+  h += "</div>";
+
+  // Model bazlı kayıp özeti tablosu
+  if (kayipListesi.length > 0) {
+    h += "<div class='sec'>Model Bazlı Kayıp Özeti</div>";
+    kayipListesi.forEach(m => {
+      const topH  = m.hurda.reduce((s,x)=>s+x.adet,0);
+      const topIA = m.iade.reduce((s,x)=>s+x.adet,0);
+      const topT  = m.tamir.reduce((s,x)=>s+x.adet,0);
+      h += "<div class='kayip-model'>";
+      h += "<div class='km-kod'>" + m.kod + "</div>";
+      h += "<div style='flex:1'>";
+      h += "<div class='km-ad'>" + m.ad + "</div>";
+      h += "<div class='km-badges' style='margin-top:4px'>";
+      if (topH  > 0) { const nedenler = [...new Set(m.hurda.map(x=>x.neden).filter(Boolean))].join(", "); h += "<span class='badge badge-h'>Hurda ×" + topH + (nedenler?" <span class='neden'>"+nedenler+"</span>":"") + "</span>"; }
+      if (topIA > 0) { const nedenler = [...new Set(m.iade.map(x=>x.neden).filter(Boolean))].join(", ");  h += "<span class='badge badge-i'>İade ×"  + topIA + (nedenler?" <span class='neden'>"+nedenler+"</span>":"") + "</span>"; }
+      if (topT  > 0) { const nedenler = [...new Set(m.tamir.map(x=>x.neden).filter(Boolean))].join(", "); h += "<span class='badge badge-t'>Tamir ×" + topT  + (nedenler?" <span class='neden'>"+nedenler+"</span>":"") + "</span>"; }
+      h += "</div></div></div>";
+    });
+  } else {
+    h += "<div style='margin-top:10px;padding:8px 14px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;font-size:10px;color:#2d8a4e;font-weight:700'>✓ Bu listede hurda, iade veya tamir kaydı bulunmuyor.</div>";
+  }
+  h += "</div>"; // page 1 bitti
+
+  // ════════════════════════════════════════════════
+  // SAYFA 2 — SİPARİŞ DETAY TABLOSU
+  // ════════════════════════════════════════════════
+  h += "<div class='page'>";
+  h += "<h1>Sipariş Detayı</h1>";
+  h += "<div class='dt'>" + siparisler.length + " sipariş · net karlılık (hurda/iade/tamir düşülmüş)</div>";
+  h += "<hr class='divider'/>";
+
+  h += "<table><thead><tr>";
+  h += "<th>Müşteri</th><th>Tarih</th><th class='r'>Net Adet</th><th class='r'>Gram</th><th class='r'>Kâr (has)</th><th class='r'>mly/gr</th><th class='r'>H / İ / T</th>";
   h += "</tr></thead><tbody>";
 
   sipData.forEach(({ s, kalemDetay, sipAdet, sipGram, sipKar, sipKarUSD, sipHurda, sipIade, sipTamir, sipKarMly }) => {
-    const karClass = sipKarMly >= 0.030 ? "kar-ok" : sipKarMly >= 0.020 ? "kar-warn" : "kar-no";
-    const tarih = new Date(s.tarih).toLocaleDateString("tr-TR", {day:"2-digit",month:"2-digit",year:"2-digit"});
-    const sonDurum = s.durumGecmisi?.length ? s.durumGecmisi[s.durumGecmisi.length-1].durum : null;
-    const durRenk = sonDurum ? (DURUM_RENK[sonDurum] || "#999") : "#ccc";
-    const durLabel = sonDurum ? (DURUM_L[sonDurum] || sonDurum) : "—";
-    const hasKayip = sipHurda > 0 || sipIade > 0 || sipTamir > 0;
-
-    h += "<tr" + (hasKayip ? " class='hurda-row'" : "") + ">";
-    // Müşteri
-    h += "<td><div class='sip-ad'>" + (s.musKod || s.musteri || "İsimsiz") + "</div>";
-    if (s.musKod && s.musteri && s.musKod !== s.musteri) h += "<div class='sip-meta'>" + s.musteri + "</div>";
-    h += "<div class='sip-meta'>" + tarih + (s.teslimTarihi ? " · Teslim: " + new Date(s.teslimTarihi).toLocaleDateString("tr-TR",{day:"2-digit",month:"2-digit"}) : "") + "</div>";
-    h += "<div class='sip-meta' style='margin-top:2px'><span class='durum-dot' style='background:" + durRenk + "'></span><span style='color:" + durRenk + ";font-weight:700'>" + durLabel + "</span></div>";
-    h += "</td>";
-    // Kalemler kısa listesi
-    h += "<td><div style='display:flex;flex-wrap:wrap;gap:2px'>";
-    kalemDetay.forEach(({ k, hc, adet, hurdaAdet, iadeAdet, tamirAdet, karMly }) => {
-      const kc = karMly >= 0.030 ? "#2d8a4e" : karMly >= 0.020 ? "#b8600a" : "#c0392b";
-      let badges = "";
-      if (hurdaAdet > 0) badges += " <span style='color:#e85a4f;font-weight:800'>H×" + hurdaAdet + "</span>";
-      if (iadeAdet  > 0) badges += " <span style='color:#a78bfa;font-weight:800'>İ×" + iadeAdet  + "</span>";
-      if (tamirAdet > 0) badges += " <span style='color:#5b9bd5;font-weight:800'>T×" + tamirAdet  + "</span>";
-      h += "<span style='background:" + kc + "18;border:1px solid " + kc + "44;border-radius:4px;padding:1px 5px;font-size:8px;color:" + kc + ";font-weight:700;white-space:nowrap'>";
-      h += (k.kod || k.ad || "?") + " ×" + adet + badges;
-      h += "</span>";
-    });
-    h += "</div></td>";
-    // Sayılar
-    h += "<td class='r' style='font-weight:800;font-size:12px'>" + sipAdet + "</td>";
-    h += "<td class='r'>" + fN(sipGram, 2) + " gr</td>";
-    h += "<td class='r " + karClass + "'>" + fN(sipKar, 3) + (sipKarUSD > 0 ? "<br><span style='font-size:8px;color:#888'>≈$" + sipKarUSD.toFixed(0) + "</span>" : "") + "</td>";
-    h += "<td class='r'><div class='" + karClass + "' style='font-size:11px'>" + fN(sipKarMly, 3) + "</div><div class='mly-bar'><div class='mly-fill' style='width:" + Math.min(100, Math.round(sipKarMly / 0.06 * 100)) + "%;background:" + (sipKarMly >= 0.030 ? "#2d8a4e" : sipKarMly >= 0.020 ? "#e8833a" : "#e85a4f") + "'></div></div></td>";
-    // H/İ/T kolonu
-    const hit = [sipHurda>0?"H:"+sipHurda:"", sipIade>0?"İ:"+sipIade:"", sipTamir>0?"T:"+sipTamir:""].filter(Boolean).join(" ");
-    h += "<td class='r' style='font-size:9px;font-weight:800;color:" + (hasKayip?"#e85a4f":"#ccc") + "'>" + (hit||"—") + "</td>";
+    const hasKayip = sipHurda>0 || sipIade>0 || sipTamir>0;
+    const karRenk  = sipKarMly>=0.030 ? "#2d8a4e" : sipKarMly>=0.020 ? "#b8600a" : "#c0392b";
+    const tarih    = new Date(s.tarih).toLocaleDateString("tr-TR",{day:"2-digit",month:"2-digit",year:"2-digit"});
+    h += "<tr" + (hasKayip?" class='kayip-row'":"") + ">";
+    h += "<td style='font-weight:700'>" + (s.musKod||s.musteri||"İsimsiz") + (s.musKod&&s.musteri&&s.musKod!==s.musteri?"<br><span style='font-size:8px;color:#999'>"+s.musteri+"</span>":"") + "</td>";
+    h += "<td style='color:#888;font-size:9px'>" + tarih + (s.teslimTarihi?"<br>Teslim: "+new Date(s.teslimTarihi).toLocaleDateString("tr-TR",{day:"2-digit",month:"2-digit",year:"2-digit"}):"") + "</td>";
+    h += "<td class='r' style='font-weight:800'>" + sipAdet + "</td>";
+    h += "<td class='r'>" + fN(sipGram,2) + " gr</td>";
+    h += "<td class='r' style='color:"+karRenk+";font-weight:700'>" + fN(sipKar,3) + (sipKarUSD>0?"<br><span style='font-size:8px;color:#aaa'>≈$"+sipKarUSD.toFixed(0)+"</span>":"") + "</td>";
+    h += "<td class='r'><span class='mly' style='color:"+karRenk+"'>" + fN(sipKarMly,3) + "</span></td>";
+    // H/İ/T hücresi
+    const hitParts = [];
+    if (sipHurda>0) hitParts.push("<span style='color:#c0392b;font-weight:800'>H:"+sipHurda+"</span>");
+    if (sipIade >0) hitParts.push("<span style='color:#6d28d9;font-weight:800'>İ:"+sipIade +"</span>");
+    if (sipTamir>0) hitParts.push("<span style='color:#1d4ed8;font-weight:800'>T:"+sipTamir+"</span>");
+    h += "<td class='r'>" + (hitParts.length ? hitParts.join(" ") : "<span style='color:#ccc'>—</span>") + "</td>";
     h += "</tr>";
+    // Kayıp olan kalemler — model bazlı alt satır
+    if (hasKayip) {
+      const kayipKalemler = kalemDetay.filter(d => d.hurda>0||d.iade>0||d.tamir>0);
+      h += "<tr" + (hasKayip?" class='kayip-row'":"") + ">";
+      h += "<td colspan='7' style='padding:4px 7px 8px 14px;border-bottom:2px solid #f0ece4'>";
+      h += "<div style='display:flex;flex-wrap:wrap;gap:5px'>";
+      kayipKalemler.forEach(({ k, hurda, iade, tamir, hurdaNeden, iadeNeden, tamirNeden }) => {
+        h += "<span style='font-size:9px;color:#888;font-weight:700;margin-right:4px'>" + (k.kod||k.ad||"?") + ":</span>";
+        if (hurda>0) h += "<span class='badge badge-h'>Hurda ×"+hurda+(hurdaNeden?" · <span class='neden'>"+hurdaNeden+"</span>":"")+"</span>";
+        if (iade >0) h += "<span class='badge badge-i'>İade ×" +iade +(iadeNeden ?" · <span class='neden'>"+iadeNeden +"</span>":"")+"</span>";
+        if (tamir>0) h += "<span class='badge badge-t'>Tamir ×"+tamir+(tamirNeden?" · <span class='neden'>"+tamirNeden+"</span>":"")+"</span>";
+      });
+      h += "</div></td></tr>";
+    }
   });
 
   // Toplam satırı
-  const topKarMlyFinal = topGram > 0 ? topKar / topGram : 0;
-  const topKarClass = topKarMlyFinal >= 0.030 ? "kar-ok" : topKarMlyFinal >= 0.020 ? "kar-warn" : "kar-no";
-  h += "<tr class='tot'><td colspan='2' style='text-align:right;color:#8a7d64;font-size:9px;text-transform:uppercase'>TOPLAM</td>";
-  h += "<td class='r'>" + topAdet + "</td><td class='r'>" + fN(topGram, 1) + " gr</td>";
-  h += "<td class='r " + topKarClass + "'>" + fN(topKar, 3) + (topKarUSD > 0 ? "<br><span style='font-size:8px;color:#888'>≈$" + topKarUSD.toFixed(0) + "</span>" : "") + "</td>";
-  h += "<td class='r " + topKarClass + "'>" + fN(topKarMlyFinal, 3) + "</td>";
-  h += "<td class='r' style='color:" + (topHurda > 0 ? "#e85a4f" : "#ccc") + "'>" + (topHurda > 0 ? topHurda : "—") + "</td></tr>";
+  const topKarMlyFin = topGram>0 ? topKar/topGram : 0;
+  const topKarRenk   = topKarMlyFin>=0.030?"#2d8a4e":topKarMlyFin>=0.020?"#b8600a":"#c0392b";
+  h += "<tr class='tot'>";
+  h += "<td colspan='2' style='text-align:right;font-size:9px;color:#8a7d64;text-transform:uppercase'>Toplam</td>";
+  h += "<td class='r'>" + topAdet + "</td>";
+  h += "<td class='r'>" + fN(topGram,1) + " gr</td>";
+  h += "<td class='r' style='color:"+topKarRenk+"'>" + fN(topKar,3) + (topKarUSD>0?"<br><span style='font-size:8px;color:#aaa'>≈$"+topKarUSD.toFixed(0)+"</span>":"") + "</td>";
+  h += "<td class='r' style='color:"+topKarRenk+"'>" + fN(topKarMlyFin,3) + "</td>";
+  h += "<td class='r' style='font-size:9px'>";
+  if (topHurda>0) h += "<span style='color:#c0392b;font-weight:800'>H:"+topHurda+"</span> ";
+  if (topIade >0) h += "<span style='color:#6d28d9;font-weight:800'>İ:"+topIade +"</span> ";
+  if (topTamir>0) h += "<span style='color:#1d4ed8;font-weight:800'>T:"+topTamir+"</span>";
+  h += "</td></tr>";
   h += "</tbody></table>";
+  h += "</div>"; // page 2 bitti
 
-  // HURDA ÖZETİ
-  if (topHurda > 0) {
-    h += "<div class='hurda-sec'>";
-    h += "<h2>⚠ Hurda Özeti — " + topHurda + " adet / " + fN(topHurdaGram, 2) + " gr</h2>";
-
-    if (Object.keys(hurdaOzet).length > 0) {
-      h += "<table style='width:100%;border-collapse:collapse;font-size:10px;margin-bottom:6px'>";
-      h += "<thead><tr><th style='background:#fdecea;padding:4px 8px;font-size:7.5px;font-weight:700;color:#c0392b;text-transform:uppercase;border-bottom:1.5px solid #e85a4f;text-align:left'>Neden</th><th style='background:#fdecea;padding:4px 8px;font-size:7.5px;font-weight:700;color:#c0392b;text-transform:uppercase;border-bottom:1.5px solid #e85a4f;text-align:right;width:50px'>Adet</th><th style='background:#fdecea;padding:4px 8px;font-size:7.5px;font-weight:700;color:#c0392b;text-transform:uppercase;border-bottom:1.5px solid #e85a4f;text-align:left'>Modeller</th></tr></thead><tbody>";
-      Object.entries(hurdaOzet).sort((a,b) => b[1].adet - a[1].adet).forEach(([neden, data]) => {
-        h += "<tr><td style='padding:5px 8px;border-bottom:1px solid #fdecea;font-weight:700;color:#c0392b'>" + neden + "</td>";
-        h += "<td style='padding:5px 8px;border-bottom:1px solid #fdecea;text-align:right;font-weight:800;color:#e85a4f'>" + data.adet + "</td>";
-        h += "<td style='padding:5px 8px;border-bottom:1px solid #fdecea'>";
-        data.modeller.forEach(m => { h += "<span class='hurda-tag'>" + m + "</span>"; });
-        h += "</td></tr>";
-      });
-      h += "</tbody></table>";
-    } else {
-      // Hurda var ama neden girilmemiş
-      h += "<p style='font-size:9px;color:#999;margin-top:4px'>Hurda nedeni girilmemiş.</p>";
-    }
-    h += "</div>";
-  } else {
-    h += "<div style='margin-top:10px;padding:8px 14px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;font-size:10px;color:#2d8a4e;font-weight:700'>✓ Bu listedeki siparişlerde hurda kaydı bulunmuyor.</div>";
-  }
-
-  // KARLILIK DAĞILIMI (küçük)
-  h += "<div class='sec-title' style='margin-top:14px'>📊 Karlılık Dağılımı (mly/gr)</div>";
-  const iyi = sipData.filter(d => d.sipKarMly >= 0.030).length;
-  const orta = sipData.filter(d => d.sipKarMly >= 0.020 && d.sipKarMly < 0.030).length;
-  const dusuk = sipData.filter(d => d.sipKarMly < 0.020 && d.sipGram > 0).length;
-  h += "<div style='display:flex;gap:8px;margin-bottom:8px'>";
-  h += "<div style='flex:1;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:7px;padding:8px 12px;text-align:center'><div style='font-size:8px;color:#999;text-transform:uppercase;margin-bottom:2px'>İyi (≥0.030)</div><div style='font-size:18px;font-weight:800;color:#2d8a4e'>" + iyi + "</div><div style='font-size:8px;color:#2d8a4e'>sipariş</div></div>";
-  h += "<div style='flex:1;background:#fff7ed;border:1px solid #fed7aa;border-radius:7px;padding:8px 12px;text-align:center'><div style='font-size:8px;color:#999;text-transform:uppercase;margin-bottom:2px'>Orta (≥0.020)</div><div style='font-size:18px;font-weight:800;color:#b8600a'>" + orta + "</div><div style='font-size:8px;color:#b8600a'>sipariş</div></div>";
-  h += "<div style='flex:1;background:#fff5f5;border:1px solid #fecaca;border-radius:7px;padding:8px 12px;text-align:center'><div style='font-size:8px;color:#999;text-transform:uppercase;margin-bottom:2px'>Düşük (&lt;0.020)</div><div style='font-size:18px;font-weight:800;color:#c0392b'>" + dusuk + "</div><div style='font-size:8px;color:#c0392b'>sipariş</div></div>";
-  h += "</div>";
-  h += "<div style='font-size:8px;color:#aaa;margin-top:4px'>mly/gr = karlılık milyemi · İyi ≥ 0.030 · Orta ≥ 0.020 · Düşük &lt; 0.020</div>";
-
-  h += "</div><button class='np pb' onclick='window.print()'>Yazdır / PDF</button></body></html>";
+  h += "<button class='np pb' onclick='window.print()'>Yazdır / PDF</button></body></html>";
   return h;
 }
 
-// ═══ MÜŞTERİ DETAY PDF ═══
 function buildMusteriDetayHTML(musAd, musKod, siparisler) {
   const musSiparisler = siparisler.filter(s => (s.musteri||"Isimsiz").trim() === musAd);
   let topKar = 0, topGram = 0, topAdet = 0;
@@ -1351,7 +1370,7 @@ function Atolye() {
     const m = await ld("v7m", []);
     const s = await tryKeys(["v7s", "v5s", "atl5-s"], []);
     const c = await tryKeysObj(["v7c", "v5c", "atl5-c"], {});
-    const u = await tryKeys(["v7u"], {}) || {};
+    const u = await tryKeysObj(["v7u"], {});
 
     // Bulduklarımızı v7 key'lerine kaydet (shared)
     if (k.length > 0) await sv("v7k", k);
@@ -1674,8 +1693,10 @@ function Atolye() {
         musteriSatis[mus].kalemSayisi += k.adet||1;
         const hc = hesapla(k, k.secilenAyar||k.refAyar, s.altinKgUSD, s.mc);
         const kDurum = (s.kalemDurumlar||{})[k.id] || k.durum || "baslanmadi";
-        const hurdaAdet = ((s.kalemHurda)||{})[k.id] || 0;
-        const tamamAdet = (k.adet||1) - hurdaAdet;
+        const hurdaAdet = ((s.kalemHurda) ||{})[k.id] || 0;
+        const iadeAdet  = ((s.kalemIade)  ||{})[k.id] || 0;
+        const tamirAdet = ((s.kalemTamir) ||{})[k.id] || 0;
+        const tamamAdet = Math.max(0, (k.adet||1) - hurdaAdet - iadeAdet - tamirAdet);
         // Sadece tamamlanan veya teslim edilenler analize girer
         const sayilsin = ["tamam","teslim"].includes(kDurum);
         musteriSatis[mus].kalemSayisi += sayilsin ? tamamAdet : hurdaAdet > 0 ? hurdaAdet : 0;
@@ -1715,8 +1736,10 @@ function Atolye() {
         const sayilsin = ["tamam","teslim"].includes(kDurum);
         if (!sayilsin) return;
         const hc = hesapla(k, k.secilenAyar||k.refAyar, s.altinKgUSD, s.mc);
-        const hurdaAdet = ((s.kalemHurda)||{})[k.id] || 0;
-        const netAdet = (k.adet||1) - hurdaAdet;
+        const hurdaAdet = ((s.kalemHurda) ||{})[k.id] || 0;
+        const iadeAdet  = ((s.kalemIade)  ||{})[k.id] || 0;
+        const tamirAdet = ((s.kalemTamir) ||{})[k.id] || 0;
+        const netAdet = Math.max(0, (k.adet||1) - hurdaAdet - iadeAdet - tamirAdet);
         aylikKar[ay].kar += hc.karHas * netAdet;
         aylikKar[ay].gram += hc.mamulGram * netAdet;
       });
@@ -2080,7 +2103,20 @@ function Atolye() {
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12, flexWrap:"wrap", gap:6 }}>
               <h2 style={{ margin:0, fontSize:14, fontWeight:700, color:"#e8dcc8" }}>Konfirmasyon</h2>
               <div style={{ display:"flex", gap:5, alignItems:"center" }}>
-                <input value={konfMus} onChange={e=>setKonfMus(e.target.value)} placeholder="Musteri..." style={{ ...IS, width:130, padding:"5px 8px", fontSize:11 }} />
+                <div style={{ position:"relative" }}>
+                  <input
+                    value={konfMus}
+                    onChange={e=>setKonfMus(e.target.value)}
+                    placeholder="Musteri..."
+                    style={{ ...IS, width:130, padding:"5px 8px", fontSize:11 }}
+                    list="konfmus-list"
+                  />
+                  <datalist id="konfmus-list">
+                    {Object.entries(musteriler).sort((a,b)=>a[1].localeCompare(b[1],"tr")).map(([ad, kod]) => (
+                      <option key={ad} value={ad}>{kod} — {ad}</option>
+                    ))}
+                  </datalist>
+                </div>
                 <input type="date" value={konfTeslim} onChange={e=>setKonfTeslim(e.target.value)} style={{ ...IS, width:130, padding:"5px 8px", fontSize:11 }} />
                 {konfList.length>0 && <>
                   <button onClick={()=>downloadPDF(buildKonfHTML({musteri:konfMus,tarih:Date.now(),kalemler:konfKalemler},altinKgUSD,madenCarpan,false),(konfMus||"siparis")+"-musteri")} style={{ ...GH, fontSize:9, padding:"5px 9px" }}>PDF Musteri</button>
