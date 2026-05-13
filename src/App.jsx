@@ -715,6 +715,193 @@ function buildSatisRaporuHTML(modeller, siparisler) {
   return h;
 }
 
+// ═══ SİPARİŞ LİSTESİ ÖZET RAPORU PDF ═══
+function buildSipListeRaporuHTML(siparisler, altinKgUSD, mc) {
+  // Tüm siparişler üzerinden hesaplama
+  let topAdet = 0, topGram = 0, topKar = 0, topKarUSD = 0;
+  let topHurda = 0, topHurdaGram = 0;
+  const hasGramUSD = (altinKgUSD || 0) / 1000;
+
+  // Sipariş bazlı veri
+  const sipData = siparisler.map(s => {
+    let sipAdet = 0, sipGram = 0, sipKar = 0, sipKarUSD = 0;
+    let sipHurda = 0, sipHurdaGram = 0;
+    const kalemDetay = (s.kalemler || []).map(k => {
+      const hc = hesapla(k, k.secilenAyar || k.refAyar, s.altinKgUSD || altinKgUSD, s.mc || mc);
+      const adet = k.adet || 1;
+      const hurdaAdet = ((s.kalemHurda) || {})[k.id] || 0;
+      const netAdet = adet - hurdaAdet;
+      const mevcDurum = (s.kalemDurumlar || {})[k.id] || k.durum || "baslanmadi";
+      const hurdaNeden = ((s.kalemHurdaNeden) || {})[k.id] || "";
+      const karMly = hc.mamulGram > 0 ? hc.karHas / hc.mamulGram : 0;
+      sipAdet += netAdet;
+      sipGram += hc.mamulGram * netAdet;
+      sipKar  += hc.karHas * netAdet;
+      sipKarUSD += hc.karHas * netAdet * hasGramUSD;
+      sipHurda += hurdaAdet;
+      sipHurdaGram += hc.mamulGram * hurdaAdet;
+      return { k, hc, adet, netAdet, hurdaAdet, mevcDurum, hurdaNeden, karMly };
+    });
+    topAdet += sipAdet; topGram += sipGram; topKar += sipKar; topKarUSD += sipKarUSD;
+    topHurda += sipHurda; topHurdaGram += sipHurdaGram;
+    const sipKarMly = sipGram > 0 ? sipKar / sipGram : 0;
+    return { s, kalemDetay, sipAdet, sipGram, sipKar, sipKarUSD, sipHurda, sipHurdaGram, sipKarMly };
+  });
+
+  // Hurda özeti
+  const hurdaOzet = {};
+  siparisler.forEach(s => {
+    (s.kalemler || []).forEach(k => {
+      const hurdaAdet = ((s.kalemHurda) || {})[k.id] || 0;
+      if (hurdaAdet > 0) {
+        const neden = ((s.kalemHurdaNeden) || {})[k.id] || "Belirtilmemiş";
+        if (!hurdaOzet[neden]) hurdaOzet[neden] = { adet: 0, modeller: [] };
+        hurdaOzet[neden].adet += hurdaAdet;
+        hurdaOzet[neden].modeller.push((k.kod || k.ad || "?") + " ×" + hurdaAdet);
+      }
+    });
+  });
+
+  const css = "*{margin:0;padding:0;box-sizing:border-box}"
+    + "body{font-family:'Segoe UI',Arial,sans-serif;background:#f0f0f0;padding:14px;display:flex;justify-content:center}"
+    + "@media print{.np{display:none!important}@page{size:A4;margin:7mm}body{background:#fff;padding:0;display:block}}"
+    + ".wrap{background:#fff;border-radius:10px;padding:14px 18px;width:100%;max-width:780px}"
+    + ".hdr{border-bottom:3px solid #c9a84c;padding-bottom:10px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:flex-end}"
+    + ".hdr h1{font-size:17px;font-weight:800;color:#1a1a1a;letter-spacing:.02em}"
+    + ".hdr .dt{font-size:9px;color:#999}"
+    + ".sum{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:14px}"
+    + ".sbox{background:#faf5e8;border:1px solid #e8d5a0;border-radius:8px;padding:7px 10px;text-align:center}"
+    + ".sbox .lb{font-size:7px;color:#999;text-transform:uppercase;letter-spacing:.07em;margin-bottom:2px}"
+    + ".sbox .vl{font-size:14px;font-weight:800;color:#1a1a1a}"
+    + ".sbox .gn{color:#2d8a4e}.sbox .rd{color:#c0392b}.sbox .bl{color:#1e5fa8}"
+    + "table.main{width:100%;border-collapse:collapse;margin-bottom:10px;font-size:10px}"
+    + "table.main th{background:#faf5e8;padding:5px 7px;font-size:7.5px;font-weight:700;color:#8a7d64;text-transform:uppercase;letter-spacing:.06em;border-bottom:2px solid #c9a84c;text-align:left}"
+    + "table.main th.r{text-align:right}"
+    + "table.main td{padding:6px 7px;border-bottom:1px solid #f5f0e8;vertical-align:top}"
+    + "table.main td.r{text-align:right;font-variant-numeric:tabular-nums}"
+    + "table.main tr.tot td{background:#faf5e8;font-weight:800;border-top:2px solid #c9a84c;font-size:11px}"
+    + "table.main tr.hurda-row{background:#fff8f8}"
+    + ".kar-ok{color:#2d8a4e;font-weight:700}.kar-no{color:#c0392b;font-weight:700}.kar-warn{color:#b8600a;font-weight:700}"
+    + ".mly-bar{height:3px;background:#eee;border-radius:2px;margin-top:2px;overflow:hidden}"
+    + ".mly-fill{height:100%;border-radius:2px}"
+    + ".sip-ad{font-weight:700;color:#1a1a1a;font-size:11px}"
+    + ".sip-meta{font-size:8px;color:#888;margin-top:1px}"
+    + ".hurda-sec{margin-top:14px;padding:10px 14px;background:#fff5f5;border:1.5px solid #e85a4f;border-radius:8px}"
+    + ".hurda-sec h2{font-size:12px;font-weight:800;color:#e85a4f;margin-bottom:8px;display:flex;align-items:center;gap:6px}"
+    + ".hurda-tag{display:inline-block;background:#fdecea;border:1px solid #f5b7b1;border-radius:4px;padding:1px 7px;font-size:8px;color:#c0392b;font-weight:700;margin:1px}"
+    + ".durum-dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:3px;vertical-align:middle}"
+    + ".sec-title{font-size:10px;font-weight:800;color:#c9a84c;text-transform:uppercase;letter-spacing:.08em;margin:12px 0 6px;padding-bottom:4px;border-bottom:1px solid #e8d5a0}"
+    + ".pb{position:fixed;bottom:14px;right:14px;background:#c9a84c;border:none;border-radius:10px;padding:9px 20px;color:#fff;font-size:12px;cursor:pointer;font-family:sans-serif;font-weight:700}";
+
+  const DURUM_RENK = { baslanmadi:"#8a7d64", cizimde:"#a78bfa", mum_tas:"#f59e0b", dokum:"#e8833a", tezgah:"#5b9bd5", cila:"#c9a84c", tas_dus:"#c27ba0", kalite:"#9b59b6", tamam:"#6abf69", teslim:"#2ecc71", hurda:"#e85a4f" };
+  const DURUM_L = { baslanmadi:"Başlanmadı", cizimde:"Çizimde", mum_tas:"Muma Taş", dokum:"Dökümde", tezgah:"Tezgahta", cila:"Cilada", tas_dus:"Taş Düşük", kalite:"Kalite", tamam:"Tamamlandı", teslim:"Teslime Hazır", hurda:"Hurda" };
+
+  let h = "<!DOCTYPE html><html><head><meta charset='utf-8'><title>Siparis Listesi Raporu</title><style>" + css + "</style></head><body><div class='wrap'>";
+
+  // BAŞLIK
+  h += "<div class='hdr'><div><h1>🪙 Sipariş Listesi — Karlılık & Hurda Raporu</h1><div class='dt'>" + new Date().toLocaleDateString("tr-TR", {day:"2-digit",month:"long",year:"numeric"}) + " &nbsp;·&nbsp; " + siparisler.length + " sipariş &nbsp;·&nbsp; " + (altinKgUSD ? "$" + altinKgUSD.toLocaleString() + "/kg" : "Fiyat girilmemiş") + "</div></div></div>";
+
+  // ÖZET KUTUCULUKLAR
+  const topKarMly = topGram > 0 ? topKar / topGram : 0;
+  h += "<div class='sum'>";
+  h += "<div class='sbox'><div class='lb'>Toplam Kalem</div><div class='vl'>" + topAdet + "</div></div>";
+  h += "<div class='sbox'><div class='lb'>Toplam Gram</div><div class='vl bl'>" + fN(topGram, 1) + " <span style='font-size:10px'>gr</span></div></div>";
+  h += "<div class='sbox'><div class='lb'>Toplam Kâr</div><div class='vl gn'>" + fN(topKar, 3) + " <span style='font-size:9px'>has</span></div></div>";
+  h += "<div class='sbox'><div class='lb'>Ort. Karlılık</div><div class='vl " + (topKarMly >= 0.030 ? "gn" : topKarMly >= 0.020 ? "" : "rd") + "'>" + fN(topKarMly, 3) + " <span style='font-size:9px'>mly</span></div></div>";
+  h += "<div class='sbox'><div class='lb'>Toplam Hurda</div><div class='vl rd'>" + topHurda + " <span style='font-size:9px'>adet</span></div></div>";
+  h += "</div>";
+
+  // SİPARİŞ BAZLI TABLO
+  h += "<div class='sec-title'>📋 Sipariş Bazlı Özet</div>";
+  h += "<table class='main'><thead><tr>";
+  h += "<th style='width:130px'>Müşteri</th><th>Kalemler</th><th class='r' style='width:55px'>Adet</th><th class='r' style='width:62px'>Gram</th><th class='r' style='width:80px'>Kâr (has)</th><th class='r' style='width:65px'>mly/gr</th><th class='r' style='width:48px'>Hurda</th>";
+  h += "</tr></thead><tbody>";
+
+  sipData.forEach(({ s, kalemDetay, sipAdet, sipGram, sipKar, sipKarUSD, sipHurda, sipKarMly }) => {
+    const karClass = sipKarMly >= 0.030 ? "kar-ok" : sipKarMly >= 0.020 ? "kar-warn" : "kar-no";
+    const tarih = new Date(s.tarih).toLocaleDateString("tr-TR", {day:"2-digit",month:"2-digit",year:"2-digit"});
+    const sonDurum = s.durumGecmisi?.length ? s.durumGecmisi[s.durumGecmisi.length-1].durum : null;
+    const durRenk = sonDurum ? (DURUM_RENK[sonDurum] || "#999") : "#ccc";
+    const durLabel = sonDurum ? (DURUM_L[sonDurum] || sonDurum) : "—";
+
+    h += "<tr" + (sipHurda > 0 ? " class='hurda-row'" : "") + ">";
+    // Müşteri
+    h += "<td><div class='sip-ad'>" + (s.musKod || s.musteri || "İsimsiz") + "</div>";
+    if (s.musKod && s.musteri && s.musKod !== s.musteri) h += "<div class='sip-meta'>" + s.musteri + "</div>";
+    h += "<div class='sip-meta'>" + tarih + (s.teslimTarihi ? " · Teslim: " + new Date(s.teslimTarihi).toLocaleDateString("tr-TR",{day:"2-digit",month:"2-digit"}) : "") + "</div>";
+    h += "<div class='sip-meta' style='margin-top:2px'><span class='durum-dot' style='background:" + durRenk + "'></span><span style='color:" + durRenk + ";font-weight:700'>" + durLabel + "</span></div>";
+    h += "</td>";
+    // Kalemler kısa listesi
+    h += "<td><div style='display:flex;flex-wrap:wrap;gap:2px'>";
+    kalemDetay.forEach(({ k, hc, adet, hurdaAdet, karMly }) => {
+      const kMly = karMly;
+      const kc = kMly >= 0.030 ? "#2d8a4e" : kMly >= 0.020 ? "#b8600a" : "#c0392b";
+      const hurdaBadge = hurdaAdet > 0 ? " <span style='color:#e85a4f;font-weight:800'>⚠×" + hurdaAdet + "</span>" : "";
+      h += "<span style='background:" + kc + "18;border:1px solid " + kc + "44;border-radius:4px;padding:1px 5px;font-size:8px;color:" + kc + ";font-weight:700;white-space:nowrap'>";
+      h += (k.kod || k.ad || "?") + " ×" + adet + hurdaBadge;
+      h += "</span>";
+    });
+    h += "</div></td>";
+    // Sayılar
+    h += "<td class='r' style='font-weight:800;font-size:12px'>" + sipAdet + "</td>";
+    h += "<td class='r'>" + fN(sipGram, 2) + " gr</td>";
+    h += "<td class='r " + karClass + "'>" + fN(sipKar, 3) + (sipKarUSD > 0 ? "<br><span style='font-size:8px;color:#888'>≈$" + sipKarUSD.toFixed(0) + "</span>" : "") + "</td>";
+    h += "<td class='r'><div class='" + karClass + "' style='font-size:11px'>" + fN(sipKarMly, 3) + "</div><div class='mly-bar'><div class='mly-fill' style='width:" + Math.min(100, Math.round(sipKarMly / 0.06 * 100)) + "%;background:" + (sipKarMly >= 0.030 ? "#2d8a4e" : sipKarMly >= 0.020 ? "#e8833a" : "#e85a4f") + "'></div></div></td>";
+    h += "<td class='r' style='color:" + (sipHurda > 0 ? "#e85a4f" : "#ccc") + ";font-weight:" + (sipHurda > 0 ? "800" : "400") + "'>" + (sipHurda > 0 ? sipHurda : "—") + "</td>";
+    h += "</tr>";
+  });
+
+  // Toplam satırı
+  const topKarMlyFinal = topGram > 0 ? topKar / topGram : 0;
+  const topKarClass = topKarMlyFinal >= 0.030 ? "kar-ok" : topKarMlyFinal >= 0.020 ? "kar-warn" : "kar-no";
+  h += "<tr class='tot'><td colspan='2' style='text-align:right;color:#8a7d64;font-size:9px;text-transform:uppercase'>TOPLAM</td>";
+  h += "<td class='r'>" + topAdet + "</td><td class='r'>" + fN(topGram, 1) + " gr</td>";
+  h += "<td class='r " + topKarClass + "'>" + fN(topKar, 3) + (topKarUSD > 0 ? "<br><span style='font-size:8px;color:#888'>≈$" + topKarUSD.toFixed(0) + "</span>" : "") + "</td>";
+  h += "<td class='r " + topKarClass + "'>" + fN(topKarMlyFinal, 3) + "</td>";
+  h += "<td class='r' style='color:" + (topHurda > 0 ? "#e85a4f" : "#ccc") + "'>" + (topHurda > 0 ? topHurda : "—") + "</td></tr>";
+  h += "</tbody></table>";
+
+  // HURDA ÖZETİ
+  if (topHurda > 0) {
+    h += "<div class='hurda-sec'>";
+    h += "<h2>⚠ Hurda Özeti — " + topHurda + " adet / " + fN(topHurdaGram, 2) + " gr</h2>";
+
+    if (Object.keys(hurdaOzet).length > 0) {
+      h += "<table style='width:100%;border-collapse:collapse;font-size:10px;margin-bottom:6px'>";
+      h += "<thead><tr><th style='background:#fdecea;padding:4px 8px;font-size:7.5px;font-weight:700;color:#c0392b;text-transform:uppercase;border-bottom:1.5px solid #e85a4f;text-align:left'>Neden</th><th style='background:#fdecea;padding:4px 8px;font-size:7.5px;font-weight:700;color:#c0392b;text-transform:uppercase;border-bottom:1.5px solid #e85a4f;text-align:right;width:50px'>Adet</th><th style='background:#fdecea;padding:4px 8px;font-size:7.5px;font-weight:700;color:#c0392b;text-transform:uppercase;border-bottom:1.5px solid #e85a4f;text-align:left'>Modeller</th></tr></thead><tbody>";
+      Object.entries(hurdaOzet).sort((a,b) => b[1].adet - a[1].adet).forEach(([neden, data]) => {
+        h += "<tr><td style='padding:5px 8px;border-bottom:1px solid #fdecea;font-weight:700;color:#c0392b'>" + neden + "</td>";
+        h += "<td style='padding:5px 8px;border-bottom:1px solid #fdecea;text-align:right;font-weight:800;color:#e85a4f'>" + data.adet + "</td>";
+        h += "<td style='padding:5px 8px;border-bottom:1px solid #fdecea'>";
+        data.modeller.forEach(m => { h += "<span class='hurda-tag'>" + m + "</span>"; });
+        h += "</td></tr>";
+      });
+      h += "</tbody></table>";
+    } else {
+      // Hurda var ama neden girilmemiş
+      h += "<p style='font-size:9px;color:#999;margin-top:4px'>Hurda nedeni girilmemiş.</p>";
+    }
+    h += "</div>";
+  } else {
+    h += "<div style='margin-top:10px;padding:8px 14px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;font-size:10px;color:#2d8a4e;font-weight:700'>✓ Bu listedeki siparişlerde hurda kaydı bulunmuyor.</div>";
+  }
+
+  // KARLILIK DAĞILIMI (küçük)
+  h += "<div class='sec-title' style='margin-top:14px'>📊 Karlılık Dağılımı (mly/gr)</div>";
+  const iyi = sipData.filter(d => d.sipKarMly >= 0.030).length;
+  const orta = sipData.filter(d => d.sipKarMly >= 0.020 && d.sipKarMly < 0.030).length;
+  const dusuk = sipData.filter(d => d.sipKarMly < 0.020 && d.sipGram > 0).length;
+  h += "<div style='display:flex;gap:8px;margin-bottom:8px'>";
+  h += "<div style='flex:1;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:7px;padding:8px 12px;text-align:center'><div style='font-size:8px;color:#999;text-transform:uppercase;margin-bottom:2px'>İyi (≥0.030)</div><div style='font-size:18px;font-weight:800;color:#2d8a4e'>" + iyi + "</div><div style='font-size:8px;color:#2d8a4e'>sipariş</div></div>";
+  h += "<div style='flex:1;background:#fff7ed;border:1px solid #fed7aa;border-radius:7px;padding:8px 12px;text-align:center'><div style='font-size:8px;color:#999;text-transform:uppercase;margin-bottom:2px'>Orta (≥0.020)</div><div style='font-size:18px;font-weight:800;color:#b8600a'>" + orta + "</div><div style='font-size:8px;color:#b8600a'>sipariş</div></div>";
+  h += "<div style='flex:1;background:#fff5f5;border:1px solid #fecaca;border-radius:7px;padding:8px 12px;text-align:center'><div style='font-size:8px;color:#999;text-transform:uppercase;margin-bottom:2px'>Düşük (&lt;0.020)</div><div style='font-size:18px;font-weight:800;color:#c0392b'>" + dusuk + "</div><div style='font-size:8px;color:#c0392b'>sipariş</div></div>";
+  h += "</div>";
+  h += "<div style='font-size:8px;color:#aaa;margin-top:4px'>mly/gr = karlılık milyemi · İyi ≥ 0.030 · Orta ≥ 0.020 · Düşük &lt; 0.020</div>";
+
+  h += "</div><button class='np pb' onclick='window.print()'>Yazdır / PDF</button></body></html>";
+  return h;
+}
+
 // ═══ MÜŞTERİ DETAY PDF ═══
 function buildMusteriDetayHTML(musAd, musKod, siparisler) {
   const musSiparisler = siparisler.filter(s => (s.musteri||"Isimsiz").trim() === musAd);
@@ -2079,6 +2266,19 @@ function Atolye() {
                 <span style={{ color:"#665d4a", fontSize:10 }}>—</span>
                 <input type="date" value={sipTarih2} onChange={e=>setSipTarih2(e.target.value)} style={{ ...IS, width:120, padding:"5px 8px", fontSize:10 }}/>
                 {(sipMusF||sipTarih1||sipTarih2) && <button onClick={()=>{setSipMusF("");setSipTarih1("");setSipTarih2("");}} style={{ ...RD, fontSize:9, padding:"4px 8px" }}>Temizle</button>}
+                {siparisler.length > 0 && (
+                  <button onClick={() => {
+                    const goruntulenecek = [...siparisler].reverse().filter(s => {
+                      if (sipMusF) { const q = sipMusF.toLowerCase(); if (!(s.musteri||"").toLowerCase().includes(q) && !(s.musKod||"").toLowerCase().includes(q)) return false; }
+                      if (sipTarih1 && s.tarih < new Date(sipTarih1).getTime()) return false;
+                      if (sipTarih2 && s.tarih > new Date(sipTarih2).getTime()+86399999) return false;
+                      return true;
+                    });
+                    downloadPDF(buildSipListeRaporuHTML(goruntulenecek, altinKgUSD, madenCarpan), "siparis-listesi-raporu");
+                  }} style={{ background:"linear-gradient(135deg,#c9a84c,#b8943f)", border:"none", borderRadius:9, padding:"5px 11px", color:"#110f0a", fontSize:9, fontWeight:800, cursor:"pointer", whiteSpace:"nowrap" }}>
+                    📊 Rapor PDF
+                  </button>
+                )}
               </div>
             </div>
             {siparisler.length===0 && <p style={{ color:"#665d4a", textAlign:"center", padding:"30px", fontSize:12 }}>Henuz siparis kaydi yok</p>}
