@@ -187,6 +187,31 @@ function resizeImg(file) {
 
 // PDF — blob download (popup yok)
 // ═══ ÜRETİM TAKİP YARDIMCILARI ═══
+
+// İki tarih arasındaki SADECE iş günü (Cumartesi/Pazar hariç) milisaniyesini hesaplar
+function isGunuSure(baslangic, bitis) {
+  if (!baslangic || !bitis || bitis <= baslangic) return 0;
+  const GUN_MS = 24 * 60 * 60 * 1000;
+  let toplam = 0;
+  let cursor = new Date(baslangic);
+  const son = new Date(bitis);
+  
+  while (cursor < son) {
+    const gun = cursor.getDay(); // 0=Pazar, 6=Cumartesi
+    if (gun !== 0 && gun !== 6) {
+      // Bu gün iş günü → günün sonuna kadar veya bitişe kadar say
+      const gunSonu = new Date(cursor);
+      gunSonu.setHours(24, 0, 0, 0); // ertesi gün 00:00
+      const bitisBuGun = son < gunSonu ? son : gunSonu;
+      toplam += bitisBuGun - cursor;
+    }
+    // Sonraki güne geç
+    cursor = new Date(cursor);
+    cursor.setHours(24, 0, 0, 0);
+  }
+  return toplam;
+}
+
 function sureFmt(ms) {
   if (!ms || ms < 0) return "-";
   const dk = Math.floor(ms / 60000);
@@ -208,12 +233,13 @@ function siparisDurumHesapla(s) {
 }
 
 function durumSureHesapla(gecmis) {
-  // [{durum, tarih}] → her durum için harcanan süre
+  // [{durum, tarih}] → her durum için harcanan SADECE İŞ GÜNÜ süresi (hafta sonu hariç)
   const sonuclar = {};
   for (let i = 0; i < gecmis.length; i++) {
     const d = gecmis[i];
     const sonraki = gecmis[i+1];
-    const sure = sonraki ? sonraki.tarih - d.tarih : Date.now() - d.tarih;
+    const bitis = sonraki ? sonraki.tarih : Date.now();
+    const sure = isGunuSure(d.tarih, bitis);
     sonuclar[d.durum] = (sonuclar[d.durum] || 0) + sure;
   }
   return sonuclar;
@@ -457,7 +483,12 @@ function buildKonfHTML(siparis, altinKgUSD, mc, fiyatli) {
   // Tablo
   h += "<div class='tbl-wrap'><table>";
 
-  h += "<thead><tr><th style='width:110px'></th><th style='width:68px'>Kod</th><th>Kategori / Not</th><th class='r' style='width:50px'>Renk</th><th class='r' style='width:38px'>Adet</th><th class='r' style='width:56px'>Gram</th><th class='r' style='width:96px'>İşçilik Birim</th><th class='r' style='width:84px'>İşçilik Toplam</th></tr></thead><tbody>";
+  // IC (fiyatli=true) modunda fiyat/işçilik gizlenir — müşteri PDF'inde gösterilir
+  const fiyatGoster = !fiyatli;
+  
+  h += "<thead><tr><th style='width:110px'></th><th style='width:68px'>Kod</th><th>Kategori / Not</th><th class='r' style='width:50px'>Renk</th><th class='r' style='width:38px'>Adet</th><th class='r' style='width:56px'>Gram</th>";
+  if (fiyatGoster) h += "<th class='r' style='width:96px'>İşçilik Birim</th><th class='r' style='width:84px'>İşçilik Toplam</th>";
+  h += "</tr></thead><tbody>";
 
   let tIscilik = 0;
   let tIscilikHas = 0;
@@ -512,8 +543,10 @@ function buildKonfHTML(siparis, altinKgUSD, mc, fiyatli) {
     h += "<td class='r dim'>" + (r.renk||"Sari") + "</td>";
     h += "<td class='r'>" + r.adet + "</td>";
     h += "<td class='r'>" + fN(topGram,2) + " gr</td>";
-    h += "<td class='r' style='font-size:9px;line-height:1.3'>" + birimStr + "</td>";
-    h += "<td class='r' style='font-size:9px;line-height:1.3;font-weight:700;color:#1a1a1a'>" + topStr + "</td>";
+    if (fiyatGoster) {
+      h += "<td class='r' style='font-size:9px;line-height:1.3'>" + birimStr + "</td>";
+      h += "<td class='r' style='font-size:9px;line-height:1.3;font-weight:700;color:#1a1a1a'>" + topStr + "</td>";
+    }
     h += "</tr>";
   });
 
@@ -524,11 +557,11 @@ function buildKonfHTML(siparis, altinKgUSD, mc, fiyatli) {
   h += "<div class='tot-blok'><table class='tot-tbl'>";
   h += "<tr><td class='lc'>Toplam Gram</td><td class='rc'>" + fN(tGram,2) + " gr</td></tr>";
   h += "<tr><td class='lc'>Toplam Adet</td><td class='rc'>" + tAdet + " adet</td></tr>";
-  if (tIscilik !== 0) {
+  if (fiyatGoster && tIscilik !== 0) {
     h += "<tr><td class='lc'>Toplam Işçilik ($)</td><td class='rc'>" + fUSD(tIscilik) + "</td></tr>";
     h += "<tr><td class='lc'>Toplam Işçilik (Has)</td><td class='rc'>" + tIscilikHas.toFixed(4) + " has</td></tr>";
+    h += "<tr class='grand'><td class='lc'>Genel Toplam</td><td class='rc'>" + fUSD(tIscilik) + "</td></tr>";
   }
-  if (!fiyatli && tIscilik !== 0) h += "<tr class='grand'><td class='lc'>Genel Toplam</td><td class='rc'>" + fUSD(tIscilik) + "</td></tr>";
   h += "</table></div>";
 
   h += "<div class='footer'><span>Atolye yonetim sistemi</span><span>" + new Date().toLocaleDateString("tr-TR") + "</span></div>";
@@ -964,8 +997,7 @@ function Atolye() {
   const [kollar,    setKollar]    = useState([]);
   const [modeller,  setModeller]  = useState([]);
   const [siparisler,setSiparisler]= useState([]);
-  const [iadeler,    setIadeler]   = useState([]); // iade edilen siparişler
-  const [iadeModal,  setIadeModal] = useState(null); // {siparis, secilenKalemler, neden}
+  const [iadeModal,  setIadeModal] = useState(null); // {sipId, kalemId, kalemAd, maxAdet, mevcAdet, iadeTuru, mevcNeden}
   const [musteriler, setMusteriler] = useState({}); // { "Ahmet": "MUS-001", ... }
   const [loaded,    setLoaded]    = useState(false);
 
@@ -998,6 +1030,7 @@ function Atolye() {
   const [yedekJson, setYedekJson] = useState("");
   const [driveYukleniyor, setDriveYukleniyor] = useState(null);
   const [hurdaModal, setHurdaModal] = useState(null); // {sipId, kalemId, kalemAd, maxAdet, mevcAdet}
+  const [tamirModal, setTamirModal] = useState(null); // {sipId, kalemId, kalemAd, maxAdet, mevcAdet}
   const HURDA_NEDENLER = ["İade","Çizim Hatası","Döküm Hatası","Atölyede Üretim Hatası","Taş Düşmesi","Müşteri Değişikliği","Diğer"];
 
   // Ayarlar
@@ -1109,8 +1142,7 @@ function Atolye() {
     if (s.length > 0) await sv("v7s", s);
 
     const ay = await ld("v7ay", {});
-    const ia = await ld("v7i", []); // iadeler
-    setKollar(k); setModeller(m); setSiparisler(s); setMusteriler(u); setIadeler(Array.isArray(ia) ? ia : []);
+    setKollar(k); setModeller(m); setSiparisler(s); setMusteriler(u);
     setAltinKg(c.a || ""); setMc(c.mc || "0.030");
     if (ay.kategoriler?.length) setAyarKategoriler(ay.kategoriler);
     if (ay.etiketler?.length) setAyarEtiketler(ay.etiketler);
@@ -1164,39 +1196,6 @@ function Atolye() {
     await sv("v7m", temiz);
   }, []);
   const svS = useCallback(async d => { setSiparisler(d); await sv("v7s", d); }, []);
-  const svIa = useCallback(async d => { setIadeler(d); await sv("v7i", d); }, []);
-  
-  // İade işle: seçili kalemleri iadeye taşı, siparişten çıkar
-  const iadeYap = useCallback((siparis, secilenKalemIdler, neden, iadeTuru) => {
-    const iadeKalemleri = (siparis.kalemler||[]).filter(k => secilenKalemIdler.has(k.id));
-    const kalanKalemler = (siparis.kalemler||[]).filter(k => !secilenKalemIdler.has(k.id));
-    
-    const iadeKaydi = {
-      id: uid(),
-      orijinalSiparisId: siparis.id,
-      musteri: siparis.musteri,
-      kalemler: iadeKalemleri,
-      neden: neden || "",
-      iadeTuru: iadeTuru || "para", // para/degisim
-      iadeTarihi: Date.now(),
-      orijinalSiparisTarihi: siparis.tarih || siparis.t,
-      altinKgUSD: siparis.altinKgUSD,
-      mc: siparis.mc,
-    };
-    
-    // İadelere ekle
-    svIa([...iadeler, iadeKaydi]);
-    
-    // Siparişten kalemleri çıkar veya tüm siparişi sil
-    if (kalanKalemler.length === 0) {
-      svS(siparisler.filter(s => s.id !== siparis.id));
-    } else {
-      const yeniSiparisler = siparisler.map(s => 
-        s.id === siparis.id ? { ...s, kalemler: kalanKalemler } : s
-      );
-      svS(yeniSiparisler);
-    }
-  }, [iadeler, siparisler]);
 
   // Sipariş durum geçmişini güncelle (opsiyonel manuel tarih)
   const sipDurumKaydet = useCallback((sipId, yeniDurum, manuelTarih) => {
@@ -1522,14 +1521,23 @@ function Atolye() {
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:8, marginBottom:10 }}>
             <h1 style={{ margin:0, fontSize:"clamp(13px,2vw,18px)", fontWeight:700, color:GOLD }}>Atolye Koleksiyon Sistemi</h1>
             <div style={{ display:"flex", gap:3, flexWrap:"wrap" }}>
-              {["koleksiyonlar","modeller","konfirmasyon","siparisler","iadeler","musteriler","analiz","ayarlar"].map(n => (
+              {["koleksiyonlar","modeller","konfirmasyon","siparisler","iadeler","musteriler","analiz","ayarlar"].map(n => {
+                let badgeSayi = 0;
+                if (n === "iadeler") {
+                  siparisler.forEach(s => {
+                    Object.values(s.kalemIade||{}).forEach(v => badgeSayi += (v||0)>0?1:0);
+                    Object.values(s.kalemTamir||{}).forEach(v => badgeSayi += (v||0)>0?1:0);
+                  });
+                }
+                return (
                 <button key={n} onClick={() => { setSayfa(n); if (n==="koleksiyonlar") setAktifKol(null); }}
                   style={{ ...GH, background:sayfa===n?"rgba(201,168,76,0.18)":"rgba(201,168,76,0.04)", borderColor:sayfa===n?"rgba(201,168,76,0.35)":"rgba(201,168,76,0.1)", fontSize:9, padding:"5px 9px", position:"relative" }}>
                   {n.charAt(0).toUpperCase()+n.slice(1)}
                   {n==="konfirmasyon" && konfList.length>0 && <span style={{ position:"absolute", top:-4, right:-4, background:GOLD, color:DARK, width:13, height:13, borderRadius:7, fontSize:7, fontWeight:800, display:"flex", alignItems:"center", justifyContent:"center" }}>{konfList.length}</span>}
-                  {n==="iadeler" && iadeler.length>0 && <span style={{ position:"absolute", top:-4, right:-4, background:"#a78bfa", color:"#fff", width:13, height:13, borderRadius:7, fontSize:7, fontWeight:800, display:"flex", alignItems:"center", justifyContent:"center" }}>{iadeler.length}</span>}
+                  {n==="iadeler" && badgeSayi>0 && <span style={{ position:"absolute", top:-4, right:-4, background:"#a78bfa", color:"#fff", width:13, height:13, borderRadius:7, fontSize:7, fontWeight:800, display:"flex", alignItems:"center", justifyContent:"center" }}>{badgeSayi}</span>}
                 </button>
-              ))}
+                );
+              })}
             </div>
           </div>
           {/* KUR */}
@@ -2142,7 +2150,7 @@ function Atolye() {
                             {s.durumGecmisi?.length > 0 && (() => {
                               const sonDurum = s.durumGecmisi[s.durumGecmisi.length-1].durum;
                               const sonDurumObj = DURUMLAR.find(d=>d.id===sonDurum);
-                              const sure = Date.now() - s.durumGecmisi[s.durumGecmisi.length-1].tarih;
+                              const sure = isGunuSure(s.durumGecmisi[s.durumGecmisi.length-1].tarih, Date.now());
                               return (
                                 <div style={{ display:"flex", alignItems:"center", gap:5 }}>
                                   <span style={{ background:sonDurumObj?.c+"22", color:sonDurumObj?.c, border:"1px solid "+sonDurumObj?.c+"44", borderRadius:5, padding:"2px 7px", fontSize:8, fontWeight:700 }}>
@@ -2182,9 +2190,6 @@ function Atolye() {
                               delSip(s.id);
                               setSayfa("konfirmasyon");
                             }} style={{ background:"rgba(232,131,58,0.1)", border:"1px solid rgba(232,131,58,0.2)", borderRadius:9, padding:"3px 7px", color:"#e8833a", fontSize:8, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap" }}>↩ Düzenle</button>
-                            <button onClick={()=>{
-                              setIadeModal({ siparis: s, secilenKalemler: new Set(), neden: "", iadeTuru: "para" });
-                            }} style={{ background:"rgba(167,139,250,0.1)", border:"1px solid rgba(167,139,250,0.25)", borderRadius:9, padding:"3px 7px", color:"#a78bfa", fontSize:8, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap" }}>↩ İade</button>
                             <button onClick={()=>setDelOnay({ type:"siparis", id:s.id })} style={{ ...RD, fontSize:8, padding:"3px 7px" }}>Sil</button>
                             <span style={{ fontSize:10, color:"#665d4a", marginLeft:4 }}>{acik?"▲":"▼"}</span>
                           </div>
@@ -2223,7 +2228,7 @@ function Atolye() {
                         {/* ZAMAN ÇİZELGESİ */}
                         {s.durumGecmisi?.length > 0 && (() => {
                           const gecmis = s.durumGecmisi;
-                          const toplamSure = Date.now() - gecmis[0].tarih;
+                          const toplamSure = isGunuSure(gecmis[0].tarih, Date.now());
                           const sonDurumObj = DURUMLAR.find(d=>d.id===gecmis[gecmis.length-1].durum)||DURUMLAR[0];
                           const tamamlandi = ["tamam","teslim"].includes(gecmis[gecmis.length-1].durum);
                           return (
@@ -2242,7 +2247,7 @@ function Atolye() {
                                   {gecmis.map((gec, gi) => {
                                     const durObj = DURUMLAR.find(d=>d.id===gec.durum)||DURUMLAR[0];
                                     const sonrakiGec = gecmis[gi+1];
-                                    const buSure = sonrakiGec ? sonrakiGec.tarih - gec.tarih : Date.now() - gec.tarih;
+                                    const buSure = isGunuSure(gec.tarih, sonrakiGec ? sonrakiGec.tarih : Date.now());
                                     const aktif = gi === gecmis.length - 1;
                                     return (
                                       <div key={gi} style={{ display:"flex", alignItems:"center", flexShrink:0 }}>
@@ -2292,7 +2297,7 @@ function Atolye() {
                                   {gecmis.map((gec, gi) => {
                                     const durObj = DURUMLAR.find(d=>d.id===gec.durum)||DURUMLAR[0];
                                     const sonrakiGec = gecmis[gi+1];
-                                    const buSure = sonrakiGec ? sonrakiGec.tarih - gec.tarih : Date.now() - gec.tarih;
+                                    const buSure = isGunuSure(gec.tarih, sonrakiGec ? sonrakiGec.tarih : Date.now());
                                     const pct = toplamSure > 0 ? Math.round(buSure/toplamSure*100) : 0;
                                     return (
                                       <div key={gi} style={{ display:"flex", alignItems:"center", gap:6 }}>
@@ -2345,13 +2350,27 @@ function Atolye() {
                                 {(() => {
                                   const hurdaAdet = (s.kalemHurda||{})[k.id]||0;
                                   const hurdaNeden = (s.kalemHurdaNeden||{})[k.id]||"";
+                                  const iadeAdet = (s.kalemIade||{})[k.id]||0;
+                                  const tamirAdet = (s.kalemTamir||{})[k.id]||0;
                                   return (
-                                    <button onClick={e=>{e.stopPropagation(); setHurdaModal({sipId:s.id, kalemId:k.id, kalemAd:k.ad, maxAdet:k.adet||1, mevcAdet:hurdaAdet, mevcNeden:hurdaNeden});}}
-                                      style={{ display:"flex", alignItems:"center", gap:3, marginLeft:6, background:hurdaAdet>0?"rgba(232,90,79,0.15)":"rgba(232,90,79,0.06)", border:"1px solid rgba(232,90,79,0.25)", borderRadius:6, padding:"2px 7px", cursor:"pointer" }}>
-                                      <span style={{ fontSize:7, color:"#e85a4f", fontWeight:700 }}>🗑 HURDA</span>
-                                      {hurdaAdet>0 && <span style={{ fontSize:9, color:"#e85a4f", fontWeight:800 }}>{hurdaAdet}/{k.adet||1}</span>}
-                                      {hurdaNeden && <span style={{ fontSize:7, color:"#e85a4f", opacity:0.7, maxWidth:60, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{hurdaNeden}</span>}
-                                    </button>
+                                    <>
+                                      <button onClick={e=>{e.stopPropagation(); setHurdaModal({sipId:s.id, kalemId:k.id, kalemAd:k.ad, maxAdet:k.adet||1, mevcAdet:hurdaAdet, mevcNeden:hurdaNeden});}}
+                                        style={{ display:"flex", alignItems:"center", gap:3, marginLeft:6, background:hurdaAdet>0?"rgba(232,90,79,0.15)":"rgba(232,90,79,0.06)", border:"1px solid rgba(232,90,79,0.25)", borderRadius:6, padding:"2px 7px", cursor:"pointer" }}>
+                                        <span style={{ fontSize:7, color:"#e85a4f", fontWeight:700 }}>🗑 HURDA</span>
+                                        {hurdaAdet>0 && <span style={{ fontSize:9, color:"#e85a4f", fontWeight:800 }}>{hurdaAdet}/{k.adet||1}</span>}
+                                        {hurdaNeden && <span style={{ fontSize:7, color:"#e85a4f", opacity:0.7, maxWidth:60, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{hurdaNeden}</span>}
+                                      </button>
+                                      <button onClick={e=>{e.stopPropagation(); setIadeModal({sipId:s.id, kalemId:k.id, kalemAd:k.ad, kalemKod:k.kod, maxAdet:k.adet||1, mevcAdet:iadeAdet, mevcNeden:(s.kalemIadeNeden||{})[k.id]||"", iadeTuru:(s.kalemIadeTuru||{})[k.id]||"para"});}}
+                                        style={{ display:"flex", alignItems:"center", gap:3, marginLeft:6, background:iadeAdet>0?"rgba(167,139,250,0.15)":"rgba(167,139,250,0.06)", border:"1px solid rgba(167,139,250,0.25)", borderRadius:6, padding:"2px 7px", cursor:"pointer" }}>
+                                        <span style={{ fontSize:7, color:"#a78bfa", fontWeight:700 }}>↩ İADE</span>
+                                        {iadeAdet>0 && <span style={{ fontSize:9, color:"#a78bfa", fontWeight:800 }}>{iadeAdet}/{k.adet||1}</span>}
+                                      </button>
+                                      <button onClick={e=>{e.stopPropagation(); setTamirModal({sipId:s.id, kalemId:k.id, kalemAd:k.ad, kalemKod:k.kod, maxAdet:k.adet||1, mevcAdet:tamirAdet, mevcNeden:(s.kalemTamirNeden||{})[k.id]||""});}}
+                                        style={{ display:"flex", alignItems:"center", gap:3, marginLeft:6, background:tamirAdet>0?"rgba(91,155,213,0.15)":"rgba(91,155,213,0.06)", border:"1px solid rgba(91,155,213,0.25)", borderRadius:6, padding:"2px 7px", cursor:"pointer" }}>
+                                        <span style={{ fontSize:7, color:"#5b9bd5", fontWeight:700 }}>🔧 TAMİR</span>
+                                        {tamirAdet>0 && <span style={{ fontSize:9, color:"#5b9bd5", fontWeight:800 }}>{tamirAdet}/{k.adet||1}</span>}
+                                      </button>
+                                    </>
                                   );
                                 })()}
                               </div>
@@ -2368,64 +2387,103 @@ function Atolye() {
         )}
 
         {/* MÜŞTERİLER */}
-        {/* İADELER */}
-        {sayfa==="iadeler" && (
-          <div style={{ animation:"fadein .3s" }}>
-            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
-              <h2 style={{ margin:0, fontSize:15, fontWeight:700, color:"#e8dcc8" }}>İadeler <span style={{ fontSize:10, color:"#998a6e", marginLeft:6 }}>({iadeler.length})</span></h2>
-            </div>
-            {iadeler.length === 0 ? (
-              <div style={{ background:"rgba(201,168,76,0.03)", border:"1px solid rgba(201,168,76,0.08)", borderRadius:14, padding:"40px 20px", textAlign:"center", color:"#665d4a", fontSize:11 }}>
-                Henüz iade kaydı yok
+        {/* İADE & TAMİR */}
+        {sayfa==="iadeler" && (() => {
+          // Tüm siparişlerden iade ve tamir kaydı olan kalemleri çıkar
+          const iadeKayitlar = [];
+          const tamirKayitlar = [];
+          siparisler.forEach(s => {
+            const iade = s.kalemIade || {};
+            const iadeNeden = s.kalemIadeNeden || {};
+            const iadeTuru = s.kalemIadeTuru || {};
+            const tamir = s.kalemTamir || {};
+            const tamirNeden = s.kalemTamirNeden || {};
+            (s.kalemler||[]).forEach(k => {
+              if (iade[k.id] && iade[k.id] > 0) {
+                iadeKayitlar.push({
+                  sipId: s.id, musteri: s.musteri, kalem: k, adet: iade[k.id],
+                  neden: iadeNeden[k.id] || "", tur: iadeTuru[k.id] || "para",
+                  tarih: s.tarih || s.t
+                });
+              }
+              if (tamir[k.id] && tamir[k.id] > 0) {
+                tamirKayitlar.push({
+                  sipId: s.id, musteri: s.musteri, kalem: k, adet: tamir[k.id],
+                  neden: tamirNeden[k.id] || "", tarih: s.tarih || s.t
+                });
+              }
+            });
+          });
+          
+          return (
+            <div style={{ animation:"fadein .3s" }}>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
+                <h2 style={{ margin:0, fontSize:15, fontWeight:700, color:"#e8dcc8" }}>İade & Tamir Kayıtları</h2>
               </div>
-            ) : (
-              <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
-                {[...iadeler].sort((a,b)=>b.iadeTarihi-a.iadeTarihi).map(ia => (
-                  <div key={ia.id} style={{ background:"rgba(167,139,250,0.04)", border:"1px solid rgba(167,139,250,0.15)", borderRadius:12, padding:"12px 14px" }}>
-                    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8, flexWrap:"wrap", gap:8 }}>
-                      <div>
-                        <div style={{ fontSize:13, fontWeight:800, color:"#e8dcc8" }}>{ia.musteri || "—"}</div>
-                        <div style={{ fontSize:9, color:"#998a6e", marginTop:2 }}>
-                          İade Tarihi: {new Date(ia.iadeTarihi).toLocaleString("tr-TR")}
-                        </div>
-                      </div>
-                      <div style={{ display:"flex", gap:6, alignItems:"center" }}>
-                        <span style={{ background:"rgba(167,139,250,0.15)", color:"#a78bfa", padding:"3px 10px", borderRadius:6, fontSize:9, fontWeight:700 }}>
-                          {ia.iadeTuru === "degisim" ? "🔄 Mal Değişimi" : "💵 Para İadesi"}
-                        </span>
-                        <span style={{ fontSize:9, color:"#998a6e", fontWeight:600 }}>{(ia.kalemler||[]).length} kalem</span>
-                        <button onClick={()=>{
-                          if (!window.confirm("Bu iade kaydı silinecek. Emin misiniz?")) return;
-                          svIa(iadeler.filter(x => x.id !== ia.id));
-                        }} style={{ ...RD, fontSize:8, padding:"3px 8px" }}>Sil</button>
-                      </div>
-                    </div>
-                    {ia.neden && (
-                      <div style={{ background:"rgba(255,255,255,0.03)", borderLeft:"2px solid #a78bfa", padding:"6px 10px", borderRadius:4, fontSize:10, color:"#c0b399", marginBottom:8 }}>
-                        <b style={{ color:"#a78bfa" }}>Neden:</b> {ia.neden}
-                      </div>
-                    )}
-                    <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
-                      {(ia.kalemler||[]).map((k, ki) => (
-                        <div key={ki} style={{ display:"flex", alignItems:"center", gap:8, padding:"4px 8px", background:"rgba(0,0,0,0.15)", borderRadius:6 }}>
-                          {k.foto ? <img src={k.foto} style={{ width:48, height:48, objectFit:"cover", borderRadius:6 }}/> : <div style={{ width:48, height:48, background:"rgba(201,168,76,0.06)", borderRadius:6 }}/>}
-                          <div style={{ flex:1 }}>
-                            <div style={{ fontSize:10, fontWeight:700, color:"#e8dcc8" }}>
-                              <span style={{ color:GOLD, marginRight:5 }}>{k.kod||""}</span>{k.ad}
-                            </div>
-                            <div style={{ fontSize:8, color:"#7a6f5a" }}>
-                              {k.gram}gr · {k.secilenAyar||k.refAyar} · {k.adet||1} adet {k.renk && "· "+k.renk}
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
+
+              {/* İade Bölümü */}
+              <div style={{ marginBottom:18 }}>
+                <h3 style={{ fontSize:12, color:"#a78bfa", marginBottom:8, fontWeight:700 }}>↩ İadeler ({iadeKayitlar.length})</h3>
+                {iadeKayitlar.length === 0 ? (
+                  <div style={{ background:"rgba(167,139,250,0.03)", border:"1px solid rgba(167,139,250,0.1)", borderRadius:10, padding:"24px", textAlign:"center", color:"#665d4a", fontSize:11 }}>
+                    İade kaydı yok
                   </div>
-                ))}
+                ) : (
+                  <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+                    {iadeKayitlar.map((r, i) => (
+                      <div key={i} style={{ background:"rgba(167,139,250,0.04)", border:"1px solid rgba(167,139,250,0.15)", borderRadius:10, padding:"10px 12px", display:"flex", alignItems:"center", gap:10 }}>
+                        {r.kalem.foto ? <img src={r.kalem.foto} style={{ width:60, height:60, objectFit:"cover", borderRadius:8, flexShrink:0 }}/> : <div style={{ width:60, height:60, background:"rgba(201,168,76,0.06)", borderRadius:8, flexShrink:0 }}/>}
+                        <div style={{ flex:1 }}>
+                          <div style={{ fontSize:11, fontWeight:700, color:"#e8dcc8" }}>
+                            <span style={{ color:GOLD, marginRight:5 }}>{r.kalem.kod||""}</span>{r.kalem.ad}
+                          </div>
+                          <div style={{ fontSize:9, color:"#998a6e", marginTop:2 }}>
+                            Müşteri: <b style={{ color:"#c0b399" }}>{r.musteri}</b> · {new Date(r.tarih).toLocaleDateString("tr-TR")}
+                          </div>
+                          {r.neden && <div style={{ fontSize:9, color:"#a78bfa", marginTop:3, fontStyle:"italic" }}>"{r.neden}"</div>}
+                        </div>
+                        <div style={{ display:"flex", flexDirection:"column", gap:3, alignItems:"flex-end" }}>
+                          <span style={{ background:"rgba(167,139,250,0.15)", color:"#a78bfa", padding:"2px 8px", borderRadius:5, fontSize:9, fontWeight:700 }}>
+                            {r.tur === "degisim" ? "🔄 Değişim" : "💵 Para"}
+                          </span>
+                          <span style={{ fontSize:10, color:"#a78bfa", fontWeight:800 }}>{r.adet}/{r.kalem.adet||1} adet</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
-            )}
-          </div>
-        )}
+
+              {/* Tamir Bölümü */}
+              <div>
+                <h3 style={{ fontSize:12, color:"#5b9bd5", marginBottom:8, fontWeight:700 }}>🔧 Tamirler ({tamirKayitlar.length})</h3>
+                {tamirKayitlar.length === 0 ? (
+                  <div style={{ background:"rgba(91,155,213,0.03)", border:"1px solid rgba(91,155,213,0.1)", borderRadius:10, padding:"24px", textAlign:"center", color:"#665d4a", fontSize:11 }}>
+                    Tamir kaydı yok
+                  </div>
+                ) : (
+                  <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+                    {tamirKayitlar.map((r, i) => (
+                      <div key={i} style={{ background:"rgba(91,155,213,0.04)", border:"1px solid rgba(91,155,213,0.15)", borderRadius:10, padding:"10px 12px", display:"flex", alignItems:"center", gap:10 }}>
+                        {r.kalem.foto ? <img src={r.kalem.foto} style={{ width:60, height:60, objectFit:"cover", borderRadius:8, flexShrink:0 }}/> : <div style={{ width:60, height:60, background:"rgba(201,168,76,0.06)", borderRadius:8, flexShrink:0 }}/>}
+                        <div style={{ flex:1 }}>
+                          <div style={{ fontSize:11, fontWeight:700, color:"#e8dcc8" }}>
+                            <span style={{ color:GOLD, marginRight:5 }}>{r.kalem.kod||""}</span>{r.kalem.ad}
+                          </div>
+                          <div style={{ fontSize:9, color:"#998a6e", marginTop:2 }}>
+                            Müşteri: <b style={{ color:"#c0b399" }}>{r.musteri}</b> · {new Date(r.tarih).toLocaleDateString("tr-TR")}
+                          </div>
+                          {r.neden && <div style={{ fontSize:9, color:"#5b9bd5", marginTop:3, fontStyle:"italic" }}>"{r.neden}"</div>}
+                        </div>
+                        <span style={{ fontSize:10, color:"#5b9bd5", fontWeight:800 }}>{r.adet}/{r.kalem.adet||1} adet</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })()}
 
         {sayfa==="musteriler" && (
           <div style={{ animation:"fadein .3s" }}>
@@ -2691,7 +2749,7 @@ function Atolye() {
 
                 gecmis.forEach((gec, gi) => {
                   const sonrakiGec = gecmis[gi+1];
-                  const buSure = sonrakiGec ? sonrakiGec.tarih - gec.tarih : (tamamlandi ? 0 : Date.now() - gec.tarih);
+                  const buSure = sonrakiGec ? isGunuSure(gec.tarih, sonrakiGec.tarih) : (tamamlandi ? 0 : isGunuSure(gec.tarih, Date.now()));
                   if (buSure <= 0) return;
                   if (!asamaSureler[gec.durum]) asamaSureler[gec.durum] = { toplam:0, sayi:0 };
                   asamaSureler[gec.durum].toplam += buSure;
@@ -3592,93 +3650,117 @@ function Atolye() {
       </Modal>
 
       {/* KOL MODAL */}
-      {/* İADE MODAL */}
-      <Modal open={!!iadeModal} onClose={()=>setIadeModal(null)} title={"İade İşlemi"} wide>
-        {iadeModal && (
-          <>
-            <div style={{ background:"rgba(167,139,250,0.05)", borderRadius:8, padding:"10px 12px", marginBottom:12 }}>
-              <div style={{ fontSize:11, color:"#a78bfa", fontWeight:700 }}>Müşteri: {iadeModal.siparis.musteri}</div>
-              <div style={{ fontSize:9, color:"#998a6e", marginTop:3 }}>İade edilecek kalemleri seçin, neden ve türünü girin.</div>
+      {/* İADE MODAL — kalem bazlı (hurda mantığında) */}
+      {iadeModal && (
+        <Modal open={!!iadeModal} onClose={()=>setIadeModal(null)} title="İade Kaydı">
+          <div style={{ fontSize:11, color:"#a78bfa", fontWeight:700, marginBottom:10, padding:"6px 10px", background:"rgba(167,139,250,0.08)", borderRadius:6 }}>
+            {iadeModal.kalemKod && <span style={{ color:GOLD, marginRight:6 }}>{iadeModal.kalemKod}</span>}{iadeModal.kalemAd}
+          </div>
+          
+          <Fl label="İade Türü">
+            <div style={{ display:"flex", gap:6 }}>
+              <button onClick={()=>setIadeModal(p=>({...p, iadeTuru:"para"}))} style={{
+                flex:1, padding:"7px", border:"1px solid "+(iadeModal.iadeTuru==="para"?"#a78bfa":"rgba(255,255,255,0.1)"),
+                background:iadeModal.iadeTuru==="para"?"rgba(167,139,250,0.15)":"transparent",
+                borderRadius:6, color:iadeModal.iadeTuru==="para"?"#a78bfa":"#998a6e", fontSize:10, fontWeight:700, cursor:"pointer"
+              }}>💵 Para İadesi</button>
+              <button onClick={()=>setIadeModal(p=>({...p, iadeTuru:"degisim"}))} style={{
+                flex:1, padding:"7px", border:"1px solid "+(iadeModal.iadeTuru==="degisim"?"#a78bfa":"rgba(255,255,255,0.1)"),
+                background:iadeModal.iadeTuru==="degisim"?"rgba(167,139,250,0.15)":"transparent",
+                borderRadius:6, color:iadeModal.iadeTuru==="degisim"?"#a78bfa":"#998a6e", fontSize:10, fontWeight:700, cursor:"pointer"
+              }}>🔄 Mal Değişimi</button>
             </div>
+          </Fl>
 
-            {/* İade türü */}
-            <Fl label="İade Türü">
-              <div style={{ display:"flex", gap:8 }}>
-                <button onClick={()=>setIadeModal(p=>({...p, iadeTuru:"para"}))} style={{
-                  flex:1, padding:"8px", border:"1px solid "+(iadeModal.iadeTuru==="para"?"#a78bfa":"rgba(255,255,255,0.1)"),
-                  background:iadeModal.iadeTuru==="para"?"rgba(167,139,250,0.15)":"transparent",
-                  borderRadius:7, color:iadeModal.iadeTuru==="para"?"#a78bfa":"#998a6e", fontSize:10, fontWeight:700, cursor:"pointer"
-                }}>💵 Para İadesi</button>
-                <button onClick={()=>setIadeModal(p=>({...p, iadeTuru:"degisim"}))} style={{
-                  flex:1, padding:"8px", border:"1px solid "+(iadeModal.iadeTuru==="degisim"?"#a78bfa":"rgba(255,255,255,0.1)"),
-                  background:iadeModal.iadeTuru==="degisim"?"rgba(167,139,250,0.15)":"transparent",
-                  borderRadius:7, color:iadeModal.iadeTuru==="degisim"?"#a78bfa":"#998a6e", fontSize:10, fontWeight:700, cursor:"pointer"
-                }}>🔄 Mal Değişimi</button>
-              </div>
-            </Fl>
-
-            {/* Kalem seçimi */}
-            <div style={{ fontSize:10, color:"#c9a84c", fontWeight:700, marginTop:10, marginBottom:6, display:"flex", justifyContent:"space-between" }}>
-              <span>İade Edilecek Kalemler ({iadeModal.secilenKalemler.size} seçili)</span>
-              <button onClick={()=>{
-                const tumIds = new Set((iadeModal.siparis.kalemler||[]).map(k=>k.id));
-                setIadeModal(p=>({...p, secilenKalemler: p.secilenKalemler.size === tumIds.size ? new Set() : tumIds}));
-              }} style={{ background:"none", border:"1px solid rgba(201,168,76,0.2)", borderRadius:5, padding:"2px 8px", color:GOLD, fontSize:8, cursor:"pointer" }}>
-                {iadeModal.secilenKalemler.size === (iadeModal.siparis.kalemler||[]).length ? "Tümünü Kaldır" : "Tümünü Seç"}
-              </button>
+          <Fl label={"İade Adedi (max "+iadeModal.maxAdet+")"}>
+            <div style={{ display:"flex", gap:4, flexWrap:"wrap" }}>
+              {Array.from({length:iadeModal.maxAdet+1},(_,i)=>i).map(n => (
+                <button key={n} onClick={()=>setIadeModal(p=>({...p,mevcAdet:n}))}
+                  style={{ background:iadeModal.mevcAdet===n?"rgba(167,139,250,0.25)":"rgba(167,139,250,0.06)", border:"1px solid", borderColor:iadeModal.mevcAdet===n?"rgba(167,139,250,0.5)":"rgba(167,139,250,0.15)", borderRadius:6, padding:"5px 10px", color:iadeModal.mevcAdet===n?"#a78bfa":"#998a6e", fontSize:12, fontWeight:iadeModal.mevcAdet===n?800:400, cursor:"pointer", minWidth:36 }}>
+                  {n}
+                </button>
+              ))}
             </div>
-            <div style={{ maxHeight:280, overflowY:"auto", border:"1px solid rgba(255,255,255,0.06)", borderRadius:8, marginBottom:10 }}>
-              {(iadeModal.siparis.kalemler||[]).map(k => {
-                const secili = iadeModal.secilenKalemler.has(k.id);
-                return (
-                  <div key={k.id} onClick={()=>{
-                    setIadeModal(p=>{
-                      const yeni = new Set(p.secilenKalemler);
-                      if (yeni.has(k.id)) yeni.delete(k.id);
-                      else yeni.add(k.id);
-                      return {...p, secilenKalemler: yeni};
-                    });
-                  }} style={{
-                    display:"flex", alignItems:"center", gap:10, padding:"8px 10px",
-                    background:secili?"rgba(167,139,250,0.1)":"transparent",
-                    borderBottom:"1px solid rgba(255,255,255,0.04)", cursor:"pointer"
-                  }}>
-                    <input type="checkbox" checked={secili} onChange={()=>{}} style={{ pointerEvents:"none" }}/>
-                    {k.foto && <img src={k.foto} style={{ width:48, height:48, objectFit:"cover", borderRadius:6 }}/>}
-                    <div style={{ flex:1 }}>
-                      <div style={{ fontSize:11, fontWeight:700, color:"#e8dcc8" }}>
-                        <span style={{ color:GOLD, marginRight:5 }}>{k.kod||""}</span>{k.ad}
-                      </div>
-                      <div style={{ fontSize:9, color:"#7a6f5a" }}>
-                        {k.gram}gr · {k.secilenAyar||k.refAyar} · {k.adet||1} adet {k.renk && "· "+k.renk}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+          </Fl>
 
-            {/* Neden */}
-            <Fl label="İade Nedeni (opsiyonel)">
-              <textarea value={iadeModal.neden} onChange={e=>setIadeModal(p=>({...p, neden:e.target.value}))}
-                placeholder="Örnek: Müşteri taşı beğenmedi, boyut uymadı, vb."
-                style={{ ...IS, padding:"8px 10px", fontSize:11, minHeight:60, resize:"vertical" }}/>
-            </Fl>
+          <Fl label="İade Nedeni (opsiyonel)">
+            <textarea value={iadeModal.mevcNeden||""} onChange={e=>setIadeModal(p=>({...p, mevcNeden:e.target.value}))}
+              placeholder="Örnek: Müşteri taşı beğenmedi, boyut uymadı, vb."
+              style={{ ...IS, padding:"7px 10px", fontSize:11, minHeight:50, resize:"vertical" }}/>
+          </Fl>
 
-            <div style={{ display:"flex", gap:8, marginTop:14 }}>
-              <button onClick={()=>setIadeModal(null)} style={{ flex:1, padding:"10px", background:"rgba(255,255,255,0.05)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:8, color:"#998a6e", fontSize:11, fontWeight:700, cursor:"pointer" }}>İptal</button>
-              <button onClick={()=>{
-                if (iadeModal.secilenKalemler.size === 0) { alert("En az bir kalem seçin!"); return; }
-                if (!window.confirm(iadeModal.secilenKalemler.size + " kalem iade edilecek. Onaylıyor musunuz?")) return;
-                iadeYap(iadeModal.siparis, iadeModal.secilenKalemler, iadeModal.neden, iadeModal.iadeTuru);
-                setIadeModal(null);
-              }} style={{ flex:2, padding:"10px", background:"linear-gradient(135deg,#a78bfa,#8b6fe0)", border:"none", borderRadius:8, color:"#fff", fontSize:11, fontWeight:800, cursor:"pointer" }}>
-                ↩ İadeyi Onayla ({iadeModal.secilenKalemler.size} kalem)
-              </button>
+          <div style={{ display:"flex", gap:8, marginTop:10 }}>
+            <button onClick={()=>setIadeModal(null)} style={{ flex:1, padding:"9px", background:"rgba(255,255,255,0.05)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:8, color:"#998a6e", fontSize:11, fontWeight:700, cursor:"pointer" }}>İptal</button>
+            <button onClick={()=>{
+              const sip = siparisler.find(x=>x.id===iadeModal.sipId);
+              if (!sip) return;
+              const yeniKalemIade = { ...(sip.kalemIade||{}) };
+              const yeniKalemIadeNeden = { ...(sip.kalemIadeNeden||{}) };
+              const yeniKalemIadeTuru = { ...(sip.kalemIadeTuru||{}) };
+              if (iadeModal.mevcAdet > 0) {
+                yeniKalemIade[iadeModal.kalemId] = iadeModal.mevcAdet;
+                yeniKalemIadeNeden[iadeModal.kalemId] = iadeModal.mevcNeden || "";
+                yeniKalemIadeTuru[iadeModal.kalemId] = iadeModal.iadeTuru || "para";
+              } else {
+                delete yeniKalemIade[iadeModal.kalemId];
+                delete yeniKalemIadeNeden[iadeModal.kalemId];
+                delete yeniKalemIadeTuru[iadeModal.kalemId];
+              }
+              svS(siparisler.map(x => x.id===iadeModal.sipId ? {...x, kalemIade:yeniKalemIade, kalemIadeNeden:yeniKalemIadeNeden, kalemIadeTuru:yeniKalemIadeTuru} : x));
+              setIadeModal(null);
+            }} style={{ flex:2, padding:"9px", background:"linear-gradient(135deg,#a78bfa,#8b6fe0)", border:"none", borderRadius:8, color:"#fff", fontSize:11, fontWeight:800, cursor:"pointer" }}>
+              ↩ Kaydet
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {/* TAMİR MODAL */}
+      {tamirModal && (
+        <Modal open={!!tamirModal} onClose={()=>setTamirModal(null)} title="Tamir Kaydı">
+          <div style={{ fontSize:11, color:"#5b9bd5", fontWeight:700, marginBottom:10, padding:"6px 10px", background:"rgba(91,155,213,0.08)", borderRadius:6 }}>
+            {tamirModal.kalemKod && <span style={{ color:GOLD, marginRight:6 }}>{tamirModal.kalemKod}</span>}{tamirModal.kalemAd}
+          </div>
+
+          <Fl label={"Tamir Adedi (max "+tamirModal.maxAdet+")"}>
+            <div style={{ display:"flex", gap:4, flexWrap:"wrap" }}>
+              {Array.from({length:tamirModal.maxAdet+1},(_,i)=>i).map(n => (
+                <button key={n} onClick={()=>setTamirModal(p=>({...p,mevcAdet:n}))}
+                  style={{ background:tamirModal.mevcAdet===n?"rgba(91,155,213,0.25)":"rgba(91,155,213,0.06)", border:"1px solid", borderColor:tamirModal.mevcAdet===n?"rgba(91,155,213,0.5)":"rgba(91,155,213,0.15)", borderRadius:6, padding:"5px 10px", color:tamirModal.mevcAdet===n?"#5b9bd5":"#998a6e", fontSize:12, fontWeight:tamirModal.mevcAdet===n?800:400, cursor:"pointer", minWidth:36 }}>
+                  {n}
+                </button>
+              ))}
             </div>
-          </>
-        )}
-      </Modal>
+          </Fl>
+
+          <Fl label="Tamir Açıklaması (opsiyonel)">
+            <textarea value={tamirModal.mevcNeden||""} onChange={e=>setTamirModal(p=>({...p, mevcNeden:e.target.value}))}
+              placeholder="Örnek: Taş düştü, kopça gevşek, boyut değişikliği vb."
+              style={{ ...IS, padding:"7px 10px", fontSize:11, minHeight:50, resize:"vertical" }}/>
+          </Fl>
+
+          <div style={{ display:"flex", gap:8, marginTop:10 }}>
+            <button onClick={()=>setTamirModal(null)} style={{ flex:1, padding:"9px", background:"rgba(255,255,255,0.05)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:8, color:"#998a6e", fontSize:11, fontWeight:700, cursor:"pointer" }}>İptal</button>
+            <button onClick={()=>{
+              const sip = siparisler.find(x=>x.id===tamirModal.sipId);
+              if (!sip) return;
+              const yeniKalemTamir = { ...(sip.kalemTamir||{}) };
+              const yeniKalemTamirNeden = { ...(sip.kalemTamirNeden||{}) };
+              if (tamirModal.mevcAdet > 0) {
+                yeniKalemTamir[tamirModal.kalemId] = tamirModal.mevcAdet;
+                yeniKalemTamirNeden[tamirModal.kalemId] = tamirModal.mevcNeden || "";
+              } else {
+                delete yeniKalemTamir[tamirModal.kalemId];
+                delete yeniKalemTamirNeden[tamirModal.kalemId];
+              }
+              svS(siparisler.map(x => x.id===tamirModal.sipId ? {...x, kalemTamir:yeniKalemTamir, kalemTamirNeden:yeniKalemTamirNeden} : x));
+              setTamirModal(null);
+            }} style={{ flex:2, padding:"9px", background:"linear-gradient(135deg,#5b9bd5,#4a89c4)", border:"none", borderRadius:8, color:"#fff", fontSize:11, fontWeight:800, cursor:"pointer" }}>
+              🔧 Kaydet
+            </button>
+          </div>
+        </Modal>
+      )}
 
       {/* MANUEL TARİH DÜZENLEME MODAL */}
       <Modal open={!!manuelTarihModal} onClose={()=>setManuelTarihModal(null)} title="Aşama Tarihini Düzenle">
