@@ -1236,6 +1236,17 @@ function Atolye() {
   const [musteriler, setMusteriler] = useState({}); // { "Ahmet": "MUS-001", ... }
   const [loaded,    setLoaded]    = useState(false);
 
+  // KASA
+  const [kasa, setKasa] = useState({
+    musteriOdemeler: {},
+    dokumcuIslemler: [],
+    hamAltin: [],
+    hazirUrun: [],
+    serbest: [],
+  });
+  const [kasaSayfa, setKasaSayfa] = useState("ozet");
+  const [kasaModal, setKasaModal] = useState(null);
+
   // Kur: kg USD fiyatı
   const [altinKg, setAltinKg]   = useState("");
   const [mc,      setMc]         = useState("0.030");
@@ -1387,10 +1398,13 @@ function Atolye() {
     if (ay.varsMc) setAyarVarsMc(ay.varsMc);
     if (ay.varsIscilik) setAyarVarsIscilik(ay.varsIscilik);
     if (ay.varsIscilikBirim) setAyarVarsIscilikBirim(ay.varsIscilikBirim);
+    const ks = await ld("v7kasa", null);
+    if (ks) setKasa(prev => ({ ...prev, ...ks }));
     setLoaded(true);
   })(); }, []);
 
   const svK = useCallback(async d => { setKollar(d);    await sv("v7k", d); }, []);
+  const svKasa = useCallback(async d => { setKasa(d); await sv("v7kasa", d); }, []);
   // Fotoğraf sıkıştırma — kaliteyi koruyarak boyutu küçültür
   const fotoSikistir = (base64, maxW=800, quality=0.70) => new Promise(resolve => {
     if (!base64 || !base64.startsWith('data:image')) { resolve(base64); return; }
@@ -1810,7 +1824,7 @@ function Atolye() {
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:8, marginBottom:10 }}>
             <h1 style={{ margin:0, fontSize:"clamp(13px,2vw,18px)", fontWeight:700, color:GOLD }}>Atolye Koleksiyon Sistemi</h1>
             <div style={{ display:"flex", gap:3, flexWrap:"wrap" }}>
-              {["koleksiyonlar","modeller","konfirmasyon","siparisler","iadeler","musteriler","analiz","ayarlar"].map(n => {
+              {["koleksiyonlar","modeller","konfirmasyon","siparisler","iadeler","musteriler","kasa","analiz","ayarlar"].map(n => {
                 let badgeSayi = 0;
                 if (n === "iadeler") {
                   siparisler.forEach(s => {
@@ -2858,6 +2872,508 @@ function Atolye() {
             </div>
           </div>
         )}
+
+        {/* KASA */}
+        {sayfa==="kasa" && (() => {
+          // ── Canlı hesaplamalar ──
+          const altinKgUSD = parseFloat(altinKg) || 0;
+          const hasGramUSD = altinKgUSD / 1000;
+
+          // Üretimdeki altın (aktif siparişler — tamam/teslim/hurda dışı)
+          let uretimAltin = 0, uretimTas = 0;
+          siparisler.forEach(s => {
+            (s.kalemler||[]).forEach(k => {
+              const dur = (s.kalemDurumlar||{})[k.id] || k.durum || "baslanmadi";
+              if (["tamam","teslim","hurda"].includes(dur)) return;
+              const hc = hesapla(k, k.secilenAyar||k.refAyar, s.altinKgUSD, s.mc);
+              const hurda = ((s.kalemHurda)||{})[k.id]||0;
+              const iade  = ((s.kalemIade) ||{})[k.id]||0;
+              const tamir = ((s.kalemTamir)||{})[k.id]||0;
+              const net   = Math.max(0,(k.adet||1)-hurda-iade-tamir);
+              uretimAltin += hc.mamulGram * net;
+              uretimTas   += (hc.tasGram||0) * net;
+            });
+          });
+
+          // Satılmamış mamul (tamam ama teslim edilmedi)
+          let satilmamisAltin = 0;
+          siparisler.forEach(s => {
+            (s.kalemler||[]).forEach(k => {
+              const dur = (s.kalemDurumlar||{})[k.id] || k.durum || "baslanmadi";
+              if (dur !== "tamam") return;
+              const hc = hesapla(k, k.secilenAyar||k.refAyar, s.altinKgUSD, s.mc);
+              const hurda = ((s.kalemHurda)||{})[k.id]||0;
+              const iade  = ((s.kalemIade) ||{})[k.id]||0;
+              const tamir = ((s.kalemTamir)||{})[k.id]||0;
+              const net   = Math.max(0,(k.adet||1)-hurda-iade-tamir);
+              satilmamisAltin += hc.mamulGram * net;
+            });
+          });
+
+          // Hurda altın
+          let hurdaAltin = 0;
+          siparisler.forEach(s => {
+            (s.kalemler||[]).forEach(k => {
+              const hc = hesapla(k, k.secilenAyar||k.refAyar, s.altinKgUSD, s.mc);
+              const hurda = ((s.kalemHurda)||{})[k.id]||0;
+              hurdaAltin += hc.mamulGram * hurda;
+            });
+          });
+
+          // Ham altın stoku (manuel girişlerden)
+          const hamAltinGram = (kasa.hamAltin||[]).reduce((s,x) => x.tip==="giris" ? s+x.has : s-x.has, 0);
+
+          // Hazır ürün değeri
+          const hazirUrunGram = (kasa.hazirUrun||[]).reduce((s,x) => {
+            const m = modeller.find(mo=>mo.id===x.modelId);
+            if (!m) return s;
+            const hc = hesapla(m, m.secilenAyar||m.refAyar, altinKgUSD, parseFloat(mc)||0.030);
+            return s + hc.mamulGram * (x.adet||1);
+          }, 0);
+
+          // Serbest malzeme
+          const serbestGram = (kasa.serbest||[]).reduce((s,x) => s + ((x.gram||0)*(x.adet||1)), 0);
+
+          // Toplam öz sermaye
+          const toplamHas = hamAltinGram + uretimAltin + satilmamisAltin + hurdaAltin + hazirUrunGram + serbestGram;
+          const toplamUSD = toplamHas * hasGramUSD;
+
+          // Müşteri bakiyeleri
+          const musBakiye = {};
+          siparisler.forEach(s => {
+            const mus = s.musteri || "İsimsiz";
+            if (!musBakiye[mus]) musBakiye[mus] = { borc:0, odenen:0, siparisler:[] };
+            let sipKar = 0;
+            (s.kalemler||[]).forEach(k => {
+              const hc = hesapla(k, k.secilenAyar||k.refAyar, s.altinKgUSD, s.mc);
+              const hurda = ((s.kalemHurda)||{})[k.id]||0;
+              const iade  = ((s.kalemIade) ||{})[k.id]||0;
+              const tamir = ((s.kalemTamir)||{})[k.id]||0;
+              const net   = Math.max(0,(k.adet||1)-hurda-iade-tamir);
+              sipKar += hc.karHas * net;
+            });
+            musBakiye[mus].borc += sipKar;
+            musBakiye[mus].siparisler.push({ id:s.id, tarih:s.tarih, kar:sipKar });
+            const odemeler = (kasa.musteriOdemeler||{})[mus] || [];
+            musBakiye[mus].odenen = odemeler.reduce((s,x)=>s+x.has,0);
+          });
+
+          // Dökümcü bakiyesi
+          const dokumGiden  = (kasa.dokumcuIslemler||[]).filter(x=>x.tip==="gonder").reduce((s,x)=>s+x.has,0);
+          const dokumOdenen = (kasa.dokumcuIslemler||[]).filter(x=>x.tip==="ode").reduce((s,x)=>s+x.has,0);
+          const dokumBorc   = dokumGiden - dokumOdenen;
+
+          const KCARD = { background:"rgba(0,0,0,0.2)", border:"1px solid rgba(255,255,255,0.06)", borderRadius:12, padding:"12px 16px", marginBottom:12 };
+          const KSEC  = { fontSize:10, fontWeight:700, color:GOLD, marginBottom:10, letterSpacing:".04em" };
+          const KIN   = { ...IS, padding:"5px 8px", fontSize:10, marginBottom:6 };
+
+          return (
+            <div style={{ animation:"fadein .3s" }}>
+              {/* Başlık + alt sekmeler */}
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12, flexWrap:"wrap", gap:6 }}>
+                <h2 style={{ margin:0, fontSize:14, fontWeight:700, color:T.text }}>💰 Kasa & Stok</h2>
+              </div>
+              <div style={{ display:"flex", gap:4, marginBottom:14, borderBottom:"1px solid rgba(201,168,76,0.12)", paddingBottom:8 }}>
+                {[{id:"ozet",l:"Özet"},{id:"musteri",l:"Müşteri Bakiyeleri"},{id:"dokumcu",l:"Dökümcü"},{id:"stok",l:"Stok"}].map(t => (
+                  <button key={t.id} onClick={()=>setKasaSayfa(t.id)} style={{ background:kasaSayfa===t.id?"rgba(201,168,76,0.15)":"transparent", border:"1px solid", borderColor:kasaSayfa===t.id?"rgba(201,168,76,0.4)":"transparent", borderRadius:7, padding:"5px 12px", color:kasaSayfa===t.id?GOLD:"#7a6f5a", fontSize:10, fontWeight:kasaSayfa===t.id?700:400, cursor:"pointer" }}>{t.l}</button>
+                ))}
+              </div>
+
+              {/* ══ ÖZET ══ */}
+              {kasaSayfa==="ozet" && (
+                <div>
+                  {/* Öz Sermaye */}
+                  <div style={KCARD}>
+                    <div style={KSEC}>🏦 ÖZ SERMAYE</div>
+                    <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:8, marginBottom:12 }}>
+                      {[
+                        { l:"Ham Altın", v:hamAltinGram, c:GOLD },
+                        { l:"Üretimdeki Altın", v:uretimAltin, c:"#5b9bd5" },
+                        { l:"Üretimdeki Taş", v:uretimTas, c:"#a78bfa" },
+                        { l:"Satılmamış Mamul", v:satilmamisAltin, c:"#6abf69" },
+                        { l:"Hurda Altın", v:hurdaAltin, c:"#e8833a" },
+                        { l:"Hazır Ürün + Serbest", v:hazirUrunGram+serbestGram, c:"#e8dcc8" },
+                      ].map((x,i) => (
+                        <div key={i} style={{ background:"rgba(0,0,0,0.15)", borderRadius:8, padding:"8px 10px" }}>
+                          <div style={{ fontSize:7, color:"#665d4a", textTransform:"uppercase", marginBottom:3 }}>{x.l}</div>
+                          <div style={{ fontSize:13, fontWeight:800, color:x.c }}>{fN(x.v,3)} <span style={{ fontSize:8 }}>has</span></div>
+                          {hasGramUSD>0 && <div style={{ fontSize:8, color:"#665d4a" }}>≈ {fUSD(x.v*hasGramUSD)}</div>}
+                        </div>
+                      ))}
+                    </div>
+                    <div style={{ background:"rgba(201,168,76,0.08)", border:"1px solid rgba(201,168,76,0.2)", borderRadius:8, padding:"10px 14px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                      <span style={{ fontSize:10, fontWeight:700, color:GOLD }}>TOPLAM ÖZ SERMAYE</span>
+                      <div style={{ textAlign:"right" }}>
+                        <div style={{ fontSize:16, fontWeight:800, color:GOLD }}>{fN(toplamHas,3)} has</div>
+                        {hasGramUSD>0 && <div style={{ fontSize:10, color:"#6abf69", fontWeight:700 }}>{fUSD(toplamUSD)}</div>}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Müşteri + Dökümcü özeti */}
+                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+                    <div style={KCARD}>
+                      <div style={KSEC}>👤 MÜŞTERİ ALACAKLAR</div>
+                      {Object.entries(musBakiye).filter(([,d])=>d.borc-d.odenen>0.001).slice(0,5).map(([mus,d]) => (
+                        <div key={mus} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"5px 0", borderBottom:"1px solid rgba(255,255,255,0.04)" }}>
+                          <span style={{ fontSize:9, color:"#e8dcc8", fontWeight:600 }}>{mus}</span>
+                          <span style={{ fontSize:10, fontWeight:800, color:"#6abf69" }}>{fN(d.borc-d.odenen,3)} has</span>
+                        </div>
+                      ))}
+                      {Object.values(musBakiye).every(d=>d.borc-d.odenen<=0.001) && <div style={{ fontSize:9, color:"#665d4a" }}>Açık bakiye yok</div>}
+                      <div style={{ marginTop:8, paddingTop:8, borderTop:"1px solid rgba(201,168,76,0.1)", display:"flex", justifyContent:"space-between" }}>
+                        <span style={{ fontSize:8, color:"#8a7d64" }}>TOPLAM ALACAK</span>
+                        <span style={{ fontSize:11, fontWeight:800, color:"#6abf69" }}>{fN(Object.values(musBakiye).reduce((s,d)=>s+Math.max(0,d.borc-d.odenen),0),3)} has</span>
+                      </div>
+                    </div>
+                    <div style={KCARD}>
+                      <div style={KSEC}>🏭 DÖKÜMCÜ BORCU</div>
+                      <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+                        {[
+                          { l:"Toplam Gönderilen", v:dokumGiden, c:"#e8833a" },
+                          { l:"Toplam Ödenen",     v:dokumOdenen, c:"#6abf69" },
+                          { l:"Kalan Borç",        v:dokumBorc, c:dokumBorc>0?"#e85a4f":"#6abf69" },
+                        ].map((x,i) => (
+                          <div key={i} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"5px 0", borderBottom:i<2?"1px solid rgba(255,255,255,0.04)":"2px solid rgba(201,168,76,0.15)" }}>
+                            <span style={{ fontSize:9, color:"#998a6e" }}>{x.l}</span>
+                            <span style={{ fontSize:11, fontWeight:800, color:x.c }}>{fN(x.v,3)} has</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ══ MÜŞTERİ BAKİYELERİ ══ */}
+              {kasaSayfa==="musteri" && (
+                <div>
+                  <div style={{ display:"flex", justifyContent:"flex-end", marginBottom:10 }}>
+                    <button onClick={()=>setKasaModal({tip:"musOde"})} style={{ ...BG, padding:"6px 14px", fontSize:10 }}>+ Ödeme Al</button>
+                  </div>
+                  {Object.entries(musBakiye).sort((a,b)=>(b[1].borc-b[1].odenen)-(a[1].borc-a[1].odened)).map(([mus,d]) => {
+                    const bakiye = d.borc - d.odenen;
+                    const odemeler = (kasa.musteriOdemeler||{})[mus] || [];
+                    return (
+                      <div key={mus} style={{ ...KCARD }}>
+                        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
+                          <div>
+                            <div style={{ fontSize:12, fontWeight:800, color:"#e8dcc8" }}>{mus}</div>
+                            <div style={{ fontSize:8, color:"#665d4a" }}>{d.siparisler.length} sipariş</div>
+                          </div>
+                          <div style={{ textAlign:"right" }}>
+                            <div style={{ fontSize:8, color:"#665d4a" }}>Toplam Borç</div>
+                            <div style={{ fontSize:13, fontWeight:800, color:GOLD }}>{fN(d.borc,3)} has</div>
+                          </div>
+                        </div>
+                        <div style={{ display:"flex", gap:8, marginBottom:odemeler.length>0?8:0 }}>
+                          <div style={{ flex:1, background:"rgba(106,191,105,0.06)", borderRadius:7, padding:"6px 10px", textAlign:"center" }}>
+                            <div style={{ fontSize:7, color:"#665d4a", marginBottom:2 }}>ÖDENEN</div>
+                            <div style={{ fontSize:12, fontWeight:800, color:"#6abf69" }}>{fN(d.odenen,3)} has</div>
+                          </div>
+                          <div style={{ flex:1, background:bakiye>0?"rgba(232,90,79,0.06)":"rgba(106,191,105,0.06)", borderRadius:7, padding:"6px 10px", textAlign:"center" }}>
+                            <div style={{ fontSize:7, color:"#665d4a", marginBottom:2 }}>BAKİYE</div>
+                            <div style={{ fontSize:12, fontWeight:800, color:bakiye>0?"#e85a4f":"#6abf69" }}>{fN(Math.abs(bakiye),3)} has {bakiye>0?"borç":"alacak"}</div>
+                          </div>
+                        </div>
+                        {odemeler.length>0 && (
+                          <div style={{ borderTop:"1px solid rgba(255,255,255,0.05)", paddingTop:8 }}>
+                            <div style={{ fontSize:7, color:"#665d4a", fontWeight:700, marginBottom:4 }}>ÖDEME GEÇMİŞİ</div>
+                            {[...odemeler].sort((a,b)=>b.tarih-a.tarih).map(o => (
+                              <div key={o.id} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"3px 0", borderBottom:"1px solid rgba(255,255,255,0.03)" }}>
+                                <div>
+                                  <span style={{ fontSize:8, color:"#998a6e" }}>{new Date(o.tarih).toLocaleDateString("tr-TR")}</span>
+                                  {o.aciklama && <span style={{ fontSize:8, color:"#665d4a", marginLeft:6 }}>{o.aciklama}</span>}
+                                </div>
+                                <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                                  <span style={{ fontSize:9, fontWeight:800, color:"#6abf69" }}>{fN(o.has,3)} has</span>
+                                  <button onClick={()=>{
+                                    const yeni = { ...kasa };
+                                    yeni.musteriOdemeler = { ...yeni.musteriOdemeler };
+                                    yeni.musteriOdemeler[mus] = (yeni.musteriOdemeler[mus]||[]).filter(x=>x.id!==o.id);
+                                    svKasa(yeni);
+                                  }} style={{ ...RD, fontSize:8, padding:"2px 5px" }}>Sil</button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        <button onClick={()=>setKasaModal({tip:"musOde",mus})} style={{ ...GH, fontSize:9, padding:"4px 10px", marginTop:8 }}>+ Ödeme Al</button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* ══ DÖKÜMCÜ ══ */}
+              {kasaSayfa==="dokumcu" && (
+                <div>
+                  {/* Özet */}
+                  <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:8, marginBottom:12 }}>
+                    {[
+                      { l:"Toplam Gönderilen", v:dokumGiden, c:"#e8833a" },
+                      { l:"Toplam Ödenen",     v:dokumOdenen, c:"#6abf69" },
+                      { l:"Kalan Borç",        v:dokumBorc, c:dokumBorc>0?"#e85a4f":"#6abf69" },
+                    ].map((x,i) => (
+                      <div key={i} style={{ background:"rgba(0,0,0,0.2)", borderRadius:10, padding:"10px 14px", textAlign:"center" }}>
+                        <div style={{ fontSize:7, color:"#665d4a", textTransform:"uppercase", marginBottom:4 }}>{x.l}</div>
+                        <div style={{ fontSize:14, fontWeight:800, color:x.c }}>{fN(x.v,3)} has</div>
+                        {hasGramUSD>0 && <div style={{ fontSize:8, color:"#665d4a" }}>≈ {fUSD(x.v*hasGramUSD)}</div>}
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{ display:"flex", gap:6, marginBottom:12 }}>
+                    <button onClick={()=>setKasaModal({tip:"dokumGonder"})} style={{ ...BG, padding:"6px 14px", fontSize:10 }}>+ Döküm Gönder</button>
+                    <button onClick={()=>setKasaModal({tip:"dokumOde"})} style={{ ...GH, padding:"6px 14px", fontSize:10 }}>+ Ödeme Yap</button>
+                  </div>
+                  {/* İşlem listesi */}
+                  <div style={KCARD}>
+                    <div style={KSEC}>İŞLEM GEÇMİŞİ</div>
+                    {[...(kasa.dokumcuIslemler||[])].sort((a,b)=>b.tarih-a.tarih).map(x => (
+                      <div key={x.id} style={{ display:"flex", alignItems:"center", gap:8, padding:"6px 0", borderBottom:"1px solid rgba(255,255,255,0.04)" }}>
+                        <div style={{ width:8, height:8, borderRadius:"50%", background:x.tip==="gonder"?"#e8833a":"#6abf69", flexShrink:0 }}/>
+                        <div style={{ flex:1 }}>
+                          <span style={{ fontSize:9, fontWeight:700, color:x.tip==="gonder"?"#e8833a":"#6abf69" }}>{x.tip==="gonder"?"Döküm Gönderildi":"Ödeme Yapıldı"}</span>
+                          {x.aciklama && <span style={{ fontSize:8, color:"#665d4a", marginLeft:6 }}>{x.aciklama}</span>}
+                          <div style={{ fontSize:7, color:"#665d4a" }}>{new Date(x.tarih).toLocaleDateString("tr-TR")}</div>
+                        </div>
+                        <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                          <span style={{ fontSize:10, fontWeight:800, color:x.tip==="gonder"?"#e8833a":"#6abf69" }}>{x.tip==="gonder"?"-":"+"}{fN(x.has,3)} has</span>
+                          <button onClick={()=>{
+                            const yeni = { ...kasa, dokumcuIslemler:(kasa.dokumcuIslemler||[]).filter(d=>d.id!==x.id) };
+                            svKasa(yeni);
+                          }} style={{ ...RD, fontSize:8, padding:"2px 5px" }}>Sil</button>
+                        </div>
+                      </div>
+                    ))}
+                    {!(kasa.dokumcuIslemler||[]).length && <div style={{ fontSize:9, color:"#665d4a", textAlign:"center", padding:"20px" }}>Henüz işlem yok</div>}
+                  </div>
+                </div>
+              )}
+
+              {/* ══ STOK ══ */}
+              {kasaSayfa==="stok" && (
+                <div>
+                  <div style={{ display:"flex", gap:6, marginBottom:12, flexWrap:"wrap" }}>
+                    <button onClick={()=>setKasaModal({tip:"hamAltin"})} style={{ ...BG, padding:"6px 14px", fontSize:10 }}>+ Ham Altın Girişi</button>
+                    <button onClick={()=>setKasaModal({tip:"hazirUrun"})} style={{ ...GH, padding:"6px 14px", fontSize:10 }}>+ Hazır Ürün</button>
+                    <button onClick={()=>setKasaModal({tip:"serbest"})} style={{ background:"rgba(167,139,250,0.1)", border:"1px solid rgba(167,139,250,0.25)", borderRadius:9, padding:"6px 14px", color:"#a78bfa", fontSize:10, fontWeight:700, cursor:"pointer" }}>+ Serbest Malzeme</button>
+                  </div>
+
+                  {/* Ham Altın */}
+                  <div style={KCARD}>
+                    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
+                      <div style={KSEC}>🪙 HAM ALTIN STOĞU</div>
+                      <div style={{ fontSize:13, fontWeight:800, color:GOLD }}>{fN(hamAltinGram,3)} has</div>
+                    </div>
+                    {[...(kasa.hamAltin||[])].sort((a,b)=>b.tarih-a.tarih).slice(0,8).map(x => (
+                      <div key={x.id} style={{ display:"flex", alignItems:"center", gap:8, padding:"5px 0", borderBottom:"1px solid rgba(255,255,255,0.04)" }}>
+                        <div style={{ width:7, height:7, borderRadius:"50%", background:x.tip==="giris"?"#6abf69":"#e85a4f", flexShrink:0 }}/>
+                        <div style={{ flex:1 }}>
+                          <span style={{ fontSize:9, color:"#e8dcc8" }}>{x.aciklama||"—"}</span>
+                          <div style={{ fontSize:7, color:"#665d4a" }}>{new Date(x.tarih).toLocaleDateString("tr-TR")}</div>
+                        </div>
+                        <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                          <span style={{ fontSize:9, fontWeight:800, color:x.tip==="giris"?"#6abf69":"#e85a4f" }}>{x.tip==="giris"?"+":"-"}{fN(x.has,3)} has</span>
+                          <button onClick={()=>{ const yeni={...kasa,hamAltin:(kasa.hamAltin||[]).filter(d=>d.id!==x.id)}; svKasa(yeni); }} style={{ ...RD, fontSize:8, padding:"2px 5px" }}>Sil</button>
+                        </div>
+                      </div>
+                    ))}
+                    {!(kasa.hamAltin||[]).length && <div style={{ fontSize:9, color:"#665d4a" }}>Henüz giriş yok</div>}
+                  </div>
+
+                  {/* Hazır Ürün */}
+                  {(kasa.hazirUrun||[]).length > 0 && (
+                    <div style={KCARD}>
+                      <div style={KSEC}>💍 HAZIR ÜRÜN STOĞU</div>
+                      {(kasa.hazirUrun||[]).map(x => {
+                        const m = modeller.find(mo=>mo.id===x.modelId);
+                        const hc = m ? hesapla(m, m.secilenAyar||m.refAyar, altinKgUSD, parseFloat(mc)||0.030) : null;
+                        return (
+                          <div key={x.id} style={{ display:"flex", alignItems:"center", gap:8, padding:"6px 0", borderBottom:"1px solid rgba(255,255,255,0.04)" }}>
+                            {m?.foto && <img src={m.foto} style={{ width:32, height:32, objectFit:"cover", borderRadius:5 }} alt=""/>}
+                            <div style={{ flex:1 }}>
+                              <div style={{ fontSize:9, fontWeight:700, color:"#e8dcc8" }}>{x.ad}</div>
+                              {x.aciklama && <div style={{ fontSize:7, color:"#665d4a" }}>{x.aciklama}</div>}
+                            </div>
+                            <div style={{ textAlign:"right" }}>
+                              <div style={{ fontSize:10, fontWeight:800, color:GOLD }}>{x.adet} adet</div>
+                              {hc && <div style={{ fontSize:8, color:"#665d4a" }}>{fN(hc.mamulGram*x.adet,2)} has</div>}
+                            </div>
+                            <button onClick={()=>{ const yeni={...kasa,hazirUrun:(kasa.hazirUrun||[]).filter(d=>d.id!==x.id)}; svKasa(yeni); }} style={{ ...RD, fontSize:8, padding:"2px 5px" }}>Sil</button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* Serbest Malzeme */}
+                  {(kasa.serbest||[]).length > 0 && (
+                    <div style={KCARD}>
+                      <div style={KSEC}>📦 SERBEST MALZEME</div>
+                      {(kasa.serbest||[]).map(x => (
+                        <div key={x.id} style={{ display:"flex", alignItems:"center", gap:8, padding:"5px 0", borderBottom:"1px solid rgba(255,255,255,0.04)" }}>
+                          <div style={{ flex:1 }}>
+                            <div style={{ fontSize:9, fontWeight:700, color:"#e8dcc8" }}>{x.ad}</div>
+                            {x.aciklama && <div style={{ fontSize:7, color:"#665d4a" }}>{x.aciklama}</div>}
+                          </div>
+                          <div style={{ textAlign:"right", marginRight:8 }}>
+                            <div style={{ fontSize:9, color:GOLD }}>{x.adet||1} adet · {fN((x.gram||0)*(x.adet||1),3)} gr</div>
+                          </div>
+                          <button onClick={()=>{ const yeni={...kasa,serbest:(kasa.serbest||[]).filter(d=>d.id!==x.id)}; svKasa(yeni); }} style={{ ...RD, fontSize:8, padding:"2px 5px" }}>Sil</button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* ══ MODALLAR ══ */}
+              {kasaModal && (() => {
+                const kapat = () => setKasaModal(null);
+                const tip = kasaModal.tip;
+                let baslik = "";
+                if (tip==="musOde")       baslik = "Müşteri Ödemesi Al";
+                if (tip==="dokumGonder")  baslik = "Döküm Gönder";
+                if (tip==="dokumOde")     baslik = "Dökümcüye Ödeme Yap";
+                if (tip==="hamAltin")     baslik = "Ham Altın Girişi";
+                if (tip==="hazirUrun")    baslik = "Hazır Ürün Ekle";
+                if (tip==="serbest")      baslik = "Serbest Malzeme Ekle";
+
+                return (
+                  <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.7)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:9999 }} onClick={kapat}>
+                    <div style={{ background:T.bg2||"#1a1710", border:"1px solid rgba(201,168,76,0.2)", borderRadius:16, padding:"20px 24px", width:340, maxWidth:"95vw" }} onClick={e=>e.stopPropagation()}>
+                      <div style={{ fontSize:13, fontWeight:700, color:GOLD, marginBottom:14 }}>{baslik}</div>
+
+                      {/* Müşteri ödeme */}
+                      {tip==="musOde" && (() => {
+                        const [selMus, setSelMus] = React.useState(kasaModal.mus||"");
+                        const [has, setHas] = React.useState("");
+                        const [ac, setAc] = React.useState("");
+                        const [tarih, setTarih] = React.useState(new Date().toISOString().slice(0,10));
+                        const kaydet = () => {
+                          if (!selMus || !has) return;
+                          const yeni = { ...kasa };
+                          yeni.musteriOdemeler = { ...yeni.musteriOdemeler };
+                          if (!yeni.musteriOdemeler[selMus]) yeni.musteriOdemeler[selMus] = [];
+                          yeni.musteriOdemeler[selMus] = [...yeni.musteriOdemeler[selMus], { id:Date.now()+"", tarih:new Date(tarih).getTime(), has:parseFloat(has), aciklama:ac }];
+                          svKasa(yeni); kapat();
+                        };
+                        return (<>
+                          <select value={selMus} onChange={e=>setSelMus(e.target.value)} style={{ ...KIN, width:"100%" }}>
+                            <option value="">Müşteri seç...</option>
+                            {Object.keys(musBakiye).sort().map(m => <option key={m} value={m}>{m}</option>)}
+                          </select>
+                          <input type="date" value={tarih} onChange={e=>setTarih(e.target.value)} style={{ ...KIN, width:"100%" }}/>
+                          <input type="number" placeholder="Has gram (örn: 2.500)" value={has} onChange={e=>setHas(e.target.value)} style={{ ...KIN, width:"100%" }} step="0.001"/>
+                          <input placeholder="Açıklama (opsiyonel)" value={ac} onChange={e=>setAc(e.target.value)} style={{ ...KIN, width:"100%" }}/>
+                          <div style={{ display:"flex", gap:6, marginTop:8 }}>
+                            <button onClick={kaydet} style={{ ...BG, flex:1, padding:"7px" }}>Kaydet</button>
+                            <button onClick={kapat} style={{ ...RD, flex:1, padding:"7px" }}>İptal</button>
+                          </div>
+                        </>);
+                      })()}
+
+                      {/* Döküm gönder / ödeme yap */}
+                      {(tip==="dokumGonder"||tip==="dokumOde") && (() => {
+                        const [has, setHas] = React.useState("");
+                        const [ac, setAc] = React.useState("");
+                        const [tarih, setTarih] = React.useState(new Date().toISOString().slice(0,10));
+                        const kaydet = () => {
+                          if (!has) return;
+                          const yeni = { ...kasa, dokumcuIslemler:[...(kasa.dokumcuIslemler||[]), { id:Date.now()+"", tarih:new Date(tarih).getTime(), tip:tip==="dokumGonder"?"gonder":"ode", has:parseFloat(has), aciklama:ac }] };
+                          svKasa(yeni); kapat();
+                        };
+                        return (<>
+                          <input type="date" value={tarih} onChange={e=>setTarih(e.target.value)} style={{ ...KIN, width:"100%" }}/>
+                          <input type="number" placeholder="Has gram" value={has} onChange={e=>setHas(e.target.value)} style={{ ...KIN, width:"100%" }} step="0.001"/>
+                          <input placeholder="Açıklama (opsiyonel)" value={ac} onChange={e=>setAc(e.target.value)} style={{ ...KIN, width:"100%" }}/>
+                          <div style={{ display:"flex", gap:6, marginTop:8 }}>
+                            <button onClick={kaydet} style={{ ...BG, flex:1, padding:"7px" }}>Kaydet</button>
+                            <button onClick={kapat} style={{ ...RD, flex:1, padding:"7px" }}>İptal</button>
+                          </div>
+                        </>);
+                      })()}
+
+                      {/* Ham altın girişi */}
+                      {tip==="hamAltin" && (() => {
+                        const [tipSec, setTipSec] = React.useState("giris");
+                        const [has, setHas] = React.useState("");
+                        const [ac, setAc] = React.useState("");
+                        const [tarih, setTarih] = React.useState(new Date().toISOString().slice(0,10));
+                        const kaydet = () => {
+                          if (!has) return;
+                          const yeni = { ...kasa, hamAltin:[...(kasa.hamAltin||[]), { id:Date.now()+"", tarih:new Date(tarih).getTime(), tip:tipSec, has:parseFloat(has), aciklama:ac }] };
+                          svKasa(yeni); kapat();
+                        };
+                        return (<>
+                          <div style={{ display:"flex", gap:4, marginBottom:8 }}>
+                            {["giris","cikis"].map(t => <button key={t} onClick={()=>setTipSec(t)} style={{ flex:1, padding:"5px", background:tipSec===t?"rgba(201,168,76,0.2)":"rgba(255,255,255,0.04)", border:"1px solid", borderColor:tipSec===t?GOLD:"rgba(255,255,255,0.08)", borderRadius:7, color:tipSec===t?GOLD:"#998a6e", fontSize:9, fontWeight:700, cursor:"pointer" }}>{t==="giris"?"Giriş":"Çıkış"}</button>)}
+                          </div>
+                          <input type="date" value={tarih} onChange={e=>setTarih(e.target.value)} style={{ ...KIN, width:"100%" }}/>
+                          <input type="number" placeholder="Has gram" value={has} onChange={e=>setHas(e.target.value)} style={{ ...KIN, width:"100%" }} step="0.001"/>
+                          <input placeholder="Açıklama" value={ac} onChange={e=>setAc(e.target.value)} style={{ ...KIN, width:"100%" }}/>
+                          <div style={{ display:"flex", gap:6, marginTop:8 }}>
+                            <button onClick={kaydet} style={{ ...BG, flex:1, padding:"7px" }}>Kaydet</button>
+                            <button onClick={kapat} style={{ ...RD, flex:1, padding:"7px" }}>İptal</button>
+                          </div>
+                        </>);
+                      })()}
+
+                      {/* Hazır ürün */}
+                      {tip==="hazirUrun" && (() => {
+                        const [selMod, setSelMod] = React.useState("");
+                        const [adet, setAdet] = React.useState("1");
+                        const [ac, setAc] = React.useState("");
+                        const kaydet = () => {
+                          if (!selMod) return;
+                          const m = modeller.find(x=>x.id===selMod);
+                          const yeni = { ...kasa, hazirUrun:[...(kasa.hazirUrun||[]), { id:Date.now()+"", modelId:selMod, ad:m?.ad||"?", adet:parseInt(adet)||1, aciklama:ac, tarih:Date.now() }] };
+                          svKasa(yeni); kapat();
+                        };
+                        return (<>
+                          <select value={selMod} onChange={e=>setSelMod(e.target.value)} style={{ ...KIN, width:"100%" }}>
+                            <option value="">Model seç...</option>
+                            {modeller.map(m => <option key={m.id} value={m.id}>{m.kod||m.ad}</option>)}
+                          </select>
+                          <input type="number" placeholder="Adet" value={adet} onChange={e=>setAdet(e.target.value)} style={{ ...KIN, width:"100%" }} min="1"/>
+                          <input placeholder="Açıklama (opsiyonel)" value={ac} onChange={e=>setAc(e.target.value)} style={{ ...KIN, width:"100%" }}/>
+                          <div style={{ display:"flex", gap:6, marginTop:8 }}>
+                            <button onClick={kaydet} style={{ ...BG, flex:1, padding:"7px" }}>Kaydet</button>
+                            <button onClick={kapat} style={{ ...RD, flex:1, padding:"7px" }}>İptal</button>
+                          </div>
+                        </>);
+                      })()}
+
+                      {/* Serbest malzeme */}
+                      {tip==="serbest" && (() => {
+                        const [ad, setAd] = React.useState("");
+                        const [gram, setGram] = React.useState("");
+                        const [adet, setAdet] = React.useState("1");
+                        const [ac, setAc] = React.useState("");
+                        const kaydet = () => {
+                          if (!ad) return;
+                          const yeni = { ...kasa, serbest:[...(kasa.serbest||[]), { id:Date.now()+"", ad, gram:parseFloat(gram)||0, adet:parseInt(adet)||1, aciklama:ac, tarih:Date.now() }] };
+                          svKasa(yeni); kapat();
+                        };
+                        return (<>
+                          <input placeholder="Malzeme adı (örn: Round 0.05ct taş)" value={ad} onChange={e=>setAd(e.target.value)} style={{ ...KIN, width:"100%" }}/>
+                          <input type="number" placeholder="Birim gram (has)" value={gram} onChange={e=>setGram(e.target.value)} style={{ ...KIN, width:"100%" }} step="0.001"/>
+                          <input type="number" placeholder="Adet" value={adet} onChange={e=>setAdet(e.target.value)} style={{ ...KIN, width:"100%" }} min="1"/>
+                          <input placeholder="Açıklama (opsiyonel)" value={ac} onChange={e=>setAc(e.target.value)} style={{ ...KIN, width:"100%" }}/>
+                          <div style={{ display:"flex", gap:6, marginTop:8 }}>
+                            <button onClick={kaydet} style={{ ...BG, flex:1, padding:"7px" }}>Kaydet</button>
+                            <button onClick={kapat} style={{ ...RD, flex:1, padding:"7px" }}>İptal</button>
+                          </div>
+                        </>);
+                      })()}
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+          );
+        })()}
 
         {/* ANALİZ */}
         {sayfa==="analiz" && (
