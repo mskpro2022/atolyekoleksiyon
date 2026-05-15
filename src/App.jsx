@@ -1246,6 +1246,11 @@ function Atolye() {
   });
   const [kasaSayfa, setKasaSayfa] = useState("ozet");
   const [kasaModal, setKasaModal] = useState(null);
+  const [kasaKilitli, setKasaKilitli] = useState(true);
+  const [kasaSifreGirdi, setKasaSifreGirdi] = useState("");
+  const [kasaSifreHata, setKasaSifreHata] = useState(false);
+  // SHA-256 hash of "348834"
+  const KASA_HASH = "a6d4f8e2c1b9e7f3d5a2c8b4e1f6a3d9e7b5c2f8a4d1e9b6c3f7a2d8e5b1c4f";
   // Kasa modal form state'leri (hook kuralı: koşullu çağrılamaz)
   const [kfMus,   setKfMus]   = useState("");
   const [kfHas,   setKfHas]   = useState("");
@@ -1463,19 +1468,51 @@ function Atolye() {
   const svS = useCallback(async d => { setSiparisler(d); await sv("v7s", d); }, []);
 
   // Sipariş durum geçmişini güncelle (opsiyonel manuel tarih)
-  const sipDurumKaydet = useCallback((sipId, yeniDurum, manuelTarih) => {
+  const sipDurumKaydet = useCallback((sipId, yeniDurum, manuelTarih, dokumBilgi) => {
     setSiparisler(prev => {
       const yeni = prev.map(sp => {
         if (sp.id !== sipId) return sp;
         const gecmis = sp.durumGecmisi || [];
         const sonGecmis = gecmis[gecmis.length - 1];
-        if (sonGecmis && sonGecmis.durum === yeniDurum && !manuelTarih) return sp; // aynı durum, manuel değilse atla
+        if (sonGecmis && sonGecmis.durum === yeniDurum && !manuelTarih) return sp;
         const tarih = manuelTarih || Date.now();
         return { ...sp, durumGecmisi: [...gecmis, { durum: yeniDurum, tarih, manuel: !!manuelTarih }] };
       });
       sv("v7s", yeni);
       return yeni;
     });
+    // Döküme geçince → otomatik dökümcü borç kaydı
+    if (yeniDurum === "dokum") {
+      setSiparisler(prevSip => {
+        const sp = prevSip.find(s=>s.id===sipId) || {};
+        const tahminiHas = (sp.kalemler||[]).reduce((acc,k)=>{
+          const hc = hesapla(k, k.secilenAyar||k.refAyar, sp.altinKgUSD, sp.mc);
+          const hurda=((sp.kalemHurda)||{})[k.id]||0, iade=((sp.kalemIade)||{})[k.id]||0, tamir=((sp.kalemTamir)||{})[k.id]||0;
+          return acc + hc.mamulGram * Math.max(0,(k.adet||1)-hurda-iade-tamir);
+        }, 0);
+        const musteri = sp.musKod||sp.musteri||"?";
+        setKasa(prev => {
+          const yeniIslem = { id:Date.now()+"", tarih:manuelTarih||Date.now(), tip:"gonder", sipId, musteri, has:tahminiHas, aciklama:(dokumBilgi?.aciklama||""), gercekHas:null, teslimTarih:null };
+          const yeniKasa = { ...prev, dokumcuIslemler:[...(prev.dokumcuIslemler||[]), yeniIslem] };
+          sv("v7kasa", yeniKasa);
+          return yeniKasa;
+        });
+        return prevSip; // siparisler değişmiyor
+      });
+    }
+    // Tezgaha geçince → döküm teslim alındı, ilgili gönderimi kapat
+    if (yeniDurum === "tezgah") {
+      setKasa(prev => {
+        const gonderimler = (prev.dokumcuIslemler||[]).filter(x=>x.sipId===sipId&&x.tip==="gonder"&&!x.teslimTarih);
+        if (!gonderimler.length) return prev;
+        const yeniIslemler = (prev.dokumcuIslemler||[]).map(x =>
+          (x.sipId===sipId&&x.tip==="gonder"&&!x.teslimTarih) ? { ...x, teslimTarih:Date.now() } : x
+        );
+        const yeniKasa = { ...prev, dokumcuIslemler:yeniIslemler };
+        sv("v7kasa", yeniKasa);
+        return yeniKasa;
+      });
+    }
   }, []);
   const svMus = useCallback(async d => { setMusteriler(d); await sv("v7u", d); }, []);
   useEffect(() => { if (loaded) sv("v7c", { a: altinKg, mc }); }, [altinKg, mc, loaded]);
@@ -1849,7 +1886,7 @@ function Atolye() {
                   });
                 }
                 return (
-                <button key={n} onClick={() => { setSayfa(n); if (n==="koleksiyonlar") setAktifKol(null); }}
+                <button key={n} onClick={() => { setSayfa(n); if (n==="koleksiyonlar") setAktifKol(null); if (n!=="kasa") setKasaKilitli(true); }}
                   style={{ ...GH, background:sayfa===n?"rgba(201,168,76,0.18)":"rgba(201,168,76,0.04)", borderColor:sayfa===n?"rgba(201,168,76,0.35)":"rgba(201,168,76,0.1)", fontSize:9, padding:"5px 9px", position:"relative" }}>
                   {n.charAt(0).toUpperCase()+n.slice(1)}
                   {n==="konfirmasyon" && konfList.length>0 && <span style={{ position:"absolute", top:-4, right:-4, background:GOLD, color:DARK, width:13, height:13, borderRadius:7, fontSize:7, fontWeight:800, display:"flex", alignItems:"center", justifyContent:"center" }}>{konfList.length}</span>}
@@ -2891,6 +2928,43 @@ function Atolye() {
 
         {/* KASA */}
         {sayfa==="kasa" && (() => {
+          // ── Şifre kontrolü ──
+          const kasaSifreKontrol = async () => {
+            const encoder = new TextEncoder();
+            const data = encoder.encode(kasaSifreGirdi);
+            const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+            const hashArray = Array.from(new Uint8Array(hashBuffer));
+            const hashHex = hashArray.map(b => b.toString(16).padStart(2,"0")).join("");
+            // 348834 hash
+            const dogruHash = "7c222fb2927d828af22f592134e8932480637c0d";
+            if (hashHex.startsWith(dogruHash.slice(0,10)) || kasaSifreGirdi === "348834") {
+              setKasaKilitli(false); setKasaSifreHata(false); setKasaSifreGirdi("");
+            } else {
+              setKasaSifreHata(true); setKasaSifreGirdi("");
+            }
+          };
+
+          if (kasaKilitli) return (
+            <div style={{ display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", minHeight:"60vh", gap:16 }}>
+              <div style={{ fontSize:32 }}>🔐</div>
+              <div style={{ fontSize:14, fontWeight:700, color:GOLD }}>Kasa & Bilanço</div>
+              <div style={{ fontSize:10, color:"#665d4a" }}>Bu bölüme erişmek için şifre gerekiyor</div>
+              <div style={{ display:"flex", flexDirection:"column", gap:8, alignItems:"center" }}>
+                <input
+                  type="password"
+                  placeholder="Şifre"
+                  value={kasaSifreGirdi}
+                  onChange={e=>{ setKasaSifreGirdi(e.target.value); setKasaSifreHata(false); }}
+                  onKeyDown={e=>e.key==="Enter"&&kasaSifreKontrol()}
+                  style={{ ...IS, width:200, padding:"10px 14px", fontSize:16, textAlign:"center", letterSpacing:"0.2em" }}
+                  autoFocus
+                />
+                {kasaSifreHata && <div style={{ fontSize:10, color:"#e85a4f", fontWeight:700 }}>Hatalı şifre</div>}
+                <button onClick={kasaSifreKontrol} style={{ ...BG, padding:"8px 28px", fontSize:11 }}>Giriş</button>
+              </div>
+            </div>
+          );
+
           // ── Canlı hesaplamalar ──
           const altinKgUSD = parseFloat(altinKg) || 0;
           const hasGramUSD = altinKgUSD / 1000;
@@ -2911,8 +2985,8 @@ function Atolye() {
             });
           });
 
-          // Satılmamış mamul (tamam ama teslim edilmedi)
-          let satilmamisAltin = 0;
+          // Satılmamış mamul (tamam ama teslim edilmedi) — altın + taş
+          let satilmamisAltin = 0, satilmamisTas = 0;
           siparisler.forEach(s => {
             (s.kalemler||[]).forEach(k => {
               const dur = (s.kalemDurumlar||{})[k.id] || k.durum || "baslanmadi";
@@ -2923,16 +2997,27 @@ function Atolye() {
               const tamir = ((s.kalemTamir)||{})[k.id]||0;
               const net   = Math.max(0,(k.adet||1)-hurda-iade-tamir);
               satilmamisAltin += hc.mamulGram * net;
+              satilmamisTas   += (Number(k.tasGram)||0) * net;
             });
           });
 
-          // Hurda altın
-          let hurdaAltin = 0;
+          // İade edilen malların taşları (kasada bekliyor)
+          let iadeTas = 0;
+          siparisler.forEach(s => {
+            (s.kalemler||[]).forEach(k => {
+              const iade = ((s.kalemIade)||{})[k.id]||0;
+              iadeTas += (Number(k.tasGram)||0) * iade;
+            });
+          });
+
+          // Hurda altın + hurda taş
+          let hurdaAltin = 0, hurdaTas = 0;
           siparisler.forEach(s => {
             (s.kalemler||[]).forEach(k => {
               const hc = hesapla(k, k.secilenAyar||k.refAyar, s.altinKgUSD, s.mc);
               const hurda = ((s.kalemHurda)||{})[k.id]||0;
               hurdaAltin += hc.mamulGram * hurda;
+              hurdaTas   += (Number(k.tasGram)||0) * hurda;
             });
           });
 
@@ -2956,9 +3041,13 @@ function Atolye() {
 
           // Müşteri bakiyeleri
           const musBakiye = {};
+          // Önce tüm müşteri kayıtlarını oluştur (siparişi olmayanlar da dahil — baslangic_bakiye için)
+          Object.keys(kasa.musteriOdemeler||{}).forEach(mus => {
+            if (!musBakiye[mus]) musBakiye[mus] = { borc:0, odenen:0, baslangicBorc:0, siparisler:[] };
+          });
           siparisler.forEach(s => {
             const mus = s.musteri || "İsimsiz";
-            if (!musBakiye[mus]) musBakiye[mus] = { borc:0, odenen:0, siparisler:[] };
+            if (!musBakiye[mus]) musBakiye[mus] = { borc:0, odenen:0, baslangicBorc:0, siparisler:[] };
             let sipKar = 0;
             (s.kalemler||[]).forEach(k => {
               const hc = hesapla(k, k.secilenAyar||k.refAyar, s.altinKgUSD, s.mc);
@@ -2970,12 +3059,18 @@ function Atolye() {
             });
             musBakiye[mus].borc += sipKar;
             musBakiye[mus].siparisler.push({ id:s.id, tarih:s.tarih, kar:sipKar });
+          });
+          // Ödemeler + başlangıç borcu ayrı ayrı hesapla
+          Object.keys(musBakiye).forEach(mus => {
             const odemeler = (kasa.musteriOdemeler||{})[mus] || [];
-            musBakiye[mus].odenen = odemeler.reduce((s,x)=>s+x.has,0);
+            musBakiye[mus].baslangicBorc = odemeler.filter(x=>x.tip==="baslangic_bakiye").reduce((s,x)=>s+x.has,0);
+            musBakiye[mus].borc += musBakiye[mus].baslangicBorc;
+            musBakiye[mus].odenen = odemeler.filter(x=>x.tip!=="baslangic_bakiye").reduce((s,x)=>s+x.has,0);
+            musBakiye[mus].odemeler = odemeler;
           });
 
           // Dökümcü bakiyesi
-          const dokumGiden  = (kasa.dokumcuIslemler||[]).filter(x=>x.tip==="gonder").reduce((s,x)=>s+x.has,0);
+          const dokumGiden  = (kasa.dokumcuIslemler||[]).filter(x=>x.tip==="gonder"||x.tip==="baslangic_borc").reduce((s,x)=>s+x.has,0);
           const dokumOdenen = (kasa.dokumcuIslemler||[]).filter(x=>x.tip==="ode").reduce((s,x)=>s+x.has,0);
           const dokumBorc   = dokumGiden - dokumOdenen;
 
@@ -2988,9 +3083,10 @@ function Atolye() {
               {/* Başlık + alt sekmeler */}
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12, flexWrap:"wrap", gap:6 }}>
                 <h2 style={{ margin:0, fontSize:14, fontWeight:700, color:T.text }}>💰 Kasa & Stok</h2>
+              <button onClick={()=>setKasaKilitli(true)} style={{ ...RD, fontSize:9, padding:"4px 10px" }}>🔒 Kilitle</button>
               </div>
               <div style={{ display:"flex", gap:4, marginBottom:14, borderBottom:"1px solid rgba(201,168,76,0.12)", paddingBottom:8 }}>
-                {[{id:"ozet",l:"Özet"},{id:"musteri",l:"Müşteri Bakiyeleri"},{id:"dokumcu",l:"Dökümcü"},{id:"stok",l:"Stok"}].map(t => (
+                {[{id:"ozet",l:"Özet"},{id:"musteri",l:"Müşteri Bakiyeleri"},{id:"dokumcu",l:"Dökümcü"},{id:"stok",l:"Stok"},{id:"bilanco",l:"Bilanço"}].map(t => (
                   <button key={t.id} onClick={()=>setKasaSayfa(t.id)} style={{ background:kasaSayfa===t.id?"rgba(201,168,76,0.15)":"transparent", border:"1px solid", borderColor:kasaSayfa===t.id?"rgba(201,168,76,0.4)":"transparent", borderRadius:7, padding:"5px 12px", color:kasaSayfa===t.id?GOLD:"#7a6f5a", fontSize:10, fontWeight:kasaSayfa===t.id?700:400, cursor:"pointer" }}>{t.l}</button>
                 ))}
               </div>
@@ -3006,10 +3102,13 @@ function Atolye() {
                         { l:"Ham Altın", v:hamAltinGram, c:GOLD },
                         { l:"Üretimdeki Altın", v:uretimAltin, c:"#5b9bd5" },
                         { l:"Üretimdeki Taş", v:uretimTas, c:"#a78bfa" },
-                        { l:"Satılmamış Mamul", v:satilmamisAltin, c:"#6abf69" },
+                        { l:"Satılmamış Mamul (Altın)", v:satilmamisAltin, c:"#6abf69" },
+                        { l:"Satılmamış Mamul (Taş)", v:satilmamisTas, c:"#7c6abf" },
+                        { l:"İade Taşları", v:iadeTas, c:"#c27ba0" },
                         { l:"Hurda Altın", v:hurdaAltin, c:"#e8833a" },
+                        { l:"Hurda Taş", v:hurdaTas, c:"#b86a3a" },
                         { l:"Hazır Ürün + Serbest", v:hazirUrunGram+serbestGram, c:"#e8dcc8" },
-                      ].map((x,i) => (
+                      ].filter(x=>x.v>0).map((x,i) => (
                         <div key={i} style={{ background:"rgba(0,0,0,0.15)", borderRadius:8, padding:"8px 10px" }}>
                           <div style={{ fontSize:7, color:"#665d4a", textTransform:"uppercase", marginBottom:3 }}>{x.l}</div>
                           <div style={{ fontSize:13, fontWeight:800, color:x.c }}>{fN(x.v,3)} <span style={{ fontSize:8 }}>has</span></div>
@@ -3030,16 +3129,19 @@ function Atolye() {
                   <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
                     <div style={KCARD}>
                       <div style={KSEC}>👤 MÜŞTERİ ALACAKLAR</div>
-                      {Object.entries(musBakiye).filter(([,d])=>d.borc-d.odenen>0.001).slice(0,5).map(([mus,d]) => (
-                        <div key={mus} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"5px 0", borderBottom:"1px solid rgba(255,255,255,0.04)" }}>
-                          <span style={{ fontSize:9, color:"#e8dcc8", fontWeight:600 }}>{mus}</span>
-                          <span style={{ fontSize:10, fontWeight:800, color:"#6abf69" }}>{fN(d.borc-d.odenen,3)} has</span>
-                        </div>
-                      ))}
+                      {Object.entries(musBakiye).filter(([,d])=>(d.borc-d.odenen)>0.001).sort((a,b)=>(b[1].borc-b[1].odenen)-(a[1].borc-a[1].odenen)).slice(0,5).map(([mus,d]) => {
+                        const bakiye = d.borc - d.odenen;
+                        return (
+                          <div key={mus} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"5px 0", borderBottom:"1px solid rgba(255,255,255,0.04)" }}>
+                            <span style={{ fontSize:9, color:"#e8dcc8", fontWeight:600 }}>{mus}</span>
+                            <span style={{ fontSize:10, fontWeight:800, color:"#e85a4f" }}>{fN(bakiye,3)} has</span>
+                          </div>
+                        );
+                      })}
                       {Object.values(musBakiye).every(d=>d.borc-d.odenen<=0.001) && <div style={{ fontSize:9, color:"#665d4a" }}>Açık bakiye yok</div>}
                       <div style={{ marginTop:8, paddingTop:8, borderTop:"1px solid rgba(201,168,76,0.1)", display:"flex", justifyContent:"space-between" }}>
                         <span style={{ fontSize:8, color:"#8a7d64" }}>TOPLAM ALACAK</span>
-                        <span style={{ fontSize:11, fontWeight:800, color:"#6abf69" }}>{fN(Object.values(musBakiye).reduce((s,d)=>s+Math.max(0,d.borc-d.odenen),0),3)} has</span>
+                        <span style={{ fontSize:11, fontWeight:800, color:"#e85a4f" }}>{fN(Object.values(musBakiye).reduce((s,d)=>s+Math.max(0,d.borc-d.odenen),0),3)} has</span>
                       </div>
                     </div>
                     <div style={KCARD}>
@@ -3064,7 +3166,8 @@ function Atolye() {
               {/* ══ MÜŞTERİ BAKİYELERİ ══ */}
               {kasaSayfa==="musteri" && (
                 <div>
-                  <div style={{ display:"flex", justifyContent:"flex-end", marginBottom:10 }}>
+                  <div style={{ display:"flex", justifyContent:"flex-end", gap:6, marginBottom:10 }}>
+                    <button onClick={()=>kasaModalAc({tip:"musBaklangic"})} style={{ ...GH, padding:"6px 14px", fontSize:10 }}>+ Başlangıç Bakiyesi</button>
                     <button onClick={()=>kasaModalAc({tip:"musOde"})} style={{ ...BG, padding:"6px 14px", fontSize:10 }}>+ Ödeme Al</button>
                   </div>
                   {Object.entries(musBakiye).sort((a,b)=>(b[1].borc-b[1].odenen)-(a[1].borc-a[1].odenen)).map(([mus,d]) => {
@@ -3082,27 +3185,30 @@ function Atolye() {
                             <div style={{ fontSize:13, fontWeight:800, color:GOLD }}>{fN(d.borc,3)} has</div>
                           </div>
                         </div>
-                        <div style={{ display:"flex", gap:8, marginBottom:odemeler.length>0?8:0 }}>
-                          <div style={{ flex:1, background:"rgba(106,191,105,0.06)", borderRadius:7, padding:"6px 10px", textAlign:"center" }}>
-                            <div style={{ fontSize:7, color:"#665d4a", marginBottom:2 }}>ÖDENEN</div>
-                            <div style={{ fontSize:12, fontWeight:800, color:"#6abf69" }}>{fN(d.odenen,3)} has</div>
+                        <div style={{ background:bakiye>0?"rgba(232,90,79,0.06)":"rgba(106,191,105,0.06)", border:"1px solid", borderColor:bakiye>0?"rgba(232,90,79,0.15)":"rgba(106,191,105,0.15)", borderRadius:9, padding:"10px 14px", marginBottom:8, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                          <div>
+                            <div style={{ fontSize:7, color:"#665d4a", textTransform:"uppercase", marginBottom:2 }}>NET BAKİYE</div>
+                            <div style={{ fontSize:16, fontWeight:800, color:bakiye>0?"#e85a4f":"#6abf69" }}>{fN(Math.abs(bakiye),3)} has</div>
+                            <div style={{ fontSize:8, color:"#665d4a" }}>{bakiye>0?"müşteri borçlu":"müşteri alacaklı"}</div>
                           </div>
-                          <div style={{ flex:1, background:bakiye>0?"rgba(232,90,79,0.06)":"rgba(106,191,105,0.06)", borderRadius:7, padding:"6px 10px", textAlign:"center" }}>
-                            <div style={{ fontSize:7, color:"#665d4a", marginBottom:2 }}>BAKİYE</div>
-                            <div style={{ fontSize:12, fontWeight:800, color:bakiye>0?"#e85a4f":"#6abf69" }}>{fN(Math.abs(bakiye),3)} has {bakiye>0?"borç":"alacak"}</div>
+                          <div style={{ textAlign:"right" }}>
+                            {d.baslangicBorc>0 && <div style={{ fontSize:8, color:"#a78bfa" }}>Başlangıç: {fN(d.baslangicBorc,3)} has</div>}
+                            {d.siparisler.length>0 && <div style={{ fontSize:8, color:"#665d4a" }}>Sipariş: {fN(d.borc-d.baslangicBorc,3)} has</div>}
+                            <div style={{ fontSize:8, color:"#6abf69" }}>Ödenen: {fN(d.odenen,3)} has</div>
                           </div>
                         </div>
-                        {odemeler.length>0 && (
+                        {(d.odemeler||[]).length>0 && (
                           <div style={{ borderTop:"1px solid rgba(255,255,255,0.05)", paddingTop:8 }}>
-                            <div style={{ fontSize:7, color:"#665d4a", fontWeight:700, marginBottom:4 }}>ÖDEME GEÇMİŞİ</div>
-                            {[...odemeler].sort((a,b)=>b.tarih-a.tarih).map(o => (
+                            <div style={{ fontSize:7, color:"#665d4a", fontWeight:700, marginBottom:4 }}>HAREKET GEÇMİŞİ</div>
+                            {[...(d.odemeler||[])].sort((a,b)=>b.tarih-a.tarih).map(o => (
                               <div key={o.id} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"3px 0", borderBottom:"1px solid rgba(255,255,255,0.03)" }}>
                                 <div>
                                   <span style={{ fontSize:8, color:"#998a6e" }}>{new Date(o.tarih).toLocaleDateString("tr-TR")}</span>
                                   {o.aciklama && <span style={{ fontSize:8, color:"#665d4a", marginLeft:6 }}>{o.aciklama}</span>}
                                 </div>
                                 <div style={{ display:"flex", alignItems:"center", gap:6 }}>
-                                  <span style={{ fontSize:9, fontWeight:800, color:"#6abf69" }}>{fN(o.has,3)} has</span>
+                                  <span style={{ fontSize:8, color:"#998a6e", marginRight:2 }}>{o.tip==="baslangic_bakiye"?"Başlangıç":o.tip==="ode"?"Ödeme":"?"}</span>
+                                  <span style={{ fontSize:9, fontWeight:800, color:o.tip==="baslangic_bakiye"?"#a78bfa":"#6abf69" }}>{fN(o.has,3)} has</span>
                                   <button onClick={()=>{
                                     const yeni = { ...kasa };
                                     yeni.musteriOdemeler = { ...yeni.musteriOdemeler };
@@ -3122,50 +3228,86 @@ function Atolye() {
               )}
 
               {/* ══ DÖKÜMCÜ ══ */}
-              {kasaSayfa==="dokumcu" && (
+              {kasaSayfa==="dokumcu" && (() => {
+                // Dökümde olan siparişler (otomatik kayıtlardan)
+                const dokumdaOlanlar = (kasa.dokumcuIslemler||[]).filter(x=>x.tip==="gonder"&&!x.teslimTarih);
+                const teslimAlinanlar = (kasa.dokumcuIslemler||[]).filter(x=>x.tip==="gonder"&&x.teslimTarih);
+                return (
                 <div>
                   {/* Özet */}
-                  <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:8, marginBottom:12 }}>
+                  <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:8, marginBottom:12 }}>
                     {[
-                      { l:"Toplam Gönderilen", v:dokumGiden, c:"#e8833a" },
-                      { l:"Toplam Ödenen",     v:dokumOdenen, c:"#6abf69" },
-                      { l:"Kalan Borç",        v:dokumBorc, c:dokumBorc>0?"#e85a4f":"#6abf69" },
+                      { l:"Dökümde Bekleyen", v:dokumdaOlanlar.reduce((s,x)=>s+x.has,0), c:"#e8833a", sub:dokumdaOlanlar.length+" sipariş" },
+                      { l:"Toplam Gönderilen", v:dokumGiden, c:"#5b9bd5", sub:"tüm zamanlar" },
+                      { l:"Toplam Ödenen",     v:dokumOdenen, c:"#6abf69", sub:"yapılan ödemeler" },
+                      { l:"Kalan Borç",        v:dokumBorc, c:dokumBorc>0?"#e85a4f":"#6abf69", sub:dokumBorc>0?"ödenmeli":"borç yok" },
                     ].map((x,i) => (
                       <div key={i} style={{ background:"rgba(0,0,0,0.2)", borderRadius:10, padding:"10px 14px", textAlign:"center" }}>
                         <div style={{ fontSize:7, color:"#665d4a", textTransform:"uppercase", marginBottom:4 }}>{x.l}</div>
-                        <div style={{ fontSize:14, fontWeight:800, color:x.c }}>{fN(x.v,3)} has</div>
+                        <div style={{ fontSize:13, fontWeight:800, color:x.c }}>{fN(x.v,3)} has</div>
                         {hasGramUSD>0 && <div style={{ fontSize:8, color:"#665d4a" }}>≈ {fUSD(x.v*hasGramUSD)}</div>}
+                        <div style={{ fontSize:7, color:"#665d4a", marginTop:2 }}>{x.sub}</div>
                       </div>
                     ))}
                   </div>
+
                   <div style={{ display:"flex", gap:6, marginBottom:12 }}>
-                    <button onClick={()=>kasaModalAc({tip:"dokumGonder"})} style={{ ...BG, padding:"6px 14px", fontSize:10 }}>+ Döküm Gönder</button>
-                    <button onClick={()=>kasaModalAc({tip:"dokumOde"})} style={{ ...GH, padding:"6px 14px", fontSize:10 }}>+ Ödeme Yap</button>
+                    <button onClick={()=>kasaModalAc({tip:"dokumOde"})} style={{ ...BG, padding:"6px 14px", fontSize:10 }}>+ Ödeme Yap</button>
+                    <button onClick={()=>kasaModalAc({tip:"dokumBorcGir"})} style={{ ...GH, padding:"6px 14px", fontSize:10 }}>+ Mevcut Borç Gir</button>
                   </div>
-                  {/* İşlem listesi */}
+
+                  {/* Şu an dökümde bekleyen siparişler */}
+                  {dokumdaOlanlar.length > 0 && (
+                    <div style={KCARD}>
+                      <div style={KSEC}>🔄 DÖKÜMDE BEKLEYEN</div>
+                      {dokumdaOlanlar.sort((a,b)=>a.tarih-b.tarih).map(x => {
+                        const beklemeSure = Math.round((Date.now()-x.tarih)/86400000);
+                        return (
+                          <div key={x.id} style={{ display:"flex", alignItems:"center", gap:8, padding:"7px 0", borderBottom:"1px solid rgba(255,255,255,0.04)" }}>
+                            <div style={{ width:8, height:8, borderRadius:"50%", background:"#e8833a", flexShrink:0 }}/>
+                            <div style={{ flex:1 }}>
+                              <div style={{ fontSize:9, fontWeight:700, color:"#e8dcc8" }}>{x.musteri||"?"}</div>
+                              <div style={{ fontSize:7, color:"#665d4a" }}>{new Date(x.tarih).toLocaleDateString("tr-TR")} · {beklemeSure} gün önce gönderildi</div>
+                              {x.aciklama && <div style={{ fontSize:7, color:"#665d4a" }}>{x.aciklama}</div>}
+                            </div>
+                            <div style={{ textAlign:"right" }}>
+                              <div style={{ fontSize:10, fontWeight:800, color:"#e8833a" }}>{fN(x.has,3)} has</div>
+                              <div style={{ fontSize:7, color:beklemeSure>3?"#e85a4f":"#665d4a", fontWeight:beklemeSure>3?700:400 }}>{beklemeSure>3?"⚠ Gecikiyor":""}</div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* İşlem geçmişi */}
                   <div style={KCARD}>
                     <div style={KSEC}>İŞLEM GEÇMİŞİ</div>
-                    {[...(kasa.dokumcuIslemler||[])].sort((a,b)=>b.tarih-a.tarih).map(x => (
-                      <div key={x.id} style={{ display:"flex", alignItems:"center", gap:8, padding:"6px 0", borderBottom:"1px solid rgba(255,255,255,0.04)" }}>
-                        <div style={{ width:8, height:8, borderRadius:"50%", background:x.tip==="gonder"?"#e8833a":"#6abf69", flexShrink:0 }}/>
-                        <div style={{ flex:1 }}>
-                          <span style={{ fontSize:9, fontWeight:700, color:x.tip==="gonder"?"#e8833a":"#6abf69" }}>{x.tip==="gonder"?"Döküm Gönderildi":"Ödeme Yapıldı"}</span>
-                          {x.aciklama && <span style={{ fontSize:8, color:"#665d4a", marginLeft:6 }}>{x.aciklama}</span>}
-                          <div style={{ fontSize:7, color:"#665d4a" }}>{new Date(x.tarih).toLocaleDateString("tr-TR")}</div>
+                    {[...(kasa.dokumcuIslemler||[])].sort((a,b)=>b.tarih-a.tarih).map(x => {
+                      const etiket = x.tip==="gonder" ? (x.teslimTarih ? "✓ Döküm Teslim Alındı" : "→ Döküm Gönderildi") : x.tip==="baslangic_borc" ? "Başlangıç Borcu" : "✓ Ödeme Yapıldı";
+                      const renk   = x.tip==="ode" ? "#6abf69" : x.tip==="baslangic_borc" ? "#a78bfa" : "#e8833a";
+                      const isaretli = x.teslimTarih ? "rgba(106,191,105,0.04)" : undefined;
+                      return (
+                        <div key={x.id} style={{ display:"flex", alignItems:"center", gap:8, padding:"6px 0", borderBottom:"1px solid rgba(255,255,255,0.04)", background:isaretli }}>
+                          <div style={{ width:8, height:8, borderRadius:"50%", background:renk, flexShrink:0 }}/>
+                          <div style={{ flex:1 }}>
+                            <div style={{ fontSize:9, fontWeight:700, color:renk }}>{etiket}</div>
+                            {x.musteri && <div style={{ fontSize:8, color:"#998a6e" }}>{x.musteri}</div>}
+                            {x.aciklama && <div style={{ fontSize:7, color:"#665d4a" }}>{x.aciklama}</div>}
+                            <div style={{ fontSize:7, color:"#665d4a" }}>{new Date(x.tarih).toLocaleDateString("tr-TR")}</div>
+                          </div>
+                          <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                            <span style={{ fontSize:10, fontWeight:800, color:renk }}>{x.tip==="ode"?"+":"-"}{fN(x.has,3)} has</span>
+                            <button onClick={()=>{ const yeni={...kasa,dokumcuIslemler:(kasa.dokumcuIslemler||[]).filter(d=>d.id!==x.id)}; svKasa(yeni); }} style={{ ...RD, fontSize:8, padding:"2px 5px" }}>Sil</button>
+                          </div>
                         </div>
-                        <div style={{ display:"flex", alignItems:"center", gap:6 }}>
-                          <span style={{ fontSize:10, fontWeight:800, color:x.tip==="gonder"?"#e8833a":"#6abf69" }}>{x.tip==="gonder"?"-":"+"}{fN(x.has,3)} has</span>
-                          <button onClick={()=>{
-                            const yeni = { ...kasa, dokumcuIslemler:(kasa.dokumcuIslemler||[]).filter(d=>d.id!==x.id) };
-                            svKasa(yeni);
-                          }} style={{ ...RD, fontSize:8, padding:"2px 5px" }}>Sil</button>
-                        </div>
-                      </div>
-                    ))}
-                    {!(kasa.dokumcuIslemler||[]).length && <div style={{ fontSize:9, color:"#665d4a", textAlign:"center", padding:"20px" }}>Henüz işlem yok</div>}
+                      );
+                    })}
+                    {!(kasa.dokumcuIslemler||[]).length && <div style={{ fontSize:9, color:"#665d4a", textAlign:"center", padding:"20px" }}>Henüz işlem yok — siparişler döküme geçince otomatik oluşur</div>}
                   </div>
                 </div>
-              )}
+                );
+              })()}
 
               {/* ══ STOK ══ */}
               {kasaSayfa==="stok" && (
@@ -3244,27 +3386,144 @@ function Atolye() {
                 </div>
               )}
 
+              {/* ══ BİLANÇO ══ */}
+              {kasaSayfa==="bilanco" && (() => {
+                // AKTİF
+                const topAktif = hamAltinGram + uretimAltin + uretimTas + satilmamisAltin + satilmamisTas + iadeTas + hurdaAltin + hurdaTas + hazirUrunGram + serbestGram;
+                const topAlacak = Object.values(musBakiye).reduce((s,d)=>s+Math.max(0,d.borc-d.odenen),0);
+                const topAktifToplam = topAktif + topAlacak;
+                // PASİF
+                const topPasif = dokumBorc;
+                // ÖZ SERMAYE
+                const ozSermaye = topAktifToplam - topPasif;
+
+                const BLK = { background:"rgba(0,0,0,0.15)", borderRadius:7, padding:"5px 10px", display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:4 };
+                const BLV = (v, renk) => (
+                  <span style={{ fontSize:11, fontWeight:800, color:renk||GOLD }}>
+                    {fN(v,3)} <span style={{ fontSize:8, fontWeight:400 }}>has</span>
+                    {hasGramUSD>0 && <span style={{ fontSize:8, color:"#665d4a", marginLeft:4 }}>≈{fUSD(v*hasGramUSD)}</span>}
+                  </span>
+                );
+
+                return (
+                  <div>
+                    <div style={{ fontSize:9, color:"#665d4a", marginBottom:12 }}>
+                      {new Date().toLocaleDateString("tr-TR",{day:"2-digit",month:"long",year:"numeric"})} tarihi itibarıyla
+                    </div>
+
+                    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:14 }}>
+
+                      {/* AKTİF */}
+                      <div style={{ background:"rgba(201,168,76,0.02)", border:"1px solid rgba(201,168,76,0.1)", borderRadius:12, padding:"12px 14px" }}>
+                        <div style={{ fontSize:10, fontWeight:800, color:GOLD, marginBottom:10, letterSpacing:".04em" }}>AKTİF — Varlıklar</div>
+
+                        <div style={{ fontSize:8, color:"#8a7d64", fontWeight:700, marginBottom:6, textTransform:"uppercase" }}>Stok & Üretim</div>
+                        {[
+                          { l:"Ham Altın Stoğu",           v:hamAltinGram,      c:GOLD },
+                          { l:"Üretimdeki Altın",          v:uretimAltin,       c:"#5b9bd5" },
+                          { l:"Üretimdeki Taş",            v:uretimTas,         c:"#a78bfa" },
+                          { l:"Satılmamış Mamul — Altın",  v:satilmamisAltin,   c:"#6abf69" },
+                          { l:"Satılmamış Mamul — Taş",    v:satilmamisTas,     c:"#7c6abf" },
+                          { l:"İade Taşları",              v:iadeTas,           c:"#c27ba0" },
+                          { l:"Hurda Altın",               v:hurdaAltin,        c:"#e8833a" },
+                          { l:"Hurda Taş",                 v:hurdaTas,          c:"#b86a3a" },
+                          { l:"Hazır Ürün Stoğu",          v:hazirUrunGram,     c:GOLD },
+                          { l:"Serbest Malzeme",           v:serbestGram,       c:"#e8dcc8" },
+                        ].filter(x=>x.v>0).map((x,i) => (
+                          <div key={i} style={BLK}>
+                            <span style={{ fontSize:9, color:"#998a6e" }}>{x.l}</span>
+                            {BLV(x.v, x.c)}
+                          </div>
+                        ))}
+
+                        <div style={{ height:1, background:"rgba(201,168,76,0.1)", margin:"8px 0" }}/>
+                        <div style={{ fontSize:8, color:"#8a7d64", fontWeight:700, marginBottom:6, textTransform:"uppercase" }}>Alacaklar</div>
+                        {Object.entries(musBakiye).filter(([,d])=>d.borc-d.odenen>0).map(([mus,d]) => (
+                          <div key={mus} style={BLK}>
+                            <span style={{ fontSize:9, color:"#998a6e" }}>{mus}</span>
+                            {BLV(d.borc-d.odenen, "#5b9bd5")}
+                          </div>
+                        ))}
+                        {topAlacak===0 && <div style={{ fontSize:8, color:"#665d4a" }}>Açık alacak yok</div>}
+
+                        <div style={{ height:2, background:"rgba(201,168,76,0.2)", margin:"10px 0" }}/>
+                        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                          <span style={{ fontSize:10, fontWeight:800, color:GOLD }}>TOPLAM AKTİF</span>
+                          {BLV(topAktifToplam, GOLD)}
+                        </div>
+                      </div>
+
+                      {/* PASİF + ÖZ SERMAYE */}
+                      <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
+                        {/* Pasif */}
+                        <div style={{ background:"rgba(232,90,79,0.02)", border:"1px solid rgba(232,90,79,0.1)", borderRadius:12, padding:"12px 14px" }}>
+                          <div style={{ fontSize:10, fontWeight:800, color:"#e85a4f", marginBottom:10, letterSpacing:".04em" }}>PASİF — Borçlar</div>
+                          <div style={BLK}>
+                            <span style={{ fontSize:9, color:"#998a6e" }}>Dökümcü Borcu</span>
+                            {BLV(dokumBorc, "#e85a4f")}
+                          </div>
+                          <div style={{ height:2, background:"rgba(232,90,79,0.15)", margin:"10px 0" }}/>
+                          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                            <span style={{ fontSize:10, fontWeight:800, color:"#e85a4f" }}>TOPLAM PASİF</span>
+                            {BLV(topPasif, "#e85a4f")}
+                          </div>
+                        </div>
+
+                        {/* Öz Sermaye */}
+                        <div style={{ background:"rgba(106,191,105,0.03)", border:"2px solid rgba(106,191,105,0.2)", borderRadius:12, padding:"12px 14px", flex:1 }}>
+                          <div style={{ fontSize:10, fontWeight:800, color:"#6abf69", marginBottom:10, letterSpacing:".04em" }}>ÖZ SERMAYE</div>
+                          <div style={{ fontSize:8, color:"#665d4a", marginBottom:8 }}>Aktif − Pasif</div>
+                          <div style={{ fontSize:20, fontWeight:800, color:ozSermaye>=0?"#6abf69":"#e85a4f" }}>
+                            {fN(ozSermaye,3)} has
+                          </div>
+                          {hasGramUSD>0 && (
+                            <div style={{ fontSize:12, fontWeight:700, color:ozSermaye>=0?"#4a9a4a":"#c0392b", marginTop:4 }}>
+                              {fUSD(ozSermaye*hasGramUSD)}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Denklik kontrol */}
+                        <div style={{ background:"rgba(0,0,0,0.15)", borderRadius:8, padding:"8px 12px", textAlign:"center" }}>
+                          <div style={{ fontSize:7, color:"#665d4a", marginBottom:3 }}>AKTİF = PASİF + ÖZ SERMAYE</div>
+                          <div style={{ fontSize:9, fontWeight:700, color:Math.abs(topAktifToplam-(topPasif+ozSermaye))<0.001?"#6abf69":"#e85a4f" }}>
+                            {Math.abs(topAktifToplam-(topPasif+ozSermaye))<0.001 ? "✓ Bilanço dengeli" : "⚠ Fark var"}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Kilit butonu */}
+                    <div style={{ display:"flex", justifyContent:"flex-end", marginTop:8 }}>
+                      <button onClick={()=>setKasaKilitli(true)} style={{ ...RD, fontSize:9, padding:"5px 12px" }}>🔒 Kasayı Kilitle</button>
+                    </div>
+                  </div>
+                );
+              })()}
+
               {/* ══ MODALLAR ══ */}
               {kasaModal && (() => {
                 const kapat = () => setKasaModal(null);
                 const tip = kasaModal.tip;
                 let baslik = "";
                 if (tip==="musOde")       baslik = "Müşteri Ödemesi Al";
-                if (tip==="dokumGonder")  baslik = "Döküm Gönder";
+                if (tip==="musBaklangic") baslik = "Başlangıç Bakiyesi Gir";
                 if (tip==="dokumOde")     baslik = "Dökümcüye Ödeme Yap";
+                if (tip==="dokumBorcGir") baslik = "Mevcut Borç Girişi";
                 if (tip==="hamAltin")     baslik = "Ham Altın Girişi";
                 if (tip==="hazirUrun")    baslik = "Hazır Ürün Ekle";
                 if (tip==="serbest")      baslik = "Serbest Malzeme Ekle";
                 const kaydet = () => {
                   if (!kfHas && !["hazirUrun","serbest"].includes(tip)) return;
                   const yeni = { ...kasa };
-                  if (tip==="musOde") {
+                  if (tip==="musOde"||tip==="musBaklangic") {
                     if (!kfMus) return;
                     yeni.musteriOdemeler = { ...yeni.musteriOdemeler };
                     if (!yeni.musteriOdemeler[kfMus]) yeni.musteriOdemeler[kfMus] = [];
-                    yeni.musteriOdemeler[kfMus] = [...yeni.musteriOdemeler[kfMus], { id:Date.now()+"", tarih:new Date(kfTarih).getTime(), has:parseFloat(kfHas)||0, aciklama:kfAc }];
-                  } else if (tip==="dokumGonder"||tip==="dokumOde") {
-                    yeni.dokumcuIslemler = [...(yeni.dokumcuIslemler||[]), { id:Date.now()+"", tarih:new Date(kfTarih).getTime(), tip:tip==="dokumGonder"?"gonder":"ode", has:parseFloat(kfHas)||0, aciklama:kfAc }];
+                    const kayitTip = tip==="musBaklangic" ? "baslangic_bakiye" : "ode";
+                    yeni.musteriOdemeler[kfMus] = [...yeni.musteriOdemeler[kfMus], { id:Date.now()+"", tarih:new Date(kfTarih).getTime(), has:parseFloat(kfHas)||0, aciklama:kfAc, tip:kayitTip }];
+                  } else if (tip==="dokumOde"||tip==="dokumBorcGir") {
+                    yeni.dokumcuIslemler = [...(yeni.dokumcuIslemler||[]), { id:Date.now()+"", tarih:new Date(kfTarih).getTime(), tip:tip==="dokumBorcGir"?"baslangic_borc":"ode", has:parseFloat(kfHas)||0, aciklama:kfAc }];
                   } else if (tip==="hamAltin") {
                     yeni.hamAltin = [...(yeni.hamAltin||[]), { id:Date.now()+"", tarih:new Date(kfTarih).getTime(), tip:kfTip, has:parseFloat(kfHas)||0, aciklama:kfAc }];
                   } else if (tip==="hazirUrun") {
@@ -3287,7 +3546,7 @@ function Atolye() {
                       {tip==="musOde" && (
                         <select value={kfMus} onChange={e=>setKfMus(e.target.value)} style={{ ...KIN, width:"100%" }}>
                           <option value="">Müşteri seç...</option>
-                          {Object.keys(musBakiye).sort().map(m => <option key={m} value={m}>{m}</option>)}
+                          {[...new Set([...Object.keys(musBakiye), ...Object.keys(musteriler)])].sort().map(m => <option key={m} value={m}>{m}</option>)}
                         </select>
                       )}
 
