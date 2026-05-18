@@ -117,7 +117,7 @@ function hesapla(m, secilenAyar, altinKgUSD, varsayilanMly) {
   const malMly     = Number(m.madenCarpan) || Number(varsayilanMly) || 0.030;
   const hasGramUSD = altinKgUSD > 0 ? altinKgUSD / 1000 : 0;
 
-  // Taş has gram
+  // Taş has gram — seçilen ayar oranıyla çarpılır (14K→0.585, 10K→0.417 vs.)
   const tasHas = tasGram * ayarOran;
 
   // İşçilik has gram
@@ -1563,6 +1563,7 @@ function Atolye() {
       ? toplamTasGram
       : (Number(fTasGram)||0);
     const obj = { ad: fAd.trim(), kod: fKod.trim().toUpperCase(), kategori: fKategori, gram: Number(fGram)||0, refAyar: fRefAyar, tasGram: hesaplananTasGram, taslar: fTaslar, tasBoy: fTasBoy.trim(), tasSekil: fTasSekil, tasTur: fTasTur, tasBoyut: fTasBoyut, tasAdet: Number(fTasAdet)||0, madenCarpan: Number(fMadenC)||0, iscilikDolar: Number(fIscilikDolar)||0, iscilikBirim: fIscilikBirim, ekMaliyet: Number(fEkMaliyet)||0, ac: fAc.trim(), foto: fFoto, ki: fKolId, durum: fDurum, etiketler: fEtiketler };
+    if (!obj.id) obj.olusturma = Date.now();
     if (editM) svM(modeller.map(m => m.id === editM.id ? { ...m, ...obj } : m));
     else svM([...modeller, { id: uid(), ...obj, t: Date.now() }]);
     setShowMM(false); rmf(); setEditM(null);
@@ -1644,7 +1645,9 @@ function Atolye() {
       }
       return ka.localeCompare(kb,"tr");
     };
-    if (sirala==="kar_desc" && altinKgUSD>0) r=[...r].sort((a,b)=>{ const ha=hesapla(a,a.refAyar,altinKgUSD,madenCarpan),hb=hesapla(b,b.refAyar,altinKgUSD,madenCarpan); return hb.karHas-ha.karHas; });
+    if (sirala==="yeni_eskiye") r=[...r].sort((a,b)=>(b.olusturma||b.id||0)-(a.olusturma||a.id||0));
+    else if (sirala==="eski_yeniye") r=[...r].sort((a,b)=>(a.olusturma||a.id||0)-(b.olusturma||b.id||0));
+    else if (sirala==="kar_desc" && altinKgUSD>0) r=[...r].sort((a,b)=>{ const ha=hesapla(a,a.refAyar,altinKgUSD,madenCarpan),hb=hesapla(b,b.refAyar,altinKgUSD,madenCarpan); return hb.karHas-ha.karHas; });
     else if (sirala==="kar_asc" && altinKgUSD>0) r=[...r].sort((a,b)=>{ const ha=hesapla(a,a.refAyar,altinKgUSD,madenCarpan),hb=hesapla(b,b.refAyar,altinKgUSD,madenCarpan); return ha.karHas-hb.karHas; });
     else if (sirala==="gram_asc") r=[...r].sort((a,b)=>(Number(a.gram)||0)-(Number(b.gram)||0));
     else if (sirala==="gram_desc") r=[...r].sort((a,b)=>(Number(b.gram)||0)-(Number(a.gram)||0));
@@ -2067,13 +2070,15 @@ function Atolye() {
             {/* Sıralama */}
             <span style={{ fontSize:7, color:"#7a6f5a", fontWeight:700, whiteSpace:"nowrap", marginRight:2 }}>SIRALA:</span>
               {[
-                { id:"varsayilan", l:"Varsayilan" },
-                { id:"kar_desc",   l:"Karli once" },
-                { id:"kar_asc",    l:"Az karli once" },
-                { id:"gram_asc",   l:"Hafif once" },
-                { id:"gram_desc",  l:"Agir once" },
-                { id:"kod",        l:"Koda gore" },
-                { id:"cok_satilan",l:"Cok satilan" },
+                { id:"varsayilan",    l:"Varsayılan" },
+                { id:"yeni_eskiye",   l:"Yeni → Eski" },
+                { id:"eski_yeniye",   l:"Eski → Yeni" },
+                { id:"kar_desc",      l:"Karlı önce" },
+                { id:"kar_asc",       l:"Az karlı önce" },
+                { id:"gram_asc",      l:"Az gram önce" },
+                { id:"gram_desc",     l:"Çok gram önce" },
+                { id:"kod",           l:"Koda göre" },
+                { id:"cok_satilan",   l:"Çok satılan" },
               ].map(s => (
                 <button key={s.id} onClick={()=>setSirala(s.id)} style={{ background:sirala===s.id?"rgba(201,168,76,0.18)":"rgba(201,168,76,0.03)", border:"1px solid", borderColor:sirala===s.id?"rgba(201,168,76,0.35)":"rgba(201,168,76,0.07)", borderRadius:5, padding:"3px 7px", color:sirala===s.id?GOLD:"#7a6f5a", fontSize:8, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap" }}>{s.l}</button>
               ))}
