@@ -120,11 +120,14 @@ function hesapla(m, secilenAyar, altinKgUSD, varsayilanMly) {
   // Taş has gram — seçilen ayar oranıyla çarpılır (14K→0.585, 10K→0.417 vs.)
   const tasHas = tasGram * ayarOran;
 
-  // İşçilik has gram
-  const iscilikDolarGr = Number(m.iscilikDolar) || 0;
+  // İşçilik — ayar bazlı fallback: seçilen ayar → girilmişse o, yoksa varsayılan
+  const iscilikAyarlar = m.iscilikAyarlar || {};
+  const ayarIscilik = iscilikAyarlar[aktifAyar];
+  const iscilikDolarGr = ayarIscilik ? (Number(ayarIscilik.dolar) || 0) : (Number(m.iscilikDolar) || 0);
+  const iscilikBirimKullan = ayarIscilik ? (ayarIscilik.birim || "dolar") : (m.iscilikBirim || "dolar");
   let iscilikHas = 0;
   let iscilikUSD = 0;
-  if (m.iscilikBirim === "milyem") {
+  if (iscilikBirimKullan === "milyem") {
     // milyem/gr → has gram doğrudan
     iscilikHas = mamulGram * iscilikDolarGr;
     iscilikUSD = iscilikHas * hasGramUSD;
@@ -1360,6 +1363,7 @@ function Atolye() {
   const [fMadenC,      setFMadenC]     = useState("");
   const [fIscilikDolar,setFIscilikDolar] = useState("");
   const [fIscilikBirim,setFIscilikBirim] = useState("dolar");
+  const [fIscilikAyarlar,setFIscilikAyarlar] = useState({}); // { "10K": {dolar:"-0.003", birim:"milyem"}, ... }
   const [fEkMaliyet,   setFEkMaliyet]  = useState("");
   const [fKategori,    setFKategori]   = useState("yuzuk");
   const [fSetKodu,     setFSetKodu]    = useState(""); // set kodu - aynı sete ait modelleri eşler
@@ -1524,7 +1528,7 @@ function Atolye() {
   }, [kollar]);
 
   const rkf = () => { setFkAd(""); setFkAc(""); setFkOn(""); };
-  const rmf = () => { setFAd(""); setFKod(""); setFGram(""); setFRefAyar("14K"); setFTasGram(""); setFTasBoy(""); setFTaslar([]); setFTasSekil("ROUND"); setFTasTur("N"); setFTasBoyut(""); setFTasAdet(""); setFTasOzelIsim(""); setFMadenC(""); setFIscilikDolar(""); setFIscilikBirim("dolar"); setFEkMaliyet(""); setFKategori("yuzuk"); setFSetKodu(""); setFAc(""); setFFoto(""); setFKolId(""); setFDurum("baslanmadi"); setFEtiketler([]); setFYeniEtiket(""); };
+  const rmf = () => { setFAd(""); setFKod(""); setFGram(""); setFRefAyar("14K"); setFTasGram(""); setFTasBoy(""); setFTaslar([]); setFTasSekil("ROUND"); setFTasTur("N"); setFTasBoyut(""); setFTasAdet(""); setFTasOzelIsim(""); setFMadenC(""); setFIscilikDolar(""); setFIscilikBirim("dolar"); setFIscilikAyarlar({}); setFEkMaliyet(""); setFKategori("yuzuk"); setFSetKodu(""); setFAc(""); setFFoto(""); setFKolId(""); setFDurum("baslanmadi"); setFEtiketler([]); setFYeniEtiket(""); };
 
   const saveKol = () => {
     if (!fkAd.trim()) return;
@@ -1562,7 +1566,7 @@ function Atolye() {
     const hesaplananTasGram = fTaslar.length > 0 && toplamTasGram > 0
       ? toplamTasGram
       : (Number(fTasGram)||0);
-    const obj = { ad: fAd.trim(), kod: fKod.trim().toUpperCase(), kategori: fKategori, gram: Number(fGram)||0, refAyar: fRefAyar, tasGram: hesaplananTasGram, taslar: fTaslar, tasBoy: fTasBoy.trim(), tasSekil: fTasSekil, tasTur: fTasTur, tasBoyut: fTasBoyut, tasAdet: Number(fTasAdet)||0, madenCarpan: Number(fMadenC)||0, iscilikDolar: Number(fIscilikDolar)||0, iscilikBirim: fIscilikBirim, ekMaliyet: Number(fEkMaliyet)||0, ac: fAc.trim(), foto: fFoto, ki: fKolId, durum: fDurum, etiketler: fEtiketler };
+    const obj = { ad: fAd.trim(), kod: fKod.trim().toUpperCase(), kategori: fKategori, gram: Number(fGram)||0, refAyar: fRefAyar, tasGram: hesaplananTasGram, taslar: fTaslar, tasBoy: fTasBoy.trim(), tasSekil: fTasSekil, tasTur: fTasTur, tasBoyut: fTasBoyut, tasAdet: Number(fTasAdet)||0, madenCarpan: Number(fMadenC)||0, iscilikDolar: Number(fIscilikDolar)||0, iscilikBirim: fIscilikBirim, iscilikAyarlar: fIscilikAyarlar, ekMaliyet: Number(fEkMaliyet)||0, ac: fAc.trim(), foto: fFoto, ki: fKolId, durum: fDurum, etiketler: fEtiketler };
     if (!obj.id) obj.olusturma = Date.now();
     if (editM) svM(modeller.map(m => m.id === editM.id ? { ...m, ...obj } : m));
     else svM([...modeller, { id: uid(), ...obj, t: Date.now() }]);
@@ -1587,7 +1591,7 @@ function Atolye() {
   const openEM = m => {
     setFAd(m.ad); setFKod(m.kod||""); setFGram(String(m.gram||"")); setFRefAyar(m.refAyar||"14K");
     setFTasGram(String(m.tasGram||"")); setFTasBoy(m.tasBoy||""); setFTaslar(m.taslar||[]); setFTasSekil(m.tasSekil||"ROUND"); setFTasTur(m.tasTur||"N"); setFTasBoyut(m.tasBoyut||""); setFTasAdet(String(m.tasAdet||"")); setFMadenC(String(m.madenCarpan||""));
-    setFIscilikDolar(String(m.iscilikDolar||"")); setFIscilikBirim(m.iscilikBirim||"dolar"); setFEkMaliyet(String(m.ekMaliyet||""));
+    setFIscilikDolar(String(m.iscilikDolar||"")); setFIscilikBirim(m.iscilikBirim||"dolar"); setFIscilikAyarlar(m.iscilikAyarlar||{}); setFEkMaliyet(String(m.ekMaliyet||""));
     setFAc(m.ac||""); setFFoto(m.foto||""); setFKolId(m.ki||""); setFDurum(m.durum||"baslanmadi");
     setFKategori(m.kategori||"yuzuk"); setFEtiketler(m.etiketler||[]); setEditM(m); setShowMM(true);
   };
@@ -1645,8 +1649,8 @@ function Atolye() {
       }
       return ka.localeCompare(kb,"tr");
     };
-    if (sirala==="yeni_eskiye") r=[...r].sort((a,b)=>(b.olusturma||b.id||0)-(a.olusturma||a.id||0));
-    else if (sirala==="eski_yeniye") r=[...r].sort((a,b)=>(a.olusturma||a.id||0)-(b.olusturma||b.id||0));
+    if (sirala==="yeni_eskiye") r=[...r].sort((a,b)=>(b.t||0)-(a.t||0));
+    else if (sirala==="eski_yeniye") r=[...r].sort((a,b)=>(a.t||0)-(b.t||0));
     else if (sirala==="kar_desc" && altinKgUSD>0) r=[...r].sort((a,b)=>{ const ha=hesapla(a,a.refAyar,altinKgUSD,madenCarpan),hb=hesapla(b,b.refAyar,altinKgUSD,madenCarpan); return hb.karHas-ha.karHas; });
     else if (sirala==="kar_asc" && altinKgUSD>0) r=[...r].sort((a,b)=>{ const ha=hesapla(a,a.refAyar,altinKgUSD,madenCarpan),hb=hesapla(b,b.refAyar,altinKgUSD,madenCarpan); return ha.karHas-hb.karHas; });
     else if (sirala==="gram_asc") r=[...r].sort((a,b)=>(Number(a.gram)||0)-(Number(b.gram)||0));
@@ -5285,13 +5289,34 @@ function Atolye() {
 
         <div style={{ background:"rgba(232,131,58,0.04)", border:"1px solid rgba(232,131,58,0.1)", borderRadius:10, padding:"10px 12px", marginBottom:10 }}>
           <div style={{ fontSize:9, fontWeight:700, color:"#e8833a", marginBottom:8 }}>ISCILIK</div>
-          <Fl label="Iscilik birim ve tutar" hint={fGram&&fIscilikDolar ? (fIscilikBirim==="milyem" ? fN(Number(fGram))+" x "+fN(Number(fIscilikDolar),3)+" mly = "+fN(Number(fGram)*Number(fIscilikDolar),3)+" has" : fN(Number(fGram))+" x "+fUSD(Number(fIscilikDolar))+" = "+fUSD(Number(fGram)*Number(fIscilikDolar))) : ""}>
+          <Fl label="Iscilik birim ve tutar (varsayilan)" hint={fGram&&fIscilikDolar ? (fIscilikBirim==="milyem" ? fN(Number(fGram))+" x "+fN(Number(fIscilikDolar),3)+" mly = "+fN(Number(fGram)*Number(fIscilikDolar),3)+" has" : fN(Number(fGram))+" x "+fUSD(Number(fIscilikDolar))+" = "+fUSD(Number(fGram)*Number(fIscilikDolar))) : ""}>
             <div style={{ display:"flex", gap:6 }}>
               <select value={fIscilikBirim} onChange={e=>setFIscilikBirim(e.target.value)} style={{ ...IS, width:130, padding:"8px 6px", fontSize:11, flexShrink:0 }}>
                 <option value="dolar">$ / gr</option>
                 <option value="milyem">milyem / gr</option>
               </select>
               <input type="number" value={fIscilikDolar} onChange={e=>setFIscilikDolar(e.target.value)} placeholder={fIscilikBirim==="milyem"?"0.30":"2.75"} style={IS}/>
+            </div>
+            {/* Ayar bazlı işçilik */}
+            <div style={{ marginTop:8, borderTop:"1px solid rgba(201,168,76,0.1)", paddingTop:8 }}>
+              <div style={{ fontSize:8, color:"#8a7d64", fontWeight:700, marginBottom:6 }}>AYAR BAZLI İŞÇİLİK (opsiyonel)</div>
+              {Object.entries(fIscilikAyarlar).map(([ayar, val]) => (
+                <div key={ayar} style={{ display:"flex", gap:5, alignItems:"center", marginBottom:5 }}>
+                  <span style={{ fontSize:9, fontWeight:700, color:GOLD, width:30, flexShrink:0 }}>{ayar}</span>
+                  <select value={val.birim||"dolar"} onChange={e=>setFIscilikAyarlar(p=>({...p,[ayar]:{...p[ayar],birim:e.target.value}}))} style={{ ...IS, width:100, padding:"4px 5px", fontSize:10 }}>
+                    <option value="dolar">$ / gr</option>
+                    <option value="milyem">milyem / gr</option>
+                  </select>
+                  <input type="number" value={val.dolar||""} onChange={e=>setFIscilikAyarlar(p=>({...p,[ayar]:{...p[ayar],dolar:e.target.value}}))} placeholder="değer" style={{ ...IS, flex:1, padding:"4px 6px", fontSize:10 }}/>
+                  <button onClick={()=>setFIscilikAyarlar(p=>{ const y={...p}; delete y[ayar]; return y; })} style={{ ...RD, fontSize:9, padding:"3px 7px" }}>✕</button>
+                </div>
+              ))}
+              <div style={{ display:"flex", gap:5, marginTop:4 }}>
+                <select onChange={e=>{ if(!e.target.value) return; const ayar=e.target.value; if(!fIscilikAyarlar[ayar]) setFIscilikAyarlar(p=>({...p,[ayar]:{dolar:"",birim:fIscilikBirim}})); e.target.value=""; }} style={{ ...IS, flex:1, padding:"4px 6px", fontSize:10 }}>
+                  <option value="">+ Ayar ekle...</option>
+                  {["8K","10K","14K","18K","21K","22K","24K","925"].filter(a=>!fIscilikAyarlar[a]).map(a=><option key={a} value={a}>{a}</option>)}
+                </select>
+              </div>
             </div>
           </Fl>
         </div>
