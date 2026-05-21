@@ -4012,6 +4012,16 @@ function Atolye() {
             <div style={{ background:"rgba(91,155,213,0.04)", border:"1px solid rgba(91,155,213,0.12)", borderRadius:12, padding:"14px 16px", marginBottom:14 }}>
               <div style={{ fontSize:10, fontWeight:700, color:"#5b9bd5", marginBottom:10 }}>💎 ÖZEL TAŞ BOYUTLARI</div>
               <div style={{ fontSize:9, color:"#665d4a", marginBottom:10 }}>Tabloda olmayan taş boyutlarını buraya ekleyin. Model formunda otomatik kullanılır.</div>
+              {ozelTaslar.length === 0 && (
+                <button onClick={()=>{
+                  const taslar = [{"sekil": "SEDEF", "boyut": "16mm", "gramPerAdet": 1}, {"sekil": "ONYX", "boyut": "16mm", "gramPerAdet": 2}, {"sekil": "OCTAGON", "boyut": "8x6", "gramPerAdet": 0.86}, {"sekil": "OCTAGON RENKLI", "boyut": "8x6", "gramPerAdet": 0.3}, {"sekil": "ONYX", "boyut": "10MM", "gramPerAdet": 1.97}, {"sekil": "KARE", "boyut": "2.5X2.5 RENKLI", "gramPerAdet": 0.021}, {"sekil": "KALP", "boyut": "7X7 OPAL", "gramPerAdet": 0.15}, {"sekil": "ROUND", "boyut": "7.5", "gramPerAdet": 0.305}, {"sekil": "MARKİZ", "boyut": "10X5", "gramPerAdet": 0.6}, {"sekil": "MARKİZ", "boyut": "10X10 RENKLI", "gramPerAdet": 0.3}, {"sekil": "KALP", "boyut": "10X10", "gramPerAdet": 1.26}, {"sekil": "KALP", "boyut": "10X10 RENKLI", "gramPerAdet": 1}, {"sekil": "OCTAGON", "boyut": "7X7", "gramPerAdet": 1.26}, {"sekil": "OCTAGON", "boyut": "7X7 RENKLI", "gramPerAdet": 0.55}, {"sekil": "OCTAGON", "boyut": "7X5", "gramPerAdet": 0.35}, {"sekil": "OCTAGON", "boyut": "7X5 RENKLI", "gramPerAdet": 0.2}, {"sekil": "KALP", "boyut": "7X7", "gramPerAdet": 1}, {"sekil": "KALP", "boyut": "7X7 RENKLI", "gramPerAdet": 0.45}, {"sekil": "BRIOLETTE", "boyut": "12X12", "gramPerAdet": 1.35}, {"sekil": "BRIOLETTE", "boyut": "16X12", "gramPerAdet": 2.85}, {"sekil": "ROUND", "boyut": "7MM", "gramPerAdet": 0.69}, {"sekil": "ROUND", "boyut": "7MM RENKLI", "gramPerAdet": 0.3}, {"sekil": "TRAPEZ", "boyut": "1.5X1.25X1.00", "gramPerAdet": 0.0079}, {"sekil": "OVAL", "boyut": "10X2 RENKLI", "gramPerAdet": 0.33}, {"sekil": "CABOCHON MALAHIT", "boyut": "10X10", "gramPerAdet": 1}, {"sekil": "YAY 3M SARNEL", "boyut": "0.5", "gramPerAdet": 0.3}, {"sekil": "ŞEKER TAŞ", "boyut": "5MM", "gramPerAdet": 0.5}, {"sekil": "TITANYUM YAY", "boyut": "60X60", "gramPerAdet": 1}, {"sekil": "OVAL", "boyut": "9X7", "gramPerAdet": 0.3}, {"sekil": "OPAL", "boyut": "10X8", "gramPerAdet": 0.3}];
+                  setOzelTaslar(taslar);
+                  sv("v7ay",{kategoriler:ayarKategoriler,etiketler:ayarEtiketler,varsAltinKg:ayarVarsAltinKg,varsMc:ayarVarsMc,varsIscilik:ayarVarsIscilik,varsIscilikBirim:ayarVarsIscilikBirim,kayitliNotlar,ozelTaslar:taslar});
+                  alert("30 taş yüklendi!");
+                }} style={{ background:"rgba(91,155,213,0.15)", border:"1px solid rgba(91,155,213,0.3)", borderRadius:8, padding:"6px 14px", color:"#5b9bd5", fontSize:10, fontWeight:700, cursor:"pointer", marginBottom:10 }}>
+                  ⬆ Yedekten 30 Taşı Yükle
+                </button>
+              )}
 
               {/* Mevcut özel taşlar */}
               {ozelTaslar.length > 0 && (
