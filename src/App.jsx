@@ -2290,10 +2290,10 @@ function Atolye() {
                     {kayitliNotlar.map((n,ni) => (
                       <div key={ni} style={{ display:"flex", alignItems:"center", gap:1 }}>
                         <button onClick={()=>konfList.forEach(m=>{ const mevc=konfNot[m.id]||""; konfNotSec(m.id, mevc?mevc+", "+n:n); })} style={{ background:"rgba(91,155,213,0.08)", border:"1px solid rgba(91,155,213,0.15)", borderRadius:5, padding:"2px 7px", color:"#5b9bd5", fontSize:8, cursor:"pointer", whiteSpace:"nowrap" }}>+{n}</button>
-                        <button onClick={()=>{ const yeni=kayitliNotlar.filter((_,i)=>i!==ni); setKayitliNotlar(yeni); sv("v7ay",{kategoriler:ayarKategoriler,etiketler:ayarEtiketler,varsAltinKg:ayarVarsAltinKg,varsMc:ayarVarsMc,varsIscilik:ayarVarsIscilik,varsIscilikBirim:ayarVarsIscilikBirim,kayitliNotlar:yeni}); }} style={{ background:"none", border:"none", color:"#554d3a", fontSize:9, cursor:"pointer", padding:"0 2px" }}>×</button>
+                        <button onClick={()=>{ const yeni=kayitliNotlar.filter((_,i)=>i!==ni); setKayitliNotlar(yeni); sv("v7ay",{kategoriler:ayarKategoriler,etiketler:ayarEtiketler,varsAltinKg:ayarVarsAltinKg,varsMc:ayarVarsMc,varsIscilik:ayarVarsIscilik,varsIscilikBirim:ayarVarsIscilikBirim,kayitliNotlar:yeni,ozelTaslar}); }} style={{ background:"none", border:"none", color:"#554d3a", fontSize:9, cursor:"pointer", padding:"0 2px" }}>×</button>
                       </div>
                     ))}
-                    <input value={yeniNotSablon} onChange={e=>setYeniNotSablon(e.target.value)} onKeyDown={e=>{ if(e.key==="Enter"&&yeniNotSablon.trim()){ const yeni=[...kayitliNotlar,yeniNotSablon.trim()]; setKayitliNotlar(yeni); setYeniNotSablon(""); sv("v7ay",{kategoriler:ayarKategoriler,etiketler:ayarEtiketler,varsAltinKg:ayarVarsAltinKg,varsMc:ayarVarsMc,varsIscilik:ayarVarsIscilik,varsIscilikBirim:ayarVarsIscilikBirim,kayitliNotlar:yeni}); }}} placeholder="+ Yeni not, Enter ile kaydet" style={{ ...IS, width:150, padding:"2px 6px", fontSize:9 }}/>
+                    <input value={yeniNotSablon} onChange={e=>setYeniNotSablon(e.target.value)} onKeyDown={e=>{ if(e.key==="Enter"&&yeniNotSablon.trim()){ const yeni=[...kayitliNotlar,yeniNotSablon.trim()]; setKayitliNotlar(yeni); setYeniNotSablon(""); sv("v7ay",{kategoriler:ayarKategoriler,etiketler:ayarEtiketler,varsAltinKg:ayarVarsAltinKg,varsMc:ayarVarsMc,varsIscilik:ayarVarsIscilik,varsIscilikBirim:ayarVarsIscilikBirim,kayitliNotlar:yeni,ozelTaslar}); }}} placeholder="+ Yeni not, Enter ile kaydet" style={{ ...IS, width:150, padding:"2px 6px", fontSize:9 }}/>
                   </div>
                 </div>
                 {/* Ana tablo */}
@@ -3948,7 +3948,7 @@ function Atolye() {
                 </Fl></div>
               </div>
               <button onClick={() => {
-                const yeniAy = { kategoriler:ayarKategoriler, etiketler:ayarEtiketler, varsAltinKg:ayarVarsAltinKg, varsMc:ayarVarsMc, varsIscilik:ayarVarsIscilik, varsIscilikBirim:ayarVarsIscilikBirim };
+                const yeniAy = { kategoriler:ayarKategoriler, etiketler:ayarEtiketler, varsAltinKg:ayarVarsAltinKg, varsMc:ayarVarsMc, varsIscilik:ayarVarsIscilik, varsIscilikBirim:ayarVarsIscilikBirim, kayitliNotlar, ozelTaslar };
                 sv("v7ay", yeniAy);
                 if (ayarVarsAltinKg) setAltinKg(ayarVarsAltinKg);
                 if (ayarVarsMc) setMc(ayarVarsMc);
@@ -3989,7 +3989,7 @@ function Atolye() {
                       <button onClick={() => {
                         const yeni = ayarKategoriler.filter(x => x!==k);
                         setAyarKategoriler(yeni);
-                        sv("v7ay", { kategoriler:yeni, etiketler:ayarEtiketler, varsAltinKg:ayarVarsAltinKg, varsMc:ayarVarsMc, varsIscilik:ayarVarsIscilik, varsIscilikBirim:ayarVarsIscilikBirim });
+                        sv("v7ay", { kategoriler:yeni, etiketler:ayarEtiketler, varsAltinKg:ayarVarsAltinKg, varsMc:ayarVarsMc, varsIscilik:ayarVarsIscilik, varsIscilikBirim:ayarVarsIscilikBirim, kayitliNotlar, ozelTaslar });
                       }} style={{ background:"none", border:"none", color:"#e85a4f", cursor:"pointer", fontSize:10, padding:0, lineHeight:1 }}>×</button>
                     )}
                   </span>
@@ -4003,7 +4003,7 @@ function Atolye() {
                   const yeni = [...ayarKategoriler, k];
                   setAyarKategoriler(yeni);
                   setAyarYeniKategori("");
-                  sv("v7ay", { kategoriler:yeni, etiketler:ayarEtiketler, varsAltinKg:ayarVarsAltinKg, varsMc:ayarVarsMc, varsIscilik:ayarVarsIscilik, varsIscilikBirim:ayarVarsIscilikBirim });
+                  sv("v7ay", { kategoriler:yeni, etiketler:ayarEtiketler, varsAltinKg:ayarVarsAltinKg, varsMc:ayarVarsMc, varsIscilik:ayarVarsIscilik, varsIscilikBirim:ayarVarsIscilikBirim, kayitliNotlar, ozelTaslar });
                 }} style={{ ...GH, padding:"6px 12px", fontSize:10 }}>+ Ekle</button>
               </div>
             </div>
