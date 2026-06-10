@@ -1293,7 +1293,6 @@ function Atolye() {
   }); // { "MizanAdı": "SistemAdı" }
   const [ajanGecmis, setAjanGecmis] = useState([]); // [{rol:"user"|"assistant", icerik:"..."}]
   const [ajanYukleniyor, setAjanYukleniyor] = useState(false);
-  const [ajanUyarilar, setAjanUyarilar] = useState(null); // null = henüz taranmadı
   const [kasaModal, setKasaModal] = useState(null);
   const [kasaKilitli, setKasaKilitli] = useState(true);
   const [kasaSifreGirdi, setKasaSifreGirdi] = useState("");
@@ -4309,7 +4308,7 @@ Kurallar:
 - Mümkünse aksiyon öner`;
 
               const mesajlar = yeniGecmis.map(m => ({ role: m.rol==="user"?"user":"assistant", content: m.icerik }));
-              const res = await fetch("https://api.anthropic.com/v1/messages", {
+              const res = await fetch("/api/chat", {
                 method:"POST",
                 headers:{ "Content-Type":"application/json" },
                 body: JSON.stringify({
@@ -4328,79 +4327,125 @@ Kurallar:
             setAjanYukleniyor(false);
           };
 
-          // Uyarıları hesapla (ilk açılışta)
-          if (ajanUyarilar === null) {
-            setTimeout(() => setAjanUyarilar(hesaplaUyarilar()), 100);
-          }
 
-          const UYARI_RENK = { kirmizi:"#e85a4f", sari:"#e8833a", yesil:"#6abf69" };
-          const UYARI_BG   = { kirmizi:"rgba(232,90,79,0.08)", sari:"rgba(232,131,58,0.08)", yesil:"rgba(106,191,105,0.08)" };
-          const UYARI_ICO  = { kirmizi:"🔴", sari:"🟡", yesil:"🟢" };
 
           return (
             <div style={{ animation:"fadein .3s" }}>
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
                 <h2 style={{ margin:0, fontSize:14, fontWeight:700, color:T.text }}>🤖 Atölye Asistanı</h2>
-                <button onClick={()=>setAjanUyarilar(hesaplaUyarilar())} style={{ ...GH, fontSize:9, padding:"5px 12px" }}>↺ Yenile</button>
+                
               </div>
 
-              {/* ── OTOMATİK UYARILAR ── */}
-              <div style={{ background:"rgba(0,0,0,0.2)", border:"1px solid rgba(255,255,255,0.06)", borderRadius:12, padding:"12px 16px", marginBottom:14 }}>
-                <div style={{ fontSize:10, fontWeight:700, color:GOLD, marginBottom:10 }}>⚡ OTOMATİK UYARILAR</div>
-                {ajanUyarilar === null
-                  ? <div style={{ fontSize:10, color:"#665d4a" }}>Taranıyor...</div>
-                  : <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
-                      {ajanUyarilar.map((u, i) => (
-                        <div key={i} style={{ display:"flex", alignItems:"flex-start", gap:8, padding:"7px 10px", background:UYARI_BG[u.tip], border:"1px solid", borderColor:UYARI_RENK[u.tip]+"33", borderRadius:8 }}>
-                          <span style={{ fontSize:12, flexShrink:0, marginTop:1 }}>{UYARI_ICO[u.tip]}</span>
-                          <span style={{ fontSize:10, color:UYARI_RENK[u.tip], fontWeight: u.tip!=="yesil"?700:400 }}>{u.mesaj}</span>
-                          {u.tip !== "yesil" && (
-                            <button onClick={()=>{
-                              setAjanGecmis(prev=>[...prev,{rol:"user",icerik:`Bu konuda ne yapmalıyım: ${u.mesaj}`}]);
-                              setAjanSoru(`Bu konuda ne yapmalıyım: ${u.mesaj}`);
-                              setTimeout(()=>document.getElementById("ajan-input")?.focus(),100);
-                            }} style={{ marginLeft:"auto", flexShrink:0, background:"rgba(255,255,255,0.06)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:6, padding:"2px 8px", color:"#998a6e", fontSize:8, cursor:"pointer" }}>Analiz Et →</button>
-                          )}
+              {/* ── ÖZET KARTLAR ── */}
+              {(() => {
+                const altinKgUSD = parseFloat(altinKg) || 0;
+                // Kritik: karlısız modeller
+                const karsizModeller = altinKgUSD > 0 ? modeller.filter(m => {
+                  const hc = hesapla(m, m.refAyar, altinKgUSD, parseFloat(mc)||0.030);
+                  return m.gram > 0 && hc.karMly < 0.020;
+                }) : [];
+                // Geciken siparişler
+                const gecikenSiparisler = siparisler.filter(s => {
+                  const son = (s.durumGecmisi||[]).slice(-1)[0];
+                  if (!son || ["tamam","teslim","hurda"].includes(son.durum)) return false;
+                  return Math.round((Date.now()-son.tarih)/86400000) >= 7;
+                });
+                // Ödeme yapmayan müşteriler
+                const odemeSizMusteriler = Object.entries(kasa.musteriOdemeler||{}).filter(([,odemeler]) => {
+                  if (!odemeler?.length) return false;
+                  const son = Math.max(...odemeler.map(o=>o.tarih||0));
+                  return Math.round((Date.now()-son)/86400000) >= 30;
+                });
+                // Hurda oranı yüksek modeller
+                const hurdaliModeller = (() => {
+                  const modelHurda = {};
+                  siparisler.forEach(s => (s.kalemler||[]).forEach(k => {
+                    const hurda = ((s.kalemHurda)||{})[k.id]||0;
+                    if (!modelHurda[k.id]) modelHurda[k.id] = { ad:k.ad||k.kod||"?", hurda:0, toplam:0 };
+                    modelHurda[k.id].hurda += hurda;
+                    modelHurda[k.id].toplam += k.adet||1;
+                  }));
+                  return Object.values(modelHurda).filter(d => d.toplam >= 5 && d.hurda/d.toplam > 0.10);
+                })();
+
+                const kartlar = [
+                  karsizModeller.length > 0 && {
+                    renk:"#e85a4f", bg:"rgba(232,90,79,0.06)", border:"rgba(232,90,79,0.15)",
+                    ikon:"🔴", baslik:"Düşük Karlılık",
+                    ozet:`${karsizModeller.length} modelin karlılığı 0.020 mly altında`,
+                    soru:`Karlılığı 0.020 mly altında olan şu modellerimi analiz et ve ne yapmalıyım öner: ${karsizModeller.slice(0,10).map(m=>m.kod||m.ad).join(", ")}`
+                  },
+                  gecikenSiparisler.length > 0 && {
+                    renk:"#e8833a", bg:"rgba(232,131,58,0.06)", border:"rgba(232,131,58,0.15)",
+                    ikon:"⏰", baslik:"Geciken Siparişler",
+                    ozet:`${gecikenSiparisler.length} sipariş 7+ gündür aynı aşamada bekliyor`,
+                    soru:`Şu siparişler gecikiyor, ne yapmalıyım: ${gecikenSiparisler.slice(0,5).map(s=>(s.musKod||s.musteri||"?")+" ("+Math.round((Date.now()-((s.durumGecmisi||[]).slice(-1)[0]?.tarih||0))/86400000)+" gün)").join(", ")}`
+                  },
+                  odemeSizMusteriler.length > 0 && {
+                    renk:"#a78bfa", bg:"rgba(167,139,250,0.06)", border:"rgba(167,139,250,0.15)",
+                    ikon:"💰", baslik:"Bekleyen Ödemeler",
+                    ozet:`${odemeSizMusteriler.length} müşteriden 30+ gündür ödeme yok`,
+                    soru:`Şu müşterilerden 30+ gündür ödeme yok, nasıl yaklaşmalıyım: ${odemeSizMusteriler.map(([m])=>m).join(", ")}`
+                  },
+                  hurdaliModeller.length > 0 && {
+                    renk:"#e8833a", bg:"rgba(232,131,58,0.06)", border:"rgba(232,131,58,0.15)",
+                    ikon:"⚠️", baslik:"Yüksek Hurda Oranı",
+                    ozet:`${hurdaliModeller.length} modelde hurda oranı %10 üstünde`,
+                    soru:`Şu modellerde hurda oranı çok yüksek, sebep ne olabilir ve ne yapmalıyım: ${hurdaliModeller.map(d=>d.ad+" (%"+Math.round(d.hurda/d.toplam*100)+")").join(", ")}`
+                  },
+                  rhinoMizan && {
+                    renk:"#5b9bd5", bg:"rgba(91,155,213,0.06)", border:"rgba(91,155,213,0.15)",
+                    ikon:"📊", baslik:"Mizan Analizi",
+                    ozet:`${rhinoMizan.musteriHas.filter(x=>x.bakiye>0).length} müşteri alacağı, ${rhinoMizan.dokumcuHas.filter(x=>x.bakiye<0).length} satıcı borcu`,
+                    soru:"Rhino ERP mizan verilerini analiz et. Müşteri alacaklarım, satıcı borçlarım ve genel finansal durum hakkında özet yap."
+                  },
+                ].filter(Boolean);
+
+                if (!kartlar.length) return (
+                  <div style={{ background:"rgba(106,191,105,0.05)", border:"1px solid rgba(106,191,105,0.15)", borderRadius:12, padding:"14px 18px", marginBottom:14, textAlign:"center" }}>
+                    <div style={{ fontSize:16, marginBottom:4 }}>✅</div>
+                    <div style={{ fontSize:11, color:"#6abf69", fontWeight:700 }}>Her şey yolunda görünüyor</div>
+                    <div style={{ fontSize:9, color:"#665d4a", marginTop:4 }}>Kritik bir durum tespit edilmedi. Aşağıdan soru sorabilirsiniz.</div>
+                  </div>
+                );
+
+                return (
+                  <div style={{ marginBottom:14 }}>
+                    <div style={{ fontSize:10, fontWeight:700, color:GOLD, marginBottom:10 }}>⚡ ÖNEMLİ KONULAR</div>
+                    <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+                      {kartlar.map((k,i) => (
+                        <div key={i} style={{ background:k.bg, border:"1px solid "+k.border, borderRadius:10, padding:"10px 14px", display:"flex", alignItems:"center", gap:12, cursor:"pointer" }}
+                          onClick={()=>{ setAjanSoru(k.soru); setTimeout(()=>document.getElementById("ajan-input")?.focus(),100); }}>
+                          <div style={{ fontSize:20, flexShrink:0 }}>{k.ikon}</div>
+                          <div style={{ flex:1 }}>
+                            <div style={{ fontSize:10, fontWeight:700, color:k.renk }}>{k.baslik}</div>
+                            <div style={{ fontSize:9, color:"#998a6e", marginTop:2 }}>{k.ozet}</div>
+                          </div>
+                          <div style={{ fontSize:9, color:"#665d4a", flexShrink:0 }}>Sormak için tıkla →</div>
                         </div>
                       ))}
                     </div>
-                }
-              </div>
-
-              {/* ── RHİNO MİZAN NOTU ── */}
-              {rhinoMizan ? (
-                <div style={{ background:"rgba(91,155,213,0.05)", border:"1px solid rgba(91,155,213,0.15)", borderRadius:10, padding:"8px 14px", marginBottom:12, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-                  <div>
-                    <span style={{ fontSize:9, fontWeight:700, color:"#5b9bd5" }}>📊 Mizan yüklendi</span>
-                    <span style={{ fontSize:8, color:"#665d4a", marginLeft:8 }}>{rhinoMizan.dosyaAd} · {rhinoMizan.tarih}</span>
                   </div>
-                  <span style={{ fontSize:8, color:"#6abf69" }}>✓ Ajan bu veriyi kullanıyor</span>
-                </div>
-              ) : (
-                <div style={{ background:"rgba(255,255,255,0.02)", border:"1px solid rgba(255,255,255,0.06)", borderRadius:10, padding:"8px 14px", marginBottom:12, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-                  <span style={{ fontSize:9, color:"#665d4a" }}>Rhino mizan verisi yüklü değil</span>
-                  <button onClick={()=>{ setSayfa("kasa"); setKasaSayfa("muhasebe"); }} style={{ ...GH, fontSize:8, padding:"3px 10px" }}>Kasa → Muhasebe'ye git</button>
-                </div>
-              )}
+                );
+              })()}
 
-                            {/* ── HIZLI SORULAR ── */}
+              {/* ── HIZLI SORULAR ── */}
               <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:12 }}>
                 {[
                   "En karlı 5 modelim hangileri?",
                   "Bu ay ne kadar kazandım?",
-                  "Hangi siparişler gecikiyor?",
-                  "Müşteri bakiyelerini özetle",
-                  "Hurda oranımı analiz et",
                   "Satış ağımı nasıl geliştirebilirim?",
+                  "Hangi koleksiyon daha çok satıyor?",
+                  "Maliyetlerimi nasıl düşürebilirim?",
                 ].map(s => (
                   <button key={s} onClick={()=>{ setAjanSoru(s); setTimeout(()=>document.getElementById("ajan-input")?.focus(),100); }}
-                    style={{ background:"rgba(201,168,76,0.06)", border:"1px solid rgba(201,168,76,0.12)", borderRadius:8, padding:"5px 10px", color:GOLD, fontSize:9, cursor:"pointer", fontWeight:500 }}>
+                    style={{ background:"rgba(201,168,76,0.06)", border:"1px solid rgba(201,168,76,0.12)", borderRadius:8, padding:"5px 10px", color:GOLD, fontSize:9, cursor:"pointer" }}>
                     {s}
                   </button>
                 ))}
               </div>
 
-              {/* ── SOHBET GEÇMİŞİ ── */}
+                            {/* ── SOHBET GEÇMİŞİ ── */}
               {ajanGecmis.length > 0 && (
                 <div style={{ background:"rgba(0,0,0,0.15)", border:"1px solid rgba(255,255,255,0.05)", borderRadius:12, padding:"12px 16px", marginBottom:12, maxHeight:400, overflowY:"auto" }}>
                   {ajanGecmis.map((m, i) => (
