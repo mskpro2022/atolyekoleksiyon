@@ -1169,7 +1169,7 @@ function GirisEkrani({ onGiris }) {
     else setHata(true);
   };
   return (
-    <div style={{ minHeight:"100vh", background:"#110f0a", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"'Segoe UI',Arial,sans-serif" }}>
+    <div style={{ minHeight:"100vh", width:"100vw", background:"#110f0a", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"'Segoe UI',Arial,sans-serif", margin:0, padding:0, boxSizing:"border-box" }}>
       <div style={{ background:"rgba(201,168,76,0.04)", border:"1px solid rgba(201,168,76,0.15)", borderRadius:16, padding:"40px 48px", textAlign:"center", maxWidth:360, width:"90%" }}>
         <div style={{ fontSize:28, marginBottom:8 }}>💎</div>
         <div style={{ fontSize:18, fontWeight:700, color:"#c9a84c", marginBottom:4 }}>Atölye Koleksiyon</div>
@@ -1876,7 +1876,7 @@ function Atolye() {
 
   return (
     <div style={{ minHeight:"100vh", background:T.bg, color:T.text, fontFamily:"sans-serif" }}>
-      <style>{`html,body,#root{background:${T.bg};margin:0;padding:0;min-height:100vh;overflow-x:hidden}`}</style>
+      <style>{`*{box-sizing:border-box}html,body,#root{background:${T.bg};margin:0;padding:0;min-height:100vh;width:100%;overflow-x:hidden}`}</style>
       <style>{"@keyframes fadein{from{opacity:0}to{opacity:1}}@keyframes cardin{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}*{box-sizing:border-box}::-webkit-scrollbar{width:4px}::-webkit-scrollbar-thumb{background:rgba(201,168,76,.15);border-radius:2px}select option{background:#1c1a15;color:#e8dcc8}"}</style>
 
       {/* HEADER */}
