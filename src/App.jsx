@@ -1940,7 +1940,7 @@ function Atolye() {
                 return (
                 <button key={n} onClick={() => { setSayfa(n); if (n==="koleksiyonlar") setAktifKol(null); if (n!=="kasa") setKasaKilitli(true); }}
                   style={{ ...GH, background:sayfa===n?"rgba(201,168,76,0.18)":"rgba(201,168,76,0.04)", borderColor:sayfa===n?"rgba(201,168,76,0.35)":"rgba(201,168,76,0.1)", fontSize:9, padding:"5px 9px", position:"relative" }}>
-                  {n.charAt(0).toUpperCase()+n.slice(1)}
+                  {{"koleksiyonlar":"Koleksiyonlar","modeller":"Modeller","konfirmasyon":"Konfirmasyon","siparisler":"Siparişler","iadeler":"İadeler","musteriler":"Müşteriler","kasa":"Kasa","analiz":"Keşfet","ayarlar":"Ayarlar"}[n]||n.charAt(0).toUpperCase()+n.slice(1)}
                   {n==="konfirmasyon" && konfList.length>0 && <span style={{ position:"absolute", top:-4, right:-4, background:GOLD, color:DARK, width:13, height:13, borderRadius:7, fontSize:7, fontWeight:800, display:"flex", alignItems:"center", justifyContent:"center" }}>{konfList.length}</span>}
                   {n==="iadeler" && badgeSayi>0 && <span style={{ position:"absolute", top:-4, right:-4, background:"#a78bfa", color:"#fff", width:13, height:13, borderRadius:7, fontSize:7, fontWeight:800, display:"flex", alignItems:"center", justifyContent:"center" }}>{badgeSayi}</span>}
                 </button>
@@ -3670,7 +3670,7 @@ function Atolye() {
 
             {/* ── BAŞLIK + FİLTRELER ── */}
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10, flexWrap:"wrap", gap:6 }}>
-              <h2 style={{ margin:0, fontSize:14, fontWeight:700, color:T.text }}>Analiz</h2>
+              <h2 style={{ margin:0, fontSize:14, fontWeight:700, color:T.text }}>🔍 Keşfet</h2>
               <button onClick={()=>downloadPDF(buildSatisRaporuHTML(modeller,siparisler),"satis-raporu")} style={{ ...GH, fontSize:9, padding:"5px 12px" }}>PDF Rapor</button>
             </div>
             <div style={{ display:"flex", gap:5, flexWrap:"wrap", alignItems:"center", marginBottom:12, background:"rgba(201,168,76,0.03)", border:"1px solid rgba(201,168,76,0.1)", borderRadius:10, padding:"8px 12px" }}>
@@ -3689,6 +3689,88 @@ function Atolye() {
                 {analizMusF && <button onClick={()=>setAnalizMusF("")} style={{ ...RD, fontSize:9, padding:"3px 7px" }}>✕</button>}
               </div>
             </div>
+
+            {/* ── YENİ EKLENENLER ── */}
+            {(() => {
+              const yeniModeller = [...modeller]
+                .filter(m => m.t)
+                .sort((a,b) => b.t - a.t)
+                .slice(0, 12);
+              if (!yeniModeller.length) return null;
+              return (
+                <div style={{ marginBottom:14, background:"rgba(201,168,76,0.02)", border:"1px solid rgba(201,168,76,0.08)", borderRadius:12, padding:"12px 16px" }}>
+                  <div style={{ fontSize:10, fontWeight:700, color:GOLD, marginBottom:10 }}>✨ YENİ EKLENENLER</div>
+                  <div style={{ display:"flex", gap:10, overflowX:"auto", paddingBottom:6 }}>
+                    {yeniModeller.map(m => {
+                      const hc = altinKgUSD > 0 ? hesapla(m, m.refAyar, altinKgUSD, madenCarpan) : null;
+                      const karMly = hc ? hc.karMly : null;
+                      const karRenk = karMly === null ? "#665d4a" : karMly >= 0.030 ? "#6abf69" : karMly >= 0.020 ? "#e8833a" : "#e85a4f";
+                      const uyari = karMly !== null && karMly < 0.020;
+                      const gun = m.t ? Math.round((Date.now()-m.t)/86400000) : null;
+                      return (
+                        <div key={m.id} style={{ flexShrink:0, width:120, background:"rgba(0,0,0,0.2)", border:"1px solid", borderColor:uyari?"rgba(232,90,79,0.3)":"rgba(255,255,255,0.06)", borderRadius:10, overflow:"hidden", cursor:"pointer" }} onClick={()=>{ setAktifKol(kollar.find(k=>k.id===m.ki)||null); setSayfa("modeller"); }}>
+                          <div className="model-foto-wrap" style={{ height:100, background:"rgba(0,0,0,0.3)", overflow:"hidden" }}>
+                            {m.foto
+                              ? <img src={m.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"cover", objectPosition:"center", display:"block" }}/>
+                              : <div style={{ width:"100%", height:"100%", display:"flex", alignItems:"center", justifyContent:"center", color:"rgba(255,255,255,0.1)", fontSize:20 }}>◇</div>}
+                            {uyari && <div style={{ position:"absolute", top:4, left:4, background:"rgba(232,90,79,0.9)", color:"#fff", fontSize:7, fontWeight:800, padding:"1px 5px", borderRadius:3 }}>⚠ Düşük Kâr</div>}
+                          </div>
+                          <div style={{ padding:"6px 8px" }}>
+                            <div style={{ fontSize:9, fontWeight:700, color:T.text, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{m.kod||m.ad}</div>
+                            {karMly !== null
+                              ? <div style={{ fontSize:9, fontWeight:800, color:karRenk, marginTop:2 }}>{fN(karMly,3)} mly</div>
+                              : <div style={{ fontSize:8, color:"#665d4a" }}>Fiyat girilmedi</div>}
+                            {gun !== null && <div style={{ fontSize:7, color:"#665d4a", marginTop:1 }}>{gun === 0 ? "Bugün" : gun + " gün önce"}</div>}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* ── POPÜLER MODELLER ── */}
+            {(() => {
+              const populer = [...modeller]
+                .filter(m => (m.satisSayisi||0) > 0)
+                .sort((a,b) => (b.satisSayisi||0) - (a.satisSayisi||0))
+                .slice(0, 12);
+              if (!populer.length) return null;
+              return (
+                <div style={{ marginBottom:14, background:"rgba(91,155,213,0.02)", border:"1px solid rgba(91,155,213,0.08)", borderRadius:12, padding:"12px 16px" }}>
+                  <div style={{ fontSize:10, fontWeight:700, color:"#5b9bd5", marginBottom:10 }}>🏆 POPÜLER MODELLER</div>
+                  <div style={{ display:"flex", gap:10, overflowX:"auto", paddingBottom:6 }}>
+                    {populer.map((m, idx) => {
+                      const hc = altinKgUSD > 0 ? hesapla(m, m.refAyar, altinKgUSD, madenCarpan) : null;
+                      const karMly = hc ? hc.karMly : null;
+                      const karRenk = karMly === null ? "#665d4a" : karMly >= 0.030 ? "#6abf69" : karMly >= 0.020 ? "#e8833a" : "#e85a4f";
+                      const uyari = karMly !== null && karMly < 0.020;
+                      return (
+                        <div key={m.id} style={{ flexShrink:0, width:120, background:"rgba(0,0,0,0.2)", border:"1px solid", borderColor:uyari?"rgba(232,90,79,0.3)":"rgba(255,255,255,0.06)", borderRadius:10, overflow:"hidden", cursor:"pointer" }} onClick={()=>{ setAktifKol(kollar.find(k=>k.id===m.ki)||null); setSayfa("modeller"); }}>
+                          <div className="model-foto-wrap" style={{ height:100, background:"rgba(0,0,0,0.3)", overflow:"hidden", position:"relative" }}>
+                            {m.foto
+                              ? <img src={m.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"cover", objectPosition:"center", display:"block" }}/>
+                              : <div style={{ width:"100%", height:"100%", display:"flex", alignItems:"center", justifyContent:"center", color:"rgba(255,255,255,0.1)", fontSize:20 }}>◇</div>}
+                            <div style={{ position:"absolute", top:4, left:4, background:"rgba(91,155,213,0.9)", color:"#fff", fontSize:7, fontWeight:800, padding:"1px 5px", borderRadius:3 }}>#{idx+1}</div>
+                            {uyari && <div style={{ position:"absolute", top:4, right:4, background:"rgba(232,90,79,0.9)", color:"#fff", fontSize:7, fontWeight:800, padding:"1px 5px", borderRadius:3 }}>⚠</div>}
+                          </div>
+                          <div style={{ padding:"6px 8px" }}>
+                            <div style={{ fontSize:9, fontWeight:700, color:T.text, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{m.kod||m.ad}</div>
+                            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginTop:2 }}>
+                              {karMly !== null
+                                ? <span style={{ fontSize:9, fontWeight:800, color:karRenk }}>{fN(karMly,3)} mly</span>
+                                : <span style={{ fontSize:8, color:"#665d4a" }}>—</span>}
+                              <span style={{ fontSize:8, color:"#5b9bd5", fontWeight:700 }}>{m.satisSayisi}x</span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
 
             {analiz.siparisSayisi===0
               ? <p style={{ color:"#665d4a", textAlign:"center", padding:"40px", fontSize:12 }}>Bu dönemde tamamlanan sipariş yok.</p>
