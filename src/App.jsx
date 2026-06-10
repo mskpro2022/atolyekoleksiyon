@@ -2029,7 +2029,7 @@ function Atolye() {
                     <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", height:160, background:"rgba(0,0,0,0.15)", borderRadius:"20px 20px 0 0", overflow:"hidden" }}>
                       {[0,1,2,3].map(x => (
                         <div key={x} style={{ overflow:"hidden", borderRight:x%2===0?"1px solid rgba(255,255,255,0.04)":"none", borderBottom:x<2?"1px solid rgba(255,255,255,0.04)":"none" }}>
-                          {ft[x] ? <img src={ft[x].foto} alt="" style={{ width:"100%", height:"100%", objectFit:"cover", display:"block", transition:"transform .3s" }}/> : <div style={{ width:"100%", height:"100%", display:"flex", alignItems:"center", justifyContent:"center", color:"rgba(255,255,255,0.06)", fontSize:18 }}>◇</div>}
+                          {ft[x] ? <div className="model-foto-wrap" style={{ width:"100%", height:"100%", overflow:"hidden" }}><img src={ft[x].foto} alt="" style={{ width:"100%", height:"100%", objectFit:"cover", display:"block" }}/></div> : <div style={{ width:"100%", height:"100%", display:"flex", alignItems:"center", justifyContent:"center", color:"rgba(255,255,255,0.06)", fontSize:18 }}>◇</div>}
                         </div>
                       ))}
                     </div>
@@ -2361,7 +2361,7 @@ function Atolye() {
                     return (
                       <div key={m.id} style={{ display:"grid", gridTemplateColumns:"100px 80px 1fr 100px 60px 70px 50px", gap:0, padding:"8px 10px", borderBottom: idx < konfList.length-1 ? "1px solid rgba(201,168,76,0.06)" : "none", alignItems:"center" }}>
                         {/* Foto */}
-                        <div>{m.foto ? <img src={m.foto} alt="" style={{ width:92, height:92, objectFit:"cover", borderRadius:8 }}/> : <div style={{ width:92, height:92, background:"rgba(201,168,76,0.08)", borderRadius:8, display:"flex", alignItems:"center", justifyContent:"center", color:"rgba(201,168,76,0.3)", fontSize:24 }}>-</div>}</div>
+                        <div className="model-foto-wrap" style={{ width:92, height:92, borderRadius:8, overflow:"hidden", flexShrink:0 }}>{m.foto ? <img src={m.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"cover", display:"block" }}/> : <div style={{ width:"100%", height:"100%", background:"rgba(201,168,76,0.08)", display:"flex", alignItems:"center", justifyContent:"center", color:"rgba(201,168,76,0.3)", fontSize:24 }}>-</div>}</div>
                         {/* Kod */}
                         <div style={{ fontSize:10, fontWeight:800, color:GOLD }}>{m.kod||"—"}</div>
                         {/* Ürün + not */}
@@ -2716,7 +2716,7 @@ function Atolye() {
                           const dur = DURUMLAR.find(d => d.id===mevcDurum) || DURUMLAR[0];
                           return (
                             <div key={k.id} style={{ display:"flex", alignItems:"center", gap:8, padding:"6px 0", borderBottom:"1px solid rgba(201,168,76,0.04)" }}>
-                              {k.foto ? <img src={k.foto} alt="" style={{ width:92, height:92, objectFit:"cover", borderRadius:8, flexShrink:0 }}/> : <div style={{ width:92, height:92, background:"rgba(201,168,76,0.06)", borderRadius:8, flexShrink:0 }}/>}
+                              <div className="model-foto-wrap" style={{ width:92, height:92, borderRadius:8, overflow:"hidden", flexShrink:0 }}>{k.foto ? <img src={k.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"cover", display:"block" }}/> : <div style={{ width:"100%", height:"100%", background:"rgba(201,168,76,0.06)" }}/>}</div>
                               <div style={{ flex:1, minWidth:0 }}>
                                 <div style={{ fontSize:10, fontWeight:700, color:"#e8dcc8" }}>
                                   <span style={{ color:GOLD, marginRight:4 }}>{k.kod||""}</span>{k.ad}
@@ -2819,7 +2819,7 @@ function Atolye() {
                   <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
                     {iadeKayitlar.map((r, i) => (
                       <div key={i} style={{ background:"rgba(167,139,250,0.04)", border:"1px solid rgba(167,139,250,0.15)", borderRadius:10, padding:"10px 12px", display:"flex", alignItems:"center", gap:10 }}>
-                        {r.kalem.foto ? <img src={r.kalem.foto} style={{ width:60, height:60, objectFit:"cover", borderRadius:8, flexShrink:0 }}/> : <div style={{ width:60, height:60, background:"rgba(201,168,76,0.06)", borderRadius:8, flexShrink:0 }}/>}
+                        <div className="model-foto-wrap" style={{ width:60, height:60, borderRadius:8, overflow:"hidden", flexShrink:0 }}>{r.kalem.foto ? <img src={r.kalem.foto} style={{ width:"100%", height:"100%", objectFit:"cover", display:"block" }}/> : <div style={{ width:"100%", height:"100%", background:"rgba(201,168,76,0.06)" }}/>}</div>
                         <div style={{ flex:1 }}>
                           <div style={{ fontSize:11, fontWeight:700, color:"#e8dcc8" }}>
                             <span style={{ color:GOLD, marginRight:5 }}>{r.kalem.kod||""}</span>{r.kalem.ad}
@@ -2852,7 +2852,7 @@ function Atolye() {
                   <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
                     {tamirKayitlar.map((r, i) => (
                       <div key={i} style={{ background:"rgba(91,155,213,0.04)", border:"1px solid rgba(91,155,213,0.15)", borderRadius:10, padding:"10px 12px", display:"flex", alignItems:"center", gap:10 }}>
-                        {r.kalem.foto ? <img src={r.kalem.foto} style={{ width:60, height:60, objectFit:"cover", borderRadius:8, flexShrink:0 }}/> : <div style={{ width:60, height:60, background:"rgba(201,168,76,0.06)", borderRadius:8, flexShrink:0 }}/>}
+                        <div className="model-foto-wrap" style={{ width:60, height:60, borderRadius:8, overflow:"hidden", flexShrink:0 }}>{r.kalem.foto ? <img src={r.kalem.foto} style={{ width:"100%", height:"100%", objectFit:"cover", display:"block" }}/> : <div style={{ width:"100%", height:"100%", background:"rgba(201,168,76,0.06)" }}/>}</div>
                         <div style={{ flex:1 }}>
                           <div style={{ fontSize:11, fontWeight:700, color:"#e8dcc8" }}>
                             <span style={{ color:GOLD, marginRight:5 }}>{r.kalem.kod||""}</span>{r.kalem.ad}
@@ -3749,7 +3749,7 @@ function Atolye() {
                         return (
                           <div key={id} style={{ display:"flex", alignItems:"center", gap:8 }}>
                             <div style={{ fontSize:9, fontWeight:800, color:i<3?GOLD:"#665d4a", minWidth:16, textAlign:"center" }}>{i+1}</div>
-                            {(m?.foto||d.foto) && <img src={m?.foto||d.foto} alt="" style={{ width:36, height:36, objectFit:"cover", borderRadius:6, flexShrink:0 }}/>}
+                            {(m?.foto||d.foto) && <div className="model-foto-wrap" style={{ width:36, height:36, borderRadius:6, overflow:"hidden", flexShrink:0 }}><img src={m?.foto||d.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"cover", display:"block" }}/></div>}
                             <div style={{ flex:1, minWidth:0 }}>
                               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline" }}>
                                 <span style={{ fontSize:9, fontWeight:700, color:"#e8dcc8", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", maxWidth:100 }}>{d.ad}</span>
@@ -4288,7 +4288,7 @@ function Atolye() {
         <Modal open={!!kopyalaModal} onClose={()=>setKopyalaModal(null)} title="Modeli Kopyala">
           {/* Kaynak model bilgisi */}
           <div style={{ display:"flex", gap:10, alignItems:"center", marginBottom:14, padding:"8px 10px", background:"rgba(201,168,76,0.05)", borderRadius:8 }}>
-            {kopyalaModal.model.foto && <img src={kopyalaModal.model.foto} alt="" style={{ width:48, height:48, objectFit:"cover", borderRadius:6 }}/>}
+            {kopyalaModal.model.foto && <div className="model-foto-wrap" style={{ width:48, height:48, borderRadius:6, overflow:"hidden" }}><img src={kopyalaModal.model.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"cover", display:"block" }}/></div>}
             <div>
               <div style={{ fontSize:12, fontWeight:800, color:GOLD }}>{kopyalaModal.model.kod}</div>
               <div style={{ fontSize:11, color:"#e8dcc8" }}>{kopyalaModal.model.ad}</div>
@@ -4534,7 +4534,7 @@ function Atolye() {
             return (
             <div key={m.id} style={{ display:"flex", alignItems:"center", gap:8, padding:"6px 10px", background: i%2===0 ? T.card : "transparent", borderBottom:"1px solid "+T.border }}>
               <span style={{ fontSize:10, color:T.dim, width:30, textAlign:"right", flexShrink:0, fontWeight:700 }}>{i+1}.</span>
-              {m.foto ? <img src={m.foto} style={{ width:44, height:44, objectFit:"cover", borderRadius:6, flexShrink:0 }}/> : <div style={{ width:44, height:44, background:T.card, borderRadius:6, flexShrink:0 }}/>}
+              <div className="model-foto-wrap" style={{ width:44, height:44, borderRadius:6, overflow:"hidden", flexShrink:0 }}>{m.foto ? <img src={m.foto} style={{ width:"100%", height:"100%", objectFit:"cover", display:"block" }}/> : <div style={{ width:"100%", height:"100%", background:T.card }}/>}</div>
               <span style={{ fontSize:12, color:T.gold, fontWeight:800, width:110, flexShrink:0 }}>{m.kod || "—"}</span>
               <span style={{ fontSize:10, color:T.sub, flex:1, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{m.ad || ""}</span>
               <span style={{ fontSize:9, color:"#a78bfa", flexShrink:0, padding:"2px 7px", background:"rgba(167,139,250,0.08)", borderRadius:4, fontWeight:700, maxWidth:120, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>📁 {kaynakAd}</span>
