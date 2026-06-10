@@ -1163,6 +1163,12 @@ function OnizlemeBox({ m, altinKgUSD, mc }) {
 function GirisEkrani({ onGiris }) {
   const [sifre, setSifre] = useState("");
   const [hata, setHata] = useState(false);
+  useEffect(() => {
+    document.body.style.margin = "0";
+    document.body.style.padding = "0";
+    document.documentElement.style.margin = "0";
+    document.documentElement.style.padding = "0";
+  }, []);
   const kontrol = () => {
     const aktifSifre = localStorage.getItem("atolye_sifre") || "19671967*Mm";
     if (sifre === aktifSifre) { onGiris(); }
