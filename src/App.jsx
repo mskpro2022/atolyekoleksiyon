@@ -1285,6 +1285,15 @@ function Atolye() {
     serbest: [],
   });
   const [kasaSayfa, setKasaSayfa] = useState("ozet");
+  // Asistan
+  const [ajanSoru, setAjanSoru] = useState("");
+  const [rhinoMizan, setRhinoMizan] = useState(null); // parse edilmiş mizan verisi
+  const [mizanEslestirme, setMizanEslestirme] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("mizan_eslestirme") || "{}"); } catch { return {}; }
+  }); // { "MizanAdı": "SistemAdı" }
+  const [ajanGecmis, setAjanGecmis] = useState([]); // [{rol:"user"|"assistant", icerik:"..."}]
+  const [ajanYukleniyor, setAjanYukleniyor] = useState(false);
+  const [ajanUyarilar, setAjanUyarilar] = useState(null); // null = henüz taranmadı
   const [kasaModal, setKasaModal] = useState(null);
   const [kasaKilitli, setKasaKilitli] = useState(true);
   const [kasaSifreGirdi, setKasaSifreGirdi] = useState("");
@@ -1929,7 +1938,7 @@ function Atolye() {
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:8, marginBottom:10 }}>
             <h1 style={{ margin:0, fontSize:"clamp(13px,2vw,18px)", fontWeight:700, color:GOLD }}>Atolye Koleksiyon Sistemi</h1>
             <div style={{ display:"flex", gap:3, flexWrap:"wrap" }}>
-              {["koleksiyonlar","modeller","konfirmasyon","siparisler","iadeler","musteriler","kasa","analiz","ayarlar"].map(n => {
+              {["koleksiyonlar","modeller","konfirmasyon","siparisler","iadeler","musteriler","kasa","analiz","asistan","ayarlar"].map(n => {
                 let badgeSayi = 0;
                 if (n === "iadeler") {
                   siparisler.forEach(s => {
@@ -1938,9 +1947,9 @@ function Atolye() {
                   });
                 }
                 return (
-                <button key={n} onClick={() => { setSayfa(n); if (n==="koleksiyonlar") setAktifKol(null); if (n!=="kasa") setKasaKilitli(true); }}
+                <button key={n} onClick={() => { setSayfa(n); if (n==="koleksiyonlar") setAktifKol(null); if (n!=="kasa") setKasaKilitli(true); if (n!=="asistan") setAjanSoru(""); }}
                   style={{ ...GH, background:sayfa===n?"rgba(201,168,76,0.18)":"rgba(201,168,76,0.04)", borderColor:sayfa===n?"rgba(201,168,76,0.35)":"rgba(201,168,76,0.1)", fontSize:9, padding:"5px 9px", position:"relative" }}>
-                  {{"koleksiyonlar":"Koleksiyonlar","modeller":"Modeller","konfirmasyon":"Konfirmasyon","siparisler":"Siparişler","iadeler":"İadeler","musteriler":"Müşteriler","kasa":"Kasa","analiz":"Keşfet","ayarlar":"Ayarlar"}[n]||n.charAt(0).toUpperCase()+n.slice(1)}
+                  {{"koleksiyonlar":"Koleksiyonlar","modeller":"Modeller","konfirmasyon":"Konfirmasyon","siparisler":"Siparişler","iadeler":"İadeler","musteriler":"Müşteriler","kasa":"Kasa","analiz":"Keşfet","asistan":"🤖 Asistan","ayarlar":"Ayarlar"}[n]||n.charAt(0).toUpperCase()+n.slice(1)}
                   {n==="konfirmasyon" && konfList.length>0 && <span style={{ position:"absolute", top:-4, right:-4, background:GOLD, color:DARK, width:13, height:13, borderRadius:7, fontSize:7, fontWeight:800, display:"flex", alignItems:"center", justifyContent:"center" }}>{konfList.length}</span>}
                   {n==="iadeler" && badgeSayi>0 && <span style={{ position:"absolute", top:-4, right:-4, background:"#a78bfa", color:"#fff", width:13, height:13, borderRadius:7, fontSize:7, fontWeight:800, display:"flex", alignItems:"center", justifyContent:"center" }}>{badgeSayi}</span>}
                 </button>
@@ -3140,7 +3149,7 @@ function Atolye() {
               <button onClick={()=>setKasaKilitli(true)} style={{ ...RD, fontSize:9, padding:"4px 10px" }}>🔒 Kilitle</button>
               </div>
               <div style={{ display:"flex", gap:4, marginBottom:14, borderBottom:"1px solid rgba(201,168,76,0.12)", paddingBottom:8 }}>
-                {[{id:"ozet",l:"Özet"},{id:"musteri",l:"Müşteri Bakiyeleri"},{id:"dokumcu",l:"Dökümcü"},{id:"stok",l:"Stok"},{id:"bilanco",l:"Bilanço"}].map(t => (
+                {[{id:"ozet",l:"Özet"},{id:"musteri",l:"Müşteri Bakiyeleri"},{id:"dokumcu",l:"Dökümcü"},{id:"stok",l:"Stok"},{id:"muhasebe",l:"Muhasebe"},{id:"bilanco",l:"Bilanço"}].map(t => (
                   <button key={t.id} onClick={()=>setKasaSayfa(t.id)} style={{ background:kasaSayfa===t.id?"rgba(201,168,76,0.15)":"transparent", border:"1px solid", borderColor:kasaSayfa===t.id?"rgba(201,168,76,0.4)":"transparent", borderRadius:7, padding:"5px 12px", color:kasaSayfa===t.id?GOLD:"#7a6f5a", fontSize:10, fontWeight:kasaSayfa===t.id?700:400, cursor:"pointer" }}>{t.l}</button>
                 ))}
               </div>
@@ -3437,6 +3446,164 @@ function Atolye() {
                       ))}
                     </div>
                   )}
+                </div>
+              )}
+
+              {/* ══ MUHASEBE ══ */}
+              {kasaSayfa==="muhasebe" && (
+                <div>
+                  <div style={{ background:"rgba(91,155,213,0.03)", border:"1px solid rgba(91,155,213,0.1)", borderRadius:12, padding:"12px 16px", marginBottom:12 }}>
+                    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
+                      <div style={{ fontSize:10, fontWeight:700, color:"#5b9bd5" }}>📊 RHİNO ERP MİZAN</div>
+                      {rhinoMizan && <button onClick={()=>setRhinoMizan(null)} style={{ ...RD, fontSize:8, padding:"2px 8px" }}>Temizle</button>}
+                    </div>
+                    {!rhinoMizan ? (
+                      <div>
+                        <div style={{ fontSize:9, color:"#665d4a", marginBottom:8 }}>Excel mizan dosyasını yükleyin — müşteri bakiyeleri, dökümcü ve satıcı borçları otomatik okunur. Asistan sekmesinde ajan da bu veriyi kullanır.</div>
+                        <label style={{ display:"inline-block", background:"rgba(91,155,213,0.1)", border:"1px solid rgba(91,155,213,0.25)", borderRadius:8, padding:"6px 14px", color:"#5b9bd5", fontSize:10, fontWeight:700, cursor:"pointer" }}>
+                          📂 Mizan Yükle (.xlsx)
+                          <input type="file" accept=".xlsx,.xls" style={{ display:"none" }} onChange={async e => {
+                            const file = e.target.files[0];
+                            if (!file) return;
+                            try {
+                              const XLSX = await import("https://cdn.jsdelivr.net/npm/xlsx@0.18.5/+esm");
+                              const buf = await file.arrayBuffer();
+                              const wb = XLSX.read(buf, { type:"array" });
+                              const ws = wb.Sheets[wb.SheetNames[0]];
+                              const rows = XLSX.utils.sheet_to_json(ws, { header:1, defval:"" });
+                              const musteriHas=[], dokumcuHas=[], saticiUsd=[], saticiEur=[];
+                              rows.forEach(row => {
+                                const kod = String(row[0]||"").trim();
+                                const ad  = String(row[1]||"").trim().replace(/^'+/, "");
+                                const dvz = String(row[2]||"").trim();
+                                const bakBor = parseFloat(String(row[5]||"0").replace(",",".")) || 0;
+                                const bakAla = parseFloat(String(row[6]||"0").replace(",",".")) || 0;
+                                const bakiye = bakBor > 0 ? bakBor : -bakAla;
+                                if (kod.startsWith("120 001 10\") && dvz==="HAS" && ad) musteriHas.push({ ad, bakiye });
+                                if (kod.startsWith("320 001 10\") && dvz==="HAS" && ad) dokumcuHas.push({ ad, bakiye });
+                                if (kod.startsWith("320 001 02\") && dvz==="USD" && ad) saticiUsd.push({ ad, bakiye });
+                                if (kod.startsWith("320 001 03\") && dvz==="EUR" && ad) saticiEur.push({ ad, bakiye });
+                              });
+                              setRhinoMizan({ musteriHas, dokumcuHas, saticiUsd, saticiEur, tarih:new Date().toLocaleDateString("tr-TR"), dosyaAd:file.name });
+                            } catch(err) { alert("Dosya okunamadı: "+err.message); }
+                            e.target.value="";
+                          }}/>
+                        </label>
+                      </div>
+                    ) : (
+                      <div>
+                        <div style={{ fontSize:8, color:"#665d4a", marginBottom:12 }}>{rhinoMizan.dosyaAd} · {rhinoMizan.tarih} · Asistan sekmesinde ajan bu veriyi kullanıyor</div>
+                        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:10 }}>
+                          {/* Müşteri HAS */}
+                          <div style={KCARD}>
+                            <div style={{ fontSize:9, fontWeight:700, color:"#6abf69", marginBottom:8 }}>👤 MÜŞTERİ ALACAKLAR (HAS)</div>
+                            {rhinoMizan.musteriHas.filter(x=>Math.abs(x.bakiye)>0.001).sort((a,b)=>b.bakiye-a.bakiye).map((x,i)=>(
+                              <div key={i} style={{ display:"flex", justifyContent:"space-between", padding:"4px 0", borderBottom:"1px solid rgba(255,255,255,0.04)", fontSize:9 }}>
+                                <span style={{ color:"#e8dcc8", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", maxWidth:120 }}>{x.ad}</span>
+                                <span style={{ fontWeight:700, color:x.bakiye>0?"#6abf69":"#e85a4f", flexShrink:0, marginLeft:6 }}>{fN(x.bakiye,3)} has</span>
+                              </div>
+                            ))}
+                            {rhinoMizan.musteriHas.filter(x=>Math.abs(x.bakiye)>0.001).length===0 && <div style={{ fontSize:8, color:"#665d4a" }}>Açık bakiye yok</div>}
+                            <div style={{ borderTop:"1px solid rgba(201,168,76,0.1)", paddingTop:6, marginTop:6, display:"flex", justifyContent:"space-between" }}>
+                              <span style={{ fontSize:8, color:"#8a7d64" }}>TOPLAM</span>
+                              <span style={{ fontSize:10, fontWeight:800, color:"#6abf69" }}>{fN(rhinoMizan.musteriHas.reduce((s,x)=>s+x.bakiye,0),3)} has</span>
+                            </div>
+                          </div>
+                          {/* Müşteri Eşleştirme */}
+                          <div style={{ ...KCARD, gridColumn:"1 / -1" }}>
+                            <div style={{ fontSize:9, fontWeight:700, color:GOLD, marginBottom:10 }}>🔗 MÜŞTERİ EŞLEŞTİRME — Mizan ↔ Sistem</div>
+                            <div style={{ fontSize:8, color:"#665d4a", marginBottom:10 }}>Mizan'daki müşteri adlarını sisteminizdeki müşterilerle eşleştirin. Eşleştirme kaydedilir, bir dahaki yüklemede otomatik uygulanır.</div>
+                            <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+                              {rhinoMizan.musteriHas.filter(x=>Math.abs(x.bakiye)>0.001).map((x,i) => {
+                                // Otomatik eşleştirme — normalize karşılaştırma
+                                const norm = s => s.toLowerCase().replace(/[^a-z0-9ğüşıöçâîû]/gi,"").trim();
+                                const sistemAdlari = Object.keys(musteriler);
+                                const otomatik = sistemAdlari.find(s => norm(s) === norm(x.ad));
+                                const secili = mizanEslestirme[x.ad] || otomatik || "";
+                                const eslesti = !!secili;
+                                return (
+                                  <div key={i} style={{ display:"flex", alignItems:"center", gap:8, padding:"5px 8px", background:eslesti?"rgba(106,191,105,0.04)":"rgba(232,90,79,0.04)", border:"1px solid", borderColor:eslesti?"rgba(106,191,105,0.1)":"rgba(232,90,79,0.1)", borderRadius:7 }}>
+                                    <div style={{ flex:1, minWidth:0 }}>
+                                      <div style={{ fontSize:9, fontWeight:700, color:"#e8dcc8" }}>{x.ad}</div>
+                                      <div style={{ fontSize:8, color:x.bakiye>0?"#6abf69":"#e85a4f" }}>{fN(x.bakiye,3)} has</div>
+                                    </div>
+                                    <div style={{ fontSize:12, color:eslesti?"#6abf69":"#e85a4f" }}>{eslesti?"↔":"?"}</div>
+                                    <select value={secili} onChange={e => {
+                                      const yeni = { ...mizanEslestirme, [x.ad]: e.target.value };
+                                      setMizanEslestirme(yeni);
+                                      try { localStorage.setItem("mizan_eslestirme", JSON.stringify(yeni)); } catch {}
+                                    }} style={{ ...IS, width:150, padding:"3px 6px", fontSize:9 }}>
+                                      <option value="">— Eşleştir —</option>
+                                      {Object.keys(musteriler).sort().map(m => <option key={m} value={m}>{m}</option>)}
+                                    </select>
+                                    {secili && secili !== otomatik && (
+                                      <button onClick={()=>{
+                                        const yeni = { ...mizanEslestirme };
+                                        delete yeni[x.ad];
+                                        setMizanEslestirme(yeni);
+                                        try { localStorage.setItem("mizan_eslestirme", JSON.stringify(yeni)); } catch {}
+                                      }} style={{ ...RD, fontSize:8, padding:"2px 6px" }}>↺</button>
+                                    )}
+                                    {otomatik && !mizanEslestirme[x.ad] && (
+                                      <span style={{ fontSize:7, color:"#6abf69", background:"rgba(106,191,105,0.1)", padding:"1px 5px", borderRadius:4 }}>otomatik</span>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                            <div style={{ marginTop:10, fontSize:8, color:"#665d4a" }}>
+                              {rhinoMizan.musteriHas.filter(x=>Math.abs(x.bakiye)>0.001).filter(x=>{
+                                const norm = s => s.toLowerCase().replace(/[^a-z0-9ğüşıöçâîû]/gi,"").trim();
+                                return !mizanEslestirme[x.ad] && !Object.keys(musteriler).find(s=>norm(s)===norm(x.ad));
+                              }).length} müşteri eşleştirilmedi
+                            </div>
+                          </div>
+                          {/* Satıcı/Dökümcü HAS */}
+                          <div style={KCARD}>
+                            <div style={{ fontSize:9, fontWeight:700, color:"#e8833a", marginBottom:8 }}>🏭 SATICI / DÖKÜMCÜ (HAS)</div>
+                            {rhinoMizan.dokumcuHas.filter(x=>Math.abs(x.bakiye)>0.001).sort((a,b)=>a.bakiye-b.bakiye).map((x,i)=>(
+                              <div key={i} style={{ display:"flex", justifyContent:"space-between", padding:"4px 0", borderBottom:"1px solid rgba(255,255,255,0.04)", fontSize:9 }}>
+                                <span style={{ color:"#e8dcc8", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", maxWidth:120 }}>{x.ad}</span>
+                                <span style={{ fontWeight:700, color:x.bakiye<0?"#e85a4f":x.bakiye>0?"#6abf69":"#665d4a", flexShrink:0, marginLeft:6 }}>{fN(x.bakiye,3)} has</span>
+                              </div>
+                            ))}
+                            {rhinoMizan.dokumcuHas.filter(x=>Math.abs(x.bakiye)>0.001).length===0 && <div style={{ fontSize:8, color:"#665d4a" }}>Açık bakiye yok</div>}
+                            <div style={{ borderTop:"1px solid rgba(201,168,76,0.1)", paddingTop:6, marginTop:6, display:"flex", justifyContent:"space-between" }}>
+                              <span style={{ fontSize:8, color:"#8a7d64" }}>TOPLAM BORÇ</span>
+                              <span style={{ fontSize:10, fontWeight:800, color:"#e85a4f" }}>{fN(Math.abs(rhinoMizan.dokumcuHas.filter(x=>x.bakiye<0).reduce((s,x)=>s+x.bakiye,0)),3)} has</span>
+                            </div>
+                          </div>
+                          {/* Satıcı USD */}
+                          <div style={KCARD}>
+                            <div style={{ fontSize:9, fontWeight:700, color:"#a78bfa", marginBottom:8 }}>💵 SATICI BORÇLAR (USD)</div>
+                            {rhinoMizan.saticiUsd.filter(x=>Math.abs(x.bakiye)>0.001).sort((a,b)=>a.bakiye-b.bakiye).map((x,i)=>(
+                              <div key={i} style={{ display:"flex", justifyContent:"space-between", padding:"4px 0", borderBottom:"1px solid rgba(255,255,255,0.04)", fontSize:9 }}>
+                                <span style={{ color:"#e8dcc8", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", maxWidth:120 }}>{x.ad}</span>
+                                <span style={{ fontWeight:700, color:x.bakiye<0?"#e85a4f":x.bakiye>0?"#6abf69":"#665d4a", flexShrink:0, marginLeft:6 }}>${fN(Math.abs(x.bakiye),2)}</span>
+                              </div>
+                            ))}
+                            {rhinoMizan.saticiUsd.filter(x=>Math.abs(x.bakiye)>0.001).length===0 && <div style={{ fontSize:8, color:"#665d4a" }}>Açık bakiye yok</div>}
+                            <div style={{ borderTop:"1px solid rgba(201,168,76,0.1)", paddingTop:6, marginTop:6, display:"flex", justifyContent:"space-between" }}>
+                              <span style={{ fontSize:8, color:"#8a7d64" }}>TOPLAM BORÇ</span>
+                              <span style={{ fontSize:10, fontWeight:800, color:"#e85a4f" }}>${fN(Math.abs(rhinoMizan.saticiUsd.filter(x=>x.bakiye<0).reduce((s,x)=>s+x.bakiye,0)),2)}</span>
+                            </div>
+                          </div>
+                          {/* Satıcı EUR */}
+                          {rhinoMizan.saticiEur.filter(x=>Math.abs(x.bakiye)>0.001).length>0 && (
+                            <div style={KCARD}>
+                              <div style={{ fontSize:9, fontWeight:700, color:"#5b9bd5", marginBottom:8 }}>💶 SATICI BORÇLAR (EUR)</div>
+                              {rhinoMizan.saticiEur.filter(x=>Math.abs(x.bakiye)>0.001).sort((a,b)=>a.bakiye-b.bakiye).map((x,i)=>(
+                                <div key={i} style={{ display:"flex", justifyContent:"space-between", padding:"4px 0", borderBottom:"1px solid rgba(255,255,255,0.04)", fontSize:9 }}>
+                                  <span style={{ color:"#e8dcc8", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", maxWidth:120 }}>{x.ad}</span>
+                                  <span style={{ fontWeight:700, color:x.bakiye<0?"#e85a4f":x.bakiye>0?"#6abf69":"#665d4a", flexShrink:0, marginLeft:6 }}>€{fN(Math.abs(x.bakiye),2)}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
 
@@ -4013,6 +4180,268 @@ function Atolye() {
           </div>
         )}
 
+
+        {/* ASİSTAN */}
+        {sayfa==="asistan" && (() => {
+          // ── Sistem context'i hazırla ──
+          const buildContext = () => {
+            const altinKgUSD = parseFloat(altinKg) || 0;
+            // Model özeti
+            const modelOzet = modeller.slice(0, 80).map(m => {
+              const hc = altinKgUSD > 0 ? hesapla(m, m.refAyar, altinKgUSD, parseFloat(mc)||0.030) : null;
+              return { kod:m.kod||m.ad, ayar:m.refAyar, gram:m.gram, tasGram:m.tasGram||0, karMly: hc ? Math.round(hc.karMly*10000)/10000 : null, satis:m.satisSayisi||0 };
+            });
+            // Sipariş özeti
+            const sipOzet = siparisler.slice(-30).map(s => ({
+              musteri: s.musKod||s.musteri, tarih: new Date(s.tarih).toLocaleDateString("tr-TR"),
+              durumlar: Object.values(s.kalemDurumlar||{}),
+              kalemSayisi: (s.kalemler||[]).length,
+              hurdaTopla: Object.values(s.kalemHurda||{}).reduce((a,b)=>a+b,0),
+              iadeTopla: Object.values(s.kalemIade||{}).reduce((a,b)=>a+b,0),
+            }));
+            // Kasa özeti
+            const dokumBorc = (kasa.dokumcuIslemler||[]).filter(x=>x.tip==="gonder"||x.tip==="baslangic_borc").reduce((s,x)=>s+x.has,0)
+                            - (kasa.dokumcuIslemler||[]).filter(x=>x.tip==="ode").reduce((s,x)=>s+x.has,0);
+            const musteriAlacak = Object.entries(kasa.musteriOdemeler||{}).reduce((acc,[mus,odemeler])=>{
+              const odenen = (odemeler||[]).filter(x=>x.tip!=="baslangic_bakiye").reduce((s,x)=>s+x.has,0);
+              const bborc  = (odemeler||[]).filter(x=>x.tip==="baslangic_bakiye").reduce((s,x)=>s+x.has,0);
+              acc[mus] = { odenen, bborc };
+              return acc;
+            }, {});
+            return JSON.stringify({
+              tarih: new Date().toLocaleDateString("tr-TR"),
+              altinKgUSD,
+              modelSayisi: modeller.length,
+              modeller: modelOzet,
+              sonSiparisler: sipOzet,
+              kasaOzet: { dokumBorc: Math.round(dokumBorc*1000)/1000, musteriAlacak },
+              koleksiyonlar: kollar.map(k=>({ ad:k.ad, on:k.on })),
+              rhinoMizan: rhinoMizan ? {
+                musteriHas: rhinoMizan.musteriHas.filter(x=>x.bakiye!==0).map(x=>({
+                  ...x, sistemMusterisi: mizanEslestirme[x.ad] || Object.keys(musteriler).find(s=>s.toLowerCase().replace(/[^a-z0-9]/gi,"")===x.ad.toLowerCase().replace(/[^a-z0-9]/gi,"")) || null
+                })),
+                dokumcuHas: rhinoMizan.dokumcuHas.filter(x=>x.bakiye!==0),
+                saticiUsd:  rhinoMizan.saticiUsd.filter(x=>x.bakiye!==0),
+                saticiEur:  rhinoMizan.saticiEur.filter(x=>x.bakiye!==0),
+              } : null,
+            }, null, 2);
+          };
+
+          // ── Otomatik uyarılar ──
+          const hesaplaUyarilar = () => {
+            const altinKgUSD = parseFloat(altinKg) || 0;
+            const uyarilar = [];
+            // Düşük karlılıklı modeller
+            if (altinKgUSD > 0) {
+              modeller.forEach(m => {
+                const hc = hesapla(m, m.refAyar, altinKgUSD, parseFloat(mc)||0.030);
+                if (hc.karMly < 0.020 && m.gram > 0) {
+                  uyarilar.push({ tip:"kirmizi", mesaj:`${m.kod||m.ad} — Düşük karlılık: ${fN(hc.karMly,3)} mly/gr (0.020 altı)` });
+                }
+              });
+            }
+            // 7+ gün geciken aktif siparişler
+            siparisler.forEach(s => {
+              const son = (s.durumGecmisi||[]).slice(-1)[0];
+              if (!son || ["tamam","teslim","hurda"].includes(son.durum)) return;
+              const bekleme = Math.round((Date.now()-son.tarih)/86400000);
+              if (bekleme >= 7) {
+                uyarilar.push({ tip:"sari", mesaj:`${s.musKod||s.musteri||"?"} siparişi ${bekleme} gündür "${DURUMLAR.find(d=>d.id===son.durum)?.l||son.durum}" aşamasında bekliyor` });
+              }
+            });
+            // 30+ gün ödeme yapmayan müşteriler
+            Object.entries(kasa.musteriOdemeler||{}).forEach(([mus, odemeler]) => {
+              if (!odemeler?.length) return;
+              const sonOdeme = Math.max(...odemeler.map(o=>o.tarih||0));
+              const gecenGun = Math.round((Date.now()-sonOdeme)/86400000);
+              if (gecenGun >= 30) {
+                uyarilar.push({ tip:"sari", mesaj:`${mus} — Son ödeme ${gecenGun} gün önce` });
+              }
+            });
+            // Yüksek hurda oranı
+            const modelHurda = {};
+            siparisler.forEach(s => {
+              (s.kalemler||[]).forEach(k => {
+                const hurda = ((s.kalemHurda)||{})[k.id]||0;
+                if (!modelHurda[k.id]) modelHurda[k.id] = { ad:k.ad||k.kod||"?", hurda:0, toplam:0 };
+                modelHurda[k.id].hurda += hurda;
+                modelHurda[k.id].toplam += k.adet||1;
+              });
+            });
+            Object.values(modelHurda).forEach(d => {
+              if (d.toplam >= 5 && d.hurda/d.toplam > 0.10) {
+                uyarilar.push({ tip:"kirmizi", mesaj:`${d.ad} — Hurda oranı %${Math.round(d.hurda/d.toplam*100)} (${d.hurda}/${d.toplam})` });
+              }
+            });
+            // Dökümcü borcu
+            const dokumBorc = (kasa.dokumcuIslemler||[]).filter(x=>x.tip==="gonder"||x.tip==="baslangic_borc").reduce((s,x)=>s+x.has,0)
+                            - (kasa.dokumcuIslemler||[]).filter(x=>x.tip==="ode").reduce((s,x)=>s+x.has,0);
+            if (dokumBorc > 50) {
+              uyarilar.push({ tip:"sari", mesaj:`Dökümcü borcu ${fN(dokumBorc,2)} has eşik geçti` });
+            }
+            if (!uyarilar.length) uyarilar.push({ tip:"yesil", mesaj:"Şu an dikkat edilmesi gereken bir durum yok." });
+            return uyarilar;
+          };
+
+          // ── Sohbet gönder ──
+          const gonder = async () => {
+            if (!ajanSoru.trim() || ajanYukleniyor) return;
+            const soru = ajanSoru.trim();
+            const yeniGecmis = [...ajanGecmis, { rol:"user", icerik:soru }];
+            setAjanGecmis(yeniGecmis);
+            setAjanSoru("");
+            setAjanYukleniyor(true);
+            try {
+              const sistemPrompt = `Sen bir kuyumcu atölyesi yönetim asistanısın. Kullanıcının atölye verisini analiz edip Türkçe, net ve pratik öneriler veriyorsun.
+
+ATÖLYE VERİSİ (${new Date().toLocaleDateString("tr-TR")} tarihi itibarıyla):
+${buildContext()}
+
+Kurallar:
+- Kısa ve net cevaplar ver
+- Sayısal veriye dayandır önerilerini  
+- Türkçe konuş
+- Gerektiğinde uyarı ver, gerektiğinde övgü ver
+- Mümkünse aksiyon öner`;
+
+              const mesajlar = yeniGecmis.map(m => ({ role: m.rol==="user"?"user":"assistant", content: m.icerik }));
+              const res = await fetch("https://api.anthropic.com/v1/messages", {
+                method:"POST",
+                headers:{ "Content-Type":"application/json" },
+                body: JSON.stringify({
+                  model: "claude-sonnet-4-20250514",
+                  max_tokens: 1000,
+                  system: sistemPrompt,
+                  messages: mesajlar,
+                })
+              });
+              const data = await res.json();
+              const cevap = data.content?.[0]?.text || "Yanıt alınamadı.";
+              setAjanGecmis(prev => [...prev, { rol:"assistant", icerik:cevap }]);
+            } catch(e) {
+              setAjanGecmis(prev => [...prev, { rol:"assistant", icerik:"Bağlantı hatası: " + e.message }]);
+            }
+            setAjanYukleniyor(false);
+          };
+
+          // Uyarıları hesapla (ilk açılışta)
+          if (ajanUyarilar === null) {
+            setTimeout(() => setAjanUyarilar(hesaplaUyarilar()), 100);
+          }
+
+          const UYARI_RENK = { kirmizi:"#e85a4f", sari:"#e8833a", yesil:"#6abf69" };
+          const UYARI_BG   = { kirmizi:"rgba(232,90,79,0.08)", sari:"rgba(232,131,58,0.08)", yesil:"rgba(106,191,105,0.08)" };
+          const UYARI_ICO  = { kirmizi:"🔴", sari:"🟡", yesil:"🟢" };
+
+          return (
+            <div style={{ animation:"fadein .3s" }}>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
+                <h2 style={{ margin:0, fontSize:14, fontWeight:700, color:T.text }}>🤖 Atölye Asistanı</h2>
+                <button onClick={()=>setAjanUyarilar(hesaplaUyarilar())} style={{ ...GH, fontSize:9, padding:"5px 12px" }}>↺ Yenile</button>
+              </div>
+
+              {/* ── OTOMATİK UYARILAR ── */}
+              <div style={{ background:"rgba(0,0,0,0.2)", border:"1px solid rgba(255,255,255,0.06)", borderRadius:12, padding:"12px 16px", marginBottom:14 }}>
+                <div style={{ fontSize:10, fontWeight:700, color:GOLD, marginBottom:10 }}>⚡ OTOMATİK UYARILAR</div>
+                {ajanUyarilar === null
+                  ? <div style={{ fontSize:10, color:"#665d4a" }}>Taranıyor...</div>
+                  : <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+                      {ajanUyarilar.map((u, i) => (
+                        <div key={i} style={{ display:"flex", alignItems:"flex-start", gap:8, padding:"7px 10px", background:UYARI_BG[u.tip], border:"1px solid", borderColor:UYARI_RENK[u.tip]+"33", borderRadius:8 }}>
+                          <span style={{ fontSize:12, flexShrink:0, marginTop:1 }}>{UYARI_ICO[u.tip]}</span>
+                          <span style={{ fontSize:10, color:UYARI_RENK[u.tip], fontWeight: u.tip!=="yesil"?700:400 }}>{u.mesaj}</span>
+                          {u.tip !== "yesil" && (
+                            <button onClick={()=>{
+                              setAjanGecmis(prev=>[...prev,{rol:"user",icerik:`Bu konuda ne yapmalıyım: ${u.mesaj}`}]);
+                              setAjanSoru(`Bu konuda ne yapmalıyım: ${u.mesaj}`);
+                              setTimeout(()=>document.getElementById("ajan-input")?.focus(),100);
+                            }} style={{ marginLeft:"auto", flexShrink:0, background:"rgba(255,255,255,0.06)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:6, padding:"2px 8px", color:"#998a6e", fontSize:8, cursor:"pointer" }}>Analiz Et →</button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                }
+              </div>
+
+              {/* ── RHİNO MİZAN NOTU ── */}
+              {rhinoMizan ? (
+                <div style={{ background:"rgba(91,155,213,0.05)", border:"1px solid rgba(91,155,213,0.15)", borderRadius:10, padding:"8px 14px", marginBottom:12, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                  <div>
+                    <span style={{ fontSize:9, fontWeight:700, color:"#5b9bd5" }}>📊 Mizan yüklendi</span>
+                    <span style={{ fontSize:8, color:"#665d4a", marginLeft:8 }}>{rhinoMizan.dosyaAd} · {rhinoMizan.tarih}</span>
+                  </div>
+                  <span style={{ fontSize:8, color:"#6abf69" }}>✓ Ajan bu veriyi kullanıyor</span>
+                </div>
+              ) : (
+                <div style={{ background:"rgba(255,255,255,0.02)", border:"1px solid rgba(255,255,255,0.06)", borderRadius:10, padding:"8px 14px", marginBottom:12, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                  <span style={{ fontSize:9, color:"#665d4a" }}>Rhino mizan verisi yüklü değil</span>
+                  <button onClick={()=>{ setSayfa("kasa"); setKasaSayfa("muhasebe"); }} style={{ ...GH, fontSize:8, padding:"3px 10px" }}>Kasa → Muhasebe'ye git</button>
+                </div>
+              )}
+
+                            {/* ── HIZLI SORULAR ── */}
+              <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:12 }}>
+                {[
+                  "En karlı 5 modelim hangileri?",
+                  "Bu ay ne kadar kazandım?",
+                  "Hangi siparişler gecikiyor?",
+                  "Müşteri bakiyelerini özetle",
+                  "Hurda oranımı analiz et",
+                  "Satış ağımı nasıl geliştirebilirim?",
+                ].map(s => (
+                  <button key={s} onClick={()=>{ setAjanSoru(s); setTimeout(()=>document.getElementById("ajan-input")?.focus(),100); }}
+                    style={{ background:"rgba(201,168,76,0.06)", border:"1px solid rgba(201,168,76,0.12)", borderRadius:8, padding:"5px 10px", color:GOLD, fontSize:9, cursor:"pointer", fontWeight:500 }}>
+                    {s}
+                  </button>
+                ))}
+              </div>
+
+              {/* ── SOHBET GEÇMİŞİ ── */}
+              {ajanGecmis.length > 0 && (
+                <div style={{ background:"rgba(0,0,0,0.15)", border:"1px solid rgba(255,255,255,0.05)", borderRadius:12, padding:"12px 16px", marginBottom:12, maxHeight:400, overflowY:"auto" }}>
+                  {ajanGecmis.map((m, i) => (
+                    <div key={i} style={{ marginBottom:12, display:"flex", flexDirection:"column", alignItems:m.rol==="user"?"flex-end":"flex-start" }}>
+                      <div style={{ fontSize:8, color:"#665d4a", marginBottom:3, paddingLeft:4 }}>{m.rol==="user"?"Siz":"Asistan"}</div>
+                      <div style={{
+                        maxWidth:"85%", padding:"8px 12px", borderRadius:10,
+                        background: m.rol==="user" ? "rgba(201,168,76,0.12)" : "rgba(255,255,255,0.05)",
+                        border: "1px solid " + (m.rol==="user" ? "rgba(201,168,76,0.2)" : "rgba(255,255,255,0.07)"),
+                        fontSize:11, color:T.text, lineHeight:1.6, whiteSpace:"pre-wrap"
+                      }}>{m.icerik}</div>
+                    </div>
+                  ))}
+                  {ajanYukleniyor && (
+                    <div style={{ display:"flex", alignItems:"flex-start" }}>
+                      <div style={{ padding:"8px 12px", borderRadius:10, background:"rgba(255,255,255,0.05)", border:"1px solid rgba(255,255,255,0.07)", fontSize:11, color:"#665d4a" }}>
+                        ⏳ Düşünüyor...
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* ── SORU KUTUSU ── */}
+              <div style={{ display:"flex", gap:8 }}>
+                <input
+                  id="ajan-input"
+                  value={ajanSoru}
+                  onChange={e=>setAjanSoru(e.target.value)}
+                  onKeyDown={e=>{ if(e.key==="Enter"&&!e.shiftKey){ e.preventDefault(); gonder(); }}}
+                  placeholder="Atölyeniz hakkında bir şey sorun... (Enter ile gönder)"
+                  style={{ ...IS, flex:1, padding:"10px 14px", fontSize:11 }}
+                  disabled={ajanYukleniyor}
+                />
+                <button onClick={gonder} disabled={ajanYukleniyor||!ajanSoru.trim()}
+                  style={{ ...BG, padding:"10px 18px", fontSize:11, opacity:ajanYukleniyor||!ajanSoru.trim()?0.5:1 }}>
+                  Gönder
+                </button>
+                {ajanGecmis.length > 0 && (
+                  <button onClick={()=>setAjanGecmis([])} style={{ ...RD, padding:"10px 12px", fontSize:11 }}>Temizle</button>
+                )}
+              </div>
+            </div>
+          );
+        })()}
 
         {/* AYARLAR */}
         {sayfa==="ayarlar" && (
