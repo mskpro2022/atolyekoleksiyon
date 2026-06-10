@@ -1378,6 +1378,13 @@ function Atolye() {
   const altinKgUSD  = Number(altinKg) || 0;
   const madenCarpan = Number(mc) || 0.25;
 
+  useEffect(() => {
+    document.body.style.margin = "0";
+    document.body.style.padding = "0";
+    document.documentElement.style.margin = "0";
+    document.documentElement.style.padding = "0";
+  }, []);
+
   useEffect(() => { (async () => {
     // Tüm eski key versiyonlarını dene
     const tryKeys = async (keys, def) => {
@@ -1876,7 +1883,7 @@ function Atolye() {
 
   return (
     <div style={{ minHeight:"100vh", background:T.bg, color:T.text, fontFamily:"sans-serif" }}>
-      <style>{`*{box-sizing:border-box}html,body,#root{background:${T.bg};margin:0;padding:0;min-height:100vh;width:100%;overflow-x:hidden}`}</style>
+      <style>{`*{box-sizing:border-box}html,body,#root{background:${T.bg};margin:0;padding:0;min-height:100vh;width:100%}body{overflow-x:hidden;overflow-y:auto}`}</style>
       <style>{"@keyframes fadein{from{opacity:0}to{opacity:1}}@keyframes cardin{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}*{box-sizing:border-box}::-webkit-scrollbar{width:4px}::-webkit-scrollbar-thumb{background:rgba(201,168,76,.15);border-radius:2px}select option{background:#1c1a15;color:#e8dcc8}"}</style>
 
       {/* HEADER */}
