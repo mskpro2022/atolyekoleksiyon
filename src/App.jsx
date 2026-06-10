@@ -3479,10 +3479,14 @@ function Atolye() {
                                 const bakBor = parseFloat(String(row[5]||"0").replace(",",".")) || 0;
                                 const bakAla = parseFloat(String(row[6]||"0").replace(",",".")) || 0;
                                 const bakiye = bakBor > 0 ? bakBor : -bakAla;
-                                if (kod.startsWith("120 001 10\") && dvz==="HAS" && ad) musteriHas.push({ ad, bakiye });
-                                if (kod.startsWith("320 001 10\") && dvz==="HAS" && ad) dokumcuHas.push({ ad, bakiye });
-                                if (kod.startsWith("320 001 02\") && dvz==="USD" && ad) saticiUsd.push({ ad, bakiye });
-                                if (kod.startsWith("320 001 03\") && dvz==="EUR" && ad) saticiEur.push({ ad, bakiye });
+                                const kodPrefix120 = "120 001 10" + String.fromCharCode(92);
+                                const kodPrefix32010 = "320 001 10" + String.fromCharCode(92);
+                                const kodPrefix32002 = "320 001 02" + String.fromCharCode(92);
+                                const kodPrefix32003 = "320 001 03" + String.fromCharCode(92);
+                                if (kod.startsWith(kodPrefix120) && dvz==="HAS" && ad) musteriHas.push({ ad, bakiye });
+                                if (kod.startsWith(kodPrefix32010) && dvz==="HAS" && ad) dokumcuHas.push({ ad, bakiye });
+                                if (kod.startsWith(kodPrefix32002) && dvz==="USD" && ad) saticiUsd.push({ ad, bakiye });
+                                if (kod.startsWith(kodPrefix32003) && dvz==="EUR" && ad) saticiEur.push({ ad, bakiye });
                               });
                               setRhinoMizan({ musteriHas, dokumcuHas, saticiUsd, saticiEur, tarih:new Date().toLocaleDateString("tr-TR"), dosyaAd:file.name });
                             } catch(err) { alert("Dosya okunamadı: "+err.message); }
