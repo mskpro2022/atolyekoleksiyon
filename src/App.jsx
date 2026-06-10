@@ -4246,7 +4246,12 @@ ${buildContext()}`;
                 body: JSON.stringify({ model:"claude-sonnet-4-20250514", max_tokens:1000, system:sistem, messages:mesajlar })
               });
               const data = await res.json();
-              setAjanGecmis(prev=>[...prev, { rol:"assistant", icerik:data.content?.[0]?.text||"Yanıt alınamadı." }]);
+              const cevap = data.content?.[0]?.text
+                || data.error?.message
+                || (data.error ? JSON.stringify(data.error) : null)
+                || data.raw
+                || "Yanıt alınamadı.";
+              setAjanGecmis(prev=>[...prev, { rol:"assistant", icerik:cevap }]);
             } catch(e) {
               setAjanGecmis(prev=>[...prev, { rol:"assistant", icerik:"Hata: "+e.message }]);
             }
