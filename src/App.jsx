@@ -1169,6 +1169,11 @@ function GirisEkrani({ onGiris }) {
     document.body.style.padding = "0";
     document.documentElement.style.margin = "0";
     document.documentElement.style.padding = "0";
+    // Model kart foto hover zoom
+    const s = document.createElement("style");
+    s.id = "atolye-hover-zoom";
+    s.textContent = `.model-foto-wrap { overflow:hidden; } .model-foto-wrap img { transition: transform .35s cubic-bezier(.25,.46,.45,.94) !important; } .model-foto-wrap:hover img { transform: scale(1.35) !important; }`;
+    if (!document.getElementById("atolye-hover-zoom")) document.head.appendChild(s);
   }, []);
   const kontrol = () => {
     const aktifSifre = localStorage.getItem("atolye_sifre") || "19671967*Mm";
@@ -2161,7 +2166,7 @@ function Atolye() {
                 const h   = altinKgUSD>0 ? hesapla(m, m.refAyar, altinKgUSD, madenCarpan) : null;
                 return (
                   <div key={m.id} style={{ background:ik?"rgba(201,168,76,0.07)":"rgba(201,168,76,0.02)", border:"1px solid", borderColor:ik?"rgba(201,168,76,0.28)":"rgba(201,168,76,0.07)", borderRadius:11, overflow:"hidden", animation:"cardin .3s ease "+(i*.03)+"s both" }}>
-                    <div style={{ position:"relative", height:130, background:"rgba(0,0,0,0.3)", overflow:"hidden" }}>
+                    <div className="model-foto-wrap" style={{ position:"relative", height:130, background:"rgba(0,0,0,0.3)", overflow:"hidden" }}>
                       {m.foto ? <img src={m.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"cover", display:"block" }}/> : <div style={{ width:"100%", height:"100%", display:"flex", alignItems:"center", justifyContent:"center", color:"rgba(201,168,76,0.1)", fontSize:24 }}>-</div>}
                       <button onClick={()=>togKonf(m)} style={{ position:"absolute", top:4, right:4, width:20, height:20, borderRadius:5, background:ik?"rgba(201,168,76,0.9)":"rgba(0,0,0,0.55)", border:"2px solid rgba(201,168,76,0.45)", color:ik?DARK:"transparent", fontSize:9, fontWeight:800, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}>V</button>
                       {seciliModeller.has(m.id) && <div style={{ position:"absolute", inset:0, background:"rgba(91,155,213,0.15)", border:"2px solid rgba(91,155,213,0.5)", pointerEvents:"none" }}/>}
