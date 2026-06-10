@@ -1876,12 +1876,12 @@ function Atolye() {
 
   return (
     <div style={{ minHeight:"100vh", background:T.bg, color:T.text, fontFamily:"sans-serif" }}>
-      <style>{`html,body,#root{background:${T.bg};margin:0;padding:0;min-height:100vh}`}</style>
+      <style>{`html,body,#root{background:${T.bg};margin:0;padding:0;min-height:100vh;overflow-x:hidden}`}</style>
       <style>{"@keyframes fadein{from{opacity:0}to{opacity:1}}@keyframes cardin{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}*{box-sizing:border-box}::-webkit-scrollbar{width:4px}::-webkit-scrollbar-thumb{background:rgba(201,168,76,.15);border-radius:2px}select option{background:#1c1a15;color:#e8dcc8}"}</style>
 
       {/* HEADER */}
       <div style={{ padding:"14px 14px 10px", background:"rgba(201,168,76,0.04)", borderBottom:"1px solid rgba(201,168,76,0.07)" }}>
-        <div style={{ maxWidth:1200, margin:"0 auto" }}>
+        <div style={{ width:"100%" }}>
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:8, marginBottom:10 }}>
             <h1 style={{ margin:0, fontSize:"clamp(13px,2vw,18px)", fontWeight:700, color:GOLD }}>Atolye Koleksiyon Sistemi</h1>
             <div style={{ display:"flex", gap:3, flexWrap:"wrap" }}>
@@ -1957,7 +1957,7 @@ function Atolye() {
         </div>
       </div>
 
-      <div style={{ maxWidth:1200, margin:"0 auto", padding:"12px 12px 60px" }}>
+      <div style={{ width:"100%", padding:"12px 12px 60px" }}>
 
         {/* KOLEKSİYONLAR */}
         {sayfa==="koleksiyonlar" && (
