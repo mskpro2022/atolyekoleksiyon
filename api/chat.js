@@ -21,13 +21,14 @@ export default async function handler(req, res) {
     });
 
     const text = await response.text();
+    let data;
     try {
-      const data = JSON.parse(text);
-      res.status(response.status).json(data);
-    } catch {
-      res.status(500).json({ error: "API yanıtı geçersiz", raw: text.slice(0, 200) });
+      data = JSON.parse(text);
+    } catch (parseErr) {
+      return res.status(500).json({ error: "API yaniti gecersiz", raw: text.slice(0, 200) });
     }
+    return res.status(response.status).json(data);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    return res.status(500).json({ error: err.message });
   }
 }
