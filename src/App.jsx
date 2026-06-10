@@ -1172,7 +1172,18 @@ function GirisEkrani({ onGiris }) {
     // Model kart foto hover zoom
     const s = document.createElement("style");
     s.id = "atolye-hover-zoom";
-    s.textContent = `.model-foto-wrap { overflow:hidden; } .model-foto-wrap img { transition: transform .35s cubic-bezier(.25,.46,.45,.94) !important; } .model-foto-wrap:hover img { transform: scale(1.35) !important; }`;
+    s.textContent = `.model-foto-wrap { overflow:hidden; position:relative; } .model-foto-wrap img { transition: transform .4s cubic-bezier(.25,.46,.45,.94), transform-origin 0s !important; transform-origin: center center; } .model-foto-wrap:hover img { transform: scale(1.90) !important; }`;
+    // Mouse-position zoom origin
+    document.addEventListener("mousemove", function(e) {
+      const el = e.target.closest && e.target.closest(".model-foto-wrap");
+      if (!el) return;
+      const img = el.querySelector("img");
+      if (!img) return;
+      const r = el.getBoundingClientRect();
+      const x = ((e.clientX - r.left) / r.width * 100).toFixed(1);
+      const y = ((e.clientY - r.top) / r.height * 100).toFixed(1);
+      img.style.transformOrigin = x + "% " + y + "%";
+    });
     if (!document.getElementById("atolye-hover-zoom")) document.head.appendChild(s);
   }, []);
   const kontrol = () => {
@@ -2005,7 +2016,7 @@ function Atolye() {
               </div>
             </div>
             {kollar.length===0 && <p style={{ color:"#665d4a", textAlign:"center", padding:"40px" }}>Henuz koleksiyon yok</p>}
-            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))", gap:16 }}>
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(320px,1fr))", gap:16 }}>
               {kollar.map((kol,i) => {
                 const km = modeller.filter(m => m.ki===kol.id);
                 const ft = km.filter(m => m.foto).slice(0,4);
@@ -2159,7 +2170,7 @@ function Atolye() {
               </div>
             )}
             {gorunen.length===0 && <p style={{ color:"#665d4a", textAlign:"center", padding:"30px", fontSize:12 }}>Model bulunamadi</p>}
-            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(175px,1fr))", gap:9 }}>
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))", gap:9 }}>
               {gorunen.map((m,i) => {
                 const ik  = konfList.find(x=>x.id===m.id);
                 const dur = DURUMLAR.find(d=>d.id===m.durum)||DURUMLAR[0];
