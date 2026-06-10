@@ -4186,104 +4186,45 @@ function Atolye() {
 
         {/* ASİSTAN */}
         {sayfa==="asistan" && (() => {
-          // ── Sistem context'i hazırla ──
+          const altinKgUSD = parseFloat(altinKg) || 0;
+
+          // ── Context ──
           const buildContext = () => {
-            const altinKgUSD = parseFloat(altinKg) || 0;
-            // Model özeti
-            const modelOzet = modeller.slice(0, 80).map(m => {
+            const modelOzet = modeller.slice(0,100).map(m => {
               const hc = altinKgUSD > 0 ? hesapla(m, m.refAyar, altinKgUSD, parseFloat(mc)||0.030) : null;
-              return { kod:m.kod||m.ad, ayar:m.refAyar, gram:m.gram, tasGram:m.tasGram||0, karMly: hc ? Math.round(hc.karMly*10000)/10000 : null, satis:m.satisSayisi||0 };
+              return { kod:m.kod||m.ad, ayar:m.refAyar, gram:m.gram, tasGram:m.tasGram||0,
+                karMly: hc ? Math.round(hc.karMly*10000)/10000 : null, satis:m.satisSayisi||0 };
             });
-            // Sipariş özeti
-            const sipOzet = siparisler.slice(-30).map(s => ({
-              musteri: s.musKod||s.musteri, tarih: new Date(s.tarih).toLocaleDateString("tr-TR"),
-              durumlar: Object.values(s.kalemDurumlar||{}),
-              kalemSayisi: (s.kalemler||[]).length,
-              hurdaTopla: Object.values(s.kalemHurda||{}).reduce((a,b)=>a+b,0),
-              iadeTopla: Object.values(s.kalemIade||{}).reduce((a,b)=>a+b,0),
-            }));
-            // Kasa özeti
+            const sipOzet = siparisler.slice(-50).map(s => {
+              let sipKar = 0;
+              (s.kalemler||[]).forEach(k => {
+                const hc = hesapla(k, k.secilenAyar||k.refAyar, s.altinKgUSD, s.mc);
+                const net = Math.max(0,(k.adet||1)-((s.kalemHurda||{})[k.id]||0)-((s.kalemIade||{})[k.id]||0)-((s.kalemTamir||{})[k.id]||0));
+                sipKar += hc.karHas * net;
+              });
+              const son = (s.durumGecmisi||[]).slice(-1)[0];
+              return { musteri:s.musKod||s.musteri, tarih:new Date(s.tarih).toLocaleDateString("tr-TR"),
+                durum:son?.durum, kalemSayisi:(s.kalemler||[]).length,
+                hurda:Object.values(s.kalemHurda||{}).reduce((a,b)=>a+b,0),
+                iade:Object.values(s.kalemIade||{}).reduce((a,b)=>a+b,0),
+                karHas: Math.round(sipKar*1000)/1000 };
+            });
             const dokumBorc = (kasa.dokumcuIslemler||[]).filter(x=>x.tip==="gonder"||x.tip==="baslangic_borc").reduce((s,x)=>s+x.has,0)
                             - (kasa.dokumcuIslemler||[]).filter(x=>x.tip==="ode").reduce((s,x)=>s+x.has,0);
-            const musteriAlacak = Object.entries(kasa.musteriOdemeler||{}).reduce((acc,[mus,odemeler])=>{
-              const odenen = (odemeler||[]).filter(x=>x.tip!=="baslangic_bakiye").reduce((s,x)=>s+x.has,0);
-              const bborc  = (odemeler||[]).filter(x=>x.tip==="baslangic_bakiye").reduce((s,x)=>s+x.has,0);
-              acc[mus] = { odenen, bborc };
-              return acc;
-            }, {});
             return JSON.stringify({
-              tarih: new Date().toLocaleDateString("tr-TR"),
-              altinKgUSD,
-              modelSayisi: modeller.length,
-              modeller: modelOzet,
-              sonSiparisler: sipOzet,
-              kasaOzet: { dokumBorc: Math.round(dokumBorc*1000)/1000, musteriAlacak },
-              koleksiyonlar: kollar.map(k=>({ ad:k.ad, on:k.on })),
+              tarih: new Date().toLocaleDateString("tr-TR"), altinKgUSD,
+              modelSayisi: modeller.length, koleksiyon: kollar.length,
+              modeller: modelOzet, sonSiparisler: sipOzet,
+              kasaOzet: { dokumBorc: Math.round(dokumBorc*1000)/1000 },
               rhinoMizan: rhinoMizan ? {
-                musteriHas: rhinoMizan.musteriHas.filter(x=>x.bakiye!==0).map(x=>({
-                  ...x, sistemMusterisi: mizanEslestirme[x.ad] || Object.keys(musteriler).find(s=>s.toLowerCase().replace(/[^a-z0-9]/gi,"")===x.ad.toLowerCase().replace(/[^a-z0-9]/gi,"")) || null
+                musteriHas: rhinoMizan.musteriHas.filter(x=>Math.abs(x.bakiye)>0.001).map(x=>({
+                  ad:x.ad, bakiye:x.bakiye,
+                  sistemMusterisi: mizanEslestirme[x.ad] || Object.keys(musteriler).find(s=>s.toLowerCase().replace(/[^a-z0-9]/gi,"")===x.ad.toLowerCase().replace(/[^a-z0-9]/gi,"")) || null
                 })),
-                dokumcuHas: rhinoMizan.dokumcuHas.filter(x=>x.bakiye!==0),
-                saticiUsd:  rhinoMizan.saticiUsd.filter(x=>x.bakiye!==0),
-                saticiEur:  rhinoMizan.saticiEur.filter(x=>x.bakiye!==0),
+                dokumcuHas: rhinoMizan.dokumcuHas.filter(x=>Math.abs(x.bakiye)>0.001),
+                saticiUsd: rhinoMizan.saticiUsd.filter(x=>Math.abs(x.bakiye)>0.001),
               } : null,
             }, null, 2);
-          };
-
-          // ── Otomatik uyarılar ──
-          const hesaplaUyarilar = () => {
-            const altinKgUSD = parseFloat(altinKg) || 0;
-            const uyarilar = [];
-            // Düşük karlılıklı modeller
-            if (altinKgUSD > 0) {
-              modeller.forEach(m => {
-                const hc = hesapla(m, m.refAyar, altinKgUSD, parseFloat(mc)||0.030);
-                if (hc.karMly < 0.020 && m.gram > 0) {
-                  uyarilar.push({ tip:"kirmizi", mesaj:`${m.kod||m.ad} — Düşük karlılık: ${fN(hc.karMly,3)} mly/gr (0.020 altı)` });
-                }
-              });
-            }
-            // 7+ gün geciken aktif siparişler
-            siparisler.forEach(s => {
-              const son = (s.durumGecmisi||[]).slice(-1)[0];
-              if (!son || ["tamam","teslim","hurda"].includes(son.durum)) return;
-              const bekleme = Math.round((Date.now()-son.tarih)/86400000);
-              if (bekleme >= 7) {
-                uyarilar.push({ tip:"sari", mesaj:`${s.musKod||s.musteri||"?"} siparişi ${bekleme} gündür "${DURUMLAR.find(d=>d.id===son.durum)?.l||son.durum}" aşamasında bekliyor` });
-              }
-            });
-            // 30+ gün ödeme yapmayan müşteriler
-            Object.entries(kasa.musteriOdemeler||{}).forEach(([mus, odemeler]) => {
-              if (!odemeler?.length) return;
-              const sonOdeme = Math.max(...odemeler.map(o=>o.tarih||0));
-              const gecenGun = Math.round((Date.now()-sonOdeme)/86400000);
-              if (gecenGun >= 30) {
-                uyarilar.push({ tip:"sari", mesaj:`${mus} — Son ödeme ${gecenGun} gün önce` });
-              }
-            });
-            // Yüksek hurda oranı
-            const modelHurda = {};
-            siparisler.forEach(s => {
-              (s.kalemler||[]).forEach(k => {
-                const hurda = ((s.kalemHurda)||{})[k.id]||0;
-                if (!modelHurda[k.id]) modelHurda[k.id] = { ad:k.ad||k.kod||"?", hurda:0, toplam:0 };
-                modelHurda[k.id].hurda += hurda;
-                modelHurda[k.id].toplam += k.adet||1;
-              });
-            });
-            Object.values(modelHurda).forEach(d => {
-              if (d.toplam >= 5 && d.hurda/d.toplam > 0.10) {
-                uyarilar.push({ tip:"kirmizi", mesaj:`${d.ad} — Hurda oranı %${Math.round(d.hurda/d.toplam*100)} (${d.hurda}/${d.toplam})` });
-              }
-            });
-            // Dökümcü borcu
-            const dokumBorc = (kasa.dokumcuIslemler||[]).filter(x=>x.tip==="gonder"||x.tip==="baslangic_borc").reduce((s,x)=>s+x.has,0)
-                            - (kasa.dokumcuIslemler||[]).filter(x=>x.tip==="ode").reduce((s,x)=>s+x.has,0);
-            if (dokumBorc > 50) {
-              uyarilar.push({ tip:"sari", mesaj:`Dökümcü borcu ${fN(dokumBorc,2)} has eşik geçti` });
-            }
-            if (!uyarilar.length) uyarilar.push({ tip:"yesil", mesaj:"Şu an dikkat edilmesi gereken bir durum yok." });
-            return uyarilar;
           };
 
           // ── Sohbet gönder ──
@@ -4295,198 +4236,117 @@ function Atolye() {
             setAjanSoru("");
             setAjanYukleniyor(true);
             try {
-              const sistemPrompt = `Sen bir kuyumcu atölyesi yönetim asistanısın. Kullanıcının atölye verisini analiz edip Türkçe, net ve pratik öneriler veriyorsun.
+              const sistem = `Sen MSK Kuyumculuk atölyesinin yönetim asistanısın. Veriyi analiz edip kısa, net, aksiyona dönük Türkçe öneriler veriyorsun. Gereksiz uzun cevaplardan kaçın. Sayısal veriye dayan.
 
-ATÖLYE VERİSİ (${new Date().toLocaleDateString("tr-TR")} tarihi itibarıyla):
-${buildContext()}
-
-Kurallar:
-- Kısa ve net cevaplar ver
-- Sayısal veriye dayandır önerilerini  
-- Türkçe konuş
-- Gerektiğinde uyarı ver, gerektiğinde övgü ver
-- Mümkünse aksiyon öner`;
-
-              const mesajlar = yeniGecmis.map(m => ({ role: m.rol==="user"?"user":"assistant", content: m.icerik }));
+ATÖLYE VERİSİ:
+${buildContext()}`;
+              const mesajlar = yeniGecmis.map(m=>({ role:m.rol==="user"?"user":"assistant", content:m.icerik }));
               const res = await fetch("/api/chat", {
-                method:"POST",
-                headers:{ "Content-Type":"application/json" },
-                body: JSON.stringify({
-                  model: "claude-sonnet-4-20250514",
-                  max_tokens: 1000,
-                  system: sistemPrompt,
-                  messages: mesajlar,
-                })
+                method:"POST", headers:{"Content-Type":"application/json"},
+                body: JSON.stringify({ model:"claude-sonnet-4-20250514", max_tokens:1000, system:sistem, messages:mesajlar })
               });
               const data = await res.json();
-              const cevap = data.content?.[0]?.text || "Yanıt alınamadı.";
-              setAjanGecmis(prev => [...prev, { rol:"assistant", icerik:cevap }]);
+              setAjanGecmis(prev=>[...prev, { rol:"assistant", icerik:data.content?.[0]?.text||"Yanıt alınamadı." }]);
             } catch(e) {
-              setAjanGecmis(prev => [...prev, { rol:"assistant", icerik:"Bağlantı hatası: " + e.message }]);
+              setAjanGecmis(prev=>[...prev, { rol:"assistant", icerik:"Hata: "+e.message }]);
             }
             setAjanYukleniyor(false);
           };
 
-
+          // ── Özet hesapla ──
+          const karsizSayisi = altinKgUSD > 0 ? modeller.filter(m=>m.gram>0&&hesapla(m,m.refAyar,altinKgUSD,parseFloat(mc)||0.030).karMly<0.020).length : 0;
+          const gecikenSayisi = siparisler.filter(s=>{ const son=(s.durumGecmisi||[]).slice(-1)[0]; return son&&!["tamam","teslim","hurda"].includes(son.durum)&&Math.round((Date.now()-son.tarih)/86400000)>=7; }).length;
+          const modelHurdaMap = {};
+          siparisler.forEach(s=>(s.kalemler||[]).forEach(k=>{ const h=((s.kalemHurda)||{})[k.id]||0; if(!modelHurdaMap[k.id]) modelHurdaMap[k.id]={ad:k.ad||k.kod||"?",h:0,t:0}; modelHurdaMap[k.id].h+=h; modelHurdaMap[k.id].t+=k.adet||1; }));
+          const hurdaliSayisi = Object.values(modelHurdaMap).filter(d=>d.t>=5&&d.h/d.t>0.10).length;
 
           return (
-            <div style={{ animation:"fadein .3s" }}>
-              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
-                <h2 style={{ margin:0, fontSize:14, fontWeight:700, color:T.text }}>🤖 Atölye Asistanı</h2>
-                
+            <div style={{ animation:"fadein .3s", maxWidth:860 }}>
+              <h2 style={{ margin:"0 0 16px", fontSize:14, fontWeight:700, color:T.text }}>🤖 Atölye Asistanı</h2>
+
+              {/* ── DURUM ÖZETI ── */}
+              <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:8, marginBottom:16 }}>
+                {[
+                  { l:"Model", v:modeller.length, sub:"toplam", c:GOLD,
+                    soru:"Modellerimi özetle — en karlı ve en az karlı olanlar hangileri?" },
+                  { l:"Düşük Kâr", v:karsizSayisi, sub:"model (<0.020 mly)", c:karsizSayisi>0?"#e85a4f":"#6abf69",
+                    soru:karsizSayisi>0?`Karlılığı 0.020 mly altında ${karsizSayisi} modelim var. Bunları nasıl düzeltebilirim?`:"" },
+                  { l:"Geciken", v:gecikenSayisi, sub:"sipariş (7+ gün)", c:gecikenSayisi>0?"#e8833a":"#6abf69",
+                    soru:gecikenSayisi>0?`${gecikenSayisi} siparişim 7+ gündür aynı aşamada bekliyor. Ne yapmalıyım?`:"" },
+                  { l:"Yüksek Hurda", v:hurdaliSayisi, sub:"model (>%10)", c:hurdaliSayisi>0?"#e8833a":"#6abf69",
+                    soru:hurdaliSayisi>0?`Hurda oranı %10 üstünde ${hurdaliSayisi} modelim var. Sebebi ne olabilir?`:"" },
+                ].map((s,i) => (
+                  <div key={i} onClick={()=>{ if(s.soru){ setAjanSoru(s.soru); setTimeout(()=>document.getElementById("ajan-input")?.focus(),100); }}}
+                    style={{ background:"rgba(0,0,0,0.2)", border:"1px solid rgba(255,255,255,0.06)", borderRadius:10, padding:"10px 14px", cursor:s.soru?"pointer":"default", transition:"background .2s" }}
+                    onMouseEnter={e=>{ if(s.soru) e.currentTarget.style.background="rgba(0,0,0,0.35)"; }}
+                    onMouseLeave={e=>{ e.currentTarget.style.background="rgba(0,0,0,0.2)"; }}>
+                    <div style={{ fontSize:7, color:s.c, fontWeight:700, textTransform:"uppercase", letterSpacing:".05em", marginBottom:4 }}>{s.l}</div>
+                    <div style={{ fontSize:18, fontWeight:800, color:s.c }}>{s.v}</div>
+                    <div style={{ fontSize:8, color:"#665d4a", marginTop:2 }}>{s.sub}</div>
+                    {s.soru && <div style={{ fontSize:7, color:"#665d4a", marginTop:4 }}>Sormak için tıkla →</div>}
+                  </div>
+                ))}
               </div>
 
-              {/* ── ÖZET KARTLAR ── */}
-              {(() => {
-                const altinKgUSD = parseFloat(altinKg) || 0;
-                // Kritik: karlısız modeller
-                const karsizModeller = altinKgUSD > 0 ? modeller.filter(m => {
-                  const hc = hesapla(m, m.refAyar, altinKgUSD, parseFloat(mc)||0.030);
-                  return m.gram > 0 && hc.karMly < 0.020;
-                }) : [];
-                // Geciken siparişler
-                const gecikenSiparisler = siparisler.filter(s => {
-                  const son = (s.durumGecmisi||[]).slice(-1)[0];
-                  if (!son || ["tamam","teslim","hurda"].includes(son.durum)) return false;
-                  return Math.round((Date.now()-son.tarih)/86400000) >= 7;
-                });
-                // Ödeme yapmayan müşteriler
-                const odemeSizMusteriler = Object.entries(kasa.musteriOdemeler||{}).filter(([,odemeler]) => {
-                  if (!odemeler?.length) return false;
-                  const son = Math.max(...odemeler.map(o=>o.tarih||0));
-                  return Math.round((Date.now()-son)/86400000) >= 30;
-                });
-                // Hurda oranı yüksek modeller
-                const hurdaliModeller = (() => {
-                  const modelHurda = {};
-                  siparisler.forEach(s => (s.kalemler||[]).forEach(k => {
-                    const hurda = ((s.kalemHurda)||{})[k.id]||0;
-                    if (!modelHurda[k.id]) modelHurda[k.id] = { ad:k.ad||k.kod||"?", hurda:0, toplam:0 };
-                    modelHurda[k.id].hurda += hurda;
-                    modelHurda[k.id].toplam += k.adet||1;
-                  }));
-                  return Object.values(modelHurda).filter(d => d.toplam >= 5 && d.hurda/d.toplam > 0.10);
-                })();
-
-                const kartlar = [
-                  karsizModeller.length > 0 && {
-                    renk:"#e85a4f", bg:"rgba(232,90,79,0.06)", border:"rgba(232,90,79,0.15)",
-                    ikon:"🔴", baslik:"Düşük Karlılık",
-                    ozet:`${karsizModeller.length} modelin karlılığı 0.020 mly altında`,
-                    soru:`Karlılığı 0.020 mly altında olan şu modellerimi analiz et ve ne yapmalıyım öner: ${karsizModeller.slice(0,10).map(m=>m.kod||m.ad).join(", ")}`
-                  },
-                  gecikenSiparisler.length > 0 && {
-                    renk:"#e8833a", bg:"rgba(232,131,58,0.06)", border:"rgba(232,131,58,0.15)",
-                    ikon:"⏰", baslik:"Geciken Siparişler",
-                    ozet:`${gecikenSiparisler.length} sipariş 7+ gündür aynı aşamada bekliyor`,
-                    soru:`Şu siparişler gecikiyor, ne yapmalıyım: ${gecikenSiparisler.slice(0,5).map(s=>(s.musKod||s.musteri||"?")+" ("+Math.round((Date.now()-((s.durumGecmisi||[]).slice(-1)[0]?.tarih||0))/86400000)+" gün)").join(", ")}`
-                  },
-                  odemeSizMusteriler.length > 0 && {
-                    renk:"#a78bfa", bg:"rgba(167,139,250,0.06)", border:"rgba(167,139,250,0.15)",
-                    ikon:"💰", baslik:"Bekleyen Ödemeler",
-                    ozet:`${odemeSizMusteriler.length} müşteriden 30+ gündür ödeme yok`,
-                    soru:`Şu müşterilerden 30+ gündür ödeme yok, nasıl yaklaşmalıyım: ${odemeSizMusteriler.map(([m])=>m).join(", ")}`
-                  },
-                  hurdaliModeller.length > 0 && {
-                    renk:"#e8833a", bg:"rgba(232,131,58,0.06)", border:"rgba(232,131,58,0.15)",
-                    ikon:"⚠️", baslik:"Yüksek Hurda Oranı",
-                    ozet:`${hurdaliModeller.length} modelde hurda oranı %10 üstünde`,
-                    soru:`Şu modellerde hurda oranı çok yüksek, sebep ne olabilir ve ne yapmalıyım: ${hurdaliModeller.map(d=>d.ad+" (%"+Math.round(d.hurda/d.toplam*100)+")").join(", ")}`
-                  },
-                  rhinoMizan && {
-                    renk:"#5b9bd5", bg:"rgba(91,155,213,0.06)", border:"rgba(91,155,213,0.15)",
-                    ikon:"📊", baslik:"Mizan Analizi",
-                    ozet:`${rhinoMizan.musteriHas.filter(x=>x.bakiye>0).length} müşteri alacağı, ${rhinoMizan.dokumcuHas.filter(x=>x.bakiye<0).length} satıcı borcu`,
-                    soru:"Rhino ERP mizan verilerini analiz et. Müşteri alacaklarım, satıcı borçlarım ve genel finansal durum hakkında özet yap."
-                  },
-                ].filter(Boolean);
-
-                if (!kartlar.length) return (
-                  <div style={{ background:"rgba(106,191,105,0.05)", border:"1px solid rgba(106,191,105,0.15)", borderRadius:12, padding:"14px 18px", marginBottom:14, textAlign:"center" }}>
-                    <div style={{ fontSize:16, marginBottom:4 }}>✅</div>
-                    <div style={{ fontSize:11, color:"#6abf69", fontWeight:700 }}>Her şey yolunda görünüyor</div>
-                    <div style={{ fontSize:9, color:"#665d4a", marginTop:4 }}>Kritik bir durum tespit edilmedi. Aşağıdan soru sorabilirsiniz.</div>
-                  </div>
-                );
-
-                return (
-                  <div style={{ marginBottom:14 }}>
-                    <div style={{ fontSize:10, fontWeight:700, color:GOLD, marginBottom:10 }}>⚡ ÖNEMLİ KONULAR</div>
-                    <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-                      {kartlar.map((k,i) => (
-                        <div key={i} style={{ background:k.bg, border:"1px solid "+k.border, borderRadius:10, padding:"10px 14px", display:"flex", alignItems:"center", gap:12, cursor:"pointer" }}
-                          onClick={()=>{ setAjanSoru(k.soru); setTimeout(()=>document.getElementById("ajan-input")?.focus(),100); }}>
-                          <div style={{ fontSize:20, flexShrink:0 }}>{k.ikon}</div>
-                          <div style={{ flex:1 }}>
-                            <div style={{ fontSize:10, fontWeight:700, color:k.renk }}>{k.baslik}</div>
-                            <div style={{ fontSize:9, color:"#998a6e", marginTop:2 }}>{k.ozet}</div>
-                          </div>
-                          <div style={{ fontSize:9, color:"#665d4a", flexShrink:0 }}>Sormak için tıkla →</div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                );
-              })()}
-
               {/* ── HIZLI SORULAR ── */}
-              <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:12 }}>
+              <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:14 }}>
                 {[
-                  "En karlı 5 modelim hangileri?",
-                  "Bu ay ne kadar kazandım?",
-                  "Satış ağımı nasıl geliştirebilirim?",
+                  "Genel durumumu özetle",
+                  "Bu ay karlılığım nasıl?",
                   "Hangi koleksiyon daha çok satıyor?",
                   "Maliyetlerimi nasıl düşürebilirim?",
-                ].map(s => (
+                  "Satış ağımı nasıl geliştirebilirim?",
+                  rhinoMizan && "Mizan verilerini analiz et",
+                ].filter(Boolean).map(s => (
                   <button key={s} onClick={()=>{ setAjanSoru(s); setTimeout(()=>document.getElementById("ajan-input")?.focus(),100); }}
-                    style={{ background:"rgba(201,168,76,0.06)", border:"1px solid rgba(201,168,76,0.12)", borderRadius:8, padding:"5px 10px", color:GOLD, fontSize:9, cursor:"pointer" }}>
+                    style={{ background:"rgba(201,168,76,0.06)", border:"1px solid rgba(201,168,76,0.12)", borderRadius:8, padding:"5px 12px", color:GOLD, fontSize:9, cursor:"pointer" }}>
                     {s}
                   </button>
                 ))}
               </div>
 
-                            {/* ── SOHBET GEÇMİŞİ ── */}
+              {/* ── SOHBET ── */}
               {ajanGecmis.length > 0 && (
-                <div style={{ background:"rgba(0,0,0,0.15)", border:"1px solid rgba(255,255,255,0.05)", borderRadius:12, padding:"12px 16px", marginBottom:12, maxHeight:400, overflowY:"auto" }}>
-                  {ajanGecmis.map((m, i) => (
-                    <div key={i} style={{ marginBottom:12, display:"flex", flexDirection:"column", alignItems:m.rol==="user"?"flex-end":"flex-start" }}>
-                      <div style={{ fontSize:8, color:"#665d4a", marginBottom:3, paddingLeft:4 }}>{m.rol==="user"?"Siz":"Asistan"}</div>
-                      <div style={{
-                        maxWidth:"85%", padding:"8px 12px", borderRadius:10,
-                        background: m.rol==="user" ? "rgba(201,168,76,0.12)" : "rgba(255,255,255,0.05)",
-                        border: "1px solid " + (m.rol==="user" ? "rgba(201,168,76,0.2)" : "rgba(255,255,255,0.07)"),
-                        fontSize:11, color:T.text, lineHeight:1.6, whiteSpace:"pre-wrap"
-                      }}>{m.icerik}</div>
+                <div style={{ background:"rgba(0,0,0,0.15)", border:"1px solid rgba(255,255,255,0.05)", borderRadius:12, padding:"14px 16px", marginBottom:12, maxHeight:450, overflowY:"auto" }}>
+                  {ajanGecmis.map((m,i) => (
+                    <div key={i} style={{ marginBottom:14, display:"flex", flexDirection:"column", alignItems:m.rol==="user"?"flex-end":"flex-start" }}>
+                      <div style={{ fontSize:8, color:"#665d4a", marginBottom:3 }}>{m.rol==="user"?"Siz":"Asistan"}</div>
+                      <div style={{ maxWidth:"88%", padding:"9px 13px", borderRadius:10,
+                        background: m.rol==="user"?"rgba(201,168,76,0.1)":"rgba(255,255,255,0.04)",
+                        border:"1px solid "+(m.rol==="user"?"rgba(201,168,76,0.18)":"rgba(255,255,255,0.07)"),
+                        fontSize:11, color:T.text, lineHeight:1.65, whiteSpace:"pre-wrap" }}>
+                        {m.icerik}
+                      </div>
                     </div>
                   ))}
                   {ajanYukleniyor && (
-                    <div style={{ display:"flex", alignItems:"flex-start" }}>
-                      <div style={{ padding:"8px 12px", borderRadius:10, background:"rgba(255,255,255,0.05)", border:"1px solid rgba(255,255,255,0.07)", fontSize:11, color:"#665d4a" }}>
-                        ⏳ Düşünüyor...
-                      </div>
+                    <div style={{ display:"flex", gap:6, alignItems:"center", padding:"8px 0" }}>
+                      <div style={{ fontSize:9, color:"#665d4a" }}>Düşünüyor</div>
+                      {[0,1,2].map(i=><div key={i} style={{ width:5, height:5, borderRadius:"50%", background:"#665d4a", animation:`fadein .6s ${i*.2}s infinite alternate` }}/>)}
                     </div>
                   )}
                 </div>
               )}
 
-              {/* ── SORU KUTUSU ── */}
+              {/* ── GİRİŞ ── */}
               <div style={{ display:"flex", gap:8 }}>
-                <input
-                  id="ajan-input"
-                  value={ajanSoru}
-                  onChange={e=>setAjanSoru(e.target.value)}
+                <input id="ajan-input" value={ajanSoru} onChange={e=>setAjanSoru(e.target.value)}
                   onKeyDown={e=>{ if(e.key==="Enter"&&!e.shiftKey){ e.preventDefault(); gonder(); }}}
-                  placeholder="Atölyeniz hakkında bir şey sorun... (Enter ile gönder)"
+                  placeholder="Atölyeniz hakkında sorun... (Enter)"
                   style={{ ...IS, flex:1, padding:"10px 14px", fontSize:11 }}
-                  disabled={ajanYukleniyor}
-                />
+                  disabled={ajanYukleniyor}/>
                 <button onClick={gonder} disabled={ajanYukleniyor||!ajanSoru.trim()}
-                  style={{ ...BG, padding:"10px 18px", fontSize:11, opacity:ajanYukleniyor||!ajanSoru.trim()?0.5:1 }}>
+                  style={{ ...BG, padding:"10px 20px", fontSize:11, opacity:ajanYukleniyor||!ajanSoru.trim()?0.4:1 }}>
                   Gönder
                 </button>
                 {ajanGecmis.length > 0 && (
-                  <button onClick={()=>setAjanGecmis([])} style={{ ...RD, padding:"10px 12px", fontSize:11 }}>Temizle</button>
+                  <button onClick={()=>setAjanGecmis([])} style={{ ...RD, padding:"10px 12px", fontSize:9 }}>Temizle</button>
                 )}
+              </div>
+
+              {/* Mizan notu */}
+              <div style={{ marginTop:10, fontSize:8, color:"#665d4a", textAlign:"center" }}>
+                {rhinoMizan ? `📊 Mizan yüklü (${rhinoMizan.tarih}) — ajan bu veriyi kullanıyor` : "Mizan yüklemek için: Kasa → Muhasebe"}
               </div>
             </div>
           );
