@@ -36,7 +36,8 @@ const TEMALAR = {
   altin:    { id:"altin",    l:"◆ Klasik Altın",  ac:"Koyu zemin, altın vurgular", bg:"linear-gradient(165deg,#110f0a,#16140e,#141210)", bg2:"#110f0a", gold:"#c9a84c", text:"#e8dcc8", sub:"#998a6e", dim:"#665d4a", card:"rgba(201,168,76,0.03)", border:"rgba(201,168,76,0.08)", header:"rgba(201,168,76,0.04)", headerBorder:"rgba(201,168,76,0.07)", btnBg:"rgba(201,168,76,0.08)", btnBorder:"rgba(201,168,76,0.15)", accent:"#c9a84c", danger:"#e85a4f", success:"#6abf69", info:"#5b9bd5" },
   obsidyen: { id:"obsidyen", l:"◆ Obsidyen",      ac:"Tam siyah, sade beyaz",     bg:"linear-gradient(165deg,#080808,#0e0e0e,#0a0a0a)", bg2:"#080808", gold:"#e0e0e0", text:"#f0f0f0", sub:"#777777", dim:"#4a4a4a", card:"rgba(255,255,255,0.03)", border:"rgba(255,255,255,0.07)", header:"rgba(255,255,255,0.03)", headerBorder:"rgba(255,255,255,0.06)", btnBg:"rgba(255,255,255,0.05)", btnBorder:"rgba(255,255,255,0.1)", accent:"#e0e0e0", danger:"#ff6b6b", success:"#69db7c", info:"#74c0fc" },
   slate:    { id:"slate",    l:"◆ Slate",         ac:"Lacivert-gri, profesyonel", bg:"linear-gradient(165deg,#0f1923,#141f2e,#111a28)", bg2:"#0f1923", gold:"#5b9bd5", text:"#d0dff0", sub:"#6a85aa", dim:"#445570", card:"rgba(91,155,213,0.04)", border:"rgba(91,155,213,0.08)", header:"rgba(91,155,213,0.04)", headerBorder:"rgba(91,155,213,0.07)", btnBg:"rgba(91,155,213,0.06)", btnBorder:"rgba(91,155,213,0.12)", accent:"#5b9bd5", danger:"#e85a4f", success:"#6abf69", info:"#5b9bd5" },
-  beyaz:    { id:"beyaz",    l:"◆ Beyaz",         ac:"Apple tarzı, minimal açık",  bg:"linear-gradient(165deg,#f5f5f7,#f0f0f2,#eeeef0)", bg2:"#f5f5f7", gold:"#1d1d1f", text:"#1d1d1f", sub:"#86868b", dim:"#aeaeb2", card:"rgba(0,0,0,0.02)", border:"rgba(0,0,0,0.06)", header:"rgba(0,0,0,0.02)", headerBorder:"rgba(0,0,0,0.05)", btnBg:"rgba(0,0,0,0.04)", btnBorder:"rgba(0,0,0,0.1)", accent:"#0066cc", danger:"#ff3b30", success:"#34c759", info:"#007aff" },
+  beyaz:     { id:"beyaz",     l:"◆ Beyaz",          ac:"Apple tarzı, minimal açık",  bg:"linear-gradient(165deg,#f5f5f7,#f0f0f2,#eeeef0)", bg2:"#f5f5f7", gold:"#1d1d1f", text:"#1d1d1f", sub:"#86868b", dim:"#aeaeb2", card:"rgba(0,0,0,0.02)", border:"rgba(0,0,0,0.06)", header:"rgba(0,0,0,0.02)", headerBorder:"rgba(0,0,0,0.05)", btnBg:"rgba(0,0,0,0.04)", btnBorder:"rgba(0,0,0,0.1)", accent:"#0066cc", danger:"#ff3b30", success:"#34c759", info:"#007aff" },
+  charcoal:  { id:"charcoal",  l:"◆ Charcoal",       ac:"Kömür gri, sade ve temiz",   bg:"#111111", bg2:"#111111", gold:"#f0f0f0", text:"#f0f0f0", sub:"#888888", dim:"#444444", card:"rgba(255,255,255,0.03)", border:"#252525", header:"rgba(255,255,255,0.02)", headerBorder:"#1e1e1e", btnBg:"rgba(255,255,255,0.04)", btnBorder:"#2a2a2a", accent:"#f0f0f0", danger:"#f87171", success:"#4ade80", info:"#60a5fa" },
 };
 
 let _tema = TEMALAR.altin;
@@ -1231,7 +1232,21 @@ function Atolye() {
   const [tema, setTema] = useState(() => {
     try { const t = localStorage.getItem("atolye_tema"); return TEMALAR[t] || TEMALAR.altin; } catch { return TEMALAR.altin; }
   });
-  const T = tema; // kısa erişim
+  // Yazı rengi özelleştirme (tema üstüne override)
+  const [yaziRenkleri, setYaziRenkleri] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("atolye_yazi_renk") || "{}"); } catch { return {}; }
+  });
+  const yaziRenkUygula = (key, val) => {
+    const yeni = { ...yaziRenkleri, [key]: val };
+    setYaziRenkleri(yeni);
+    try { localStorage.setItem("atolye_yazi_renk", JSON.stringify(yeni)); } catch {}
+  };
+  const T = { ...tema,
+    text: yaziRenkleri.text || tema.text,
+    sub:  yaziRenkleri.sub  || tema.sub,
+    dim:  yaziRenkleri.dim  || tema.dim,
+    gold: yaziRenkleri.gold || tema.gold,
+  };
   const temaUygula = (t) => {
     setTema(t);
     try { localStorage.setItem("atolye_tema", t.id); } catch {}
@@ -3932,6 +3947,39 @@ function Atolye() {
                 ))}
               </div>
               <div style={{ fontSize:8, color:T.dim, marginTop:10, textAlign:"center" }}>Tema seçimi tarayıcıya kaydedilir</div>
+            </div>
+
+            {/* YAZI RENKLERİ */}
+            <div style={{ background:T.card, border:"1px solid "+T.border, borderRadius:16, padding:"16px 18px", marginBottom:14 }}>
+              <div style={{ fontSize:11, fontWeight:700, color:T.gold, marginBottom:14, letterSpacing:"0.03em" }}>✏️ YAZI RENKLERİ</div>
+              <div style={{ fontSize:8, color:T.dim, marginBottom:12 }}>Aktif tema renklerini özelleştirin. Sıfırla'ya basınca tema varsayılanına döner.</div>
+              <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+                {[
+                  { key:"text", label:"Ana Yazı",     hint:"Model adları, başlıklar",    def:tema.text },
+                  { key:"sub",  label:"İkincil Yazı", hint:"Açıklamalar, alt bilgiler", def:tema.sub },
+                  { key:"dim",  label:"Soluk Yazı",   hint:"Tarih, kod gibi detaylar",  def:tema.dim },
+                  { key:"gold", label:"Vurgu Rengi",  hint:"Başlıklar, aktif öğeler",   def:tema.gold },
+                ].map(({ key, label, hint, def }) => (
+                  <div key={key} style={{ display:"flex", alignItems:"center", gap:10 }}>
+                    <div style={{ flex:1 }}>
+                      <div style={{ fontSize:10, fontWeight:700, color:T.text }}>{label}</div>
+                      <div style={{ fontSize:8, color:T.dim }}>{hint}</div>
+                    </div>
+                    <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                      <div style={{ width:28, height:28, borderRadius:6, background:T[key], border:"2px solid "+T.border }}/>
+                      <input type="color" value={yaziRenkleri[key]||def} onChange={e=>yaziRenkUygula(key,e.target.value)}
+                        style={{ width:36, height:28, border:"1px solid "+T.border, borderRadius:6, cursor:"pointer", background:"none", padding:0 }}/>
+                      <span style={{ fontSize:9, color:T.dim, fontFamily:"monospace", minWidth:52 }}>{T[key]}</span>
+                      {yaziRenkleri[key] && (
+                        <button onClick={()=>{ const y={...yaziRenkleri}; delete y[key]; setYaziRenkleri(y); try{localStorage.setItem("atolye_yazi_renk",JSON.stringify(y))}catch{} }}
+                          style={{ ...RD, fontSize:8, padding:"2px 7px" }}>↺</button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <button onClick={()=>{ setYaziRenkleri({}); try{localStorage.removeItem("atolye_yazi_renk")}catch{} }}
+                style={{ ...RD, fontSize:9, padding:"5px 14px", marginTop:12 }}>Tümünü Sıfırla</button>
             </div>
 
             {/* ŞİFRE DEĞİŞTİR */}
