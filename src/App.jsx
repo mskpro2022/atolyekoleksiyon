@@ -1620,9 +1620,47 @@ function Atolye() {
       : (Number(fTasGram)||0);
     const obj = { ad: fAd.trim(), kod: fKod.trim().toUpperCase(), kategori: fKategori, gram: Number(fGram)||0, refAyar: fRefAyar, tasGram: hesaplananTasGram, taslar: fTaslar, tasBoy: fTasBoy.trim(), tasSekil: fTasSekil, tasTur: fTasTur, tasBoyut: fTasBoyut, tasAdet: Number(fTasAdet)||0, madenCarpan: Number(fMadenC)||0, iscilikDolar: Number(fIscilikDolar)||0, iscilikBirim: fIscilikBirim, iscilikAyarlar: fIscilikAyarlar, ekMaliyet: Number(fEkMaliyet)||0, ac: fAc.trim(), foto: fFoto, ki: fKolId, durum: fDurum, etiketler: fEtiketler };
     if (!obj.id) obj.olusturma = Date.now();
-    if (editM) svM(modeller.map(m => m.id === editM.id ? { ...m, ...obj } : m));
-    else svM([...modeller, { id: uid(), ...obj, t: Date.now() }]);
-    setShowMM(false); rmf(); setEditM(null);
+    // Aynı kodlu diğer modeller var mı kontrol et
+    const FIYAT_ALANLARI = ["iscilikDolar","iscilikBirim","iscilikAyarlar","ekMaliyet","madenCarpan"];
+    const syncObj = Object.fromEntries(Object.entries(obj).filter(([k]) => !FIYAT_ALANLARI.includes(k)));
+    const ayniKodlular = modeller.filter(m => m.kod === obj.kod && (!editM || m.id !== editM.id));
+
+    const kaydet = (onayliSync) => {
+      if (editM) {
+        const yeniListe = modeller.map(m => {
+          if (m.id === editM.id) return { ...m, ...obj };
+          if (onayliSync && m.kod === obj.kod) return { ...m, ...syncObj };
+          return m;
+        });
+        svM(yeniListe);
+      } else {
+        const yeniModel = { id: uid(), ...obj, t: Date.now() };
+        if (onayliSync && ayniKodlular.length > 0) {
+          svM([...modeller.map(m => m.kod === obj.kod ? { ...m, ...syncObj } : m), yeniModel]);
+        } else {
+          svM([...modeller, yeniModel]);
+        }
+      }
+      setShowMM(false); rmf(); setEditM(null);
+    };
+
+    if (ayniKodlular.length > 0) {
+      const kolAdlari = ayniKodlular.map(m => {
+        const kol = kollar.find(k => k.id === m.ki);
+        return (kol?.ad || "?") + " → " + (m.ad || m.kod);
+      }).join("
+• ");
+      const onay = window.confirm(
+        obj.kod + " kodu " + ayniKodlular.length + " farklı koleksiyonda daha var:
+• " + kolAdlari +
+        "
+
+Fiyat hariç tüm bilgiler güncellenecek. Onaylıyor musunuz?"
+      );
+      kaydet(onay);
+    } else {
+      kaydet(false);
+    }
   };
 
   const delMod = id => { svM(modeller.filter(m => m.id !== id)); setDelOnay(null); };
