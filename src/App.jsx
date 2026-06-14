@@ -1283,6 +1283,7 @@ function Atolye() {
     hamAltin: [],
     hazirUrun: [],
     serbest: [],
+    musteriModelFiyat: {}, // { "MusteriAd": { "MODEL-KOD": { iscilikDolar, iscilikBirim } } }
   });
   const [kasaSayfa, setKasaSayfa] = useState("ozet");
   // Asistan
@@ -1383,6 +1384,7 @@ function Atolye() {
   const [kayitliNotlar, setKayitliNotlar] = useState([]); // kayıtlı not şablonları
   const [yeniNotSablon, setYeniNotSablon] = useState("");
   const [konfAyar,    setKonfAyar]    = useState("14K");  // tek global ayar
+  const [konfFiyatlar, setKonfFiyatlar] = useState({}); // {modelId: {iscilikDolar, iscilikBirim}}
   const [konfRenkler, setKonfRenkler] = useState({});     // per-item renk
   const [konfAdet,    setKonfAdet]    = useState({});  // id -> adet
   const [konfNot,     setKonfNot]     = useState({});  // id -> not
@@ -1840,7 +1842,17 @@ function Atolye() {
     const yeni = { id: uid(), musteri: musAd, musKod, tarih: Date.now(), teslimTarihi: konfTeslim||"", altinKgUSD, mc: madenCarpan, kalemler: konfKalemler, gelir: kTop.gelir, maliyet: kTop.maliyet, kar: kTop.kar };
     svS([...siparisler, yeni]);
     svM(modeller.map(m => { const k = konfKalemler.find(x => x.id === m.id); return k ? { ...m, satisSayisi: (m.satisSayisi||0)+1 } : m; }));
-    setKonfList([]); setKonfAyarlar({}); setKonfRenkler({}); setKonfAdet({}); setKonfNot({}); setKonfMus(""); setKonfTeslim(""); setKonfAyar("14K");
+    // Müşteri-model fiyat hafızasını güncelle
+    if (musAd && Object.keys(konfFiyatlar).length > 0) {
+      const yeniFiyatHafiza = { ...(kasa.musteriModelFiyat||{}), [musAd]: { ...((kasa.musteriModelFiyat||{})[musAd]||{}) } };
+      konfList.forEach(m => {
+        if (konfFiyatlar[m.id]) {
+          yeniFiyatHafiza[musAd][m.kod] = { iscilikDolar: konfFiyatlar[m.id].iscilikDolar, iscilikBirim: konfFiyatlar[m.id].iscilikBirim };
+        }
+      });
+      svKasa({ ...kasa, musteriModelFiyat: yeniFiyatHafiza });
+    }
+    setKonfList([]); setKonfAyarlar({}); setKonfRenkler({}); setKonfAdet({}); setKonfNot({}); setKonfFiyatlar({}); setKonfMus(""); setKonfTeslim(""); setKonfAyar("14K");
     alert("Siparis kaydedildi!");
   };
 
@@ -2362,6 +2374,7 @@ function Atolye() {
               <h2 style={{ margin:0, fontSize:14, fontWeight:700, color:"#e8dcc8" }}>Konfirmasyon</h2>
               <div style={{ display:"flex", gap:5, alignItems:"center" }}>
                 <div style={{ position:"relative" }}>
+                  <div style={{ position:"relative" }}>
                   <input
                     value={konfMus}
                     onChange={e=>setKonfMus(e.target.value)}
@@ -2369,6 +2382,12 @@ function Atolye() {
                     style={{ ...IS, width:130, padding:"5px 8px", fontSize:11 }}
                     list="konfmus-list"
                   />
+                  {konfMus && (kasa.musteriModelFiyat||{})[konfMus] && (
+                    <div style={{ position:"absolute", top:"100%", left:0, zIndex:10, background:"rgba(106,191,105,0.1)", border:"1px solid rgba(106,191,105,0.25)", borderRadius:6, padding:"4px 8px", fontSize:8, color:"#6abf69", whiteSpace:"nowrap", marginTop:2 }}>
+                      📌 {Object.keys((kasa.musteriModelFiyat||{})[konfMus]||{}).length} model için fiyat hafızası var
+                    </div>
+                  )}
+                </div>
                   <datalist id="konfmus-list">
                     {Object.entries(musteriler).sort((a,b)=>a[1].localeCompare(b[1],"tr")).map(([ad, kod]) => (
                       <option key={ad} value={ad}>{kod} — {ad}</option>
@@ -2431,8 +2450,8 @@ function Atolye() {
                 {/* Ana tablo */}
                 <div style={{ background:"rgba(201,168,76,0.02)", border:"1px solid rgba(201,168,76,0.1)", borderRadius:12, overflow:"hidden", marginBottom:10 }}>
                   {/* Başlık satırı */}
-                  <div style={{ display:"grid", gridTemplateColumns:"72px 80px 1fr 100px 60px 70px 50px", gap:0, background:"rgba(201,168,76,0.08)", padding:"6px 10px", borderBottom:"1px solid rgba(201,168,76,0.12)" }}>
-                    {["","Kod","Urun / Not","Renk","Adet","Top.Gr",""].map((t,i) => (
+                  <div style={{ display:"grid", gridTemplateColumns:"120px 100px 1fr 160px 100px 60px 70px 50px", gap:0, background:"rgba(201,168,76,0.08)", padding:"6px 10px", borderBottom:"1px solid rgba(201,168,76,0.12)" }}>
+                    {["","Kod","Ürün / Not","İşçilik","Renk","Adet","Top.Gr",""].map((t,i) => (
                       <div key={i} style={{ fontSize:8, fontWeight:700, color:"#8a7d64", textTransform:"uppercase", textAlign:i>2?"center":"left" }}>{t}</div>
                     ))}
                   </div>
@@ -2442,15 +2461,26 @@ function Atolye() {
                     const adet    = konfAdet[m.id]||1;
                     const not     = konfNot[m.id]||"";
                     const renk    = konfRenkler[m.id]||"Sari";
-                    const hc      = hesapla(m, konfAyar, altinKgUSD, madenCarpan);
+                    // Fiyat override — konfFiyatlar > müşteri hafızası > model varsayılanı
+                    const musHafiza = konfMus ? (kasa.musteriModelFiyat||{})[konfMus]?.[m.kod] : null;
+                    const fiyatOverride = konfFiyatlar[m.id];
+                    const aktifIscilik = fiyatOverride?.iscilikDolar ?? musHafiza?.iscilikDolar ?? m.iscilikDolar;
+                    const aktifBirim   = fiyatOverride?.iscilikBirim ?? musHafiza?.iscilikBirim ?? m.iscilikBirim ?? "dolar";
+                    const mOverride = { ...m, iscilikDolar: aktifIscilik, iscilikBirim: aktifBirim };
+                    const hc      = hesapla(mOverride, konfAyar, altinKgUSD, madenCarpan);
                     const topGram = hc.mamulGram * adet;
                     const renkRenk = renk==="Rose"?"#e8833a":renk==="Beyaz"?"#aaa":"#c9a84c";
+                    const fiyatDegisti = fiyatOverride !== undefined;
+                    const hafizaVarMi = musHafiza && !fiyatOverride;
                     return (
-                      <div key={m.id} style={{ display:"grid", gridTemplateColumns:"100px 80px 1fr 100px 60px 70px 50px", gap:0, padding:"8px 10px", borderBottom: idx < konfList.length-1 ? "1px solid rgba(201,168,76,0.06)" : "none", alignItems:"center" }}>
+                      <div key={m.id} style={{ display:"grid", gridTemplateColumns:"120px 100px 1fr 160px 100px 60px 70px 50px", gap:0, padding:"8px 10px", borderBottom: idx < konfList.length-1 ? "1px solid rgba(201,168,76,0.06)" : "none", alignItems:"start" }}>
                         {/* Foto */}
-                        <div className="model-foto-wrap" style={{ width:120, height:120, borderRadius:8, overflow:"hidden", flexShrink:0, background:"rgba(0,0,0,0.2)" }}>{m.foto ? <img src={m.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"cover", objectPosition:"center center", display:"block" }}/> : <div style={{ width:"100%", height:"100%", background:"rgba(201,168,76,0.08)", display:"flex", alignItems:"center", justifyContent:"center", color:"rgba(201,168,76,0.3)", fontSize:24 }}>-</div>}</div>
-                        {/* Kod */}
-                        <div style={{ fontSize:10, fontWeight:800, color:GOLD }}>{m.kod||"—"}</div>
+                        <div className="model-foto-wrap" style={{ width:116, height:116, borderRadius:8, overflow:"hidden", flexShrink:0, background:"rgba(0,0,0,0.2)" }}>{m.foto ? <img src={m.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"cover", objectPosition:"center center", display:"block" }}/> : <div style={{ width:"100%", height:"100%", background:"rgba(201,168,76,0.08)", display:"flex", alignItems:"center", justifyContent:"center", color:"rgba(201,168,76,0.3)", fontSize:20 }}>-</div>}</div>
+                        {/* Kod + fiyat hafızası */}
+                        <div style={{ paddingTop:4 }}>
+                          <div style={{ fontSize:11, fontWeight:800, color:GOLD }}>{m.kod||"—"}</div>
+                          {hafizaVarMi && <div style={{ fontSize:7, color:"#6abf69", marginTop:2, background:"rgba(106,191,105,0.1)", padding:"1px 5px", borderRadius:3 }}>📌 {musHafiza.iscilikDolar} {musHafiza.iscilikBirim==="milyem"?"mly":"$/gr"}</div>}
+                        </div>
                         {/* Ürün + not */}
                         <div>
                           <div style={{ fontSize:10, fontWeight:700, color:"#e8dcc8" }}>{m.ad}</div>
@@ -2522,8 +2552,39 @@ function Atolye() {
                             </div>
                           )}
                         </div>
+                        {/* Fiyat override */}
+                        <div style={{ paddingTop:2 }}>
+                          <div style={{ fontSize:7, color:"#665d4a", fontWeight:700, marginBottom:3 }}>İŞÇİLİK</div>
+                          <div style={{ display:"flex", gap:3, marginBottom:3 }}>
+                            <select value={aktifBirim} onChange={e=>setKonfFiyatlar(p=>({...p,[m.id]:{iscilikDolar:aktifIscilik,iscilikBirim:e.target.value}}))}
+                              style={{ ...IS, width:58, padding:"2px 3px", fontSize:8 }}>
+                              <option value="dolar">$/gr</option>
+                              <option value="milyem">mly</option>
+                            </select>
+                            <input type="number" value={aktifIscilik||""} placeholder={String(m.iscilikDolar||"")}
+                              onChange={e=>setKonfFiyatlar(p=>({...p,[m.id]:{iscilikDolar:Number(e.target.value)||0,iscilikBirim:aktifBirim}}))}
+                              style={{ ...IS, width:72, padding:"2px 4px", fontSize:9, fontWeight:700,
+                                borderColor: fiyatDegisti?"rgba(201,168,76,0.5)":"rgba(201,168,76,0.12)",
+                                background: fiyatDegisti?"rgba(201,168,76,0.08)":"rgba(201,168,76,0.05)" }}/>
+                          </div>
+                          {/* Kaydet hafızaya / sıfırla */}
+                          <div style={{ display:"flex", gap:3 }}>
+                            {konfMus && (fiyatDegisti || hafizaVarMi) && (
+                              <button onClick={()=>{
+                                const yeniKasa = { ...kasa, musteriModelFiyat: { ...(kasa.musteriModelFiyat||{}), [konfMus]: { ...((kasa.musteriModelFiyat||{})[konfMus]||{}), [m.kod]: { iscilikDolar:aktifIscilik, iscilikBirim:aktifBirim } } } };
+                                svKasa(yeniKasa);
+                              }} style={{ fontSize:7, background:"rgba(106,191,105,0.1)", border:"1px solid rgba(106,191,105,0.2)", borderRadius:4, padding:"2px 5px", color:"#6abf69", cursor:"pointer", whiteSpace:"nowrap" }}>💾 Kaydet</button>
+                            )}
+                            {fiyatDegisti && (
+                              <button onClick={()=>setKonfFiyatlar(p=>{ const y={...p}; delete y[m.id]; return y; })}
+                                style={{ fontSize:7, background:"rgba(232,90,79,0.1)", border:"1px solid rgba(232,90,79,0.2)", borderRadius:4, padding:"2px 5px", color:"#e85a4f", cursor:"pointer" }}>↺</button>
+                            )}
+                          </div>
+                          {/* Karlılık göster */}
+                          {altinKgUSD>0 && <div style={{ fontSize:8, color:hc.karUyari?"#e85a4f":"#6abf69", fontWeight:700, marginTop:3 }}>{fN(hc.karMly,3)} mly</div>}
+                        </div>
                         {/* Altın rengi */}
-                        <div style={{ display:"flex", gap:4, justifyContent:"center" }}>
+                        <div style={{ display:"flex", gap:4, justifyContent:"center", paddingTop:4 }}>
                           {[{id:"Sari",c:"#c9a84c"},{id:"Beyaz",c:"#b0b8c1"},{id:"Rose",c:"#d4877a"}].map(r => (
                             <button key={r.id} onClick={()=>konfRenkSec(m.id,r.id)} style={{ width:26, height:26, borderRadius:13, background:r.c, border: renk===r.id?"3px solid #fff":"2px solid transparent", cursor:"pointer", boxShadow:renk===r.id?"0 0 0 2px "+r.c:"none", fontSize:0 }} title={r.id}/>
                           ))}
@@ -2550,7 +2611,7 @@ function Atolye() {
                   })}
 
                   {/* Toplam satırı */}
-                  <div style={{ display:"grid", gridTemplateColumns:"72px 80px 1fr 100px 60px 70px 50px", gap:0, padding:"8px 10px", background:"rgba(201,168,76,0.06)", borderTop:"2px solid rgba(201,168,76,0.2)", alignItems:"center" }}>
+                  <div style={{ display:"grid", gridTemplateColumns:"120px 100px 1fr 160px 100px 60px 70px 50px", gap:0, padding:"8px 10px", background:"rgba(201,168,76,0.06)", borderTop:"2px solid rgba(201,168,76,0.2)", alignItems:"center" }}>
                     <div></div><div></div>
                     <div style={{ fontSize:9, fontWeight:700, color:GOLD, textAlign:"right" }}>TOPLAM</div>
                     <div></div>
