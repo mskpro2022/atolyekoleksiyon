@@ -1447,18 +1447,16 @@ function Atolye() {
       return def;
     };
 
-    const k = await tryKeys(["v7k", "v5k", "atl5-k"], []);
-    // Modelleri yükle — supabase.js chunk sistemi otomatik halleder
-    const m = await ld("v7m", []);
-    const s = await tryKeys(["v7s", "v5s", "atl5-s"], []);
-    const c = await tryKeysObj(["v7c", "v5c", "atl5-c"], {});
-    const u = await tryKeysObj(["v7u"], {});
-
-    // Bulduklarımızı v7 key'lerine kaydet (shared)
-    if (k.length > 0) await sv("v7k", k);
-    if (s.length > 0) await sv("v7s", s);
-
-    const ay = await ld("v7ay", {});
+    // Paralel yükleme — tüm istekler aynı anda gider
+    const [k, m, s, c, u, ay, ks] = await Promise.all([
+      tryKeys(["v7k", "v5k", "atl5-k"], []),
+      ld("v7m", []),
+      tryKeys(["v7s", "v5s", "atl5-s"], []),
+      tryKeysObj(["v7c", "v5c", "atl5-c"], {}),
+      tryKeysObj(["v7u"], {}),
+      ld("v7ay", {}),
+      ld("v7kasa", null),
+    ]);
     setKollar(k); setModeller(m); setSiparisler(s); setMusteriler(u);
     setAltinKg(c.a || ""); setMc(c.mc || "0.030");
     if (ay.kategoriler?.length) setAyarKategoriler(ay.kategoriler);
@@ -1469,7 +1467,6 @@ function Atolye() {
     if (ay.varsMc) setAyarVarsMc(ay.varsMc);
     if (ay.varsIscilik) setAyarVarsIscilik(ay.varsIscilik);
     if (ay.varsIscilikBirim) setAyarVarsIscilikBirim(ay.varsIscilikBirim);
-    const ks = await ld("v7kasa", null);
     if (ks) setKasa(prev => ({ ...prev, ...ks }));
     setLoaded(true);
   })(); }, []);
