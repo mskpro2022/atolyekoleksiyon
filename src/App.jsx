@@ -1456,8 +1456,43 @@ function Atolye() {
       ld("v7ay", {}),
       ld("v7kasa", null),
     ]);
-    // Modelleri ayrı yükle — chunk sistemi otomatik halleder
+
+    // Model cache — önce cache'den göster, arka planda güncelle
+    let mCache = [];
+    try {
+      const cached = localStorage.getItem("atolye_model_cache");
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (parsed?.data?.length > 0) {
+          mCache = parsed.data;
+          // Cache varsa anında göster
+          setKollar(k); setModeller(mCache); setSiparisler(s); setMusteriler(u);
+          setAltinKg(c.a || ""); setMc(c.mc || "0.030");
+          if (ay.kategoriler?.length) setAyarKategoriler(ay.kategoriler);
+          if (ay.etiketler?.length) setAyarEtiketler(ay.etiketler);
+          if (ay.varsAltinKg) setAyarVarsAltinKg(ay.varsAltinKg);
+          if (ay.kayitliNotlar?.length) setKayitliNotlar(ay.kayitliNotlar);
+          if (ay.ozelTaslar?.length) setOzelTaslar(ay.ozelTaslar);
+          if (ay.varsMc) setAyarVarsMc(ay.varsMc);
+          if (ay.varsIscilik) setAyarVarsIscilik(ay.varsIscilik);
+          if (ay.varsIscilikBirim) setAyarVarsIscilikBirim(ay.varsIscilikBirim);
+          if (ks) setKasa(prev => ({ ...prev, ...ks }));
+          setLoaded(true);
+          // Arka planda güncel veriyi çek
+          ld("v7m", []).then(mFresh => {
+            if (mFresh?.length > 0) {
+              setModeller(mFresh);
+              try { localStorage.setItem("atolye_model_cache", JSON.stringify({ data: mFresh, ts: Date.now() })); } catch {}
+            }
+          });
+          return;
+        }
+      }
+    } catch {}
+
+    // Cache yoksa normal yükle
     const m = await ld("v7m", []);
+    try { localStorage.setItem("atolye_model_cache", JSON.stringify({ data: m, ts: Date.now() })); } catch {}
     setKollar(k); setModeller(m); setSiparisler(s); setMusteriler(u);
     setAltinKg(c.a || ""); setMc(c.mc || "0.030");
     if (ay.kategoriler?.length) setAyarKategoriler(ay.kategoriler);
@@ -1517,6 +1552,7 @@ function Atolye() {
       console.log("🧹 " + (d.length - temiz.length) + " duplicate temizlendi");
     }
     setModeller(temiz);
+    try { localStorage.setItem("atolye_model_cache", JSON.stringify({ data: temiz, ts: Date.now() })); } catch {}
     await sv("v7m", temiz);
   }, []);
   const svS = useCallback(async d => { setSiparisler(d); await sv("v7s", d); }, []);
