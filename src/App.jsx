@@ -1644,15 +1644,13 @@ function Atolye() {
     if (ayniKodlular.length > 0) {
       const kolAdlari = ayniKodlular.map(m => {
         const kol = kollar.find(k => k.id === m.ki);
-        return (kol?.ad || "?") + " → " + (m.ad || m.kod);
-      }).join("
-• ");
+        return (kol?.ad || "?") + " - " + (m.ad || m.kod);
+      }).join(", ");
       const onay = window.confirm(
-        obj.kod + " kodu " + ayniKodlular.length + " farklı koleksiyonda daha var:
-• " + kolAdlari +
+        obj.kod + " kodu " + ayniKodlular.length + " farkli koleksiyonda daha var: " + kolAdlari +
         "
 
-Fiyat hariç tüm bilgiler güncellenecek. Onaylıyor musunuz?"
+Fiyat haric tum bilgiler guncellenecek. Onayliyor musunuz?"
       );
       kaydet(onay);
     } else {
