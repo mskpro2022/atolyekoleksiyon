@@ -2022,8 +2022,22 @@ Fiyat hariç tüm bilgiler güncellenecek. Onaylıyor musunuz?"
                     etiketler: ayarEtiketler,
                     ozelTaslar: ozelTaslar,
                     kayitliNotlar: kayitliNotlar,
+                    varsAltinKg: ayarVarsAltinKg,
+                    varsMc: ayarVarsMc,
+                    varsIscilik: ayarVarsIscilik,
+                    varsIscilikBirim: ayarVarsIscilikBirim,
                   };
-                  const data = { kollar:k, modeller:m, siparisler:s, musteriler:u, ayarlar:ay, v: Date.now() };
+                  const ks = await ld("v7kasa", null);
+                  let mizanEslYedek = {};
+                  try { mizanEslYedek = JSON.parse(localStorage.getItem("mizan_eslestirme") || "{}"); } catch {}
+                  let yaziRenkYedek = {};
+                  try { yaziRenkYedek = JSON.parse(localStorage.getItem("atolye_yazi_renk") || "{}"); } catch {}
+                  let temaYedek = "";
+                  try { temaYedek = localStorage.getItem("atolye_tema") || ""; } catch {}
+                  const data = { kollar:k, modeller:m, siparisler:s, musteriler:u, ayarlar:ay,
+                    kasa: ks || {}, mizanEslestirme: mizanEslYedek,
+                    yaziRenkleri: yaziRenkYedek, tema: temaYedek,
+                    v: Date.now() };
                   const json = JSON.stringify(data, null, 2);
                   const blob = new Blob([json], { type: "application/json" });
                   const url = URL.createObjectURL(blob);
@@ -5182,7 +5196,7 @@ ${buildContext()}`;
             const d = JSON.parse(yedekJson);
             return (
               <div style={{ fontSize:9, color:"#6abf69", margin:"6px 0", padding:"5px 8px", background:"rgba(106,191,105,0.08)", borderRadius:5 }}>
-                ✓ Geçerli — <b>{d.modeller?.length||0} model</b> · <b>{d.kollar?.length||0} koleksiyon</b> · <b>{d.siparisler?.length||0} sipariş</b> · <b>{d.musteriler ? Object.keys(d.musteriler).length : 0} müşteri</b>
+                ✓ Geçerli — <b>{d.modeller?.length||0} model</b> · <b>{d.kollar?.length||0} koleksiyon</b> · <b>{d.siparisler?.length||0} sipariş</b> · <b>{d.musteriler ? Object.keys(d.musteriler).length : 0} müşteri</b>{d.kasa ? " · Kasa ✓" : ""}{d.tema ? " · Tema ✓" : ""}
               </div>
             );
           } catch(e) {
@@ -5214,10 +5228,25 @@ ${buildContext()}`;
                 if (d.ayarlar.varsIscilik) setAyarVarsIscilik(d.ayarlar.varsIscilik);
                 if (d.ayarlar.varsIscilikBirim) setAyarVarsIscilikBirim(d.ayarlar.varsIscilikBirim);
               }
+              // Kasa
+              if (d.kasa && Object.keys(d.kasa).length > 0) {
+                await sv("v7kasa", d.kasa);
+                setKasa(d.kasa);
+              }
+              // localStorage verileri
+              if (d.mizanEslestirme && Object.keys(d.mizanEslestirme).length > 0) {
+                try { localStorage.setItem("mizan_eslestirme", JSON.stringify(d.mizanEslestirme)); setMizanEslestirme(d.mizanEslestirme); } catch {}
+              }
+              if (d.yaziRenkleri && Object.keys(d.yaziRenkleri).length > 0) {
+                try { localStorage.setItem("atolye_yazi_renk", JSON.stringify(d.yaziRenkleri)); setYaziRenkleri(d.yaziRenkleri); } catch {}
+              }
+              if (d.tema) {
+                try { localStorage.setItem("atolye_tema", d.tema); } catch {}
+              }
               setDriveYukleniyor(null);
               setShowYedek(false);
               setYedekJson("");
-              alert("✓ Yükleme tamamlandı! " + (d.modeller?.length||0) + " model Supabase'e kaydedildi.");
+              alert("✓ Yükleme tamamlandı!\n" + (d.modeller?.length||0) + " model\n" + (d.kollar?.length||0) + " koleksiyon\n" + (d.siparisler?.length||0) + " sipariş\nKasa ve ayarlar da geri yüklendi.");
             } catch(e) {
               setDriveYukleniyor(null);
               alert("Hata: " + e.message);
