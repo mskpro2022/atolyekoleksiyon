@@ -87,15 +87,15 @@ const KATEGORILER = [
 
 function gramDonustur(refGram, refAyar, hedefAyar, tasGram) {
   if (refAyar === hedefAyar) return refGram;
-  // Karat sayıları
-  const karatMap = { "8K":8, "10K":10, "14K":14, "18K":18, "22K":22, "24K":24, "925":9.25 };
-  const eskiK = karatMap[refAyar] || 14;
-  const yeniK = karatMap[hedefAyar] || 14;
+  // Yoğunluk bazlı dönüşüm (g/cm³) — sektör standardı
+  const yogunluk = { "8K":11.0, "10K":11.6, "14K":13.4, "18K":15.5, "22K":17.7, "24K":19.3, "925":10.4 };
+  const eskiY = yogunluk[refAyar] || 13.4;
+  const yeniY = yogunluk[hedefAyar] || 13.4;
   // Taş gramını ayır (taş değişmez!)
   const tas = Number(tasGram) || 0;
   const madenGram = Math.max(0, Number(refGram) - tas);
-  // Atölye katsayısı: maden gramı × (yeniK / eskiK)
-  const yeniMadenGram = madenGram * (yeniK / eskiK);
+  // Yoğunluk oranıyla maden gramını dönüştür
+  const yeniMadenGram = madenGram * (yeniY / eskiY);
   // Taşı geri ekle
   return yeniMadenGram + tas;
 }
