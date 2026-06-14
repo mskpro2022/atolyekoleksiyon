@@ -1646,12 +1646,7 @@ function Atolye() {
         const kol = kollar.find(k => k.id === m.ki);
         return (kol?.ad || "?") + " - " + (m.ad || m.kod);
       }).join(", ");
-      const onay = window.confirm(
-        obj.kod + " kodu " + ayniKodlular.length + " farkli koleksiyonda daha var: " + kolAdlari +
-        "
-
-Fiyat haric tum bilgiler guncellenecek. Onayliyor musunuz?"
-      );
+      const onay = window.confirm(obj.kod + " kodu " + ayniKodlular.length + " farkli koleksiyonda daha var: " + kolAdlari + "\n\nFiyat haric tum bilgiler guncellenecek. Onayliyor musunuz?");
       kaydet(onay);
     } else {
       kaydet(false);
