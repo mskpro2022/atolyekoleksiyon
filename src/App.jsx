@@ -1447,16 +1447,17 @@ function Atolye() {
       return def;
     };
 
-    // Paralel yükleme — tüm istekler aynı anda gider
-    const [k, m, s, c, u, ay, ks] = await Promise.all([
+    // Paralel yükleme — modeller hariç (chunk sistemi ayrı çalışır)
+    const [k, s, c, u, ay, ks] = await Promise.all([
       tryKeys(["v7k", "v5k", "atl5-k"], []),
-      ld("v7m", []),
       tryKeys(["v7s", "v5s", "atl5-s"], []),
       tryKeysObj(["v7c", "v5c", "atl5-c"], {}),
       tryKeysObj(["v7u"], {}),
       ld("v7ay", {}),
       ld("v7kasa", null),
     ]);
+    // Modelleri ayrı yükle — chunk sistemi otomatik halleder
+    const m = await ld("v7m", []);
     setKollar(k); setModeller(m); setSiparisler(s); setMusteriler(u);
     setAltinKg(c.a || ""); setMc(c.mc || "0.030");
     if (ay.kategoriler?.length) setAyarKategoriler(ay.kategoriler);
