@@ -1849,7 +1849,12 @@ function Atolye() {
     konfList.forEach(m => {
       const boylar = konfBoylar[m.id] || [];
       const genelBoyAktif = konfGenelBoy.aktif && konfGenelBoy.deger;
-      const temel = { ...m, secilenAyar: konfAyar, renk: konfRenkler[m.id]||"Sari", sipNot: konfNot[m.id]||"" };
+      // Fiyat override — konfFiyatlar > müşteri hafızası > model varsayılanı
+      const musHafiza = konfMus ? (kasa.musteriModelFiyat||{})[konfMus]?.[m.kod] : null;
+      const fiyatOvr = konfFiyatlar[m.id];
+      const aktifIscilik = fiyatOvr?.iscilikDolar ?? musHafiza?.iscilikDolar ?? m.iscilikDolar;
+      const aktifBirim   = fiyatOvr?.iscilikBirim ?? musHafiza?.iscilikBirim ?? m.iscilikBirim ?? "dolar";
+      const temel = { ...m, secilenAyar: konfAyar, renk: konfRenkler[m.id]||"Sari", sipNot: konfNot[m.id]||"", iscilikDolar: aktifIscilik, iscilikBirim: aktifBirim };
       
       // Kolye ve bileklik: tek satır, boyListesi içeride
       if ((m.kategori==="kolye" || m.kategori==="bileklik") && boylar.length > 0) {
@@ -1869,7 +1874,7 @@ function Atolye() {
       }
     });
     return satirlar;
-  }, [konfList, konfAyar, konfRenkler, konfAdet, konfNot, konfBoylar, konfGenelBoy]);
+  }, [konfList, konfAyar, konfRenkler, konfAdet, konfNot, konfBoylar, konfGenelBoy, konfFiyatlar, konfMus, kasa]);
 
   const kTop = useMemo(() => {
     let gelir = 0, maliyet = 0, topGram = 0;
