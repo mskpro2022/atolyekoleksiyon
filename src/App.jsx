@@ -423,8 +423,7 @@ function buildKatalogHTML(kol, modeller, sutun, hedefAyar, kollar) {
 }
 
 
-// Konfirmasyon — fiyatli (ic kullanim) veya fiyatsiz (musteriye)
-new_func = r'''function buildKonfHTML(siparis, altinKgUSD, mc, fiyatli) {
+function buildKonfHTML(siparis, altinKgUSD, mc, fiyatli) {
   // fiyatli=true  → Müşteri PDF: işçilik/fiyat VAR, taş detayı YOK
   // fiyatli=false → İç PDF:      işçilik/fiyat YOK, taş detayı VAR
   const hasGramUSD = altinKgUSD / 1000;
@@ -647,12 +646,6 @@ new_func = r'''function buildKonfHTML(siparis, altinKgUSD, mc, fiyatli) {
   h += "</div><button class='noprint pb' onclick='window.print()'>Yazdir / PDF</button></body></html>";
   return h;
 }
-'''
-
-with open('/tmp/konf_func.py', 'w') as f:
-    f.write(new_func)
-print("written")
-
 
 // ═══ TAŞ GRAM TABLOSU ═══
 // gram_per_adet = 1 / (adet_per_gram)
