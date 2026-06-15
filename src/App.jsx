@@ -497,7 +497,7 @@ function buildKonfHTML(siparis, altinKgUSD, mc, fiyatli) {
     ".isc-birim{font-size:9px;color:#4a5568}",
     ".isc-top{font-size:10px;font-weight:700;color:#0f1923}",
     ".isc-has{font-size:7px;color:#8a9bb0}",
-    ".tot-bar{background:#f8fafc;border-top:2px solid #0f1923;padding:14px 24px;display:flex;flex-direction:column;align-items:flex-start;gap:10px}",
+    ".tot-bar{background:#f8fafc;border-top:2px solid #0f1923;padding:14px 24px;display:flex;justify-content:flex-end;align-items:flex-end;gap:40px}",
     ".tot-left{display:flex;gap:28px;width:100%}",
     ".tot-box .lbl{font-size:7px;color:#8a9bb0;text-transform:uppercase;letter-spacing:.1em}",
     ".tot-box .val{font-size:16px;font-weight:700;color:#0f1923}",
@@ -521,13 +521,13 @@ function buildKonfHTML(siparis, altinKgUSD, mc, fiyatli) {
     + '<line x1="98" y1="58" x2="156" y2="58" stroke="#c9a84c" stroke-width="0.8"/>'
     + '</svg>';
 
-  let h = "<!DOCTYPE html><html><head><meta charset='utf-8'><title>" + (fiyatli ? "MSK Siparis Formu" : "MSK Ic Konfirmasyon") + "</title><style>" + css + "</style></head><body><div class='wrap'>";
+  let h = "<!DOCTYPE html><html><head><meta charset='utf-8'><title>" + (fiyatli ? "MSK Siparis Formu - Fiyatli" : "MSK Ic Konfirmasyon - Fiyatsiz") + "</title><style>" + css + "</style></head><body><div class='wrap'>";
 
   // HEADER
   h += "<div class='hdr'>";
   h += "<div class='logo-area'><div style='width:160px;height:70px;flex-shrink:0'>" + logoSVG + "</div>";
   h += "</div>";
-  h += "<div class='hdr-right'><div class='doc-type'>" + (fiyatli ? "Siparis Formu" : "Ic Konfirmasyon") + "</div>";
+  h += "<div class='hdr-right'><div class='doc-type'>" + (fiyatli ? "Siparis Formu — Fiyatli" : "Ic Konfirmasyon — Fiyatsiz") + "</div>";
   h += "<div class='doc-no'>" + sipNo + "</div><div class='doc-date'>" + new Date(siparis.tarih).toLocaleDateString("tr-TR",{day:"2-digit",month:"long",year:"numeric"}) + "</div></div>";
   h += "</div>";
 
@@ -2449,8 +2449,8 @@ function Atolye() {
                 </div>
                 <input type="date" value={konfTeslim} onChange={e=>setKonfTeslim(e.target.value)} style={{ ...IS, width:130, padding:"5px 8px", fontSize:11 }} />
                 {konfList.length>0 && <>
-                  <button onClick={()=>downloadPDF(buildKonfHTML({musteri:konfMus,musKod:(musteriler[konfMus]||""),tarih:Date.now(),kalemler:konfKalemler},altinKgUSD,madenCarpan,true),(konfMus||"siparis")+"-musteri")} style={{ ...GH, fontSize:9, padding:"5px 9px" }}>PDF Musteri</button>
-                  <button onClick={()=>downloadPDF(buildKonfHTML({musteri:konfMus,musKod:(musteriler[konfMus]||""),tarih:Date.now(),kalemler:konfKalemler},altinKgUSD,madenCarpan,false),(konfMus||"siparis")+"-ic")} style={{ background:"rgba(232,90,79,0.08)", border:"1px solid rgba(232,90,79,0.2)", borderRadius:9, padding:"5px 9px", color:"#e85a4f", fontSize:9, fontWeight:700, cursor:"pointer" }}>PDF Ic</button>
+                  <button onClick={()=>downloadPDF(buildKonfHTML({musteri:konfMus,musKod:(musteriler[konfMus]||""),tarih:Date.now(),kalemler:konfKalemler},altinKgUSD,madenCarpan,true),(konfMus||"siparis")+"-musteri")} style={{ ...GH, fontSize:9, padding:"5px 9px" }}>PDF Fiyatli</button>
+                  <button onClick={()=>downloadPDF(buildKonfHTML({musteri:konfMus,musKod:(musteriler[konfMus]||""),tarih:Date.now(),kalemler:konfKalemler},altinKgUSD,madenCarpan,false),(konfMus||"siparis")+"-ic")} style={{ background:"rgba(232,90,79,0.08)", border:"1px solid rgba(232,90,79,0.2)", borderRadius:9, padding:"5px 9px", color:"#e85a4f", fontSize:9, fontWeight:700, cursor:"pointer" }}>PDF Fiyatsiz</button>
                   <button onClick={konfKaydet} style={{ ...BG, padding:"6px 12px", fontSize:10 }}>Kaydet</button>
                 </>}
               </div>
