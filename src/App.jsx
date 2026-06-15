@@ -450,7 +450,7 @@ function buildKonfHTML(siparis, altinKgUSD, mc, fiyatli) {
   const css = [
     "*{margin:0;padding:0;box-sizing:border-box}",
     "body{font-family:'Segoe UI',Helvetica,Arial,sans-serif;background:#f0f2f5;color:#1a1a2e;padding:24px;display:flex;justify-content:center}",
-    "@media print{.noprint{display:none!important}@page{size:A4 portrait;margin:10mm}body{background:#fff;padding:0;display:block}.wrap{box-shadow:none!important;border:none!important}}",
+    "@media print{.noprint{display:none!important}@page{size:A4 portrait;margin:10mm}body{background:#fff;padding:0;display:block}.wrap{box-shadow:none!important;border:none!important}.hdr{-webkit-print-color-adjust:exact;print-color-adjust:exact}}",
     ".wrap{background:#fff;width:100%;max-width:760px;box-shadow:0 4px 24px rgba(0,0,0,.10);border-radius:4px;overflow:hidden}",
     ".hdr{background:#0f1923;padding:20px 28px;display:flex;justify-content:space-between;align-items:center}",
     ".logo-area{display:flex;align-items:center;gap:12px}",
@@ -497,8 +497,8 @@ function buildKonfHTML(siparis, altinKgUSD, mc, fiyatli) {
     ".isc-birim{font-size:9px;color:#4a5568}",
     ".isc-top{font-size:10px;font-weight:700;color:#0f1923}",
     ".isc-has{font-size:7px;color:#8a9bb0}",
-    ".tot-bar{background:#f8fafc;border-top:2px solid #0f1923;padding:14px 24px;display:flex;justify-content:space-between;align-items:flex-end;gap:20px}",
-    ".tot-left{display:flex;gap:28px}",
+    ".tot-bar{background:#f8fafc;border-top:2px solid #0f1923;padding:14px 24px;display:flex;flex-direction:column;align-items:flex-start;gap:10px}",
+    ".tot-left{display:flex;gap:28px;width:100%}",
     ".tot-box .lbl{font-size:7px;color:#8a9bb0;text-transform:uppercase;letter-spacing:.1em}",
     ".tot-box .val{font-size:16px;font-weight:700;color:#0f1923}",
     ".tot-right{display:flex;flex-direction:column;align-items:flex-end;gap:4px}",
@@ -589,8 +589,9 @@ function buildKonfHTML(siparis, altinKgUSD, mc, fiyatli) {
         taslar.forEach(t => {
           const grHesap = tasGramHesapla(t.sekil, t.tur, isNaN(Number(t.boyut))?t.boyut:Number(t.boyut), Number(t.adet)||1, []);
           const grGoster = grHesap > 0 ? grHesap : (Number(t.gram)||0);
+          const grupLabel = t.grup==="tepelik"?"Tepelik · ":t.grup==="pave"?"Pavé · ":"";
           tasStr += "<div class='tas-row'>";
-          tasStr += "<span class='tas-sekil'>" + t.sekil + (t.sekil==="ROUND"?" ("+t.tur+")":"") + "</span>";
+          tasStr += "<span class='tas-sekil'>" + grupLabel + t.sekil + (t.sekil==="ROUND"?" ("+t.tur+")":"") + "</span>";
           tasStr += "<span class='tas-dim'>" + t.boyut + (t.sekil==="ROUND"?"mm":"") + "</span>";
           tasStr += "<span class='tas-dim'>x" + (t.adet||1) + "</span>";
           if (grGoster > 0) tasStr += "<span class='tas-gr'>" + grGoster.toFixed(4) + "gr</span>";
@@ -5897,8 +5898,16 @@ ${buildContext()}`;
             return (
               <div key={i} style={{ marginBottom:5, padding:"5px 8px", background:"rgba(91,155,213,0.08)", borderRadius:6 }}>
                 <div style={{ display:"flex", alignItems:"center", gap:6 }}>
-                  <span style={{ fontSize:9, color:"#5b9bd5", fontWeight:700, flex:1 }}>
-                    {t.sekil}{t.sekil==="ROUND"?" ("+t.tur+")":""} · {t.boyut}{t.sekil==="ROUND"?"mm":""} · {t.adet} adet
+                  {fKategori==="pendant" && (
+                    <select value={t.grup||"ana"} onChange={e=>setFTaslar(fTaslar.map((x,j)=>j===i?{...x,grup:e.target.value}:x))}
+                      style={{ ...IS, width:110, padding:"2px 4px", fontSize:8, flexShrink:0 }}>
+                      <option value="ana">Ana Taş</option>
+                      <option value="tepelik">Tepelik Taşı</option>
+                      <option value="pave">Pavé</option>
+                    </select>
+                  )}
+                  <span style={{ fontSize:9, color: t.grup==="tepelik"?"#e8833a":t.grup==="pave"?"#a78bfa":"#5b9bd5", fontWeight:700, flex:1 }}>
+                    {t.grup==="tepelik"?"🔗 ":t.grup==="pave"?"✦ ":""}{t.sekil}{t.sekil==="ROUND"?" ("+t.tur+")":""} · {t.boyut}{t.sekil==="ROUND"?"mm":""} · {t.adet} adet
                     {grHesap > 0
                       ? <span style={{ color:"#6abf69", marginLeft:6 }}>= {grHesap.toFixed(4)}gr</span>
                       : <span style={{ color:"#e85a4f", marginLeft:6, fontSize:8 }}>tabloda yok — manuel gir</span>
