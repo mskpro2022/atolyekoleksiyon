@@ -426,152 +426,223 @@ function buildKatalogHTML(kol, modeller, sutun, hedefAyar, kollar) {
 // Konfirmasyon — fiyatli (ic kullanim) veya fiyatsiz (musteriye)
 function buildKonfHTML(siparis, altinKgUSD, mc, fiyatli) {
   const hasGramUSD = altinKgUSD / 1000;
-  let tGram = 0, tKar = 0;
+  let tGram = 0, tKar = 0, tIscilik = 0, tIscilikHas = 0;
   const rows = (siparis.kalemler || []).map(k => {
     const hc = hesapla(k, k.secilenAyar || k.refAyar, altinKgUSD, mc);
     const adet = k.adet || 1;
     tGram += hc.mamulGram * adet;
     tKar  += hc.karHas * adet;
-    return { ...k, hc, adet };
-  });
-
-  const css = "*{margin:0;padding:0;box-sizing:border-box}"
-    + "body{font-family:'Segoe UI',Arial,sans-serif;background:#e8edf2;padding:20px;display:flex;justify-content:center}"
-    + "@media print{.np{display:none!important}@page{size:A4;margin:8mm}body{background:#fff;padding:0;display:block}}"
-    + ".wrap{background:#fff;border-radius:8px;border:1px solid #c8d8e8;width:100%;max-width:720px;overflow:hidden}"
-    + ".hdr{padding:22px 28px 20px;background:#f5f8fc;border-bottom:1px solid #dce8f0;display:flex;justify-content:space-between;align-items:flex-end}"
-    + ".lbl{font-size:8px;color:#7a9ab5;text-transform:uppercase;letter-spacing:.14em;margin-bottom:5px}"
-    + ".musno{font-size:26px;font-weight:500;color:#1e3a5f}"
-    + ".musad{font-size:11px;color:#7a9ab5;margin-top:3px}"
-    + ".meta{font-size:10px;color:#7a9ab5}"
-    + ".ayar-bar{margin:14px 28px 10px;display:flex;gap:24px;padding:8px 14px;background:#f5f8fc;border-radius:5px;border:1px solid #dce8f0}"
-    + ".ayar-bar .lk{font-size:8px;color:#7a9ab5;text-transform:uppercase;letter-spacing:.07em;margin-bottom:2px}"
-    + ".ayar-bar .vk{font-size:11px;color:#1e3a5f;font-weight:500}"
-    + "table{width:100%;border-collapse:collapse;margin:0 0 4px}"
-    + ".tbl-wrap{padding:0 28px}"
-    + "th{font-size:8px;color:#7a9ab5;text-transform:uppercase;letter-spacing:.08em;padding:0 6px 8px;border-bottom:1px solid #dce8f0;font-weight:400;text-align:left}"
-    + "th.r{text-align:right}"
-    + "td{padding:11px 6px;border-bottom:.5px solid #f0f4f8;vertical-align:middle;font-size:11px;color:#1a1a1a}"
-    + "td.r{text-align:right}"
-    + ".ic img{width:100px;height:100px;object-fit:cover;border-radius:8px;display:block}"
-    + ".ni2{width:100px;height:100px;background:#eef4fa;border-radius:8px}"
-    + ".kod{font-size:12px;font-weight:500;color:#1e3a5f}"
-    + ".nm{font-size:11px;color:#1a1a1a}"
-    + ".nt{font-size:9px;color:#aaa;margin-top:2px}"
-    + ".boy{font-size:9px;color:#5a7a95;margin-top:2px}"
-    + ".dim{font-size:10px;color:#888}"
-    + ".tot-blok{padding:14px 34px 0;display:flex;justify-content:flex-end;border-top:1px solid #dce8f0;margin:0 28px}"
-    + ".tot-tbl{border-collapse:collapse;min-width:230px}"
-    + ".tot-tbl td{padding:4px 8px;font-size:11px}"
-    + ".tot-tbl .lc{text-align:left;color:#7a9ab5;font-size:10px;text-transform:uppercase;letter-spacing:.05em}"
-    + ".tot-tbl .rc{text-align:right;color:#1a1a1a}"
-    + ".tot-tbl .grand td{border-top:1px solid #dce8f0;padding-top:10px;font-weight:500;color:#1e3a5f;font-size:13px}"
-    + ".footer{margin:14px 28px 0;padding:10px 0;border-top:.5px solid #eef4fa;display:flex;justify-content:space-between;font-size:8px;color:#b0c4d4}"
-    + ".pb{position:fixed;bottom:16px;right:16px;background:#1e3a5f;border:none;border-radius:8px;padding:10px 22px;color:#fff;font-size:13px;cursor:pointer}";
-
-  let h = "<!DOCTYPE html><html><head><meta charset='utf-8'><title>" + (fiyatli ? "Ic Konfirmasyon" : "Siparis Formu") + "</title><style>" + css + "</style></head><body><div class='wrap'>";
-
-  // Başlık
-  h += "<div class='hdr'>";
-  h += "<div><div class='lbl'>" + (fiyatli ? "Siparis Konfirmasyonu" : "Siparis Formu") + "</div>";
-  h += "<div class='musno'>" + (siparis.musKod||siparis.musteri||"—") + "</div>";
-  h += "<div class='musad'>" + (siparis.musteri||"") + "</div></div>";
-  h += "<div style='text-align:right'><div class='meta'>" + new Date(siparis.tarih).toLocaleDateString("tr-TR",{day:"2-digit",month:"long",year:"numeric"}) + "</div>";
-  h += "<div class='meta' style='margin-top:3px'>" + rows.length + " kalem" + (siparis.teslimTarihi ? " &nbsp;·&nbsp; Teslim: " + new Date(siparis.teslimTarihi).toLocaleDateString("tr-TR") : "") + "</div></div>";
-  h += "</div>";
-
-  // Ayar bar — altın fiyatı yok
-  const ayarLabel = rows[0]?.secilenAyar ? rows[0].secilenAyar.replace("K"," Ayar") : "14 Ayar";
-  h += "<div class='ayar-bar'><div><div class='lk'>Ayar</div><div class='vk'>" + ayarLabel + "</div></div></div>";
-
-  // Tablo
-  h += "<div class='tbl-wrap'><table>";
-
-  // IC (fiyatli=true) modunda fiyat/işçilik gizlenir — müşteri PDF'inde gösterilir
-  const fiyatGoster = !fiyatli;
-  
-  h += "<thead><tr><th style='width:110px'></th><th style='width:68px'>Kod</th><th>Kategori / Not</th><th class='r' style='width:50px'>Renk</th><th class='r' style='width:38px'>Adet</th><th class='r' style='width:56px'>Gram</th>";
-  if (fiyatGoster) h += "<th class='r' style='width:96px'>İşçilik Birim</th><th class='r' style='width:84px'>İşçilik Toplam</th>";
-  h += "</tr></thead><tbody>";
-
-  let tIscilik = 0;
-  let tIscilikHas = 0;
-  rows.forEach(r => {
-    const topGram = r.hc.mamulGram * r.adet;
-    const isMilyem = r.iscilikBirim === "milyem";
-    // Birim işçilik: bir mamul için
-    const birimGram = r.hc.mamulGram;
-    const iscilikBirimVal = isMilyem
-      ? r.hc.iscilikHas * r.hc.hasGramUSD  // 1 adet için $ karşılığı
-      : (r.iscilikDolar||0) * birimGram;    // $/gr × gram
-    const iscilikBirimHas = isMilyem
-      ? r.hc.iscilikHas                      // 1 adet için has
-      : ((r.iscilikDolar||0) * birimGram) / (r.hc.hasGramUSD || 1);
-    // Toplam (adet ile çarpılı)
+    const isMilyem = k.iscilikBirim === "milyem";
     const iscilikTop = isMilyem
-      ? r.hc.iscilikHas * r.hc.hasGramUSD * r.adet
-      : (r.iscilikDolar||0) * topGram;
+      ? hc.iscilikHas * hc.hasGramUSD * adet
+      : (k.iscilikDolar||0) * hc.mamulGram * adet;
     const iscilikTopHas = isMilyem
-      ? r.hc.iscilikHas * r.adet
-      : iscilikTop / (r.hc.hasGramUSD || 1);
+      ? hc.iscilikHas * adet
+      : iscilikTop / (hc.hasGramUSD || 1);
     tIscilik += iscilikTop;
     tIscilikHas += iscilikTopHas;
-    
-    // Birim formatlı: $/has karışık göster
-    let birimStr = "-";
-    let topStr = "-";
-    if (iscilikBirimVal !== 0) {
-      if (isMilyem) {
-        // milyem girişi: x mly/gr → toplam has
-        birimStr = (r.iscilikDolar||0).toFixed(3) + " mly/gr<br/><span style='font-size:7px;color:#888'>" + fUSD(iscilikBirimVal) + "</span>";
-        topStr = iscilikBirimHas.toFixed(4) + " has × " + r.adet + "<br/><span style='font-size:7px;color:#888'>" + fUSD(iscilikTop) + "</span>";
+    return { ...k, hc, adet, iscilikTop, iscilikTopHas, isMilyem };
+  });
+  const tAdet = rows.reduce((s,r)=>s+r.adet,0);
+  const sipNo = "SIP-" + new Date(siparis.tarih).getFullYear() + "-" + String(siparis.tarih).slice(-5);
+  const ayarLabel = rows[0]?.secilenAyar || "14K";
+  const fiyatGoster = fiyatli; // iç PDF'te fiyat göster
+
+  const css = \`
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI',Helvetica,Arial,sans-serif;background:#f0f2f5;color:#1a1a2e;padding:24px;display:flex;justify-content:center}
+@media print{.noprint{display:none!important}@page{size:A4 portrait;margin:10mm}body{background:#fff;padding:0;display:block}.wrap{box-shadow:none!important;border:none!important}}
+.wrap{background:#fff;width:100%;max-width:760px;box-shadow:0 4px 24px rgba(0,0,0,.10);border-radius:4px;overflow:hidden}
+
+/* HEADER */
+.hdr{background:#0f1923;padding:22px 30px;display:flex;justify-content:space-between;align-items:center}
+.logo-area{display:flex;align-items:center;gap:12px}
+.logo-diamond{width:36px;height:36px;position:relative;flex-shrink:0}
+.logo-diamond svg{width:36px;height:36px}
+.logo-text{display:flex;flex-direction:column}
+.logo-name{font-size:15px;font-weight:700;color:#fff;letter-spacing:.08em;text-transform:uppercase}
+.logo-sub{font-size:7px;color:#8a9bb0;letter-spacing:.18em;text-transform:uppercase;margin-top:1px}
+.hdr-right{text-align:right}
+.doc-type{font-size:8px;color:#8a9bb0;letter-spacing:.15em;text-transform:uppercase;margin-bottom:4px}
+.doc-no{font-size:13px;font-weight:600;color:#c9a84c;letter-spacing:.04em}
+.doc-date{font-size:9px;color:#8a9bb0;margin-top:3px}
+
+/* MÜŞTERİ BAR */
+.info-bar{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;border-bottom:1px solid #e8edf2}
+.info-cell{padding:14px 20px;border-right:1px solid #e8edf2}
+.info-cell:last-child{border-right:none}
+.info-lbl{font-size:7px;color:#8a9bb0;text-transform:uppercase;letter-spacing:.12em;margin-bottom:4px}
+.info-val{font-size:13px;font-weight:600;color:#0f1923}
+.info-sub{font-size:9px;color:#8a9bb0;margin-top:2px}
+
+/* TABLO */
+.tbl-wrap{padding:0 20px}
+table{width:100%;border-collapse:collapse}
+thead tr{border-bottom:2px solid #0f1923}
+th{font-size:7.5px;font-weight:700;color:#8a9bb0;text-transform:uppercase;letter-spacing:.1em;padding:10px 8px 8px;text-align:left}
+th.r{text-align:right}
+tbody tr{border-bottom:1px solid #f0f2f5}
+tbody tr:last-child{border-bottom:none}
+td{padding:10px 8px;vertical-align:middle;font-size:11px;color:#1a1a2e}
+td.r{text-align:right}
+td.dim{color:#8a9bb0}
+
+/* FOTOĞRAF */
+.foto-cell{width:80px}
+.foto-wrap{width:76px;height:76px;border-radius:6px;overflow:hidden;background:#f5f7fa;border:1px solid #e8edf2}
+.foto-wrap img{width:100%;height:100%;object-fit:cover;display:block}
+
+/* KOD & AD */
+.kod{font-size:12px;font-weight:700;color:#0f1923;letter-spacing:.02em}
+.model-ad{font-size:10px;color:#4a5568;margin-top:2px}
+.model-nt{font-size:9px;color:#c9a84c;margin-top:3px;font-style:italic}
+.model-boy{font-size:9px;color:#6b7a8d;margin-top:2px}
+
+/* GRAM — birim + toplam ayrı */
+.gram-birim{font-size:10px;font-weight:600;color:#1a1a2e}
+.gram-top{font-size:11px;font-weight:700;color:#0f1923}
+.gram-lbl{font-size:7px;color:#8a9bb0;margin-bottom:1px}
+
+/* RENKler */
+.renk-sari{color:#b8943f;font-weight:600}
+.renk-beyaz{color:#6b7a8d;font-weight:600}
+.renk-rose{color:#b06060;font-weight:600}
+
+/* İŞÇİLİK */
+.isc-birim{font-size:9px;color:#4a5568}
+.isc-top{font-size:10px;font-weight:700;color:#0f1923}
+.isc-has{font-size:7px;color:#8a9bb0}
+
+/* TOPLAM BAR */
+.tot-bar{background:#f8fafc;border-top:2px solid #0f1923;padding:16px 28px;display:flex;justify-content:space-between;align-items:flex-end;gap:20px}
+.tot-left{display:flex;gap:28px}
+.tot-box{display:flex;flex-direction:column;gap:2px}
+.tot-box .lbl{font-size:7px;color:#8a9bb0;text-transform:uppercase;letter-spacing:.1em}
+.tot-box .val{font-size:16px;font-weight:700;color:#0f1923}
+.tot-right{display:flex;flex-direction:column;align-items:flex-end;gap:4px}
+.tot-right .row{display:flex;justify-content:space-between;gap:32px;font-size:10px;color:#4a5568}
+.tot-right .row .v{font-weight:600;color:#0f1923}
+.tot-right .grand{display:flex;justify-content:space-between;gap:32px;font-size:13px;font-weight:700;color:#0f1923;border-top:1px solid #dde2ea;padding-top:6px;margin-top:4px}
+
+/* FOOTER */
+.footer{padding:12px 28px;display:flex;justify-content:space-between;align-items:center;border-top:1px solid #e8edf2;background:#fafbfc}
+.footer-left{font-size:8px;color:#8a9bb0}
+.footer-sig{display:flex;gap:40px}
+.sig-box{text-align:center}
+.sig-line{width:100px;border-bottom:1px solid #bbc4d0;margin-bottom:4px;height:24px}
+.sig-lbl{font-size:7px;color:#8a9bb0;text-transform:uppercase;letter-spacing:.08em}
+
+/* PRINT BUTTON */
+.pb{position:fixed;bottom:20px;right:20px;background:#0f1923;color:#fff;border:none;border-radius:8px;padding:11px 24px;font-size:12px;font-weight:600;cursor:pointer;font-family:sans-serif;box-shadow:0 4px 12px rgba(0,0,0,.2)}
+\`;
+
+  // MSK Logo SVG
+  const logoSVG = \`<svg viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <polygon points="18,2 34,10 34,26 18,34 2,26 2,10" fill="none" stroke="#c9a84c" stroke-width="1.5"/>
+    <polygon points="18,7 29,13 29,23 18,29 7,23 7,13" fill="none" stroke="#c9a84c" stroke-width="0.7" opacity="0.5"/>
+    <text x="18" y="22" text-anchor="middle" font-family="Arial" font-size="9" font-weight="700" fill="#c9a84c" letter-spacing="0.5">MSK</text>
+  </svg>\`;
+
+  let h = "<!DOCTYPE html><html><head><meta charset='utf-8'><title>" + (fiyatli ? "MSK Konfirmasyon" : "MSK Siparis Formu") + "</title><style>" + css + "</style></head><body><div class='wrap'>";
+
+  // ── HEADER ──
+  h += "<div class='hdr'>";
+  h += "<div class='logo-area'><div class='logo-diamond'>" + logoSVG + "</div><div class='logo-text'><div class='logo-name'>MSK Kuyumculuk</div><div class='logo-sub'>Fine Jewellery Atelier</div></div></div>";
+  h += "<div class='hdr-right'><div class='doc-type'>" + (fiyatli ? "İç Konfirmasyon" : "Sipariş Formu") + "</div><div class='doc-no'>" + sipNo + "</div><div class='doc-date'>" + new Date(siparis.tarih).toLocaleDateString("tr-TR",{day:"2-digit",month:"long",year:"numeric"}) + "</div></div>";
+  h += "</div>";
+
+  // ── BİLGİ BAR ──
+  h += "<div class='info-bar'>";
+  h += "<div class='info-cell'><div class='info-lbl'>Müşteri Kodu</div><div class='info-val'>" + (siparis.musKod||"—") + "</div><div class='info-sub'>" + (siparis.musteri||"") + "</div></div>";
+  h += "<div class='info-cell'><div class='info-lbl'>Ayar</div><div class='info-val'>" + ayarLabel + "</div><div class='info-sub'>" + (ayarLabel==="925"?"Gümüş":"Altın") + "</div></div>";
+  h += "<div class='info-cell'><div class='info-lbl'>Kalem / Adet</div><div class='info-val'>" + rows.length + " / " + tAdet + "</div><div class='info-sub'>model / parça</div></div>";
+  h += "<div class='info-cell'><div class='info-lbl'>Teslim Tarihi</div><div class='info-val' style='font-size:11px'>" + (siparis.teslimTarihi ? new Date(siparis.teslimTarihi).toLocaleDateString("tr-TR",{day:"2-digit",month:"long",year:"numeric"}) : "—") + "</div><div class='info-sub'>&nbsp;</div></div>";
+  h += "</div>";
+
+  // ── TABLO ──
+  h += "<div class='tbl-wrap'><table><thead><tr>";
+  h += "<th class='foto-cell'></th>";
+  h += "<th style='width:80px'>Kod</th>";
+  h += "<th>Ürün / Not</th>";
+  h += "<th class='r' style='width:42px'>Renk</th>";
+  h += "<th class='r' style='width:32px'>Adet</th>";
+  h += "<th class='r' style='width:70px'>Birim Gr</th>";
+  h += "<th class='r' style='width:70px'>Top. Gr</th>";
+  if (fiyatGoster) {
+    h += "<th class='r' style='width:90px'>İşçilik/br</th>";
+    h += "<th class='r' style='width:90px'>İşçilik Top.</th>";
+  }
+  h += "</tr></thead><tbody>";
+
+  rows.forEach((r, ri) => {
+    const topGram = r.hc.mamulGram * r.adet;
+    const birimGram = r.hc.mamulGram;
+    const renkClass = r.renk==="Rose"?"renk-rose":r.renk==="Beyaz"?"renk-beyaz":"renk-sari";
+
+    // İşçilik birim string
+    let iscBirimStr = "—", iscTopStr = "—";
+    if (r.iscilikTop > 0) {
+      if (r.isMilyem) {
+        iscBirimStr = "<div class='isc-birim'>" + (r.iscilikDolar||0).toFixed(3) + " mly/gr</div>";
+        iscTopStr   = "<div class='isc-top'>" + fUSD(r.iscilikTop) + "</div><div class='isc-has'>" + r.iscilikTopHas.toFixed(4) + " has</div>";
       } else {
-        // dolar girişi: $/gr → toplam $
-        birimStr = fUSD(r.iscilikDolar||0) + "/gr<br/><span style='font-size:7px;color:#888'>" + iscilikBirimHas.toFixed(4) + " has</span>";
-        topStr = fUSD(iscilikTop) + "<br/><span style='font-size:7px;color:#888'>" + iscilikTopHas.toFixed(4) + " has</span>";
+        iscBirimStr = "<div class='isc-birim'>" + fUSD(r.iscilikDolar||0) + "/gr</div>";
+        iscTopStr   = "<div class='isc-top'>" + fUSD(r.iscilikTop) + "</div><div class='isc-has'>" + r.iscilikTopHas.toFixed(4) + " has</div>";
       }
     }
-    
-    const katLabel = r.kategori ? r.kategori.charAt(0).toUpperCase()+r.kategori.slice(1) : "";
-    const boyLabel = r.boy&&r.boy.deger ? "Boy: "+r.boy.sistem+" "+r.boy.deger+(r.boy.sistem!=="mm"&&r.boy.sistem!=="Beden"&&r.boy.sistem!=="mm (iç çap)"&&r.boy.sistem!=="mm (iç çevre)"?" (≈"+boyToMM(r.boy.sistem,r.boy.deger)+"mm)":"") : "";
-    let boyListesiHTML = "";
+
+    // Boy string
+    let boyStr = "";
     if (r.boyListesi && r.boyListesi.length > 0) {
-      boyListesiHTML = "<div class='boy' style='margin-top:3px'><b>Boylar:</b> " + r.boyListesi.map(b => 
-        (b.uzunluk||"-") + (b.birim||"cm") + " · " + (b.gram||"-") + "gr × " + (b.adet||1) + "ad"
-      ).join(" / ") + "</div>";
+      boyStr = "<div class='model-boy'>" + r.boyListesi.map(b=>(b.uzunluk||"—")+(b.birim||"cm")+" "+fN(b.gram||birimGram,2)+"gr ×"+(b.adet||1)).join(" · ") + "</div>";
+    } else if (r.boy && r.boy.deger) {
+      boyStr = "<div class='model-boy'>Boy: " + r.boy.sistem + " " + r.boy.deger + (r.boy.sistem!=="mm"&&r.boy.sistem!=="Beden"?" (≈"+boyToMM(r.boy.sistem,r.boy.deger)+"mm)":"") + "</div>";
     }
+
     h += "<tr>";
-    h += "<td>" + (r.foto ? "<img src='"+r.foto+"' style='width:100px;height:100px;object-fit:cover;border-radius:8px;display:block'/>" : "<div style='width:100px;height:100px;background:#eef4fa;border-radius:8px'></div>") + "</td>";
-    h += "<td class='kod'>" + (r.kod||"-") + "</td>";
-    h += "<td>" + (katLabel?"<div class='nm'>"+katLabel+"</div>":"") + (r.sipNot?"<div class='nt'>"+r.sipNot+"</div>":"") + (boyLabel?"<div class='boy'>"+boyLabel+"</div>":"") + boyListesiHTML + "</td>";
-    h += "<td class='r dim'>" + (r.renk||"Sari") + "</td>";
+    h += "<td class='foto-cell'><div class='foto-wrap'>" + (r.foto?"<img src='"+r.foto+"'/>":"") + "</div></td>";
+    h += "<td><div class='kod'>" + (r.kod||"—") + "</div></td>";
+    h += "<td><div class='model-ad'>" + (r.ad||"") + (r.kategori?" <span style='font-size:8px;color:#8a9bb0'>· "+r.kategori+"</span>":"") + "</div>" + (r.sipNot?"<div class='model-nt'>"+r.sipNot+"</div>":"") + boyStr + "</td>";
+    h += "<td class='r'><span class='" + renkClass + "'>" + (r.renk||"Sarı") + "</span></td>";
     h += "<td class='r'>" + r.adet + "</td>";
-    h += "<td class='r'>" + fN(topGram,2) + " gr</td>";
+    h += "<td class='r'><div class='gram-lbl'>birim</div><div class='gram-birim'>" + fN(birimGram,2) + " gr</div></td>";
+    h += "<td class='r'><div class='gram-lbl'>toplam</div><div class='gram-top'>" + fN(topGram,2) + " gr</div></td>";
     if (fiyatGoster) {
-      h += "<td class='r' style='font-size:9px;line-height:1.3'>" + birimStr + "</td>";
-      h += "<td class='r' style='font-size:9px;line-height:1.3;font-weight:700;color:#1a1a1a'>" + topStr + "</td>";
+      h += "<td class='r'>" + iscBirimStr + "</td>";
+      h += "<td class='r'>" + iscTopStr + "</td>";
     }
     h += "</tr>";
   });
 
-  const tAdet = rows.reduce((s,r)=>s+r.adet,0);
   h += "</tbody></table></div>";
 
-  // Toplam blok
-  h += "<div class='tot-blok'><table class='tot-tbl'>";
-  h += "<tr><td class='lc'>Toplam Gram</td><td class='rc'>" + fN(tGram,2) + " gr</td></tr>";
-  h += "<tr><td class='lc'>Toplam Adet</td><td class='rc'>" + tAdet + " adet</td></tr>";
-  if (fiyatGoster && tIscilik !== 0) {
-    h += "<tr><td class='lc'>Toplam Işçilik ($)</td><td class='rc'>" + fUSD(tIscilik) + "</td></tr>";
-    h += "<tr><td class='lc'>Toplam Işçilik (Has)</td><td class='rc'>" + tIscilikHas.toFixed(4) + " has</td></tr>";
-    h += "<tr class='grand'><td class='lc'>Genel Toplam</td><td class='rc'>" + fUSD(tIscilik) + "</td></tr>";
+  // ── TOPLAM BAR ──
+  h += "<div class='tot-bar'>";
+  h += "<div class='tot-left'>";
+  h += "<div class='tot-box'><div class='lbl'>Toplam Gram</div><div class='val'>" + fN(tGram,2) + " gr</div></div>";
+  h += "<div class='tot-box'><div class='lbl'>Toplam Adet</div><div class='val'>" + tAdet + "</div></div>";
+  h += "</div>";
+  if (fiyatGoster && tIscilik > 0) {
+    h += "<div class='tot-right'>";
+    h += "<div class='row'><span>İşçilik (Has)</span><span class='v'>" + tIscilikHas.toFixed(4) + " has</span></div>";
+    h += "<div class='row'><span>İşçilik (USD)</span><span class='v'>" + fUSD(tIscilik) + "</span></div>";
+    h += "<div class='grand'><span>Toplam İşçilik</span><span>" + fUSD(tIscilik) + "</span></div>";
+    h += "</div>";
   }
-  h += "</table></div>";
+  h += "</div>";
 
-  h += "<div class='footer'><span>Atolye yonetim sistemi</span><span>" + new Date().toLocaleDateString("tr-TR") + "</span></div>";
-  h += "</div><button class='np pb' onclick='window.print()'>Yazdir / PDF</button></body></html>";
+  // ── FOOTER ──
+  h += "<div class='footer'>";
+  h += "<div class='footer-left'>MSK Kuyumculuk &nbsp;·&nbsp; " + new Date().toLocaleDateString("tr-TR") + " &nbsp;·&nbsp; " + sipNo + "</div>";
+  h += "<div class='footer-sig'>";
+  h += "<div class='sig-box'><div class='sig-line'></div><div class='sig-lbl'>Hazırlayan</div></div>";
+  h += "<div class='sig-box'><div class='sig-line'></div><div class='sig-lbl'>Müşteri Onayı</div></div>";
+  h += "</div></div>";
+
+  h += "</div><button class='noprint pb' onclick='window.print()'>Yazdır / PDF</button></body></html>";
   return h;
 }
+
 
 // ═══ TAŞ GRAM TABLOSU ═══
 // gram_per_adet = 1 / (adet_per_gram)
