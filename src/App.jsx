@@ -1504,79 +1504,48 @@ function Atolye() {
   }, []);
 
   useEffect(() => { (async () => {
-    // Tüm eski key versiyonlarını dene
-    const tryKeys = async (keys, def) => {
-      for (const key of keys) {
-        const r = await ld(key, null);
-        if (r && r.length > 0) return r;
-      }
-      return def;
-    };
-    const tryKeysObj = async (keys, def) => {
-      for (const key of keys) {
-        const r = await ld(key, null);
-        if (r && Object.keys(r).length > 0) return r;
-      }
-      return def;
+    const applyData = (k, m, s, u, c, ay, ks) => {
+      setKollar(k||[]); setModeller(m||[]); setSiparisler(s||[]); setMusteriler(u||{});
+      setAltinKg(c?.a || ""); setMc(c?.mc || "0.030");
+      if (ay?.kategoriler?.length) setAyarKategoriler(ay.kategoriler);
+      if (ay?.etiketler?.length) setAyarEtiketler(ay.etiketler);
+      if (ay?.varsAltinKg) setAyarVarsAltinKg(ay.varsAltinKg);
+      if (ay?.kayitliNotlar?.length) setKayitliNotlar(ay.kayitliNotlar);
+      if (ay?.ozelTaslar?.length) setOzelTaslar(ay.ozelTaslar);
+      if (ay?.varsMc) setAyarVarsMc(ay.varsMc);
+      if (ay?.varsIscilik) setAyarVarsIscilik(ay.varsIscilik);
+      if (ay?.varsIscilikBirim) setAyarVarsIscilikBirim(ay.varsIscilikBirim);
+      if (ks) setKasa(prev => ({ ...prev, ...ks }));
+      setLoaded(true);
     };
 
-    // Paralel yükleme — modeller hariç (chunk sistemi ayrı çalışır)
-    const [k, s, c, u, ay, ks] = await Promise.all([
-      tryKeys(["v7k", "v5k", "atl5-k"], []),
-      tryKeys(["v7s", "v5s", "atl5-s"], []),
-      tryKeysObj(["v7c", "v5c", "atl5-c"], {}),
-      tryKeysObj(["v7u"], {}),
-      ld("v7ay", {}),
-      ld("v7kasa", null),
-    ]);
-
-    // Model cache — önce cache'den göster, arka planda güncelle
-    let mCache = [];
+    // 1. Önce TÜM veriyi localStorage'dan göster (anında — sıfır network)
     try {
-      const cached = localStorage.getItem("atolye_model_cache");
-      if (cached) {
-        const parsed = JSON.parse(cached);
-        if (parsed?.data?.length > 0) {
-          mCache = parsed.data;
-          // Cache varsa anında göster
-          setKollar(k); setModeller(mCache); setSiparisler(s); setMusteriler(u);
-          setAltinKg(c.a || ""); setMc(c.mc || "0.030");
-          if (ay.kategoriler?.length) setAyarKategoriler(ay.kategoriler);
-          if (ay.etiketler?.length) setAyarEtiketler(ay.etiketler);
-          if (ay.varsAltinKg) setAyarVarsAltinKg(ay.varsAltinKg);
-          if (ay.kayitliNotlar?.length) setKayitliNotlar(ay.kayitliNotlar);
-          if (ay.ozelTaslar?.length) setOzelTaslar(ay.ozelTaslar);
-          if (ay.varsMc) setAyarVarsMc(ay.varsMc);
-          if (ay.varsIscilik) setAyarVarsIscilik(ay.varsIscilik);
-          if (ay.varsIscilikBirim) setAyarVarsIscilikBirim(ay.varsIscilikBirim);
-          if (ks) setKasa(prev => ({ ...prev, ...ks }));
-          setLoaded(true);
-          // Arka planda güncel veriyi çek
-          ld("v7m", []).then(mFresh => {
-            if (mFresh?.length > 0) {
-              setModeller(mFresh);
-              try { localStorage.setItem("atolye_model_cache", JSON.stringify({ data: mFresh, ts: Date.now() })); } catch {}
-            }
+      const fc = localStorage.getItem("atolye_full_cache");
+      if (fc) {
+        const d = JSON.parse(fc);
+        if (d?.m?.length > 0 || d?.k?.length > 0) {
+          applyData(d.k, d.m, d.s, d.u, d.c, d.ay, d.ks);
+          // Arka planda Supabase'den güncelle — sadece v7 key'leri
+          Promise.all([
+            ld("v7k",[]), ld("v7m",[]), ld("v7s",[]),
+            ld("v7u",{}), ld("v7c",{}), ld("v7ay",{}), ld("v7kasa",null)
+          ]).then(([k,m,s,u,c,ay,ks]) => {
+            try { localStorage.setItem("atolye_full_cache", JSON.stringify({k,m,s,u,c,ay,ks,ts:Date.now()})); } catch {}
+            if (m?.length > 0) applyData(k,m,s,u,c,ay,ks);
           });
           return;
         }
       }
     } catch {}
 
-    // Cache yoksa normal yükle
-    const m = await ld("v7m", []);
-    try { localStorage.setItem("atolye_model_cache", JSON.stringify({ data: m, ts: Date.now() })); } catch {}
-    setKollar(k); setModeller(m); setSiparisler(s); setMusteriler(u);
-    setAltinKg(c.a || ""); setMc(c.mc || "0.030");
-    if (ay.kategoriler?.length) setAyarKategoriler(ay.kategoriler);
-    if (ay.etiketler?.length) setAyarEtiketler(ay.etiketler);
-    if (ay.varsAltinKg) setAyarVarsAltinKg(ay.varsAltinKg);
-    if (ay.kayitliNotlar?.length) setKayitliNotlar(ay.kayitliNotlar);
-    if (ay.ozelTaslar?.length) setOzelTaslar(ay.ozelTaslar);
-    if (ay.varsMc) setAyarVarsMc(ay.varsMc);
-    if (ay.varsIscilik) setAyarVarsIscilik(ay.varsIscilik);
-    if (ay.varsIscilikBirim) setAyarVarsIscilikBirim(ay.varsIscilikBirim);
-    if (ks) setKasa(prev => ({ ...prev, ...ks }));
+    // 2. Cache yok — Supabase'den çek, sadece v7
+    const [k,m,s,u,c,ay,ks] = await Promise.all([
+      ld("v7k",[]), ld("v7m",[]), ld("v7s",[]),
+      ld("v7u",{}), ld("v7c",{}), ld("v7ay",{}), ld("v7kasa",null)
+    ]);
+    try { localStorage.setItem("atolye_full_cache", JSON.stringify({k,m,s,u,c,ay,ks,ts:Date.now()})); } catch {}
+    applyData(k,m,s,u,c,ay,ks);
     setLoaded(true);
   })(); }, []);
 
@@ -1625,7 +1594,11 @@ function Atolye() {
       console.log("🧹 " + (d.length - temiz.length) + " duplicate temizlendi");
     }
     setModeller(temiz);
-    try { localStorage.setItem("atolye_model_cache", JSON.stringify({ data: temiz, ts: Date.now() })); } catch {}
+    try {
+      const fc = localStorage.getItem("atolye_full_cache");
+      const d = fc ? JSON.parse(fc) : {};
+      localStorage.setItem("atolye_full_cache", JSON.stringify({...d, m:temiz, ts:Date.now()}));
+    } catch {}
     await sv("v7m", temiz);
   }, []);
   const svS = useCallback(async d => { setSiparisler(d); await sv("v7s", d); }, []);
