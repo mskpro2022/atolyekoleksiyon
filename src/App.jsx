@@ -448,100 +448,101 @@ function buildKonfHTML(siparis, altinKgUSD, mc, fiyatli) {
   const ayarLabel = rows[0]?.secilenAyar || "14K";
   const fiyatGoster = fiyatli; // iç PDF'te fiyat göster
 
-  const css = \`
-*{margin:0;padding:0;box-sizing:border-box}
-body{font-family:'Segoe UI',Helvetica,Arial,sans-serif;background:#f0f2f5;color:#1a1a2e;padding:24px;display:flex;justify-content:center}
-@media print{.noprint{display:none!important}@page{size:A4 portrait;margin:10mm}body{background:#fff;padding:0;display:block}.wrap{box-shadow:none!important;border:none!important}}
-.wrap{background:#fff;width:100%;max-width:760px;box-shadow:0 4px 24px rgba(0,0,0,.10);border-radius:4px;overflow:hidden}
-
-/* HEADER */
-.hdr{background:#0f1923;padding:22px 30px;display:flex;justify-content:space-between;align-items:center}
-.logo-area{display:flex;align-items:center;gap:12px}
-.logo-diamond{width:36px;height:36px;position:relative;flex-shrink:0}
-.logo-diamond svg{width:36px;height:36px}
-.logo-text{display:flex;flex-direction:column}
-.logo-name{font-size:15px;font-weight:700;color:#fff;letter-spacing:.08em;text-transform:uppercase}
-.logo-sub{font-size:7px;color:#8a9bb0;letter-spacing:.18em;text-transform:uppercase;margin-top:1px}
-.hdr-right{text-align:right}
-.doc-type{font-size:8px;color:#8a9bb0;letter-spacing:.15em;text-transform:uppercase;margin-bottom:4px}
-.doc-no{font-size:13px;font-weight:600;color:#c9a84c;letter-spacing:.04em}
-.doc-date{font-size:9px;color:#8a9bb0;margin-top:3px}
-
-/* MÜŞTERİ BAR */
-.info-bar{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;border-bottom:1px solid #e8edf2}
-.info-cell{padding:14px 20px;border-right:1px solid #e8edf2}
-.info-cell:last-child{border-right:none}
-.info-lbl{font-size:7px;color:#8a9bb0;text-transform:uppercase;letter-spacing:.12em;margin-bottom:4px}
-.info-val{font-size:13px;font-weight:600;color:#0f1923}
-.info-sub{font-size:9px;color:#8a9bb0;margin-top:2px}
-
-/* TABLO */
-.tbl-wrap{padding:0 20px}
-table{width:100%;border-collapse:collapse}
-thead tr{border-bottom:2px solid #0f1923}
-th{font-size:7.5px;font-weight:700;color:#8a9bb0;text-transform:uppercase;letter-spacing:.1em;padding:10px 8px 8px;text-align:left}
-th.r{text-align:right}
-tbody tr{border-bottom:1px solid #f0f2f5}
-tbody tr:last-child{border-bottom:none}
-td{padding:10px 8px;vertical-align:middle;font-size:11px;color:#1a1a2e}
-td.r{text-align:right}
-td.dim{color:#8a9bb0}
-
-/* FOTOĞRAF */
-.foto-cell{width:80px}
-.foto-wrap{width:76px;height:76px;border-radius:6px;overflow:hidden;background:#f5f7fa;border:1px solid #e8edf2}
-.foto-wrap img{width:100%;height:100%;object-fit:cover;display:block}
-
-/* KOD & AD */
-.kod{font-size:12px;font-weight:700;color:#0f1923;letter-spacing:.02em}
-.model-ad{font-size:10px;color:#4a5568;margin-top:2px}
-.model-nt{font-size:9px;color:#c9a84c;margin-top:3px;font-style:italic}
-.model-boy{font-size:9px;color:#6b7a8d;margin-top:2px}
-
-/* GRAM — birim + toplam ayrı */
-.gram-birim{font-size:10px;font-weight:600;color:#1a1a2e}
-.gram-top{font-size:11px;font-weight:700;color:#0f1923}
-.gram-lbl{font-size:7px;color:#8a9bb0;margin-bottom:1px}
-
-/* RENKler */
-.renk-sari{color:#b8943f;font-weight:600}
-.renk-beyaz{color:#6b7a8d;font-weight:600}
-.renk-rose{color:#b06060;font-weight:600}
-
-/* İŞÇİLİK */
-.isc-birim{font-size:9px;color:#4a5568}
-.isc-top{font-size:10px;font-weight:700;color:#0f1923}
-.isc-has{font-size:7px;color:#8a9bb0}
-
-/* TOPLAM BAR */
-.tot-bar{background:#f8fafc;border-top:2px solid #0f1923;padding:16px 28px;display:flex;justify-content:space-between;align-items:flex-end;gap:20px}
-.tot-left{display:flex;gap:28px}
-.tot-box{display:flex;flex-direction:column;gap:2px}
-.tot-box .lbl{font-size:7px;color:#8a9bb0;text-transform:uppercase;letter-spacing:.1em}
-.tot-box .val{font-size:16px;font-weight:700;color:#0f1923}
-.tot-right{display:flex;flex-direction:column;align-items:flex-end;gap:4px}
-.tot-right .row{display:flex;justify-content:space-between;gap:32px;font-size:10px;color:#4a5568}
-.tot-right .row .v{font-weight:600;color:#0f1923}
-.tot-right .grand{display:flex;justify-content:space-between;gap:32px;font-size:13px;font-weight:700;color:#0f1923;border-top:1px solid #dde2ea;padding-top:6px;margin-top:4px}
-
-/* FOOTER */
-.footer{padding:12px 28px;display:flex;justify-content:space-between;align-items:center;border-top:1px solid #e8edf2;background:#fafbfc}
-.footer-left{font-size:8px;color:#8a9bb0}
-.footer-sig{display:flex;gap:40px}
-.sig-box{text-align:center}
-.sig-line{width:100px;border-bottom:1px solid #bbc4d0;margin-bottom:4px;height:24px}
-.sig-lbl{font-size:7px;color:#8a9bb0;text-transform:uppercase;letter-spacing:.08em}
-
-/* PRINT BUTTON */
-.pb{position:fixed;bottom:20px;right:20px;background:#0f1923;color:#fff;border:none;border-radius:8px;padding:11px 24px;font-size:12px;font-weight:600;cursor:pointer;font-family:sans-serif;box-shadow:0 4px 12px rgba(0,0,0,.2)}
-\`;
+  const css = [
+    "*{margin:0;padding:0;box-sizing:border-box}",
+    "body{font-family:'Segoe UI',Helvetica,Arial,sans-serif;background:#f0f2f5;color:#1a1a2e;padding:24px;display:flex;justify-content:center}",
+    "@media print{.noprint{display:none!important}@page{size:A4 portrait;margin:10mm}body{background:#fff;padding:0;display:block}.wrap{box-shadow:none!important;border:none!important}}",
+    ".wrap{background:#fff;width:100%;max-width:760px;box-shadow:0 4px 24px rgba(0,0,0,.10);border-radius:4px;overflow:hidden}",
+    "",
+    "/* HEADER */",
+    ".hdr{background:#0f1923;padding:22px 30px;display:flex;justify-content:space-between;align-items:center}",
+    ".logo-area{display:flex;align-items:center;gap:12px}",
+    ".logo-diamond{width:36px;height:36px;position:relative;flex-shrink:0}",
+    ".logo-diamond svg{width:36px;height:36px}",
+    ".logo-text{display:flex;flex-direction:column}",
+    ".logo-name{font-size:15px;font-weight:700;color:#fff;letter-spacing:.08em;text-transform:uppercase}",
+    ".logo-sub{font-size:7px;color:#8a9bb0;letter-spacing:.18em;text-transform:uppercase;margin-top:1px}",
+    ".hdr-right{text-align:right}",
+    ".doc-type{font-size:8px;color:#8a9bb0;letter-spacing:.15em;text-transform:uppercase;margin-bottom:4px}",
+    ".doc-no{font-size:13px;font-weight:600;color:#c9a84c;letter-spacing:.04em}",
+    ".doc-date{font-size:9px;color:#8a9bb0;margin-top:3px}",
+    "",
+    "/* MÜŞTERİ BAR */",
+    ".info-bar{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;border-bottom:1px solid #e8edf2}",
+    ".info-cell{padding:14px 20px;border-right:1px solid #e8edf2}",
+    ".info-cell:last-child{border-right:none}",
+    ".info-lbl{font-size:7px;color:#8a9bb0;text-transform:uppercase;letter-spacing:.12em;margin-bottom:4px}",
+    ".info-val{font-size:13px;font-weight:600;color:#0f1923}",
+    ".info-sub{font-size:9px;color:#8a9bb0;margin-top:2px}",
+    "",
+    "/* TABLO */",
+    ".tbl-wrap{padding:0 20px}",
+    "table{width:100%;border-collapse:collapse}",
+    "thead tr{border-bottom:2px solid #0f1923}",
+    "th{font-size:7.5px;font-weight:700;color:#8a9bb0;text-transform:uppercase;letter-spacing:.1em;padding:10px 8px 8px;text-align:left}",
+    "th.r{text-align:right}",
+    "tbody tr{border-bottom:1px solid #f0f2f5}",
+    "tbody tr:last-child{border-bottom:none}",
+    "td{padding:10px 8px;vertical-align:middle;font-size:11px;color:#1a1a2e}",
+    "td.r{text-align:right}",
+    "td.dim{color:#8a9bb0}",
+    "",
+    "/* FOTOĞRAF */",
+    ".foto-cell{width:80px}",
+    ".foto-wrap{width:76px;height:76px;border-radius:6px;overflow:hidden;background:#f5f7fa;border:1px solid #e8edf2}",
+    ".foto-wrap img{width:100%;height:100%;object-fit:cover;display:block}",
+    "",
+    "/* KOD & AD */",
+    ".kod{font-size:12px;font-weight:700;color:#0f1923;letter-spacing:.02em}",
+    ".model-ad{font-size:10px;color:#4a5568;margin-top:2px}",
+    ".model-nt{font-size:9px;color:#c9a84c;margin-top:3px;font-style:italic}",
+    ".model-boy{font-size:9px;color:#6b7a8d;margin-top:2px}",
+    "",
+    "/* GRAM — birim + toplam ayrı */",
+    ".gram-birim{font-size:10px;font-weight:600;color:#1a1a2e}",
+    ".gram-top{font-size:11px;font-weight:700;color:#0f1923}",
+    ".gram-lbl{font-size:7px;color:#8a9bb0;margin-bottom:1px}",
+    "",
+    "/* RENKler */",
+    ".renk-sari{color:#b8943f;font-weight:600}",
+    ".renk-beyaz{color:#6b7a8d;font-weight:600}",
+    ".renk-rose{color:#b06060;font-weight:600}",
+    "",
+    "/* İŞÇİLİK */",
+    ".isc-birim{font-size:9px;color:#4a5568}",
+    ".isc-top{font-size:10px;font-weight:700;color:#0f1923}",
+    ".isc-has{font-size:7px;color:#8a9bb0}",
+    "",
+    "/* TOPLAM BAR */",
+    ".tot-bar{background:#f8fafc;border-top:2px solid #0f1923;padding:16px 28px;display:flex;justify-content:space-between;align-items:flex-end;gap:20px}",
+    ".tot-left{display:flex;gap:28px}",
+    ".tot-box{display:flex;flex-direction:column;gap:2px}",
+    ".tot-box .lbl{font-size:7px;color:#8a9bb0;text-transform:uppercase;letter-spacing:.1em}",
+    ".tot-box .val{font-size:16px;font-weight:700;color:#0f1923}",
+    ".tot-right{display:flex;flex-direction:column;align-items:flex-end;gap:4px}",
+    ".tot-right .row{display:flex;justify-content:space-between;gap:32px;font-size:10px;color:#4a5568}",
+    ".tot-right .row .v{font-weight:600;color:#0f1923}",
+    ".tot-right .grand{display:flex;justify-content:space-between;gap:32px;font-size:13px;font-weight:700;color:#0f1923;border-top:1px solid #dde2ea;padding-top:6px;margin-top:4px}",
+    "",
+    "/* FOOTER */",
+    ".footer{padding:12px 28px;display:flex;justify-content:space-between;align-items:center;border-top:1px solid #e8edf2;background:#fafbfc}",
+    ".footer-left{font-size:8px;color:#8a9bb0}",
+    ".footer-sig{display:flex;gap:40px}",
+    ".sig-box{text-align:center}",
+    ".sig-line{width:100px;border-bottom:1px solid #bbc4d0;margin-bottom:4px;height:24px}",
+    ".sig-lbl{font-size:7px;color:#8a9bb0;text-transform:uppercase;letter-spacing:.08em}",
+    "",
+    "/* PRINT BUTTON */",
+    ".pb{position:fixed;bottom:20px;right:20px;background:#0f1923;color:#fff;border:none;border-radius:8px;padding:11px 24px;font-size:12px;font-weight:600;cursor:pointer;font-family:sans-serif;box-shadow:0 4px 12px rgba(0,0,0,.2)}",
+    "",
+  ].join("\n");
 
   // MSK Logo SVG
-  const logoSVG = \`<svg viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <polygon points="18,2 34,10 34,26 18,34 2,26 2,10" fill="none" stroke="#c9a84c" stroke-width="1.5"/>
-    <polygon points="18,7 29,13 29,23 18,29 7,23 7,13" fill="none" stroke="#c9a84c" stroke-width="0.7" opacity="0.5"/>
-    <text x="18" y="22" text-anchor="middle" font-family="Arial" font-size="9" font-weight="700" fill="#c9a84c" letter-spacing="0.5">MSK</text>
-  </svg>\`;
+  const logoSVG = '<svg viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">'
+    + '<polygon points="18,2 34,10 34,26 18,34 2,26 2,10" fill="none" stroke="#c9a84c" stroke-width="1.5"/>'
+    + '<polygon points="18,7 29,13 29,23 18,29 7,23 7,13" fill="none" stroke="#c9a84c" stroke-width="0.7" opacity="0.5"/>'
+    + '<text x="18" y="22" text-anchor="middle" font-family="Arial" font-size="9" font-weight="700" fill="#c9a84c" letter-spacing="0.5">MSK</text>'
+    + '</svg>';
 
   let h = "<!DOCTYPE html><html><head><meta charset='utf-8'><title>" + (fiyatli ? "MSK Konfirmasyon" : "MSK Siparis Formu") + "</title><style>" + css + "</style></head><body><div class='wrap'>";
 
