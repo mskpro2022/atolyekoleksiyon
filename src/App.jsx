@@ -2673,8 +2673,11 @@ function Atolye() {
                               <option value="dolar">$/gr</option>
                               <option value="milyem">mly</option>
                             </select>
-                            <input type="number" value={aktifIscilik||""} placeholder={String(m.iscilikDolar||"")}
-                              onChange={e=>setKonfFiyatlar(p=>({...p,[m.id]:{iscilikDolar:Number(e.target.value)||0,iscilikBirim:aktifBirim}}))}
+                            <input type="number" step="0.001" value={aktifIscilik===0?0:(aktifIscilik??"")} placeholder={String(m.iscilikDolar||"")}
+                              onChange={e=>{
+                                const v = e.target.value;
+                                setKonfFiyatlar(p=>({...p,[m.id]:{iscilikDolar: v===""?0:Number(v), iscilikBirim:aktifBirim}}));
+                              }}
                               style={{ ...IS, width:72, padding:"2px 4px", fontSize:9, fontWeight:700,
                                 borderColor: fiyatDegisti?"rgba(201,168,76,0.5)":"rgba(201,168,76,0.12)",
                                 background: fiyatDegisti?"rgba(201,168,76,0.08)":"rgba(201,168,76,0.05)" }}/>
