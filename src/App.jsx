@@ -5116,6 +5116,8 @@ ${buildContext()}`;
               });
               setKatalogSiraliModeller(sortByKat);
             }} style={{ background:"rgba(232,167,79,0.1)", border:"1px solid rgba(232,167,79,0.25)", borderRadius:5, padding:"4px 10px", color:"#e8a74f", fontSize:9, fontWeight:700, cursor:"pointer" }}>🏷 Kategoriye Göre</button>
+            <button onClick={() => setKatalogSiraliModeller([...katalogSiraliModeller].sort((a,b)=>(b.t||0)-(a.t||0)))} style={{ background:"rgba(106,191,105,0.1)", border:"1px solid rgba(106,191,105,0.25)", borderRadius:5, padding:"4px 10px", color:"#6abf69", fontSize:9, fontWeight:700, cursor:"pointer" }}>🕐 Yeni→Eski</button>
+            <button onClick={() => setKatalogSiraliModeller([...katalogSiraliModeller].sort((a,b)=>(a.t||0)-(b.t||0)))} style={{ background:"rgba(106,191,105,0.1)", border:"1px solid rgba(106,191,105,0.25)", borderRadius:5, padding:"4px 10px", color:"#6abf69", fontSize:9, fontWeight:700, cursor:"pointer" }}>🕐 Eski→Yeni</button>
           </div>
         </div>
 
