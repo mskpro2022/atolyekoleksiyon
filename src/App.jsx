@@ -4484,8 +4484,8 @@ function Atolye() {
                     <div style={{ fontSize:10, fontWeight:700, color:"#5b9bd5", marginBottom:10 }}>🆕 Yeni Eklenen Modeller</div>
                     {yeniModeller.length===0 && <div style={{ fontSize:10, color:"#665d4a" }}>Henüz model yok</div>}
                     {yeniModeller.map(m => (
-                      <div key={m.id} onClick={()=>{ const kol=kollar.find(k=>k.id===m.ki); if(kol){setAktifKol(kol);setSayfa("modeller");setArama(m.kod||m.ad);} }} style={{ display:"flex", alignItems:"center", gap:8, padding:"5px 0", borderBottom:"1px solid rgba(255,255,255,0.04)", cursor:"pointer" }}>
-                        {m.foto ? <img src={m.foto} alt="" style={{ width:32, height:32, objectFit:"cover", borderRadius:5, flexShrink:0 }}/> : <div style={{ width:32, height:32, borderRadius:5, background:"rgba(255,255,255,0.05)", flexShrink:0 }}/>}
+                      <div key={m.id} onClick={()=>{ const kol=kollar.find(k=>k.id===m.ki); if(kol){setAktifKol(kol);setSayfa("modeller");setArama(m.kod||m.ad);} }} style={{ display:"flex", alignItems:"center", gap:8, padding:"7px 0", borderBottom:"1px solid rgba(255,255,255,0.04)", cursor:"pointer" }}>
+                        {m.foto ? <img src={m.foto} alt="" style={{ width:64, height:64, objectFit:"cover", borderRadius:7, flexShrink:0 }}/> : <div style={{ width:64, height:64, borderRadius:7, background:"rgba(255,255,255,0.05)", flexShrink:0 }}/>}
                         <div style={{ flex:1, minWidth:0 }}>
                           <div style={{ fontSize:10, fontWeight:700, color:GOLD, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{m.kod||m.ad}</div>
                           <div style={{ fontSize:8, color:"#665d4a" }}>{new Date(m.t).toLocaleDateString("tr-TR")}</div>
@@ -4505,8 +4505,8 @@ function Atolye() {
                     <div style={{ fontSize:10, fontWeight:700, color:"#6abf69", marginBottom:10 }}>⭐ Çok Satan Modeller</div>
                     {cokSatan.length===0 && <div style={{ fontSize:10, color:"#665d4a" }}>Henüz satış yok</div>}
                     {cokSatan.map(m => (
-                      <div key={m.id} onClick={()=>{ const kol=kollar.find(k=>k.id===m.ki); if(kol){setAktifKol(kol);setSayfa("modeller");setArama(m.kod||m.ad);} }} style={{ display:"flex", alignItems:"center", gap:8, padding:"5px 0", borderBottom:"1px solid rgba(255,255,255,0.04)", cursor:"pointer" }}>
-                        {m.foto ? <img src={m.foto} alt="" style={{ width:32, height:32, objectFit:"cover", borderRadius:5, flexShrink:0 }}/> : <div style={{ width:32, height:32, borderRadius:5, background:"rgba(255,255,255,0.05)", flexShrink:0 }}/>}
+                      <div key={m.id} onClick={()=>{ const kol=kollar.find(k=>k.id===m.ki); if(kol){setAktifKol(kol);setSayfa("modeller");setArama(m.kod||m.ad);} }} style={{ display:"flex", alignItems:"center", gap:8, padding:"7px 0", borderBottom:"1px solid rgba(255,255,255,0.04)", cursor:"pointer" }}>
+                        {m.foto ? <img src={m.foto} alt="" style={{ width:64, height:64, objectFit:"cover", borderRadius:7, flexShrink:0 }}/> : <div style={{ width:64, height:64, borderRadius:7, background:"rgba(255,255,255,0.05)", flexShrink:0 }}/>}
                         <div style={{ flex:1, minWidth:0 }}>
                           <div style={{ fontSize:10, fontWeight:700, color:GOLD, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{m.kod||m.ad}</div>
                           <div style={{ height:3, background:"rgba(106,191,105,0.15)", borderRadius:2, marginTop:3, overflow:"hidden" }}>
@@ -4542,8 +4542,8 @@ function Atolye() {
                     <div style={{ fontSize:10, fontWeight:700, color:"#e85a4f", marginBottom:10 }}>⚠ Arıza Veren Modeller</div>
                     {arizaListe.length===0 && <div style={{ fontSize:10, color:"#6abf69" }}>✓ Sorunlu model yok</div>}
                     {arizaListe.map(m => (
-                      <div key={m.id} onClick={()=>{ const kol=kollar.find(k=>k.id===m.ki); if(kol){setAktifKol(kol);setSayfa("modeller");setArama(m.kod||m.ad);} }} style={{ display:"flex", alignItems:"center", gap:8, padding:"5px 0", borderBottom:"1px solid rgba(255,255,255,0.04)", cursor:"pointer" }}>
-                        {m.foto ? <img src={m.foto} alt="" style={{ width:32, height:32, objectFit:"cover", borderRadius:5, flexShrink:0 }}/> : <div style={{ width:32, height:32, borderRadius:5, background:"rgba(255,255,255,0.05)", flexShrink:0 }}/>}
+                      <div key={m.id} onClick={()=>{ const kol=kollar.find(k=>k.id===m.ki); if(kol){setAktifKol(kol);setSayfa("modeller");setArama(m.kod||m.ad);} }} style={{ display:"flex", alignItems:"center", gap:8, padding:"7px 0", borderBottom:"1px solid rgba(255,255,255,0.04)", cursor:"pointer" }}>
+                        {m.foto ? <img src={m.foto} alt="" style={{ width:64, height:64, objectFit:"cover", borderRadius:7, flexShrink:0 }}/> : <div style={{ width:64, height:64, borderRadius:7, background:"rgba(255,255,255,0.05)", flexShrink:0 }}/>}
                         <div style={{ flex:1, minWidth:0 }}>
                           <div style={{ fontSize:10, fontWeight:700, color:GOLD, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{m.kod||m.ad}</div>
                           <div style={{ display:"flex", gap:5, marginTop:2 }}>
@@ -4580,8 +4580,8 @@ function Atolye() {
                     <div style={{ fontSize:10, fontWeight:700, color:GOLD, marginBottom:10 }}>💰 En Karlı Modeller <span style={{ fontSize:8, color:"#665d4a", fontWeight:400 }}>(mly/gr)</span></div>
                     {karliListe.length===0 && <div style={{ fontSize:10, color:"#665d4a" }}>Karlı model bulunamadı</div>}
                     {karliListe.map(({m, karMly, karHas}) => (
-                      <div key={m.id} onClick={()=>{ const kol=kollar.find(k=>k.id===m.ki); if(kol){setAktifKol(kol);setSayfa("modeller");setArama(m.kod||m.ad);} }} style={{ display:"flex", alignItems:"center", gap:8, padding:"5px 0", borderBottom:"1px solid rgba(255,255,255,0.04)", cursor:"pointer" }}>
-                        {m.foto ? <img src={m.foto} alt="" style={{ width:32, height:32, objectFit:"cover", borderRadius:5, flexShrink:0 }}/> : <div style={{ width:32, height:32, borderRadius:5, background:"rgba(255,255,255,0.05)", flexShrink:0 }}/>}
+                      <div key={m.id} onClick={()=>{ const kol=kollar.find(k=>k.id===m.ki); if(kol){setAktifKol(kol);setSayfa("modeller");setArama(m.kod||m.ad);} }} style={{ display:"flex", alignItems:"center", gap:8, padding:"7px 0", borderBottom:"1px solid rgba(255,255,255,0.04)", cursor:"pointer" }}>
+                        {m.foto ? <img src={m.foto} alt="" style={{ width:64, height:64, objectFit:"cover", borderRadius:7, flexShrink:0 }}/> : <div style={{ width:64, height:64, borderRadius:7, background:"rgba(255,255,255,0.05)", flexShrink:0 }}/>}
                         <div style={{ flex:1, minWidth:0 }}>
                           <div style={{ fontSize:10, fontWeight:700, color:GOLD, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{m.kod||m.ad}</div>
                           <div style={{ height:3, background:"rgba(201,168,76,0.15)", borderRadius:2, marginTop:3, overflow:"hidden" }}>
