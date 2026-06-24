@@ -6,7 +6,6 @@ const fHas = (n) => (Number(n) || 0).toFixed(4) + " has";
 const fUSD = (p) => "$" + (Number(p) || 0).toFixed(2);
 const fN = (n, d) => (Number(n) || 0).toFixed(d || 3);
 
-const YOGUNLUKLAR = { "8K": 9.70, "10K": 11.60, "14K": 13.40, "18K": 15.50, "22K": 15.95, "24K": 19.32, "925": 10.40 };
 const AYARLAR = [
   { id: "8K",  l: "8 Ayar",     o: 0.333 },
   { id: "10K", l: "10 Ayar",    o: 0.417 },
@@ -1406,8 +1405,6 @@ function Atolye() {
   const [kasaKilitli, setKasaKilitli] = useState(true);
   const [kasaSifreGirdi, setKasaSifreGirdi] = useState("");
   const [kasaSifreHata, setKasaSifreHata] = useState(false);
-  // SHA-256 hash of "348834"
-  const KASA_HASH = "a6d4f8e2c1b9e7f3d5a2c8b4e1f6a3d9e7b5c2f8a4d1e9b6c3f7a2d8e5b1c4f";
   // Kasa modal form state'leri (hook kuralı: koşullu çağrılamaz)
   const [kfMus,   setKfMus]   = useState("");
   const [kfHas,   setKfHas]   = useState("");
@@ -1454,7 +1451,6 @@ function Atolye() {
   // Ayarlar
   const [ayarEtiketler, setAyarEtiketler] = useState([]); // global etiket listesi
   const [ayarKategoriler, setAyarKategoriler] = useState(["yuzuk","kolye","kupe","bilezik","bileklik","pendant","set","diger"]);
-  const [ayarYeniEtiket, setAyarYeniEtiket] = useState("");
   const [ayarYeniKategori, setAyarYeniKategori] = useState("");
   const [ayarVarsAltinKg, setAyarVarsAltinKg] = useState("");
   const [ayarVarsMc, setAyarVarsMc] = useState("");
@@ -1542,7 +1538,7 @@ function Atolye() {
   }, []);
 
   // ═══ ÇAKIŞMA KORUMASI — versiyon takibi ═══
-  const versiyonRef = useRef({ v7k: 0, v7m: 0, v7s: 0 });
+  const versiyonRef = useRef({ v7k: 0, v7m: 0, v7s: 0, v7u: 0, v7kasa: 0 });
 
   useEffect(() => { (async () => {
     const applyData = (k, m, s, u, c, ay, ks) => {
@@ -1562,8 +1558,8 @@ function Atolye() {
 
     // Versiyon damgalarını da çek — çakışma kontrolü için referans alınır
     const versiyonlariYukle = async () => {
-      const [vk, vm, vs] = await Promise.all([ld("v7k_v",0), ld("v7m_v",0), ld("v7s_v",0)]);
-      versiyonRef.current = { v7k: vk||0, v7m: vm||0, v7s: vs||0 };
+      const [vk, vm, vs, vu, vkasa] = await Promise.all([ld("v7k_v",0), ld("v7m_v",0), ld("v7s_v",0), ld("v7u_v",0), ld("v7kasa_v",0)]);
+      versiyonRef.current = { v7k: vk||0, v7m: vm||0, v7s: vs||0, v7u: vu||0, v7kasa: vkasa||0 };
     };
 
     // 1. Önce TÜM veriyi localStorage'dan göster (anında — sıfır network)
@@ -1605,7 +1601,7 @@ function Atolye() {
     if (!loaded) return;
     const kontrolEt = async () => {
       try {
-        const [vk, vm, vs] = await Promise.all([ld("v7k_v",0), ld("v7m_v",0), ld("v7s_v",0)]);
+        const [vk, vm, vs, vu, vkasa] = await Promise.all([ld("v7k_v",0), ld("v7m_v",0), ld("v7s_v",0), ld("v7u_v",0), ld("v7kasa_v",0)]);
         const guncel = versiyonRef.current;
         if (vk && vk !== guncel.v7k) {
           const yeni = await ld("v7k", []);
@@ -1626,6 +1622,16 @@ function Atolye() {
           const yeni = await ld("v7s", []);
           setSiparisler(yeni);
           versiyonRef.current.v7s = vs;
+        }
+        if (vu && vu !== guncel.v7u) {
+          const yeni = await ld("v7u", {});
+          setMusteriler(yeni);
+          versiyonRef.current.v7u = vu;
+        }
+        if (vkasa && vkasa !== guncel.v7kasa) {
+          const yeni = await ld("v7kasa", null);
+          if (yeni) setKasa(prev => ({ ...prev, ...yeni }));
+          versiyonRef.current.v7kasa = vkasa;
         }
       } catch (e) { /* sessiz geç — bir sonraki kontrolde tekrar denenir */ }
     };
@@ -1669,8 +1675,20 @@ function Atolye() {
     }
   }, [toastGoster]);
 
+  // Versiyon damgasını günceller — setSiparisler callback'i içinden doğrudan sv("v7s") çağıran
+  // durum güncellemeleri için. Böylece o değişiklikler de versiyon takibine girer ve
+  // diğer cihazlara otomatik senkronizasyonla yansır, yanlış çakışma uyarısı çıkmaz.
+  const versiyonDamgala = useCallback(async (key, data) => {
+    try {
+      await sv(key, data);
+      const v = Date.now();
+      await sv(key + "_v", v);
+      versiyonRef.current[key] = v;
+    } catch (e) { console.error("versiyonDamgala hata:", key, e); }
+  }, []);
+
   const svK = useCallback(async d => { setKollar(d);    await guvenliKaydet("v7k", d); }, [guvenliKaydet]);
-  const svKasa = useCallback(async d => { setKasa(d); await sv("v7kasa", d); }, []);
+  const svKasa = useCallback(async d => { setKasa(d); await versiyonDamgala("v7kasa", d); }, [versiyonDamgala]);
   const kasaModalAc = (data) => {
     setKfMus(data.mus||""); setKfHas(""); setKfAc(""); setKfTip("giris");
     setKfTarih(new Date().toISOString().slice(0,10));
@@ -1765,7 +1783,7 @@ function Atolye() {
 
         return { ...sp, durumGecmisi: yeniGecmis };
       });
-      sv("v7s", yeni);
+      versiyonDamgala("v7s", yeni);
       return yeni;
     });
     // Döküme geçince → otomatik dökümcü borç kaydı
@@ -1781,7 +1799,7 @@ function Atolye() {
         setKasa(prev => {
           const yeniIslem = { id:Date.now()+"", tarih:manuelTarih||Date.now(), tip:"gonder", sipId, musteri, has:tahminiHas, aciklama:(dokumBilgi?.aciklama||""), gercekHas:null, teslimTarih:null };
           const yeniKasa = { ...prev, dokumcuIslemler:[...(prev.dokumcuIslemler||[]), yeniIslem] };
-          sv("v7kasa", yeniKasa);
+          versiyonDamgala("v7kasa", yeniKasa);
           return yeniKasa;
         });
         return prevSip;
@@ -1796,12 +1814,12 @@ function Atolye() {
           (x.sipId===sipId&&x.tip==="gonder"&&!x.teslimTarih) ? { ...x, teslimTarih:Date.now() } : x
         );
         const yeniKasa = { ...prev, dokumcuIslemler:yeniIslemler };
-        sv("v7kasa", yeniKasa);
+        versiyonDamgala("v7kasa", yeniKasa);
         return yeniKasa;
       });
     }
-  }, []);
-  const svMus = useCallback(async d => { setMusteriler(d); await sv("v7u", d); }, []);
+  }, [versiyonDamgala]);
+  const svMus = useCallback(async d => { setMusteriler(d); await versiyonDamgala("v7u", d); }, [versiyonDamgala]);
   useEffect(() => { if (loaded) sv("v7c", { a: altinKg, mc }); }, [altinKg, mc, loaded]);
 
   const kodToKol = useCallback(kod => {
@@ -2403,8 +2421,8 @@ function Atolye() {
                 <h2 style={{ margin:0, fontSize:14, fontWeight:700, color:"#e8dcc8" }}>{aktifKol ? aktifKol.ad : "Tum Modeller"} <span style={{ fontSize:10, color:"#7a6f5a" }}>({gorunen.length})</span></h2>
               </div>
               <div style={{ display:"flex", gap:4 }}>
-                {aktifKol && <button onClick={() => { setKatalogKol(aktifKol); setKatalogSiraliModeller([]); setKatalogSutun(3); setKatalogAyar("14K"); setKatalogSiralaModal(true); }} style={{ ...GH, fontSize:9, padding:"5px 9px" }}>PDF 3'lü</button>}
-                {aktifKol && <button onClick={() => { setKatalogKol(aktifKol); setKatalogSiraliModeller([]); setKatalogSutun(4); setKatalogAyar("14K"); setKatalogSiralaModal(true); }} style={{ background:"rgba(167,139,250,0.06)", border:"1px solid rgba(167,139,250,0.15)", borderRadius:9, padding:"5px 9px", color:"#a78bfa", fontSize:9, fontWeight:700, cursor:"pointer" }}>PDF 4'lü</button>}
+                {aktifKol && <button onClick={() => { setKatalogKol(aktifKol); setKatalogSiraliModeller(seciliModeller.size>0 ? modeller.filter(m=>seciliModeller.has(m.id)) : []); setKatalogSutun(3); setKatalogAyar("14K"); setKatalogSiralaModal(true); }} style={{ ...GH, fontSize:9, padding:"5px 9px" }}>PDF 3'lü{seciliModeller.size>0?" ("+seciliModeller.size+")":""}</button>}
+                {aktifKol && <button onClick={() => { setKatalogKol(aktifKol); setKatalogSiraliModeller(seciliModeller.size>0 ? modeller.filter(m=>seciliModeller.has(m.id)) : []); setKatalogSutun(4); setKatalogAyar("14K"); setKatalogSiralaModal(true); }} style={{ background:"rgba(167,139,250,0.06)", border:"1px solid rgba(167,139,250,0.15)", borderRadius:9, padding:"5px 9px", color:"#a78bfa", fontSize:9, fontWeight:700, cursor:"pointer" }}>PDF 4'lü{seciliModeller.size>0?" ("+seciliModeller.size+")":""}</button>}
                 {seciliModeller.size > 0 && (
                   <>
                     <button onClick={()=>{ const hepsi = new Set(gorunen.map(m=>m.id)); setSeciliModeller(hepsi); }} style={{ ...GH, fontSize:9, padding:"5px 9px" }}>Tümünü Seç ({gorunen.length})</button>
@@ -4749,8 +4767,8 @@ ${buildContext()}`;
                   </span>
                 ))}
               </div>
-              <div style={{ display:"flex", gap:6 }}>
-                <input value={ayarYeniEtiket} onChange={e=>setAyarYeniEtiket(e.target.value)} onKeyDown={e=>{ if(e.key==="Enter"&&ayarYeniEtiket.trim()){ setAyarYeniEtiket(""); }}} placeholder="yeni-etiket-adi..." style={{ ...IS, flex:1, padding:"6px 10px", fontSize:11 }}/>
+              <div style={{ fontSize:8, color:"#665d4a", fontStyle:"italic" }}>
+                Yeni etiketler model eklerken/düzenlerken oluşturulur. Buradan mevcut etiketleri tüm modellerden kaldırabilirsiniz.
               </div>
             </div>
 
@@ -5529,7 +5547,7 @@ ${buildContext()}`;
                                   const yeniGecmis = sp.durumGecmisi.slice(0, -1);
                                   return { ...sp, durumGecmisi: yeniGecmis };
                                 });
-                                sv("v7s", yeni);
+                                versiyonDamgala("v7s", yeni);
                                 return yeni;
                               });
                             }
@@ -5746,7 +5764,7 @@ ${buildContext()}`;
                     }
                     return { ...sp, durumGecmisi: gecmis };
                   });
-                  sv("v7s", yeni);
+                  versiyonDamgala("v7s", yeni);
                   return yeni;
                 });
                 setManuelTarihModal(null);
