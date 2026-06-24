@@ -4607,7 +4607,7 @@ function Atolye() {
                       const bilgi = modelBilgi(m);
                       return (
                         <div key={m.id+"_"+i} onClick={()=>{ const kol=kollar.find(k=>k.id===m.ki); if(kol){setAktifKol(kol);setSayfa("modeller");setArama(m.kod||m.ad);} }} style={{ display:"flex", alignItems:"center", gap:8, padding:"6px 0", borderBottom:"1px solid rgba(255,255,255,0.04)", cursor:"pointer" }}>
-                          {m.foto ? <img src={m.foto} alt="" style={{ width:54, height:54, objectFit:"cover", borderRadius:7, flexShrink:0 }}/> : <div style={{ width:54, height:54, borderRadius:7, background:"rgba(255,255,255,0.05)", flexShrink:0 }}/>}
+                          {m.foto ? <img src={m.foto} alt="" style={{ width:108, height:108, objectFit:"cover", borderRadius:9, flexShrink:0 }}/> : <div style={{ width:108, height:108, borderRadius:9, background:"rgba(255,255,255,0.05)", flexShrink:0 }}/>}
                           <div style={{ flex:1, minWidth:0 }}>
                             <div style={{ fontSize:11, fontWeight:700, color:GOLD, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{m.kod||m.ad}</div>
                             {/* GRAM + KARLILIK — her zaman göster */}
