@@ -1482,6 +1482,7 @@ function Atolye() {
   const [analizTarih1,setAnalizTarih1]= useState("");
   const [analizTarih2,setAnalizTarih2]= useState("");
   const [analizDonem, setAnalizDonem] = useState("bu_ay"); // bu_ay, gecen_ay, 3ay, 6ay, yil, ozel
+  const [kesfetSekme, setKesfetSekme] = useState("yeni"); // yeni, coksatan, arizali, karli
   const [editMusteri, setEditMusteri] = useState(null); // {ad, kod} düzenleme
   const [konfAyarlar, setKonfAyarlar] = useState({});
   const [konfBoylar,  setKonfBoylar]  = useState({}); // id -> [{sistem, deger, adet}]
@@ -4473,127 +4474,136 @@ function Atolye() {
               })()}
             </div>
 
-            {/* ── MODEL PANELLERİ: YENİ / ÇOK SATAN / ARIZA VEREN / KARLI ── */}
-            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginTop:14 }}>
-
-              {/* Yeni eklenen modeller */}
-              {(() => {
-                const yeniModeller = [...modeller].filter(m=>m.t).sort((a,b)=>(b.t||0)-(a.t||0)).slice(0,10);
-                return (
-                  <div style={{ background:"rgba(91,155,213,0.02)", border:"1px solid rgba(91,155,213,0.1)", borderRadius:12, padding:"12px 16px" }}>
-                    <div style={{ fontSize:10, fontWeight:700, color:"#5b9bd5", marginBottom:10 }}>🆕 Yeni Eklenen Modeller</div>
-                    {yeniModeller.length===0 && <div style={{ fontSize:10, color:"#665d4a" }}>Henüz model yok</div>}
-                    {yeniModeller.map(m => (
-                      <div key={m.id} onClick={()=>{ const kol=kollar.find(k=>k.id===m.ki); if(kol){setAktifKol(kol);setSayfa("modeller");setArama(m.kod||m.ad);} }} style={{ display:"flex", alignItems:"center", gap:8, padding:"7px 0", borderBottom:"1px solid rgba(255,255,255,0.04)", cursor:"pointer" }}>
-                        {m.foto ? <img src={m.foto} alt="" style={{ width:64, height:64, objectFit:"cover", borderRadius:7, flexShrink:0 }}/> : <div style={{ width:64, height:64, borderRadius:7, background:"rgba(255,255,255,0.05)", flexShrink:0 }}/>}
-                        <div style={{ flex:1, minWidth:0 }}>
-                          <div style={{ fontSize:10, fontWeight:700, color:GOLD, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{m.kod||m.ad}</div>
-                          <div style={{ fontSize:8, color:"#665d4a" }}>{new Date(m.t).toLocaleDateString("tr-TR")}</div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                );
-              })()}
-
-              {/* Çok satan modeller */}
-              {(() => {
-                const cokSatan = [...modeller].filter(m=>(m.satisSayisi||0)>0).sort((a,b)=>(b.satisSayisi||0)-(a.satisSayisi||0)).slice(0,10);
-                const maxSatis = cokSatan[0]?.satisSayisi || 1;
-                return (
-                  <div style={{ background:"rgba(106,191,105,0.02)", border:"1px solid rgba(106,191,105,0.1)", borderRadius:12, padding:"12px 16px" }}>
-                    <div style={{ fontSize:10, fontWeight:700, color:"#6abf69", marginBottom:10 }}>⭐ Çok Satan Modeller</div>
-                    {cokSatan.length===0 && <div style={{ fontSize:10, color:"#665d4a" }}>Henüz satış yok</div>}
-                    {cokSatan.map(m => (
-                      <div key={m.id} onClick={()=>{ const kol=kollar.find(k=>k.id===m.ki); if(kol){setAktifKol(kol);setSayfa("modeller");setArama(m.kod||m.ad);} }} style={{ display:"flex", alignItems:"center", gap:8, padding:"7px 0", borderBottom:"1px solid rgba(255,255,255,0.04)", cursor:"pointer" }}>
-                        {m.foto ? <img src={m.foto} alt="" style={{ width:64, height:64, objectFit:"cover", borderRadius:7, flexShrink:0 }}/> : <div style={{ width:64, height:64, borderRadius:7, background:"rgba(255,255,255,0.05)", flexShrink:0 }}/>}
-                        <div style={{ flex:1, minWidth:0 }}>
-                          <div style={{ fontSize:10, fontWeight:700, color:GOLD, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{m.kod||m.ad}</div>
-                          <div style={{ height:3, background:"rgba(106,191,105,0.15)", borderRadius:2, marginTop:3, overflow:"hidden" }}>
-                            <div style={{ height:"100%", width:((m.satisSayisi||0)/maxSatis*100)+"%", background:"#6abf69", borderRadius:2 }}/>
-                          </div>
-                        </div>
-                        <span style={{ fontSize:11, fontWeight:800, color:"#6abf69", flexShrink:0 }}>{m.satisSayisi}×</span>
-                      </div>
-                    ))}
-                  </div>
-                );
-              })()}
-
-              {/* Arıza veren (hurda/iade/tamir) modeller */}
-              {(() => {
-                const arizaMap = {};
-                siparisler.forEach(s => {
-                  (s.kalemler||[]).forEach(k => {
-                    const h  = ((s.kalemHurda)||{})[k.id]||0;
-                    const ia = ((s.kalemIade) ||{})[k.id]||0;
-                    const t  = ((s.kalemTamir)||{})[k.id]||0;
-                    const toplam = h+ia+t;
-                    if (toplam>0) {
-                      const key = k.id;
-                      if (!arizaMap[key]) arizaMap[key] = { ad:k.ad, kod:k.kod||"", foto:k.foto||"", ki:k.ki, hurda:0, iade:0, tamir:0 };
-                      arizaMap[key].hurda += h; arizaMap[key].iade += ia; arizaMap[key].tamir += t;
-                    }
-                  });
+            {/* ── DASHBOARD — ÜRETİM & KARLILIK ÖZETİ ── */}
+            {(() => {
+              const hasGramUSD = altinKgUSD>0 ? altinKgUSD/1000 : 0;
+              // Tüm siparişlerden topla
+              let toplamGram=0, satilanGram=0, bitenGram=0;
+              let aktifAdet=0, dokumdeAdet=0, tamamAdet=0;
+              let satilanKarHas=0, bekleyenKarHas=0;
+              siparisler.forEach(s => {
+                (s.kalemler||[]).forEach(k => {
+                  const hc = hesapla(k, k.secilenAyar||k.refAyar, s.altinKgUSD||altinKgUSD, s.mc||madenCarpan);
+                  const dur = (s.kalemDurumlar||{})[k.id] || k.durum || "baslanmadi";
+                  const hurda=((s.kalemHurda)||{})[k.id]||0, iade=((s.kalemIade)||{})[k.id]||0, tamir=((s.kalemTamir)||{})[k.id]||0;
+                  const net = Math.max(0,(k.adet||1)-hurda-iade-tamir);
+                  const gram = hc.mamulGram*net;
+                  toplamGram += gram;
+                  if (["tamam","teslim"].includes(dur)) { bitenGram += gram; tamamAdet += net; }
+                  if (dur==="teslim") { satilanGram += gram; satilanKarHas += hc.karHas*net; }
+                  else { bekleyenKarHas += hc.karHas*net; }
+                  const son=(s.durumGecmisi||[]).slice(-1)[0];
+                  if (son && !["tamam","teslim","hurda"].includes(son.durum)) aktifAdet += net;
+                  if (son?.durum==="dokum") dokumdeAdet += net;
                 });
-                const arizaListe = Object.entries(arizaMap).map(([id,d])=>({id,...d,toplam:d.hurda+d.iade+d.tamir})).sort((a,b)=>b.toplam-a.toplam).slice(0,10);
-                return (
-                  <div style={{ background:"rgba(232,90,79,0.02)", border:"1px solid rgba(232,90,79,0.1)", borderRadius:12, padding:"12px 16px" }}>
-                    <div style={{ fontSize:10, fontWeight:700, color:"#e85a4f", marginBottom:10 }}>⚠ Arıza Veren Modeller</div>
-                    {arizaListe.length===0 && <div style={{ fontSize:10, color:"#6abf69" }}>✓ Sorunlu model yok</div>}
-                    {arizaListe.map(m => (
-                      <div key={m.id} onClick={()=>{ const kol=kollar.find(k=>k.id===m.ki); if(kol){setAktifKol(kol);setSayfa("modeller");setArama(m.kod||m.ad);} }} style={{ display:"flex", alignItems:"center", gap:8, padding:"7px 0", borderBottom:"1px solid rgba(255,255,255,0.04)", cursor:"pointer" }}>
-                        {m.foto ? <img src={m.foto} alt="" style={{ width:64, height:64, objectFit:"cover", borderRadius:7, flexShrink:0 }}/> : <div style={{ width:64, height:64, borderRadius:7, background:"rgba(255,255,255,0.05)", flexShrink:0 }}/>}
-                        <div style={{ flex:1, minWidth:0 }}>
-                          <div style={{ fontSize:10, fontWeight:700, color:GOLD, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{m.kod||m.ad}</div>
-                          <div style={{ display:"flex", gap:5, marginTop:2 }}>
-                            {m.hurda>0 && <span style={{ fontSize:7, color:"#e85a4f", fontWeight:700 }}>H:{m.hurda}</span>}
-                            {m.iade>0  && <span style={{ fontSize:7, color:"#a78bfa", fontWeight:700 }}>İ:{m.iade}</span>}
-                            {m.tamir>0 && <span style={{ fontSize:7, color:"#5b9bd5", fontWeight:700 }}>T:{m.tamir}</span>}
-                          </div>
-                        </div>
-                        <span style={{ fontSize:11, fontWeight:800, color:"#e85a4f", flexShrink:0 }}>{m.toplam}</span>
-                      </div>
-                    ))}
+              });
+              const toplamKarHas = satilanKarHas + bekleyenKarHas;
+              const kart = (lbl, ana, alt, renk) => (
+                <div style={{ background:"rgba(0,0,0,0.15)", border:"1px solid rgba(255,255,255,0.06)", borderLeft:"3px solid "+renk, borderRadius:10, padding:"10px 14px" }}>
+                  <div style={{ fontSize:7, color:"#8a7d64", textTransform:"uppercase", letterSpacing:".05em", marginBottom:5 }}>{lbl}</div>
+                  <div style={{ fontSize:16, fontWeight:800, color:renk, lineHeight:1 }}>{ana}</div>
+                  {alt && <div style={{ fontSize:8, color:"#665d4a", marginTop:3 }}>{alt}</div>}
+                </div>
+              );
+              return (
+                <div style={{ marginTop:14 }}>
+                  {/* KG / GRAM satırı */}
+                  <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:8, marginBottom:8 }}>
+                    {kart("Toplam Sipariş", fN(toplamGram/1000,3)+" kg", fN(toplamGram,1)+" gr", "#5b9bd5")}
+                    {kart("Üretimi Biten", fN(bitenGram/1000,3)+" kg", fN(bitenGram,1)+" gr · "+tamamAdet+" adet", "#6abf69")}
+                    {kart("Teslim Edilen", fN(satilanGram/1000,3)+" kg", fN(satilanGram,1)+" gr satıldı", GOLD)}
                   </div>
-                );
-              })()}
+                  {/* ADET satırı */}
+                  <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:8, marginBottom:8 }}>
+                    {kart("Aktif Üretim", aktifAdet+" adet", "üretimde olan parça", "#e8833a")}
+                    {kart("Dökümde", dokumdeAdet+" adet", "dökümcüde bekleyen", "#e8a74f")}
+                    {kart("Tamamlanan", tamamAdet+" adet", "biten parça", "#6abf69")}
+                  </div>
+                  {/* KARLILIK satırı */}
+                  <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:8 }}>
+                    {kart("Satılan Karlılık", fN(satilanKarHas,2)+" has", hasGramUSD>0?"≈"+fUSD(satilanKarHas*hasGramUSD)+" (teslim edilen)":"teslim edilen kâr", "#6abf69")}
+                    {kart("Bekleyen Karlılık", fN(bekleyenKarHas,2)+" has", hasGramUSD>0?"≈"+fUSD(bekleyenKarHas*hasGramUSD)+" (üretimdeki)":"henüz teslim edilmeyen", "#e8833a")}
+                    {kart("Toplam Potansiyel", fN(toplamKarHas,2)+" has", hasGramUSD>0?"≈"+fUSD(toplamKarHas*hasGramUSD)+" (hepsi satılırsa)":"hepsi satılırsa", GOLD)}
+                  </div>
+                </div>
+              );
+            })()}
 
-              {/* Karlı modeller */}
+            {/* ── SEKMELİ MODEL PANELİ ── */}
+            <div style={{ background:"rgba(255,255,255,0.02)", border:"1px solid rgba(255,255,255,0.06)", borderRadius:12, padding:"12px 16px", marginTop:14 }}>
+              {/* Sekme butonları */}
+              <div style={{ display:"flex", gap:5, marginBottom:12, flexWrap:"wrap" }}>
+                {[
+                  { id:"yeni",     l:"🆕 Yeni Eklenen", c:"#5b9bd5" },
+                  { id:"coksatan", l:"⭐ Çok Satan",    c:"#6abf69" },
+                  { id:"arizali",  l:"⚠ Arıza Veren",  c:"#e85a4f" },
+                  { id:"karli",    l:"💰 En Karlı",     c:GOLD },
+                ].map(t => (
+                  <button key={t.id} onClick={()=>setKesfetSekme(t.id)} style={{ background:kesfetSekme===t.id?t.c+"22":"rgba(255,255,255,0.03)", border:"1px solid "+(kesfetSekme===t.id?t.c+"66":"rgba(255,255,255,0.08)"), borderRadius:7, padding:"5px 12px", color:kesfetSekme===t.id?t.c:"#7a6f5a", fontSize:10, fontWeight:kesfetSekme===t.id?700:400, cursor:"pointer" }}>{t.l}</button>
+                ))}
+              </div>
+
+              {/* İçerik — 2 sütunlu liste */}
               {(() => {
-                if (!(altinKgUSD>0)) {
-                  return (
-                    <div style={{ background:"rgba(201,168,76,0.02)", border:"1px solid rgba(201,168,76,0.1)", borderRadius:12, padding:"12px 16px" }}>
-                      <div style={{ fontSize:10, fontWeight:700, color:GOLD, marginBottom:10 }}>💰 En Karlı Modeller</div>
-                      <div style={{ fontSize:10, color:"#665d4a" }}>Altın fiyatı girilince karlılık hesaplanır</div>
-                    </div>
-                  );
+                let liste = [];
+                if (kesfetSekme==="yeni") {
+                  liste = [...modeller].filter(m=>m.t).sort((a,b)=>(b.t||0)-(a.t||0)).slice(0,10)
+                    .map(m=>({ m, sag:new Date(m.t).toLocaleDateString("tr-TR"), bar:null }));
+                } else if (kesfetSekme==="coksatan") {
+                  const cs = [...modeller].filter(m=>(m.satisSayisi||0)>0).sort((a,b)=>(b.satisSayisi||0)-(a.satisSayisi||0)).slice(0,10);
+                  const mx = cs[0]?.satisSayisi||1;
+                  liste = cs.map(m=>({ m, sag:m.satisSayisi+"×", barW:(m.satisSayisi/mx*100), barC:"#6abf69" }));
+                } else if (kesfetSekme==="arizali") {
+                  const am={};
+                  siparisler.forEach(s=>(s.kalemler||[]).forEach(k=>{
+                    const h=((s.kalemHurda)||{})[k.id]||0, ia=((s.kalemIade)||{})[k.id]||0, t=((s.kalemTamir)||{})[k.id]||0;
+                    if(h+ia+t>0){ if(!am[k.id]) am[k.id]={...k,hurda:0,iade:0,tamir:0}; am[k.id].hurda+=h;am[k.id].iade+=ia;am[k.id].tamir+=t; }
+                  }));
+                  liste = Object.values(am).map(m=>({...m,toplam:m.hurda+m.iade+m.tamir})).sort((a,b)=>b.toplam-a.toplam).slice(0,10)
+                    .map(m=>({ m, sag:m.toplam+"", htDetay:m }));
+                } else if (kesfetSekme==="karli") {
+                  if (altinKgUSD>0) {
+                    const kl = [...modeller].map(m=>{const hc=hesapla(m,m.refAyar,altinKgUSD,madenCarpan);return {m,karMly:hc.mamulGram>0?hc.karMly:0,karHas:hc.karHas};}).filter(x=>x.karMly>0).sort((a,b)=>b.karMly-a.karMly).slice(0,10);
+                    const mx = kl[0]?.karMly||1;
+                    liste = kl.map(x=>({ m:x.m, sag:fN(x.karMly,3), sagAlt:fN(x.karHas,3)+" has", barW:(x.karMly/mx*100), barC:GOLD }));
+                  }
                 }
-                const karliListe = [...modeller]
-                  .map(m => { const hc = hesapla(m, m.refAyar, altinKgUSD, madenCarpan); return { m, karMly: hc.mamulGram>0 ? hc.karMly : 0, karHas: hc.karHas }; })
-                  .filter(x => x.karMly > 0)
-                  .sort((a,b) => b.karMly - a.karMly)
-                  .slice(0,10);
-                const maxKar = karliListe[0]?.karMly || 1;
+                if (kesfetSekme==="karli" && !(altinKgUSD>0)) {
+                  return <div style={{ fontSize:10, color:"#665d4a", padding:"10px 0" }}>Altın fiyatı girilince karlılık hesaplanır</div>;
+                }
+                if (liste.length===0) {
+                  return <div style={{ fontSize:10, color:"#665d4a", padding:"10px 0" }}>Bu kategoride model bulunamadı</div>;
+                }
                 return (
-                  <div style={{ background:"rgba(201,168,76,0.02)", border:"1px solid rgba(201,168,76,0.1)", borderRadius:12, padding:"12px 16px" }}>
-                    <div style={{ fontSize:10, fontWeight:700, color:GOLD, marginBottom:10 }}>💰 En Karlı Modeller <span style={{ fontSize:8, color:"#665d4a", fontWeight:400 }}>(mly/gr)</span></div>
-                    {karliListe.length===0 && <div style={{ fontSize:10, color:"#665d4a" }}>Karlı model bulunamadı</div>}
-                    {karliListe.map(({m, karMly, karHas}) => (
-                      <div key={m.id} onClick={()=>{ const kol=kollar.find(k=>k.id===m.ki); if(kol){setAktifKol(kol);setSayfa("modeller");setArama(m.kod||m.ad);} }} style={{ display:"flex", alignItems:"center", gap:8, padding:"7px 0", borderBottom:"1px solid rgba(255,255,255,0.04)", cursor:"pointer" }}>
-                        {m.foto ? <img src={m.foto} alt="" style={{ width:64, height:64, objectFit:"cover", borderRadius:7, flexShrink:0 }}/> : <div style={{ width:64, height:64, borderRadius:7, background:"rgba(255,255,255,0.05)", flexShrink:0 }}/>}
-                        <div style={{ flex:1, minWidth:0 }}>
-                          <div style={{ fontSize:10, fontWeight:700, color:GOLD, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{m.kod||m.ad}</div>
-                          <div style={{ height:3, background:"rgba(201,168,76,0.15)", borderRadius:2, marginTop:3, overflow:"hidden" }}>
-                            <div style={{ height:"100%", width:(karMly/maxKar*100)+"%", background:GOLD, borderRadius:2 }}/>
+                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"4px 16px" }}>
+                    {liste.map((row,i) => {
+                      const m = row.m;
+                      return (
+                        <div key={m.id+"_"+i} onClick={()=>{ const kol=kollar.find(k=>k.id===m.ki); if(kol){setAktifKol(kol);setSayfa("modeller");setArama(m.kod||m.ad);} }} style={{ display:"flex", alignItems:"center", gap:8, padding:"6px 0", borderBottom:"1px solid rgba(255,255,255,0.04)", cursor:"pointer" }}>
+                          {m.foto ? <img src={m.foto} alt="" style={{ width:54, height:54, objectFit:"cover", borderRadius:7, flexShrink:0 }}/> : <div style={{ width:54, height:54, borderRadius:7, background:"rgba(255,255,255,0.05)", flexShrink:0 }}/>}
+                          <div style={{ flex:1, minWidth:0 }}>
+                            <div style={{ fontSize:11, fontWeight:700, color:GOLD, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{m.kod||m.ad}</div>
+                            <div style={{ fontSize:8, color:"#998a6e", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{m.ad}</div>
+                            {row.barW!=null && (
+                              <div style={{ height:3, background:"rgba(255,255,255,0.08)", borderRadius:2, marginTop:3, overflow:"hidden" }}>
+                                <div style={{ height:"100%", width:row.barW+"%", background:row.barC, borderRadius:2 }}/>
+                              </div>
+                            )}
+                            {row.htDetay && (
+                              <div style={{ display:"flex", gap:5, marginTop:2 }}>
+                                {row.htDetay.hurda>0 && <span style={{ fontSize:7, color:"#e85a4f", fontWeight:700 }}>H:{row.htDetay.hurda}</span>}
+                                {row.htDetay.iade>0  && <span style={{ fontSize:7, color:"#a78bfa", fontWeight:700 }}>İ:{row.htDetay.iade}</span>}
+                                {row.htDetay.tamir>0 && <span style={{ fontSize:7, color:"#5b9bd5", fontWeight:700 }}>T:{row.htDetay.tamir}</span>}
+                              </div>
+                            )}
+                          </div>
+                          <div style={{ textAlign:"right", flexShrink:0 }}>
+                            <div style={{ fontSize:12, fontWeight:800, color:kesfetSekme==="arizali"?"#e85a4f":kesfetSekme==="karli"?"#6abf69":kesfetSekme==="coksatan"?"#6abf69":"#5b9bd5" }}>{row.sag}</div>
+                            {row.sagAlt && <div style={{ fontSize:7, color:"#665d4a" }}>{row.sagAlt}</div>}
                           </div>
                         </div>
-                        <div style={{ textAlign:"right", flexShrink:0 }}>
-                          <div style={{ fontSize:10, fontWeight:800, color:"#6abf69" }}>{fN(karMly,3)}</div>
-                          <div style={{ fontSize:7, color:"#665d4a" }}>{fN(karHas,3)} has</div>
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 );
               })()}
