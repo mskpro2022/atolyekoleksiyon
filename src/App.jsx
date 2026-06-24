@@ -1536,6 +1536,9 @@ function Atolye() {
     document.documentElement.style.padding = "0";
   }, []);
 
+  // ═══ ÇAKIŞMA KORUMASI — versiyon takibi ═══
+  const versiyonRef = useRef({ v7k: 0, v7m: 0, v7s: 0 });
+
   useEffect(() => { (async () => {
     const applyData = (k, m, s, u, c, ay, ks) => {
       setKollar(k||[]); setModeller(m||[]); setSiparisler(s||[]); setMusteriler(u||{});
@@ -1550,6 +1553,12 @@ function Atolye() {
       if (ay?.varsIscilikBirim) setAyarVarsIscilikBirim(ay.varsIscilikBirim);
       if (ks) setKasa(prev => ({ ...prev, ...ks }));
       setLoaded(true);
+    };
+
+    // Versiyon damgalarını da çek — çakışma kontrolü için referans alınır
+    const versiyonlariYukle = async () => {
+      const [vk, vm, vs] = await Promise.all([ld("v7k_v",0), ld("v7m_v",0), ld("v7s_v",0)]);
+      versiyonRef.current = { v7k: vk||0, v7m: vm||0, v7s: vs||0 };
     };
 
     // 1. Önce TÜM veriyi localStorage'dan göster (anında — sıfır network)
@@ -1567,6 +1576,7 @@ function Atolye() {
             try { localStorage.setItem("atolye_full_cache", JSON.stringify({k,m,s,u,c,ay,ks,ts:Date.now()})); } catch {}
             if (m?.length > 0) applyData(k,m,s,u,c,ay,ks);
           });
+          versiyonlariYukle();
           return;
         }
       }
@@ -1580,9 +1590,72 @@ function Atolye() {
     try { localStorage.setItem("atolye_full_cache", JSON.stringify({k,m,s,u,c,ay,ks,ts:Date.now()})); } catch {}
     applyData(k,m,s,u,c,ay,ks);
     setLoaded(true);
+    versiyonlariYukle();
   })(); }, []);
 
-  const svK = useCallback(async d => { setKollar(d);    await sv("v7k", d); }, []);
+  // ═══ OTOMATİK SENKRONİZASYON — periyodik kontrol ═══
+  // Her 20 saniyede bir, başka bir cihazda değişiklik olup olmadığını kontrol eder.
+  // Değişiklik varsa ilgili veriyi otomatik çeker ve ekranı günceller (sayfa yenilemesi gerekmez).
+  useEffect(() => {
+    if (!loaded) return;
+    const kontrolEt = async () => {
+      try {
+        const [vk, vm, vs] = await Promise.all([ld("v7k_v",0), ld("v7m_v",0), ld("v7s_v",0)]);
+        const guncel = versiyonRef.current;
+        if (vk && vk !== guncel.v7k) {
+          const yeni = await ld("v7k", []);
+          setKollar(yeni);
+          versiyonRef.current.v7k = vk;
+        }
+        if (vm && vm !== guncel.v7m) {
+          const yeni = await ld("v7m", []);
+          setModeller(yeni);
+          versiyonRef.current.v7m = vm;
+          try {
+            const fc = localStorage.getItem("atolye_full_cache");
+            const d = fc ? JSON.parse(fc) : {};
+            localStorage.setItem("atolye_full_cache", JSON.stringify({...d, m:yeni, ts:Date.now()}));
+          } catch {}
+        }
+        if (vs && vs !== guncel.v7s) {
+          const yeni = await ld("v7s", []);
+          setSiparisler(yeni);
+          versiyonRef.current.v7s = vs;
+        }
+      } catch (e) { /* sessiz geç — bir sonraki kontrolde tekrar denenir */ }
+    };
+    const interval = setInterval(kontrolEt, 20000); // 20 saniyede bir kontrol
+    return () => clearInterval(interval);
+  }, [loaded]);
+
+  // Kaydetmeden önce Supabase'deki versiyonla karşılaştırılır; fark varsa
+  // başka bir cihaz/kullanıcı araya kayıt yapmış demektir — üzerine yazmayı durdurup uyarı verir.
+  const guvenliKaydet = useCallback(async (key, data) => {
+    try {
+      const sunucuVersiyon = await ld(key + "_v", 0);
+      const bilinenVersiyon = versiyonRef.current[key] || 0;
+      if (sunucuVersiyon && bilinenVersiyon && sunucuVersiyon !== bilinenVersiyon) {
+        const devamEt = window.confirm(
+          "⚠ Başka bir cihazdan/sekmeden bu sırada değişiklik yapıldı.\n\n" +
+          "Üzerine yazarsanız o değişiklik kaybolabilir.\n\n" +
+          "Sayfa yenilenip güncel veriyle devam edilsin mi?\n" +
+          "(İptal: yine de kaydetmeye devam et — riskli)"
+        );
+        if (devamEt) { window.location.reload(); return false; }
+      }
+      await sv(key, data);
+      const yeniVersiyon = Date.now();
+      await sv(key + "_v", yeniVersiyon);
+      versiyonRef.current[key] = yeniVersiyon;
+      return true;
+    } catch (e) {
+      console.error("guvenliKaydet hata:", key, e);
+      await sv(key, data); // fallback — eski davranış
+      return true;
+    }
+  }, []);
+
+  const svK = useCallback(async d => { setKollar(d);    await guvenliKaydet("v7k", d); }, [guvenliKaydet]);
   const svKasa = useCallback(async d => { setKasa(d); await sv("v7kasa", d); }, []);
   const kasaModalAc = (data) => {
     setKfMus(data.mus||""); setKfHas(""); setKfAc(""); setKfTip("giris");
@@ -1632,9 +1705,10 @@ function Atolye() {
       const d = fc ? JSON.parse(fc) : {};
       localStorage.setItem("atolye_full_cache", JSON.stringify({...d, m:temiz, ts:Date.now()}));
     } catch {}
-    await sv("v7m", temiz);
-  }, []);
-  const svS = useCallback(async d => { setSiparisler(d); await sv("v7s", d); }, []);
+    await guvenliKaydet("v7m", temiz);
+  }, [guvenliKaydet]);
+  const svS = useCallback(async d => { setSiparisler(d); await guvenliKaydet("v7s", d); }, [guvenliKaydet]);
+
 
   // Sipariş durum geçmişini güncelle (opsiyonel manuel tarih)
   const sipDurumKaydet = useCallback((sipId, yeniDurum, manuelTarih, dokumBilgi) => {
