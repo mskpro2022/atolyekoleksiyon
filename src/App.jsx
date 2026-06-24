@@ -1378,6 +1378,11 @@ function Atolye() {
   const [cizelgeModal, setCizelgeModal] = useState(null); // sipId — zaman çizelgesi modal'ı
   const [musteriler, setMusteriler] = useState({}); // { "Ahmet": "MUS-001", ... }
   const [loaded,    setLoaded]    = useState(false);
+  const [toast, setToast] = useState(null); // {tip:"ok"|"hata", msg:"..."}
+  const toastGoster = useCallback((tip, msg) => {
+    setToast({ tip, msg, id: Date.now() });
+    setTimeout(() => setToast(t => (t && t.msg === msg ? null : t)), 3000);
+  }, []);
 
   // KASA
   const [kasa, setKasa] = useState({
@@ -1644,16 +1649,25 @@ function Atolye() {
         if (devamEt) { window.location.reload(); return false; }
       }
       await sv(key, data);
+      // Kaydın gerçekten gittiğini doğrula — geri okuyup karşılaştır
+      const dogrulama = await ld(key, null);
+      const beklenenUzunluk = Array.isArray(data) ? data.length : null;
+      const gelenUzunluk = Array.isArray(dogrulama) ? dogrulama.length : null;
+      if (beklenenUzunluk !== null && gelenUzunluk !== beklenenUzunluk) {
+        toastGoster("hata", "✗ Kayıt doğrulanamadı — lütfen tekrar deneyin");
+        return false;
+      }
       const yeniVersiyon = Date.now();
       await sv(key + "_v", yeniVersiyon);
       versiyonRef.current[key] = yeniVersiyon;
+      toastGoster("ok", "✓ Kaydedildi");
       return true;
     } catch (e) {
       console.error("guvenliKaydet hata:", key, e);
-      await sv(key, data); // fallback — eski davranış
-      return true;
+      toastGoster("hata", "✗ Kayıt başarısız — tekrar deneyin (" + e.message + ")");
+      return false;
     }
-  }, []);
+  }, [toastGoster]);
 
   const svK = useCallback(async d => { setKollar(d);    await guvenliKaydet("v7k", d); }, [guvenliKaydet]);
   const svKasa = useCallback(async d => { setKasa(d); await sv("v7kasa", d); }, []);
@@ -2192,7 +2206,20 @@ function Atolye() {
   return (
     <div style={{ minHeight:"100vh", background:T.bg, color:T.text, fontFamily:"sans-serif" }}>
       <style>{`*{box-sizing:border-box}html,body,#root{background:${T.bg};margin:0;padding:0;min-height:100vh;width:100%}body{overflow-x:hidden;overflow-y:auto}`}</style>
-      <style>{"@keyframes fadein{from{opacity:0}to{opacity:1}}@keyframes cardin{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}*{box-sizing:border-box}::-webkit-scrollbar{width:4px}::-webkit-scrollbar-thumb{background:rgba(201,168,76,.15);border-radius:2px}select option{background:#1c1a15;color:#e8dcc8}"}</style>
+      <style>{"@keyframes fadein{from{opacity:0}to{opacity:1}}@keyframes cardin{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}@keyframes toastin{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}*{box-sizing:border-box}::-webkit-scrollbar{width:4px}::-webkit-scrollbar-thumb{background:rgba(201,168,76,.15);border-radius:2px}select option{background:#1c1a15;color:#e8dcc8}"}</style>
+
+      {/* TOAST BİLDİRİMİ */}
+      {toast && (
+        <div style={{
+          position:"fixed", bottom:20, left:"50%", transform:"translateX(-50%)", zIndex:99999,
+          background: toast.tip==="ok" ? "rgba(106,191,105,0.95)" : "rgba(232,90,79,0.95)",
+          color:"#fff", padding:"10px 20px", borderRadius:10, fontSize:12, fontWeight:700,
+          boxShadow:"0 4px 20px rgba(0,0,0,0.3)", animation:"toastin .25s ease",
+          display:"flex", alignItems:"center", gap:8, maxWidth:"90vw"
+        }}>
+          {toast.msg}
+        </div>
+      )}
 
       {/* HEADER */}
       <div style={{ padding:"14px 14px 10px", background:"rgba(201,168,76,0.04)", borderBottom:"1px solid rgba(201,168,76,0.07)" }}>
