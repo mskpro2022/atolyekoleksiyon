@@ -4538,6 +4538,7 @@ function Atolye() {
                   { id:"coksatan", l:"⭐ Çok Satan",    c:"#6abf69" },
                   { id:"arizali",  l:"⚠ Arıza Veren",  c:"#e85a4f" },
                   { id:"karli",    l:"💰 En Karlı",     c:GOLD },
+                  { id:"kazandiran", l:"💵 Çok Kazandıran", c:"#6abf69" },
                 ].map(t => (
                   <button key={t.id} onClick={()=>setKesfetSekme(t.id)} style={{ background:kesfetSekme===t.id?t.c+"22":"rgba(255,255,255,0.03)", border:"1px solid "+(kesfetSekme===t.id?t.c+"66":"rgba(255,255,255,0.08)"), borderRadius:7, padding:"5px 12px", color:kesfetSekme===t.id?t.c:"#7a6f5a", fontSize:10, fontWeight:kesfetSekme===t.id?700:400, cursor:"pointer" }}>{t.l}</button>
                 ))}
@@ -4545,6 +4546,14 @@ function Atolye() {
 
               {/* İçerik — 2 sütunlu liste */}
               {(() => {
+                // Her model için gram ve karlılık (mly/gr) — tüm sekmelerde alt bilgi olarak gösterilir
+                const modelBilgi = (m) => {
+                  if (altinKgUSD>0) {
+                    const hc = hesapla(m, m.refAyar, altinKgUSD, madenCarpan);
+                    return { gram: hc.mamulGram, mly: hc.mamulGram>0 ? hc.karMly : 0, ayar: m.refAyar };
+                  }
+                  return { gram: Number(m.gram)||0, mly: null, ayar: m.refAyar };
+                };
                 let liste = [];
                 if (kesfetSekme==="yeni") {
                   liste = [...modeller].filter(m=>m.t).sort((a,b)=>(b.t||0)-(a.t||0)).slice(0,10)
@@ -4565,25 +4574,47 @@ function Atolye() {
                   if (altinKgUSD>0) {
                     const kl = [...modeller].map(m=>{const hc=hesapla(m,m.refAyar,altinKgUSD,madenCarpan);return {m,karMly:hc.mamulGram>0?hc.karMly:0,karHas:hc.karHas};}).filter(x=>x.karMly>0).sort((a,b)=>b.karMly-a.karMly).slice(0,10);
                     const mx = kl[0]?.karMly||1;
-                    liste = kl.map(x=>({ m:x.m, sag:fN(x.karMly,3), sagAlt:fN(x.karHas,3)+" has", barW:(x.karMly/mx*100), barC:GOLD }));
+                    liste = kl.map(x=>({ m:x.m, sag:fN(x.karMly,3), sagAlt:"mly/gr", barW:(x.karMly/mx*100), barC:GOLD }));
                   }
+                } else if (kesfetSekme==="kazandiran") {
+                  // Gerçekten teslim edilen ürünlerden toplam kazanç (kar has × teslim adedi)
+                  const km={};
+                  siparisler.forEach(s=>(s.kalemler||[]).forEach(k=>{
+                    const dur=(s.kalemDurumlar||{})[k.id]||k.durum||"baslanmadi";
+                    if(dur!=="teslim") return;
+                    const hc=hesapla(k,k.secilenAyar||k.refAyar,s.altinKgUSD||altinKgUSD,s.mc||madenCarpan);
+                    const hurda=((s.kalemHurda)||{})[k.id]||0, iade=((s.kalemIade)||{})[k.id]||0, tamir=((s.kalemTamir)||{})[k.id]||0;
+                    const net=Math.max(0,(k.adet||1)-hurda-iade-tamir);
+                    if(net<=0) return;
+                    if(!km[k.id]) km[k.id]={m:k, kazanc:0, adet:0};
+                    km[k.id].kazanc += hc.karHas*net;
+                    km[k.id].adet += net;
+                  }));
+                  const kz = Object.values(km).filter(x=>x.kazanc>0).sort((a,b)=>b.kazanc-a.kazanc).slice(0,10);
+                  const mx = kz[0]?.kazanc||1;
+                  liste = kz.map(x=>({ m:x.m, sag:fN(x.kazanc,2), sagAlt:x.adet+" adet satıldı", barW:(x.kazanc/mx*100), barC:"#6abf69", kazancHas:true }));
                 }
                 if (kesfetSekme==="karli" && !(altinKgUSD>0)) {
                   return <div style={{ fontSize:10, color:"#665d4a", padding:"10px 0" }}>Altın fiyatı girilince karlılık hesaplanır</div>;
                 }
                 if (liste.length===0) {
-                  return <div style={{ fontSize:10, color:"#665d4a", padding:"10px 0" }}>Bu kategoride model bulunamadı</div>;
+                  return <div style={{ fontSize:10, color:"#665d4a", padding:"10px 0" }}>{kesfetSekme==="kazandiran"?"Henüz teslim edilen ürün yok":"Bu kategoride model bulunamadı"}</div>;
                 }
                 return (
                   <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"4px 16px" }}>
                     {liste.map((row,i) => {
                       const m = row.m;
+                      const bilgi = modelBilgi(m);
                       return (
                         <div key={m.id+"_"+i} onClick={()=>{ const kol=kollar.find(k=>k.id===m.ki); if(kol){setAktifKol(kol);setSayfa("modeller");setArama(m.kod||m.ad);} }} style={{ display:"flex", alignItems:"center", gap:8, padding:"6px 0", borderBottom:"1px solid rgba(255,255,255,0.04)", cursor:"pointer" }}>
                           {m.foto ? <img src={m.foto} alt="" style={{ width:54, height:54, objectFit:"cover", borderRadius:7, flexShrink:0 }}/> : <div style={{ width:54, height:54, borderRadius:7, background:"rgba(255,255,255,0.05)", flexShrink:0 }}/>}
                           <div style={{ flex:1, minWidth:0 }}>
                             <div style={{ fontSize:11, fontWeight:700, color:GOLD, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{m.kod||m.ad}</div>
-                            <div style={{ fontSize:8, color:"#998a6e", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{m.ad}</div>
+                            {/* GRAM + KARLILIK — her zaman göster */}
+                            <div style={{ display:"flex", gap:6, marginTop:1, flexWrap:"wrap" }}>
+                              <span style={{ fontSize:8, color:"#5b9bd5", fontWeight:600 }}>{fN(bilgi.gram,2)}gr · {bilgi.ayar}</span>
+                              {bilgi.mly!=null && <span style={{ fontSize:8, color:bilgi.mly>=0.030?"#6abf69":bilgi.mly>=0.020?"#e8a74f":"#e85a4f", fontWeight:700 }}>{fN(bilgi.mly,3)} mly/gr</span>}
+                            </div>
                             {row.barW!=null && (
                               <div style={{ height:3, background:"rgba(255,255,255,0.08)", borderRadius:2, marginTop:3, overflow:"hidden" }}>
                                 <div style={{ height:"100%", width:row.barW+"%", background:row.barC, borderRadius:2 }}/>
@@ -4598,7 +4629,7 @@ function Atolye() {
                             )}
                           </div>
                           <div style={{ textAlign:"right", flexShrink:0 }}>
-                            <div style={{ fontSize:12, fontWeight:800, color:kesfetSekme==="arizali"?"#e85a4f":kesfetSekme==="karli"?"#6abf69":kesfetSekme==="coksatan"?"#6abf69":"#5b9bd5" }}>{row.sag}</div>
+                            <div style={{ fontSize:12, fontWeight:800, color:kesfetSekme==="arizali"?"#e85a4f":kesfetSekme==="karli"?"#6abf69":(kesfetSekme==="coksatan"||kesfetSekme==="kazandiran")?"#6abf69":"#5b9bd5" }}>{row.sag}{row.kazancHas?" has":""}</div>
                             {row.sagAlt && <div style={{ fontSize:7, color:"#665d4a" }}>{row.sagAlt}</div>}
                           </div>
                         </div>
