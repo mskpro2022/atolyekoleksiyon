@@ -4472,6 +4472,132 @@ function Atolye() {
                 );
               })()}
             </div>
+
+            {/* ── MODEL PANELLERİ: YENİ / ÇOK SATAN / ARIZA VEREN / KARLI ── */}
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginTop:14 }}>
+
+              {/* Yeni eklenen modeller */}
+              {(() => {
+                const yeniModeller = [...modeller].filter(m=>m.t).sort((a,b)=>(b.t||0)-(a.t||0)).slice(0,10);
+                return (
+                  <div style={{ background:"rgba(91,155,213,0.02)", border:"1px solid rgba(91,155,213,0.1)", borderRadius:12, padding:"12px 16px" }}>
+                    <div style={{ fontSize:10, fontWeight:700, color:"#5b9bd5", marginBottom:10 }}>🆕 Yeni Eklenen Modeller</div>
+                    {yeniModeller.length===0 && <div style={{ fontSize:10, color:"#665d4a" }}>Henüz model yok</div>}
+                    {yeniModeller.map(m => (
+                      <div key={m.id} onClick={()=>{ const kol=kollar.find(k=>k.id===m.ki); if(kol){setAktifKol(kol);setSayfa("modeller");setArama(m.kod||m.ad);} }} style={{ display:"flex", alignItems:"center", gap:8, padding:"5px 0", borderBottom:"1px solid rgba(255,255,255,0.04)", cursor:"pointer" }}>
+                        {m.foto ? <img src={m.foto} alt="" style={{ width:32, height:32, objectFit:"cover", borderRadius:5, flexShrink:0 }}/> : <div style={{ width:32, height:32, borderRadius:5, background:"rgba(255,255,255,0.05)", flexShrink:0 }}/>}
+                        <div style={{ flex:1, minWidth:0 }}>
+                          <div style={{ fontSize:10, fontWeight:700, color:GOLD, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{m.kod||m.ad}</div>
+                          <div style={{ fontSize:8, color:"#665d4a" }}>{new Date(m.t).toLocaleDateString("tr-TR")}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
+
+              {/* Çok satan modeller */}
+              {(() => {
+                const cokSatan = [...modeller].filter(m=>(m.satisSayisi||0)>0).sort((a,b)=>(b.satisSayisi||0)-(a.satisSayisi||0)).slice(0,10);
+                const maxSatis = cokSatan[0]?.satisSayisi || 1;
+                return (
+                  <div style={{ background:"rgba(106,191,105,0.02)", border:"1px solid rgba(106,191,105,0.1)", borderRadius:12, padding:"12px 16px" }}>
+                    <div style={{ fontSize:10, fontWeight:700, color:"#6abf69", marginBottom:10 }}>⭐ Çok Satan Modeller</div>
+                    {cokSatan.length===0 && <div style={{ fontSize:10, color:"#665d4a" }}>Henüz satış yok</div>}
+                    {cokSatan.map(m => (
+                      <div key={m.id} onClick={()=>{ const kol=kollar.find(k=>k.id===m.ki); if(kol){setAktifKol(kol);setSayfa("modeller");setArama(m.kod||m.ad);} }} style={{ display:"flex", alignItems:"center", gap:8, padding:"5px 0", borderBottom:"1px solid rgba(255,255,255,0.04)", cursor:"pointer" }}>
+                        {m.foto ? <img src={m.foto} alt="" style={{ width:32, height:32, objectFit:"cover", borderRadius:5, flexShrink:0 }}/> : <div style={{ width:32, height:32, borderRadius:5, background:"rgba(255,255,255,0.05)", flexShrink:0 }}/>}
+                        <div style={{ flex:1, minWidth:0 }}>
+                          <div style={{ fontSize:10, fontWeight:700, color:GOLD, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{m.kod||m.ad}</div>
+                          <div style={{ height:3, background:"rgba(106,191,105,0.15)", borderRadius:2, marginTop:3, overflow:"hidden" }}>
+                            <div style={{ height:"100%", width:((m.satisSayisi||0)/maxSatis*100)+"%", background:"#6abf69", borderRadius:2 }}/>
+                          </div>
+                        </div>
+                        <span style={{ fontSize:11, fontWeight:800, color:"#6abf69", flexShrink:0 }}>{m.satisSayisi}×</span>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
+
+              {/* Arıza veren (hurda/iade/tamir) modeller */}
+              {(() => {
+                const arizaMap = {};
+                siparisler.forEach(s => {
+                  (s.kalemler||[]).forEach(k => {
+                    const h  = ((s.kalemHurda)||{})[k.id]||0;
+                    const ia = ((s.kalemIade) ||{})[k.id]||0;
+                    const t  = ((s.kalemTamir)||{})[k.id]||0;
+                    const toplam = h+ia+t;
+                    if (toplam>0) {
+                      const key = k.id;
+                      if (!arizaMap[key]) arizaMap[key] = { ad:k.ad, kod:k.kod||"", foto:k.foto||"", ki:k.ki, hurda:0, iade:0, tamir:0 };
+                      arizaMap[key].hurda += h; arizaMap[key].iade += ia; arizaMap[key].tamir += t;
+                    }
+                  });
+                });
+                const arizaListe = Object.entries(arizaMap).map(([id,d])=>({id,...d,toplam:d.hurda+d.iade+d.tamir})).sort((a,b)=>b.toplam-a.toplam).slice(0,10);
+                return (
+                  <div style={{ background:"rgba(232,90,79,0.02)", border:"1px solid rgba(232,90,79,0.1)", borderRadius:12, padding:"12px 16px" }}>
+                    <div style={{ fontSize:10, fontWeight:700, color:"#e85a4f", marginBottom:10 }}>⚠ Arıza Veren Modeller</div>
+                    {arizaListe.length===0 && <div style={{ fontSize:10, color:"#6abf69" }}>✓ Sorunlu model yok</div>}
+                    {arizaListe.map(m => (
+                      <div key={m.id} onClick={()=>{ const kol=kollar.find(k=>k.id===m.ki); if(kol){setAktifKol(kol);setSayfa("modeller");setArama(m.kod||m.ad);} }} style={{ display:"flex", alignItems:"center", gap:8, padding:"5px 0", borderBottom:"1px solid rgba(255,255,255,0.04)", cursor:"pointer" }}>
+                        {m.foto ? <img src={m.foto} alt="" style={{ width:32, height:32, objectFit:"cover", borderRadius:5, flexShrink:0 }}/> : <div style={{ width:32, height:32, borderRadius:5, background:"rgba(255,255,255,0.05)", flexShrink:0 }}/>}
+                        <div style={{ flex:1, minWidth:0 }}>
+                          <div style={{ fontSize:10, fontWeight:700, color:GOLD, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{m.kod||m.ad}</div>
+                          <div style={{ display:"flex", gap:5, marginTop:2 }}>
+                            {m.hurda>0 && <span style={{ fontSize:7, color:"#e85a4f", fontWeight:700 }}>H:{m.hurda}</span>}
+                            {m.iade>0  && <span style={{ fontSize:7, color:"#a78bfa", fontWeight:700 }}>İ:{m.iade}</span>}
+                            {m.tamir>0 && <span style={{ fontSize:7, color:"#5b9bd5", fontWeight:700 }}>T:{m.tamir}</span>}
+                          </div>
+                        </div>
+                        <span style={{ fontSize:11, fontWeight:800, color:"#e85a4f", flexShrink:0 }}>{m.toplam}</span>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
+
+              {/* Karlı modeller */}
+              {(() => {
+                if (!(altinKgUSD>0)) {
+                  return (
+                    <div style={{ background:"rgba(201,168,76,0.02)", border:"1px solid rgba(201,168,76,0.1)", borderRadius:12, padding:"12px 16px" }}>
+                      <div style={{ fontSize:10, fontWeight:700, color:GOLD, marginBottom:10 }}>💰 En Karlı Modeller</div>
+                      <div style={{ fontSize:10, color:"#665d4a" }}>Altın fiyatı girilince karlılık hesaplanır</div>
+                    </div>
+                  );
+                }
+                const karliListe = [...modeller]
+                  .map(m => { const hc = hesapla(m, m.refAyar, altinKgUSD, madenCarpan); return { m, karMly: hc.mamulGram>0 ? hc.karMly : 0, karHas: hc.karHas }; })
+                  .filter(x => x.karMly > 0)
+                  .sort((a,b) => b.karMly - a.karMly)
+                  .slice(0,10);
+                const maxKar = karliListe[0]?.karMly || 1;
+                return (
+                  <div style={{ background:"rgba(201,168,76,0.02)", border:"1px solid rgba(201,168,76,0.1)", borderRadius:12, padding:"12px 16px" }}>
+                    <div style={{ fontSize:10, fontWeight:700, color:GOLD, marginBottom:10 }}>💰 En Karlı Modeller <span style={{ fontSize:8, color:"#665d4a", fontWeight:400 }}>(mly/gr)</span></div>
+                    {karliListe.length===0 && <div style={{ fontSize:10, color:"#665d4a" }}>Karlı model bulunamadı</div>}
+                    {karliListe.map(({m, karMly, karHas}) => (
+                      <div key={m.id} onClick={()=>{ const kol=kollar.find(k=>k.id===m.ki); if(kol){setAktifKol(kol);setSayfa("modeller");setArama(m.kod||m.ad);} }} style={{ display:"flex", alignItems:"center", gap:8, padding:"5px 0", borderBottom:"1px solid rgba(255,255,255,0.04)", cursor:"pointer" }}>
+                        {m.foto ? <img src={m.foto} alt="" style={{ width:32, height:32, objectFit:"cover", borderRadius:5, flexShrink:0 }}/> : <div style={{ width:32, height:32, borderRadius:5, background:"rgba(255,255,255,0.05)", flexShrink:0 }}/>}
+                        <div style={{ flex:1, minWidth:0 }}>
+                          <div style={{ fontSize:10, fontWeight:700, color:GOLD, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{m.kod||m.ad}</div>
+                          <div style={{ height:3, background:"rgba(201,168,76,0.15)", borderRadius:2, marginTop:3, overflow:"hidden" }}>
+                            <div style={{ height:"100%", width:(karMly/maxKar*100)+"%", background:GOLD, borderRadius:2 }}/>
+                          </div>
+                        </div>
+                        <div style={{ textAlign:"right", flexShrink:0 }}>
+                          <div style={{ fontSize:10, fontWeight:800, color:"#6abf69" }}>{fN(karMly,3)}</div>
+                          <div style={{ fontSize:7, color:"#665d4a" }}>{fN(karHas,3)} has</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
+            </div>
           </div>
         )}
 
