@@ -6,17 +6,28 @@ export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
   const apiKey = process.env.ANTHROPIC_API_KEY;
+
+  // ── GEÇİCİ DEBUG — sorun çözülünce kaldırılacak ──
   if (!apiKey) {
-    return res.status(500).json({ error: "API key eksik - env: " + Object.keys(process.env).filter(k=>k.includes("ANTHRO")).join(",") });
+    const anthroKeys = Object.keys(process.env).filter(k => k.toUpperCase().includes("ANTHRO"));
+    const tumKeyler = Object.keys(process.env).filter(k => !k.startsWith("npm_") && !k.startsWith("__")).sort();
+    return res.status(500).json({
+      error: "API key okunamadi",
+      debug: {
+        anthropicVarlari: anthroKeys,
+        anthropicDegerUzunluk: anthroKeys.map(k => ({ isim: k, uzunluk: (process.env[k] || "").length })),
+        toplamEnvSayisi: Object.keys(process.env).length,
+        ornekEnvler: tumKeyler.slice(0, 40),
+      }
+    });
   }
+  // ── DEBUG SONU ──
 
   try {
-    // req.body bazen string gelebilir — güvenli parse
     let body = req.body;
     if (typeof body === "string") {
       try { body = JSON.parse(body); } catch { body = {}; }
     }
-
     const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
@@ -26,7 +37,6 @@ export default async function handler(req, res) {
       },
       body: JSON.stringify(body),
     });
-
     const text = await response.text();
     let data;
     try { data = JSON.parse(text); }
