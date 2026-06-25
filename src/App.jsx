@@ -1266,6 +1266,7 @@ function OnizlemeBox({ m, altinKgUSD, mc }) {
 function GirisEkrani({ onGiris }) {
   const [sifre, setSifre] = useState("");
   const [hata, setHata] = useState(false);
+  const [hatirla, setHatirla] = useState(true);
   useEffect(() => {
     document.body.style.margin = "0";
     document.body.style.padding = "0";
@@ -1290,7 +1291,18 @@ function GirisEkrani({ onGiris }) {
   }, []);
   const kontrol = () => {
     const aktifSifre = localStorage.getItem("atolye_sifre") || "19671967*Mm";
-    if (sifre === aktifSifre) { onGiris(); }
+    if (sifre === aktifSifre) {
+      // "Beni Hatırla" işaretliyse 30 günlük oturum token'ı kaydet
+      try {
+        if (hatirla) {
+          const sonGecerlilik = Date.now() + 30 * 24 * 60 * 60 * 1000; // 30 gün
+          localStorage.setItem("atolye_oturum", String(sonGecerlilik));
+        } else {
+          localStorage.removeItem("atolye_oturum");
+        }
+      } catch {}
+      onGiris();
+    }
     else setHata(true);
   };
   return (
@@ -1304,6 +1316,11 @@ function GirisEkrani({ onGiris }) {
           placeholder="Şifre" autoFocus
           style={{ width:"100%", background:"rgba(0,0,0,0.3)", border:"1px solid "+(hata?"#e85a4f":"rgba(201,168,76,0.2)"), borderRadius:8, padding:"10px 14px", color:"#e8dcc8", fontSize:14, outline:"none", boxSizing:"border-box", marginBottom:8 }}/>
         {hata && <div style={{ color:"#e85a4f", fontSize:11, marginBottom:8 }}>Şifre yanlış</div>}
+        <label style={{ display:"flex", alignItems:"center", gap:7, marginBottom:14, cursor:"pointer", userSelect:"none" }}>
+          <input type="checkbox" checked={hatirla} onChange={e=>setHatirla(e.target.checked)}
+            style={{ width:16, height:16, accentColor:"#c9a84c", cursor:"pointer" }}/>
+          <span style={{ fontSize:12, color:"#998a6e" }}>Beni hatırla (30 gün)</span>
+        </label>
         <button onClick={kontrol} style={{ width:"100%", background:"rgba(201,168,76,0.15)", border:"1px solid rgba(201,168,76,0.3)", borderRadius:8, padding:"10px", color:"#c9a84c", fontSize:14, fontWeight:700, cursor:"pointer" }}>Giriş Yap</button>
       </div>
     </div>
@@ -1322,6 +1339,7 @@ function SifreDegistir() {
     if (yeniSifre.length < 6) { setMesaj({ok:false,txt:"En az 6 karakter olmalı!"}); return; }
     if (yeniSifre !== yeniSifre2) { setMesaj({ok:false,txt:"Şifreler eşleşmiyor!"}); return; }
     localStorage.setItem("atolye_sifre", yeniSifre);
+    try { localStorage.removeItem("atolye_oturum"); } catch {} // şifre değişti, oturum sıfırlansın
     setEskiSifre(""); setYeniSifre(""); setYeniSifre2("");
     setMesaj({ok:true,txt:"Şifre değiştirildi!"});
     setTimeout(()=>setMesaj(null), 3000);
@@ -1341,7 +1359,18 @@ function SifreDegistir() {
 }
 
 export default function Root() {
-  const [giris, setGiris] = useState(false);
+  const [giris, setGiris] = useState(() => {
+    // "Beni Hatırla" — token varsa ve süresi dolmamışsa otomatik giriş
+    try {
+      const t = localStorage.getItem("atolye_oturum");
+      if (t) {
+        const son = parseInt(t, 10);
+        if (son && Date.now() < son) return true; // süre dolmamış
+        localStorage.removeItem("atolye_oturum"); // süresi dolmuş, temizle
+      }
+    } catch {}
+    return false;
+  });
   if (!giris) return <GirisEkrani onGiris={()=>setGiris(true)} />;
   return <Atolye />;
 }
@@ -4893,6 +4922,17 @@ ${buildContext()}`;
 
             {/* ŞİFRE DEĞİŞTİR */}
             <SifreDegistir />
+
+            {/* OTURUMU KAPAT */}
+            <div style={{ background:"rgba(232,90,79,0.03)", border:"1px solid rgba(232,90,79,0.1)", borderRadius:12, padding:"14px 16px", marginBottom:14 }}>
+              <div style={{ fontSize:10, fontWeight:700, color:"#e85a4f", marginBottom:8 }}>🚪 OTURUM</div>
+              <div style={{ fontSize:9, color:"#665d4a", marginBottom:10 }}>"Beni hatırla" ile açık oturumu kapatır, bir dahaki açılışta tekrar şifre sorulur.</div>
+              <button onClick={()=>{
+                if (!window.confirm("Oturumu kapatmak istediğinize emin misiniz? Tekrar şifre girmeniz gerekecek.")) return;
+                try { localStorage.removeItem("atolye_oturum"); } catch {}
+                window.location.reload();
+              }} style={{ background:"rgba(232,90,79,0.12)", border:"1px solid rgba(232,90,79,0.25)", borderRadius:7, padding:"7px 14px", color:"#e85a4f", fontSize:10, fontWeight:700, cursor:"pointer" }}>Oturumu Kapat</button>
+            </div>
 
             {/* VARSAYILAN DEGERLER */}
             <div style={{ background:"rgba(201,168,76,0.04)", border:"1px solid rgba(201,168,76,0.1)", borderRadius:12, padding:"14px 16px", marginBottom:14 }}>
