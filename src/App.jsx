@@ -1365,6 +1365,10 @@ function Atolye() {
     dim:  yaziRenkleri.dim  || tema.dim,
     gold: yaziRenkleri.gold || tema.gold,
   };
+  // GOLD ve DARK modül seviyesinde tanımlı ve birçok yerde kullanılıyor.
+  // Tema değişince bu değişkenleri de güncelle ki tüm kullanımlar aktif temaya uysun.
+  GOLD = T.gold;
+  DARK = T.bg2;
   const temaUygula = (t) => {
     setTema(t);
     try { localStorage.setItem("atolye_tema", t.id); } catch {}
@@ -4601,13 +4605,13 @@ function Atolye() {
                   return <div style={{ fontSize:10, color:"#665d4a", padding:"10px 0" }}>{kesfetSekme==="kazandiran"?"Henüz teslim edilen ürün yok":"Bu kategoride model bulunamadı"}</div>;
                 }
                 return (
-                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"4px 16px" }}>
+                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr 1fr", gap:"4px 12px" }}>
                     {liste.map((row,i) => {
                       const m = row.m;
                       const bilgi = modelBilgi(m);
                       return (
                         <div key={m.id+"_"+i} onClick={()=>{ const kol=kollar.find(k=>k.id===m.ki); if(kol){setAktifKol(kol);setSayfa("modeller");setArama(m.kod||m.ad);} }} style={{ display:"flex", alignItems:"center", gap:8, padding:"6px 0", borderBottom:"1px solid rgba(255,255,255,0.04)", cursor:"pointer" }}>
-                          {m.foto ? <div className="model-foto-wrap" style={{ width:108, height:108, borderRadius:9, overflow:"hidden", flexShrink:0 }}><img src={m.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"cover", objectPosition:"center center", display:"block" }}/></div> : <div style={{ width:108, height:108, borderRadius:9, background:"rgba(255,255,255,0.05)", flexShrink:0 }}/>}
+                          {m.foto ? <div className="model-foto-wrap" style={{ width:72, height:72, borderRadius:8, overflow:"hidden", flexShrink:0 }}><img src={m.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"cover", objectPosition:"center center", display:"block" }}/></div> : <div style={{ width:72, height:72, borderRadius:8, background:"rgba(255,255,255,0.05)", flexShrink:0 }}/>}
                           <div style={{ flex:1, minWidth:0 }}>
                             <div style={{ fontSize:11, fontWeight:700, color:GOLD, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{m.kod||m.ad}</div>
                             {/* GRAM + KARLILIK — her zaman göster */}
