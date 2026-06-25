@@ -1369,6 +1369,12 @@ function Atolye() {
   // Tema değişince bu değişkenleri de güncelle ki tüm kullanımlar aktif temaya uysun.
   GOLD = T.gold;
   DARK = T.bg2;
+  // Stil sabitleri (IS/BG/GH/RD) modül seviyesinde sabit altın renkliydi — tema değişince
+  // değişmiyorlardı. Burada temaya bağlı yeniden tanımlayarak modül seviyesini gölgeliyoruz.
+  const IS = { width:"100%", background:T.card, border:"1px solid "+T.border, borderRadius:10, padding:"10px 14px", color:T.text, fontSize:13, outline:"none", fontFamily:"sans-serif", boxSizing:"border-box" };
+  const BG = { background:"linear-gradient(135deg,"+T.gold+","+T.accent+")", border:"none", borderRadius:10, padding:"9px 18px", color:T.bg2, fontSize:12, fontWeight:800, cursor:"pointer" };
+  const GH = { background:T.btnBg, border:"1px solid "+T.btnBorder, borderRadius:9, padding:"7px 13px", color:T.gold, fontSize:11, fontWeight:700, cursor:"pointer" };
+  const RD = { background:"rgba(232,90,79,0.08)", border:"1px solid rgba(232,90,79,0.2)", borderRadius:9, padding:"7px 13px", color:T.danger||"#e85a4f", fontSize:11, fontWeight:700, cursor:"pointer" };
   const temaUygula = (t) => {
     setTema(t);
     try { localStorage.setItem("atolye_tema", t.id); } catch {}
@@ -2228,7 +2234,7 @@ function Atolye() {
 
   return (
     <div style={{ minHeight:"100vh", background:T.bg, color:T.text, fontFamily:"sans-serif" }}>
-      <style>{`*{box-sizing:border-box}html,body,#root{background:${T.bg};margin:0;padding:0;min-height:100vh;width:100%}body{overflow-x:hidden;overflow-y:auto}`}</style>
+      <style>{`*{box-sizing:border-box}html,body,#root{background:${T.bg};margin:0;padding:0;min-height:100vh;width:100%}body{overflow-x:hidden;overflow-y:auto}:root{--gold:${T.gold};--goldtext:${T.text};--bg2:${T.bg2}}`}</style>
       <style>{"@keyframes fadein{from{opacity:0}to{opacity:1}}@keyframes cardin{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}@keyframes toastin{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}*{box-sizing:border-box}::-webkit-scrollbar{width:4px}::-webkit-scrollbar-thumb{background:rgba(201,168,76,.15);border-radius:2px}select option{background:#1c1a15;color:#e8dcc8}"}</style>
 
       {/* TOAST BİLDİRİMİ */}
@@ -2342,7 +2348,7 @@ function Atolye() {
         {sayfa==="koleksiyonlar" && (
           <div style={{ animation:"fadein .3s" }}>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14, flexWrap:"wrap", gap:8 }}>
-              <h2 style={{ margin:0, fontSize:15, fontWeight:700, color:"#e8dcc8" }}>Koleksiyonlar</h2>
+              <h2 style={{ margin:0, fontSize:15, fontWeight:700, color:"var(--goldtext)" }}>Koleksiyonlar</h2>
               <div style={{ display:"flex", gap:6 }}>
                 {kollar.length > 1 && (
                   <button onClick={() => setHizalaModal(true)} style={{ background:"rgba(167,139,250,0.1)", border:"1px solid rgba(167,139,250,0.25)", borderRadius:9, padding:"6px 12px", color:"#a78bfa", fontSize:11, fontWeight:700, cursor:"pointer" }}>↕ Hizala</button>
@@ -2423,7 +2429,7 @@ function Atolye() {
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10, flexWrap:"wrap", gap:6 }}>
               <div style={{ display:"flex", alignItems:"center", gap:6 }}>
                 {aktifKol && <button onClick={() => { setSayfa("koleksiyonlar"); setAktifKol(null); }} style={{ ...GH, padding:"4px 7px", fontSize:10 }}>{"<"}</button>}
-                <h2 style={{ margin:0, fontSize:14, fontWeight:700, color:"#e8dcc8" }}>{aktifKol ? aktifKol.ad : "Tum Modeller"} <span style={{ fontSize:10, color:"#7a6f5a" }}>({gorunen.length})</span></h2>
+                <h2 style={{ margin:0, fontSize:14, fontWeight:700, color:"var(--goldtext)" }}>{aktifKol ? aktifKol.ad : "Tum Modeller"} <span style={{ fontSize:10, color:"#7a6f5a" }}>({gorunen.length})</span></h2>
               </div>
               <div style={{ display:"flex", gap:4 }}>
                 {aktifKol && <button onClick={() => { setKatalogKol(aktifKol); setKatalogSiraliModeller(seciliModeller.size>0 ? modeller.filter(m=>seciliModeller.has(m.id)) : []); setKatalogSutun(3); setKatalogAyar("14K"); setKatalogSiralaModal(true); }} style={{ ...GH, fontSize:9, padding:"5px 9px" }}>PDF 3'lü{seciliModeller.size>0?" ("+seciliModeller.size+")":""}</button>}
@@ -2529,7 +2535,7 @@ function Atolye() {
                       <div style={{ height:2, background:"rgba(201,168,76,0.07)", borderRadius:1, overflow:"hidden", marginBottom:3 }}>
                         <div style={{ height:"100%", width:(dur.s/9*100)+"%", background:dur.c, borderRadius:1 }} />
                       </div>
-                      <div style={{ fontSize:10, fontWeight:700, color:"#e8dcc8", marginBottom:2 }}>{m.ad}</div>
+                      <div style={{ fontSize:10, fontWeight:700, color:"var(--goldtext)", marginBottom:2 }}>{m.ad}</div>
                       <div style={{ display:"flex", gap:3, flexWrap:"wrap", marginBottom:2 }}>
                         {m.gram>0 && <span style={{ fontSize:6, color:"#998a6e", background:"rgba(201,168,76,0.07)", padding:"1px 3px", borderRadius:2, fontWeight:600 }}>{m.gram}gr</span>}
                         {m.refAyar && <span style={{ fontSize:6, color:"#998a6e", background:"rgba(201,168,76,0.07)", padding:"1px 3px", borderRadius:2, fontWeight:600 }}>{m.refAyar}</span>}
@@ -2607,7 +2613,7 @@ function Atolye() {
           <div style={{ animation:"fadein .3s" }}>
             {/* Header */}
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12, flexWrap:"wrap", gap:6 }}>
-              <h2 style={{ margin:0, fontSize:14, fontWeight:700, color:"#e8dcc8" }}>Konfirmasyon</h2>
+              <h2 style={{ margin:0, fontSize:14, fontWeight:700, color:"var(--goldtext)" }}>Konfirmasyon</h2>
               <div style={{ display:"flex", gap:5, alignItems:"center" }}>
                 <div style={{ position:"relative" }}>
                   <div style={{ position:"relative" }}>
@@ -2719,10 +2725,10 @@ function Atolye() {
                         </div>
                         {/* Ürün + not */}
                         <div>
-                          <div style={{ fontSize:10, fontWeight:700, color:"#e8dcc8" }}>{m.ad}</div>
+                          <div style={{ fontSize:10, fontWeight:700, color:"var(--goldtext)" }}>{m.ad}</div>
                           {m.kategori && <span style={{ fontSize:7, color:"#a78bfa", background:"rgba(167,139,250,0.1)", padding:"1px 5px", borderRadius:3, fontWeight:600 }}>{m.kategori.charAt(0).toUpperCase()+m.kategori.slice(1)}</span>}
                           {/* Manuel not */}
-                          <input value={not} onChange={e=>konfNotSec(m.id,e.target.value)} placeholder="Not ekle..." style={{ marginTop:4, width:"100%", background:"transparent", border:"none", borderBottom:"1px dashed rgba(201,168,76,0.2)", color:"#c9a84c", fontSize:9, outline:"none", padding:"1px 0" }}/>
+                          <input value={not} onChange={e=>konfNotSec(m.id,e.target.value)} placeholder="Not ekle..." style={{ marginTop:4, width:"100%", background:"transparent", border:"none", borderBottom:"1px dashed rgba(201,168,76,0.2)", color:"var(--gold)", fontSize:9, outline:"none", padding:"1px 0" }}/>
                           {/* Kayıtlı not şablonları */}
                           {kayitliNotlar.length > 0 && (
                             <div style={{ display:"flex", gap:3, flexWrap:"wrap", marginTop:3 }}>
@@ -2840,7 +2846,7 @@ function Atolye() {
                           )}
                         </div>
                         {/* Top gram */}
-                        <div style={{ textAlign:"center", fontSize:11, fontWeight:800, color:"#e8dcc8" }}>{fN(topGram)} gr</div>
+                        <div style={{ textAlign:"center", fontSize:11, fontWeight:800, color:"var(--goldtext)" }}>{fN(topGram)} gr</div>
                         {/* Sil */}
                         <div style={{ textAlign:"center" }}>
                           <button onClick={()=>togKonf(m)} style={{ background:"rgba(232,90,79,0.08)", border:"1px solid rgba(232,90,79,0.15)", borderRadius:6, padding:"3px 8px", color:"#e85a4f", fontSize:9, cursor:"pointer" }}>X</button>
@@ -2855,7 +2861,7 @@ function Atolye() {
                     <div style={{ fontSize:9, fontWeight:700, color:GOLD, textAlign:"right" }}>TOPLAM</div>
                     <div></div>
                     <div style={{ textAlign:"center", fontSize:12, fontWeight:800, color:GOLD }}>{konfKalemler.reduce((s,m)=>s+(m.adet||1),0)}</div>
-                    <div style={{ textAlign:"center", fontSize:12, fontWeight:800, color:"#e8dcc8" }}>{fN(kTop.topGram)} gr</div>
+                    <div style={{ textAlign:"center", fontSize:12, fontWeight:800, color:"var(--goldtext)" }}>{fN(kTop.topGram)} gr</div>
                     <div></div>
                   </div>
                 </div>
@@ -2881,7 +2887,7 @@ function Atolye() {
         {sayfa==="siparisler" && (
           <div style={{ animation:"fadein .3s" }}>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8, flexWrap:"wrap", gap:6 }}>
-              <h2 style={{ margin:0, fontSize:14, fontWeight:700, color:"#e8dcc8" }}>Siparis Gecmisi ({siparisler.length})</h2>
+              <h2 style={{ margin:0, fontSize:14, fontWeight:700, color:"var(--goldtext)" }}>Siparis Gecmisi ({siparisler.length})</h2>
               <div style={{ display:"flex", gap:6, alignItems:"center", flexWrap:"wrap" }}>
                 <input value={sipMusF} onChange={e=>setSipMusF(e.target.value)} placeholder="Musteri ara..." style={{ ...IS, width:130, padding:"5px 8px", fontSize:10 }}/>
                 <input type="date" value={sipTarih1} onChange={e=>setSipTarih1(e.target.value)} style={{ ...IS, width:120, padding:"5px 8px", fontSize:10 }}/>
@@ -3112,7 +3118,7 @@ function Atolye() {
                                   {sonDurumObj.l}
                                 </span>
                                 {!tamamlandi && <span style={{ fontSize:8, color:"#998a6e" }}>{sureFmt(sonSure)} aşamada</span>}
-                                <span style={{ fontSize:8, color:"#665d4a" }}>Toplam: <b style={{ color:"#e8dcc8" }}>{sureFmt(toplamSure)}</b></span>
+                                <span style={{ fontSize:8, color:"#665d4a" }}>Toplam: <b style={{ color:"var(--goldtext)" }}>{sureFmt(toplamSure)}</b></span>
                                 <span style={{ fontSize:8, color:"#665d4a" }}>{gecmis.length} aşama</span>
                                 {tamamlandi && <span style={{ fontSize:8, color:"#6abf69", fontWeight:700 }}>✓ Tamamlandı</span>}
                               </div>
@@ -3153,9 +3159,9 @@ function Atolye() {
                             <div key={k.id} style={{ display:"flex", alignItems:"center", gap:8, padding:"6px 0", borderBottom:"1px solid rgba(201,168,76,0.04)" }}>
                               <div className="model-foto-wrap" style={{ width:120, height:120, borderRadius:8, overflow:"hidden", flexShrink:0, background:"rgba(0,0,0,0.2)" }}>{k.foto ? <img src={k.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"cover", objectPosition:"center center", display:"block" }}/> : <div style={{ width:"100%", height:"100%", background:"rgba(201,168,76,0.06)" }}/>}</div>
                               <div style={{ flex:1, minWidth:0 }}>
-                                <div style={{ fontSize:10, fontWeight:700, color:"#e8dcc8" }}>
+                                <div style={{ fontSize:10, fontWeight:700, color:"var(--goldtext)" }}>
                                   <span style={{ color:GOLD, marginRight:4 }}>{k.kod||""}</span>{k.ad}
-                                  {k.renk && <span style={{ color:"#c9a84c", marginLeft:6, fontSize:9 }}>{k.renk}</span>}
+                                  {k.renk && <span style={{ color:"var(--gold)", marginLeft:6, fontSize:9 }}>{k.renk}</span>}
                                 </div>
                                 <div style={{ fontSize:8, color:"#7a6f5a" }}>
                                   {k.secilenAyar||k.refAyar} · {fN(k.gram||0)} gr · {k.adet||1} adet
@@ -3240,7 +3246,7 @@ function Atolye() {
           return (
             <div style={{ animation:"fadein .3s" }}>
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
-                <h2 style={{ margin:0, fontSize:15, fontWeight:700, color:"#e8dcc8" }}>İade & Tamir Kayıtları</h2>
+                <h2 style={{ margin:0, fontSize:15, fontWeight:700, color:"var(--goldtext)" }}>İade & Tamir Kayıtları</h2>
               </div>
 
               {/* İade Bölümü */}
@@ -3256,7 +3262,7 @@ function Atolye() {
                       <div key={i} style={{ background:"rgba(167,139,250,0.04)", border:"1px solid rgba(167,139,250,0.15)", borderRadius:10, padding:"10px 12px", display:"flex", alignItems:"center", gap:10 }}>
                         <div className="model-foto-wrap" style={{ width:80, height:80, borderRadius:8, overflow:"hidden", flexShrink:0, background:"rgba(0,0,0,0.2)" }}>{r.kalem.foto ? <img src={r.kalem.foto} style={{ width:"100%", height:"100%", objectFit:"cover", objectPosition:"center center", display:"block" }}/> : <div style={{ width:"100%", height:"100%", background:"rgba(201,168,76,0.06)" }}/>}</div>
                         <div style={{ flex:1 }}>
-                          <div style={{ fontSize:11, fontWeight:700, color:"#e8dcc8" }}>
+                          <div style={{ fontSize:11, fontWeight:700, color:"var(--goldtext)" }}>
                             <span style={{ color:GOLD, marginRight:5 }}>{r.kalem.kod||""}</span>{r.kalem.ad}
                           </div>
                           <div style={{ fontSize:9, color:"#998a6e", marginTop:2 }}>
@@ -3289,7 +3295,7 @@ function Atolye() {
                       <div key={i} style={{ background:"rgba(91,155,213,0.04)", border:"1px solid rgba(91,155,213,0.15)", borderRadius:10, padding:"10px 12px", display:"flex", alignItems:"center", gap:10 }}>
                         <div className="model-foto-wrap" style={{ width:80, height:80, borderRadius:8, overflow:"hidden", flexShrink:0, background:"rgba(0,0,0,0.2)" }}>{r.kalem.foto ? <img src={r.kalem.foto} style={{ width:"100%", height:"100%", objectFit:"cover", objectPosition:"center center", display:"block" }}/> : <div style={{ width:"100%", height:"100%", background:"rgba(201,168,76,0.06)" }}/>}</div>
                         <div style={{ flex:1 }}>
-                          <div style={{ fontSize:11, fontWeight:700, color:"#e8dcc8" }}>
+                          <div style={{ fontSize:11, fontWeight:700, color:"var(--goldtext)" }}>
                             <span style={{ color:GOLD, marginRight:5 }}>{r.kalem.kod||""}</span>{r.kalem.ad}
                           </div>
                           <div style={{ fontSize:9, color:"#998a6e", marginTop:2 }}>
@@ -3310,7 +3316,7 @@ function Atolye() {
         {sayfa==="musteriler" && (
           <div style={{ animation:"fadein .3s" }}>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>
-              <h2 style={{ margin:0, fontSize:14, fontWeight:700, color:"#e8dcc8" }}>Musteriler ({Object.keys(musteriler).length})</h2>
+              <h2 style={{ margin:0, fontSize:14, fontWeight:700, color:"var(--goldtext)" }}>Musteriler ({Object.keys(musteriler).length})</h2>
               <button onClick={()=>setEditMusteri({ad:"", yeniAd:"", yeni:true})} style={{ ...BG, padding:"6px 14px", fontSize:11 }}>+ Musteri Ekle</button>
             </div>
 
@@ -3388,7 +3394,7 @@ function Atolye() {
                         </div>
                       ) : (
                         <div style={{ display:"flex", alignItems:"baseline", gap:8 }}>
-                          <span style={{ fontSize:13, fontWeight:700, color:"#e8dcc8" }}>{ad}</span>
+                          <span style={{ fontSize:13, fontWeight:700, color:"var(--goldtext)" }}>{ad}</span>
                           <button onClick={()=>setEditMusteri({ad,yeniAd:ad})} style={{ background:"none", border:"none", color:"#665d4a", fontSize:9, cursor:"pointer", textDecoration:"underline" }}>Duzenle</button>
                         </div>
                       )}
@@ -3622,7 +3628,7 @@ function Atolye() {
                         const bakiye = d.borc - d.odenen;
                         return (
                           <div key={mus} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"5px 0", borderBottom:"1px solid rgba(255,255,255,0.04)" }}>
-                            <span style={{ fontSize:9, color:"#e8dcc8", fontWeight:600 }}>{mus}</span>
+                            <span style={{ fontSize:9, color:"var(--goldtext)", fontWeight:600 }}>{mus}</span>
                             <span style={{ fontSize:10, fontWeight:800, color:"#e85a4f" }}>{fN(bakiye,3)} has</span>
                           </div>
                         );
@@ -3666,7 +3672,7 @@ function Atolye() {
                       <div key={mus} style={{ ...KCARD }}>
                         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
                           <div>
-                            <div style={{ fontSize:12, fontWeight:800, color:"#e8dcc8" }}>{mus}</div>
+                            <div style={{ fontSize:12, fontWeight:800, color:"var(--goldtext)" }}>{mus}</div>
                             <div style={{ fontSize:8, color:"#665d4a" }}>{d.siparisler.length} sipariş</div>
                           </div>
                           <div style={{ textAlign:"right" }}>
@@ -3755,7 +3761,7 @@ function Atolye() {
                           <div key={x.id} style={{ display:"flex", alignItems:"center", gap:8, padding:"7px 0", borderBottom:"1px solid rgba(255,255,255,0.04)" }}>
                             <div style={{ width:8, height:8, borderRadius:"50%", background:"#e8833a", flexShrink:0 }}/>
                             <div style={{ flex:1 }}>
-                              <div style={{ fontSize:9, fontWeight:700, color:"#e8dcc8" }}>{x.musteri||"?"}</div>
+                              <div style={{ fontSize:9, fontWeight:700, color:"var(--goldtext)" }}>{x.musteri||"?"}</div>
                               <div style={{ fontSize:7, color:"#665d4a" }}>{new Date(x.tarih).toLocaleDateString("tr-TR")} · {beklemeSure} gün önce gönderildi</div>
                               {x.aciklama && <div style={{ fontSize:7, color:"#665d4a" }}>{x.aciklama}</div>}
                             </div>
@@ -3817,7 +3823,7 @@ function Atolye() {
                       <div key={x.id} style={{ display:"flex", alignItems:"center", gap:8, padding:"5px 0", borderBottom:"1px solid rgba(255,255,255,0.04)" }}>
                         <div style={{ width:7, height:7, borderRadius:"50%", background:x.tip==="giris"?"#6abf69":"#e85a4f", flexShrink:0 }}/>
                         <div style={{ flex:1 }}>
-                          <span style={{ fontSize:9, color:"#e8dcc8" }}>{x.aciklama||"—"}</span>
+                          <span style={{ fontSize:9, color:"var(--goldtext)" }}>{x.aciklama||"—"}</span>
                           <div style={{ fontSize:7, color:"#665d4a" }}>{new Date(x.tarih).toLocaleDateString("tr-TR")}</div>
                         </div>
                         <div style={{ display:"flex", alignItems:"center", gap:6 }}>
@@ -3840,7 +3846,7 @@ function Atolye() {
                           <div key={x.id} style={{ display:"flex", alignItems:"center", gap:8, padding:"6px 0", borderBottom:"1px solid rgba(255,255,255,0.04)" }}>
                             {m?.foto && <img src={m.foto} style={{ width:32, height:32, objectFit:"cover", borderRadius:5 }} alt=""/>}
                             <div style={{ flex:1 }}>
-                              <div style={{ fontSize:9, fontWeight:700, color:"#e8dcc8" }}>{x.ad}</div>
+                              <div style={{ fontSize:9, fontWeight:700, color:"var(--goldtext)" }}>{x.ad}</div>
                               {x.aciklama && <div style={{ fontSize:7, color:"#665d4a" }}>{x.aciklama}</div>}
                             </div>
                             <div style={{ textAlign:"right" }}>
@@ -3861,7 +3867,7 @@ function Atolye() {
                       {(kasa.serbest||[]).map(x => (
                         <div key={x.id} style={{ display:"flex", alignItems:"center", gap:8, padding:"5px 0", borderBottom:"1px solid rgba(255,255,255,0.04)" }}>
                           <div style={{ flex:1 }}>
-                            <div style={{ fontSize:9, fontWeight:700, color:"#e8dcc8" }}>{x.ad}</div>
+                            <div style={{ fontSize:9, fontWeight:700, color:"var(--goldtext)" }}>{x.ad}</div>
                             {x.aciklama && <div style={{ fontSize:7, color:"#665d4a" }}>{x.aciklama}</div>}
                           </div>
                           <div style={{ textAlign:"right", marginRight:8 }}>
@@ -3929,7 +3935,7 @@ function Atolye() {
                             <div style={{ fontSize:9, fontWeight:700, color:"#6abf69", marginBottom:8 }}>👤 MÜŞTERİ ALACAKLAR (HAS)</div>
                             {rhinoMizan.musteriHas.filter(x=>Math.abs(x.bakiye)>0.001).sort((a,b)=>b.bakiye-a.bakiye).map((x,i)=>(
                               <div key={i} style={{ display:"flex", justifyContent:"space-between", padding:"4px 0", borderBottom:"1px solid rgba(255,255,255,0.04)", fontSize:9 }}>
-                                <span style={{ color:"#e8dcc8", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", maxWidth:120 }}>{x.ad}</span>
+                                <span style={{ color:"var(--goldtext)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", maxWidth:120 }}>{x.ad}</span>
                                 <span style={{ fontWeight:700, color:x.bakiye>0?"#6abf69":"#e85a4f", flexShrink:0, marginLeft:6 }}>{fN(x.bakiye,3)} has</span>
                               </div>
                             ))}
@@ -3954,7 +3960,7 @@ function Atolye() {
                                 return (
                                   <div key={i} style={{ display:"flex", alignItems:"center", gap:8, padding:"5px 8px", background:eslesti?"rgba(106,191,105,0.04)":"rgba(232,90,79,0.04)", border:"1px solid", borderColor:eslesti?"rgba(106,191,105,0.1)":"rgba(232,90,79,0.1)", borderRadius:7 }}>
                                     <div style={{ flex:1, minWidth:0 }}>
-                                      <div style={{ fontSize:9, fontWeight:700, color:"#e8dcc8" }}>{x.ad}</div>
+                                      <div style={{ fontSize:9, fontWeight:700, color:"var(--goldtext)" }}>{x.ad}</div>
                                       <div style={{ fontSize:8, color:x.bakiye>0?"#6abf69":"#e85a4f" }}>{fN(x.bakiye,3)} has</div>
                                     </div>
                                     <div style={{ fontSize:12, color:eslesti?"#6abf69":"#e85a4f" }}>{eslesti?"↔":"?"}</div>
@@ -3993,7 +3999,7 @@ function Atolye() {
                             <div style={{ fontSize:9, fontWeight:700, color:"#e8833a", marginBottom:8 }}>🏭 SATICI / DÖKÜMCÜ (HAS)</div>
                             {rhinoMizan.dokumcuHas.filter(x=>Math.abs(x.bakiye)>0.001).sort((a,b)=>a.bakiye-b.bakiye).map((x,i)=>(
                               <div key={i} style={{ display:"flex", justifyContent:"space-between", padding:"4px 0", borderBottom:"1px solid rgba(255,255,255,0.04)", fontSize:9 }}>
-                                <span style={{ color:"#e8dcc8", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", maxWidth:120 }}>{x.ad}</span>
+                                <span style={{ color:"var(--goldtext)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", maxWidth:120 }}>{x.ad}</span>
                                 <span style={{ fontWeight:700, color:x.bakiye<0?"#e85a4f":x.bakiye>0?"#6abf69":"#665d4a", flexShrink:0, marginLeft:6 }}>{fN(x.bakiye,3)} has</span>
                               </div>
                             ))}
@@ -4008,7 +4014,7 @@ function Atolye() {
                             <div style={{ fontSize:9, fontWeight:700, color:"#a78bfa", marginBottom:8 }}>💵 SATICI BORÇLAR (USD)</div>
                             {rhinoMizan.saticiUsd.filter(x=>Math.abs(x.bakiye)>0.001).sort((a,b)=>a.bakiye-b.bakiye).map((x,i)=>(
                               <div key={i} style={{ display:"flex", justifyContent:"space-between", padding:"4px 0", borderBottom:"1px solid rgba(255,255,255,0.04)", fontSize:9 }}>
-                                <span style={{ color:"#e8dcc8", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", maxWidth:120 }}>{x.ad}</span>
+                                <span style={{ color:"var(--goldtext)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", maxWidth:120 }}>{x.ad}</span>
                                 <span style={{ fontWeight:700, color:x.bakiye<0?"#e85a4f":x.bakiye>0?"#6abf69":"#665d4a", flexShrink:0, marginLeft:6 }}>${fN(Math.abs(x.bakiye),2)}</span>
                               </div>
                             ))}
@@ -4024,7 +4030,7 @@ function Atolye() {
                               <div style={{ fontSize:9, fontWeight:700, color:"#5b9bd5", marginBottom:8 }}>💶 SATICI BORÇLAR (EUR)</div>
                               {rhinoMizan.saticiEur.filter(x=>Math.abs(x.bakiye)>0.001).sort((a,b)=>a.bakiye-b.bakiye).map((x,i)=>(
                                 <div key={i} style={{ display:"flex", justifyContent:"space-between", padding:"4px 0", borderBottom:"1px solid rgba(255,255,255,0.04)", fontSize:9 }}>
-                                  <span style={{ color:"#e8dcc8", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", maxWidth:120 }}>{x.ad}</span>
+                                  <span style={{ color:"var(--goldtext)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", maxWidth:120 }}>{x.ad}</span>
                                   <span style={{ fontWeight:700, color:x.bakiye<0?"#e85a4f":x.bakiye>0?"#6abf69":"#665d4a", flexShrink:0, marginLeft:6 }}>€{fN(Math.abs(x.bakiye),2)}</span>
                                 </div>
                               ))}
@@ -4360,7 +4366,7 @@ function Atolye() {
                       onMouseOut={e=>e.currentTarget.style.background="rgba(232,90,79,0.04)"}>
                       <div style={{ width:8, height:8, borderRadius:4, background:durObj.c, flexShrink:0 }}/>
                       <div style={{ flex:1 }}>
-                        <div style={{ fontSize:11, fontWeight:700, color:"#e8dcc8" }}>{x.musteri}</div>
+                        <div style={{ fontSize:11, fontWeight:700, color:"var(--goldtext)" }}>{x.musteri}</div>
                         <div style={{ fontSize:9, color:durObj.c }}>{durObj.l}</div>
                       </div>
                       <div style={{ textAlign:"right" }}>
@@ -4398,7 +4404,7 @@ function Atolye() {
                     <div style={{ fontSize:20, fontWeight:800, color:"#e8833a", marginBottom:2 }}>{fN(dokumBorc,3)} has</div>
                     <div style={{ fontSize:9, color:"#665d4a", marginBottom:10 }}>{altinKgUSD>0?"≈"+fUSD(dokumBorc*(altinKgUSD/1000))+" bekleyen borç":""}</div>
                     <div style={{ borderTop:"1px solid rgba(255,255,255,0.05)", paddingTop:8 }}>
-                      <div style={{ fontSize:9, color:"#998a6e" }}>Dökümde bekleyen: <span style={{ color:"#e8dcc8", fontWeight:700 }}>{dokumdaOlan.length} sipariş · {fN(dokumdaGram,1)} gr</span></div>
+                      <div style={{ fontSize:9, color:"#998a6e" }}>Dökümde bekleyen: <span style={{ color:"var(--goldtext)", fontWeight:700 }}>{dokumdaOlan.length} sipariş · {fN(dokumdaGram,1)} gr</span></div>
                     </div>
                   </div>
                 );
@@ -4995,7 +5001,7 @@ ${buildContext()}`;
                     {ozelTaslar.map((t, i) => (
                       <div key={i} style={{ display:"flex", alignItems:"center", gap:8, padding:"6px 10px", background:"rgba(91,155,213,0.06)", borderRadius:7 }}>
                         <span style={{ fontSize:10, fontWeight:700, color:"#5b9bd5", minWidth:70 }}>{t.sekil}</span>
-                        <span style={{ fontSize:10, color:"#e8dcc8", minWidth:80 }}>{t.boyut}</span>
+                        <span style={{ fontSize:10, color:"var(--goldtext)", minWidth:80 }}>{t.boyut}</span>
                         <span style={{ fontSize:9, color:"#6abf69" }}>{t.gramPerAdet.toFixed(6)} gr/adet</span>
                         <span style={{ fontSize:8, color:"#665d4a" }}>({Math.round(1/t.gramPerAdet)} adet/gr)</span>
                         <button onClick={() => {
@@ -5063,7 +5069,7 @@ ${buildContext()}`;
                   <div key={kol.id} style={{ display:"flex", alignItems:"center", gap:10, marginBottom:8, padding:"8px 10px", background:"rgba(0,0,0,0.15)", borderRadius:8 }}>
                     <div style={{ background:"rgba(201,168,76,0.15)", color:GOLD, padding:"2px 8px", borderRadius:5, fontSize:11, fontWeight:800, minWidth:50, textAlign:"center" }}>{kol.on||"—"}</div>
                     <div style={{ flex:1 }}>
-                      <div style={{ fontSize:11, fontWeight:700, color:"#e8dcc8" }}>{kol.ad}</div>
+                      <div style={{ fontSize:11, fontWeight:700, color:"var(--goldtext)" }}>{kol.ad}</div>
                       <div style={{ fontSize:8, color:"#665d4a" }}>{kolModeller.length} model · Ornek: {kol.on||"XX"}-001, {kol.on||"XX"}-002...</div>
                     </div>
                     <button onClick={() => { setSayfa("koleksiyonlar"); }} style={{ ...GH, fontSize:8, padding:"3px 8px" }}>Duzenle</button>
@@ -5178,7 +5184,7 @@ ${buildContext()}`;
             {kopyalaModal.model.foto && <div className="model-foto-wrap" style={{ width:64, height:64, borderRadius:6, overflow:"hidden" }}><img src={kopyalaModal.model.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"cover", objectPosition:"center center", display:"block" }}/></div>}
             <div>
               <div style={{ fontSize:12, fontWeight:800, color:GOLD }}>{kopyalaModal.model.kod}</div>
-              <div style={{ fontSize:11, color:"#e8dcc8" }}>{kopyalaModal.model.ad}</div>
+              <div style={{ fontSize:11, color:"var(--goldtext)" }}>{kopyalaModal.model.ad}</div>
               <div style={{ fontSize:9, color:"#998a6e" }}>{kopyalaModal.model.gram}gr · {kopyalaModal.model.refAyar}</div>
             </div>
           </div>
@@ -5251,7 +5257,7 @@ ${buildContext()}`;
       {/* HURDA MODAL */}
       {hurdaModal && (
         <Modal open={!!hurdaModal} onClose={()=>setHurdaModal(null)} title="Hurda Kaydı">
-          <div style={{ fontSize:11, fontWeight:700, color:"#e8dcc8", marginBottom:12 }}>
+          <div style={{ fontSize:11, fontWeight:700, color:"var(--goldtext)", marginBottom:12 }}>
             {hurdaModal.kalemAd}
           </div>
           {/* Hurda adedi */}
@@ -5691,7 +5697,7 @@ ${buildContext()}`;
               </div>
               <div style={{ textAlign:"right" }}>
                 <div style={{ fontSize:9, color:"#665d4a" }}>Toplam İş Günü Süresi</div>
-                <div style={{ fontSize:14, color:"#e8dcc8", fontWeight:800 }}>{sureFmt(toplamSure)}</div>
+                <div style={{ fontSize:14, color:"var(--goldtext)", fontWeight:800 }}>{sureFmt(toplamSure)}</div>
                 {tamamlandi && <div style={{ fontSize:9, color:"#6abf69", fontWeight:700, marginTop:2 }}>✓ Tamamlandı</div>}
               </div>
             </div>
@@ -5953,7 +5959,7 @@ ${buildContext()}`;
 
         {/* OTOMATİK SIRALAMALAR */}
         <div style={{ display:"flex", gap:6, marginBottom:14, flexWrap:"wrap" }}>
-          <span style={{ fontSize:10, color:"#c9a84c", fontWeight:700, alignSelf:"center" }}>Otomatik:</span>
+          <span style={{ fontSize:10, color:"var(--gold)", fontWeight:700, alignSelf:"center" }}>Otomatik:</span>
           <button onClick={() => {
             // Yüzük → Kolye → Küpe → Bileklik → Bilezik → Pendant → Set → Diğer ağırlıklarına göre
             const KAT_SIRA = { yuzuk:1, kolye:2, kupe:3, bileklik:4, bilezik:5, pendant:6, set:7, diger:8 };
@@ -5995,7 +6001,7 @@ ${buildContext()}`;
         </div>
 
         {/* MANUEL SIRALAMA LİSTESİ */}
-        <div style={{ fontSize:10, color:"#c9a84c", fontWeight:700, marginBottom:6 }}>↕ Manuel Sıralama (sürükle-bırak veya ↑↓)</div>
+        <div style={{ fontSize:10, color:"var(--gold)", fontWeight:700, marginBottom:6 }}>↕ Manuel Sıralama (sürükle-bırak veya ↑↓)</div>
         <div style={{ maxHeight:520, overflowY:"auto", border:"1px solid rgba(255,255,255,0.06)", borderRadius:8 }}>
           {kollar.map((k, i) => {
             const km = modeller.filter(m => m.ki === k.id);
@@ -6049,7 +6055,7 @@ ${buildContext()}`;
                 }}>
                 <span style={{ fontSize:14, color:"#665d4a", width:20, textAlign:"center", cursor:"grab" }}>⋮⋮</span>
                 <span style={{ fontSize:10, color:"#665d4a", width:24, textAlign:"right", fontWeight:700 }}>{i+1}.</span>
-                <span style={{ flex:1, fontSize:12, color:"#e8dcc8", fontWeight:600 }}>{k.ad || "—"}</span>
+                <span style={{ flex:1, fontSize:12, color:"var(--goldtext)", fontWeight:600 }}>{k.ad || "—"}</span>
                 <span style={{ fontSize:9, color:"#a78bfa", padding:"2px 8px", background:"rgba(167,139,250,0.1)", borderRadius:4, fontWeight:600 }}>{enCokKat}</span>
                 <span style={{ fontSize:9, color:"#998a6e", fontWeight:600 }}>{km.length} model</span>
                 <button onClick={() => {
@@ -6057,13 +6063,13 @@ ${buildContext()}`;
                   const y = [...kollar];
                   [y[i-1], y[i]] = [y[i], y[i-1]];
                   svK(y);
-                }} disabled={i===0} style={{ background:"none", border:"1px solid rgba(255,255,255,0.1)", borderRadius:5, color:"#e8dcc8", cursor:"pointer", fontSize:13, padding:"3px 9px", opacity:i===0?0.3:1, fontWeight:700 }}>↑</button>
+                }} disabled={i===0} style={{ background:"none", border:"1px solid rgba(255,255,255,0.1)", borderRadius:5, color:"var(--goldtext)", cursor:"pointer", fontSize:13, padding:"3px 9px", opacity:i===0?0.3:1, fontWeight:700 }}>↑</button>
                 <button onClick={() => {
                   if (i === kollar.length-1) return;
                   const y = [...kollar];
                   [y[i], y[i+1]] = [y[i+1], y[i]];
                   svK(y);
-                }} disabled={i===kollar.length-1} style={{ background:"none", border:"1px solid rgba(255,255,255,0.1)", borderRadius:5, color:"#e8dcc8", cursor:"pointer", fontSize:13, padding:"3px 9px", opacity:i===kollar.length-1?0.3:1, fontWeight:700 }}>↓</button>
+                }} disabled={i===kollar.length-1} style={{ background:"none", border:"1px solid rgba(255,255,255,0.1)", borderRadius:5, color:"var(--goldtext)", cursor:"pointer", fontSize:13, padding:"3px 9px", opacity:i===kollar.length-1?0.3:1, fontWeight:700 }}>↓</button>
               </div>
             );
           })}
