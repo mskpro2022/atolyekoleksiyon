@@ -165,8 +165,26 @@ function hesapla(m, secilenAyar, altinKgUSD, varsayilanMly) {
   };
 }
 
-async function ld(k, f) { try { const r = await dbLoad(k, f); return r ?? f; } catch { return f; } }
-async function sv(k, d) { try { await dbSave(k, d); } catch(e) { console.error("sv error:", e); } }
+// ═══ ŞİRKET (MULTI-COMPANY) ═══
+// Aktif şirketin Supabase anahtar öneki. MSK = "" (mevcut veriler korunur), BSP = "bsp_".
+// Şirket bağımsız anahtarlar (önek almayan): şifre, ayarlar gibi global olanlar burada listelenir.
+let AKTIF_SIRKET_ONEK = (() => {
+  try { return localStorage.getItem("atolye_sirket_onek") || ""; } catch { return ""; }
+})();
+function setSirketOnek(onek) {
+  AKTIF_SIRKET_ONEK = onek || "";
+  try { localStorage.setItem("atolye_sirket_onek", AKTIF_SIRKET_ONEK); } catch {}
+}
+// Bu anahtarlar şirketten bağımsız (önek ALMAZ) — her iki şirkette ortak kalır
+const SIRKET_BAGIMSIZ = ["atolye_sifre"];
+function sirketAnahtar(k) {
+  if (!AKTIF_SIRKET_ONEK) return k;            // MSK → değişiklik yok
+  if (SIRKET_BAGIMSIZ.includes(k)) return k;   // global anahtar
+  return AKTIF_SIRKET_ONEK + k;                // BSP → "bsp_" öneki
+}
+
+async function ld(k, f) { try { const r = await dbLoad(sirketAnahtar(k), f); return r ?? f; } catch { return f; } }
+async function sv(k, d) { try { await dbSave(sirketAnahtar(k), d); } catch(e) { console.error("sv error:", e); } }
 
 function resizeImg(file) {
   return new Promise(resolve => {
@@ -1358,6 +1376,78 @@ function SifreDegistir() {
   );
 }
 
+function SecimEkrani({ onKatalog }) {
+  const PERSONEL_URL = "https://personeltakip-pearl.vercel.app/";
+  const [hover, setHover] = useState(null);
+  const kart = (id, ikon, baslik, aciklama, renk, onClick) => (
+    <div
+      onClick={onClick}
+      onMouseEnter={()=>setHover(id)}
+      onMouseLeave={()=>setHover(null)}
+      style={{
+        flex:1, minWidth:200, maxWidth:280, cursor:"pointer",
+        background: hover===id ? "rgba(201,168,76,0.10)" : "rgba(201,168,76,0.04)",
+        border:"1px solid "+(hover===id ? renk : "rgba(201,168,76,0.18)"),
+        borderRadius:18, padding:"38px 28px", textAlign:"center",
+        transform: hover===id ? "translateY(-4px)" : "none",
+        transition:"all .2s ease",
+        boxShadow: hover===id ? "0 12px 30px rgba(0,0,0,0.35)" : "none",
+      }}>
+      <div style={{ fontSize:52, marginBottom:14 }}>{ikon}</div>
+      <div style={{ fontSize:18, fontWeight:800, color:renk, marginBottom:6 }}>{baslik}</div>
+      <div style={{ fontSize:11, color:"#998a6e", lineHeight:1.5 }}>{aciklama}</div>
+    </div>
+  );
+  return (
+    <div style={{ minHeight:"100vh", width:"100vw", background:"#110f0a", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", fontFamily:"'Segoe UI',Arial,sans-serif", margin:0, padding:"20px", boxSizing:"border-box" }}>
+      <div style={{ fontSize:32, marginBottom:6 }}>💎</div>
+      <div style={{ fontSize:22, fontWeight:800, color:"#c9a84c", marginBottom:4 }}>MSK Atölye Sistemi</div>
+      <div style={{ fontSize:12, color:"#665d4a", marginBottom:40 }}>Hangi bölüme girmek istersiniz?</div>
+      <div style={{ display:"flex", gap:20, flexWrap:"wrap", justifyContent:"center", width:"100%", maxWidth:620 }}>
+        {kart("katalog", "💎", "Katalog / Atölye", "Modeller, siparişler, koleksiyonlar, kasa ve üretim takibi", "#c9a84c", onKatalog)}
+        {kart("personel", "👥", "Personel / Bordro", "Personel, mesai, avans, izin, giderler ve devam takibi", "#5b9bd5", ()=>{ window.location.href = PERSONEL_URL; })}
+      </div>
+      <div style={{ fontSize:9, color:"#4a4336", marginTop:36 }}>İki sistem de ortak veritabanını kullanır</div>
+    </div>
+  );
+}
+
+function SirketSecimEkrani({ onSec }) {
+  const [hover, setHover] = useState(null);
+  const sec = (onek, ad) => { setSirketOnek(onek); onSec(); };
+  const kart = (id, ikon, baslik, aciklama, renk, onClick) => (
+    <div
+      onClick={onClick}
+      onMouseEnter={()=>setHover(id)}
+      onMouseLeave={()=>setHover(null)}
+      style={{
+        flex:1, minWidth:200, maxWidth:280, cursor:"pointer",
+        background: hover===id ? "rgba(201,168,76,0.10)" : "rgba(201,168,76,0.04)",
+        border:"1px solid "+(hover===id ? renk : "rgba(201,168,76,0.18)"),
+        borderRadius:18, padding:"38px 28px", textAlign:"center",
+        transform: hover===id ? "translateY(-4px)" : "none",
+        transition:"all .2s ease",
+        boxShadow: hover===id ? "0 12px 30px rgba(0,0,0,0.35)" : "none",
+      }}>
+      <div style={{ fontSize:52, marginBottom:14 }}>{ikon}</div>
+      <div style={{ fontSize:18, fontWeight:800, color:renk, marginBottom:6 }}>{baslik}</div>
+      <div style={{ fontSize:11, color:"#998a6e", lineHeight:1.5 }}>{aciklama}</div>
+    </div>
+  );
+  return (
+    <div style={{ minHeight:"100vh", width:"100vw", background:"#110f0a", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", fontFamily:"'Segoe UI',Arial,sans-serif", margin:0, padding:"20px", boxSizing:"border-box" }}>
+      <div style={{ fontSize:32, marginBottom:6 }}>🏢</div>
+      <div style={{ fontSize:22, fontWeight:800, color:"#c9a84c", marginBottom:4 }}>Şirket Seçin</div>
+      <div style={{ fontSize:12, color:"#665d4a", marginBottom:40 }}>Hangi şirketin kataloğunu açmak istersiniz?</div>
+      <div style={{ display:"flex", gap:20, flexWrap:"wrap", justifyContent:"center", width:"100%", maxWidth:620 }}>
+        {kart("msk", "💎", "MSK Jewelry", "Mevcut katalog, modeller, siparişler ve kasa", "#c9a84c", ()=>sec("", "MSK"))}
+        {kart("bsp", "✨", "BSP Jewelry Design", "Ayrı katalog — kendi modelleri ve siparişleri", "#a78bfa", ()=>sec("bsp_", "BSP"))}
+      </div>
+      <div style={{ fontSize:9, color:"#4a4336", marginTop:36 }}>İki şirketin verileri tamamen ayrıdır</div>
+    </div>
+  );
+}
+
 export default function Root() {
   const [giris, setGiris] = useState(() => {
     // "Beni Hatırla" — token varsa ve süresi dolmamışsa otomatik giriş
@@ -1371,11 +1461,15 @@ export default function Root() {
     } catch {}
     return false;
   });
+  const [secim, setSecim] = useState(false);     // katalog seçildi mi
+  const [sirket, setSirket] = useState(false);   // şirket seçildi mi
   if (!giris) return <GirisEkrani onGiris={()=>setGiris(true)} />;
-  return <Atolye />;
+  if (!secim) return <SecimEkrani onKatalog={()=>setSecim(true)} />;
+  if (!sirket) return <SirketSecimEkrani onSec={()=>setSirket(true)} />;
+  return <Atolye onSirketDegis={()=>setSirket(false)} />;
 }
 
-function Atolye() {
+function Atolye({ onSirketDegis }) {
   const [tema, setTema] = useState(() => {
     try { const t = localStorage.getItem("atolye_tema"); return TEMALAR[t] || TEMALAR.altin; } catch { return TEMALAR.altin; }
   });
@@ -1398,6 +1492,8 @@ function Atolye() {
   // Tema değişince bu değişkenleri de güncelle ki tüm kullanımlar aktif temaya uysun.
   GOLD = T.gold;
   DARK = T.bg2;
+  // Aktif şirket — başlıkta ve ayarlarda gösterilir
+  const AKTIF_SIRKET = AKTIF_SIRKET_ONEK === "bsp_" ? "BSP Jewelry Design" : "MSK Jewelry";
   // Stil sabitleri (IS/BG/GH/RD) modül seviyesinde sabit altın renkliydi — tema değişince
   // değişmiyorlardı. Burada temaya bağlı yeniden tanımlayarak modül seviyesini gölgeliyoruz.
   const IS = { width:"100%", background:T.card, border:"1px solid "+T.border, borderRadius:10, padding:"10px 14px", color:T.text, fontSize:13, outline:"none", fontFamily:"sans-serif", boxSizing:"border-box" };
@@ -2283,7 +2379,10 @@ function Atolye() {
       <div style={{ padding:"14px 14px 10px", background:"rgba(201,168,76,0.04)", borderBottom:"1px solid rgba(201,168,76,0.07)" }}>
         <div style={{ width:"100%" }}>
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:8, marginBottom:10 }}>
-            <h1 style={{ margin:0, fontSize:"clamp(13px,2vw,18px)", fontWeight:700, color:GOLD }}>Atolye Koleksiyon Sistemi</h1>
+            <h1 style={{ margin:0, fontSize:"clamp(13px,2vw,18px)", fontWeight:700, color:GOLD, display:"flex", alignItems:"center", gap:8 }}>
+              Atolye Koleksiyon Sistemi
+              <span style={{ fontSize:9, fontWeight:800, padding:"3px 9px", borderRadius:20, background: AKTIF_SIRKET_ONEK==="bsp_" ? "rgba(167,139,250,0.15)" : "rgba(201,168,76,0.15)", border:"1px solid "+(AKTIF_SIRKET_ONEK==="bsp_" ? "rgba(167,139,250,0.4)" : "rgba(201,168,76,0.4)"), color: AKTIF_SIRKET_ONEK==="bsp_" ? "#a78bfa" : GOLD, whiteSpace:"nowrap" }}>{AKTIF_SIRKET_ONEK==="bsp_" ? "✨ BSP" : "💎 MSK"}</span>
+            </h1>
             <div style={{ display:"flex", gap:3, flexWrap:"wrap" }}>
               {["koleksiyonlar","modeller","konfirmasyon","siparisler","iadeler","musteriler","kasa","analiz","asistan","ayarlar"].map(n => {
                 let badgeSayi = 0;
@@ -4922,6 +5021,23 @@ ${buildContext()}`;
 
             {/* ŞİFRE DEĞİŞTİR */}
             <SifreDegistir />
+
+            {/* AKTİF ŞİRKET */}
+            <div style={{ background:"rgba(167,139,250,0.04)", border:"1px solid rgba(167,139,250,0.15)", borderRadius:12, padding:"14px 16px", marginBottom:14 }}>
+              <div style={{ fontSize:10, fontWeight:700, color:"#a78bfa", marginBottom:8 }}>🏢 AKTİF ŞİRKET</div>
+              <div style={{ fontSize:14, fontWeight:800, color:GOLD, marginBottom:4 }}>{AKTIF_SIRKET}</div>
+              <div style={{ fontSize:9, color:"#665d4a", marginBottom:10 }}>Şu an bu şirketin kataloğundasınız. Diğer şirkete geçmek için aşağıdaki butonu kullanın (verileriniz korunur).</div>
+              <button onClick={()=>{ if (onSirketDegis) onSirketDegis(); }}
+                style={{ background:"rgba(167,139,250,0.12)", border:"1px solid rgba(167,139,250,0.25)", borderRadius:7, padding:"7px 14px", color:"#a78bfa", fontSize:10, fontWeight:700, cursor:"pointer" }}>Şirket Değiştir →</button>
+            </div>
+
+            {/* DİĞER SİSTEM — PERSONEL */}
+            <div style={{ background:"rgba(91,155,213,0.03)", border:"1px solid rgba(91,155,213,0.12)", borderRadius:12, padding:"14px 16px", marginBottom:14 }}>
+              <div style={{ fontSize:10, fontWeight:700, color:"#5b9bd5", marginBottom:8 }}>👥 PERSONEL SİSTEMİ</div>
+              <div style={{ fontSize:9, color:"#665d4a", marginBottom:10 }}>Personel, bordro, mesai, avans, izin ve gider takibi için diğer sisteme geçiş yapın.</div>
+              <button onClick={()=>{ window.open("https://personeltakip-pearl.vercel.app/", "_blank"); }}
+                style={{ background:"rgba(91,155,213,0.12)", border:"1px solid rgba(91,155,213,0.25)", borderRadius:7, padding:"7px 14px", color:"#5b9bd5", fontSize:10, fontWeight:700, cursor:"pointer" }}>Personel Sistemini Aç →</button>
+            </div>
 
             {/* OTURUMU KAPAT */}
             <div style={{ background:"rgba(232,90,79,0.03)", border:"1px solid rgba(232,90,79,0.1)", borderRadius:12, padding:"14px 16px", marginBottom:14 }}>
