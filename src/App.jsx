@@ -1455,10 +1455,11 @@ export default function Root() {
   });
   const [secim, setSecim] = useState(false);     // katalog seçildi mi
   const [sirket, setSirket] = useState(false);   // şirket seçildi mi
+  const [sirketKey, setSirketKey] = useState(0); // şirket değişince Atolye'yi yeniden mount eder
   if (!giris) return <GirisEkrani onGiris={()=>setGiris(true)} />;
   if (!secim) return <SecimEkrani onKatalog={()=>setSecim(true)} />;
-  if (!sirket) return <SirketSecimEkrani onSec={()=>setSirket(true)} />;
-  return <Atolye onSirketDegis={()=>setSirket(false)} />;
+  if (!sirket) return <SirketSecimEkrani onSec={()=>{ setSirketKey(k=>k+1); setSirket(true); }} />;
+  return <Atolye key={sirketKey} onSirketDegis={()=>setSirket(false)} />;
 }
 
 function Atolye({ onSirketDegis }) {
@@ -2393,7 +2394,7 @@ function Atolye({ onSirketDegis }) {
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:8, marginBottom:10 }}>
             <h1 style={{ margin:0, fontSize:"clamp(13px,2vw,18px)", fontWeight:700, color:GOLD, display:"flex", alignItems:"center", gap:8 }}>
               Atolye Koleksiyon Sistemi
-              <span style={{ fontSize:9, fontWeight:800, padding:"3px 9px", borderRadius:20, background: AKTIF_SIRKET_ONEK==="bsp_" ? "rgba(167,139,250,0.15)" : "rgba(201,168,76,0.15)", border:"1px solid "+(AKTIF_SIRKET_ONEK==="bsp_" ? "rgba(167,139,250,0.4)" : "rgba(201,168,76,0.4)"), color: AKTIF_SIRKET_ONEK==="bsp_" ? "#a78bfa" : GOLD, whiteSpace:"nowrap" }}>{AKTIF_SIRKET_ONEK==="bsp_" ? "✨ BSP" : "💎 MSK"}</span>
+              <button onClick={()=>{ if (onSirketDegis) onSirketDegis(); }} title="Şirket değiştir" style={{ fontSize:9, fontWeight:800, padding:"3px 10px", borderRadius:20, background: AKTIF_SIRKET_ONEK==="bsp_" ? "rgba(167,139,250,0.15)" : "rgba(201,168,76,0.15)", border:"1px solid "+(AKTIF_SIRKET_ONEK==="bsp_" ? "rgba(167,139,250,0.4)" : "rgba(201,168,76,0.4)"), color: AKTIF_SIRKET_ONEK==="bsp_" ? "#a78bfa" : GOLD, whiteSpace:"nowrap", cursor:"pointer", display:"inline-flex", alignItems:"center", gap:4 }}>{AKTIF_SIRKET_ONEK==="bsp_" ? "✨ BSP" : "💎 MSK"} <span style={{ fontSize:8, opacity:0.7 }}>⇄</span></button>
             </h1>
             <div style={{ display:"flex", gap:3, flexWrap:"wrap" }}>
               {["koleksiyonlar","modeller","konfirmasyon","siparisler","iadeler","musteriler","kasa","analiz","asistan","ayarlar"].map(n => {
