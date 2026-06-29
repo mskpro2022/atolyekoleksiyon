@@ -297,11 +297,19 @@ function downloadPDF(html, filename) {
 
 // Sıralama: SADECE koddaki rakam (sayısal)
 function dogalSirala(a, b) {
-  const ka = (a.kod || "").toUpperCase();
-  const kb = (b.kod || "").toUpperCase();
-  const sayiA = parseInt((ka.match(/\d+/) || ["999999"])[0], 10);
-  const sayiB = parseInt((kb.match(/\d+/) || ["999999"])[0], 10);
-  return sayiA - sayiB;
+  const ka = a.kod || "", kb = b.kod || "";
+  // Karmaşık kodları doğru sırala: prefix + ana sayı + suffix
+  // "01GS21" < "01GS21-B" < "01GS21-V2" < "01GSP21" gibi
+  const ma = ka.match(/^([A-Za-zÇĞİÖŞÜçğışöşü\-]*)(\d+)(.*)$/);
+  const mb = kb.match(/^([A-Za-zÇĞİÖŞÜçğışöşü\-]*)(\d+)(.*)$/);
+  if (ma && mb) {
+    const prefCmp = ma[1].localeCompare(mb[1], "tr");
+    if (prefCmp !== 0) return prefCmp;
+    const numCmp = Number(ma[2]) - Number(mb[2]);
+    if (numCmp !== 0) return numCmp;
+    return ma[3].localeCompare(mb[3], "tr");
+  }
+  return ka.localeCompare(kb, "tr");
 }
 
 function buildKatalogHTML(kol, modeller, sutun, hedefAyar, kollar) {
@@ -1290,22 +1298,6 @@ function GirisEkrani({ onGiris }) {
     document.body.style.padding = "0";
     document.documentElement.style.margin = "0";
     document.documentElement.style.padding = "0";
-    // Model kart foto hover zoom
-    const s = document.createElement("style");
-    s.id = "atolye-hover-zoom";
-    s.textContent = `.model-foto-wrap { overflow:hidden; position:relative; } .model-foto-wrap img { transition: transform .4s cubic-bezier(.25,.46,.45,.94), transform-origin 0s !important; transform-origin: center center; } .model-foto-wrap:hover img { transform: scale(1.90) !important; }`;
-    // Mouse-position zoom origin
-    document.addEventListener("mousemove", function(e) {
-      const el = e.target.closest && e.target.closest(".model-foto-wrap");
-      if (!el) return;
-      const img = el.querySelector("img");
-      if (!img) return;
-      const r = el.getBoundingClientRect();
-      const x = ((e.clientX - r.left) / r.width * 100).toFixed(1);
-      const y = ((e.clientY - r.top) / r.height * 100).toFixed(1);
-      img.style.transformOrigin = x + "% " + y + "%";
-    });
-    if (!document.getElementById("atolye-hover-zoom")) document.head.appendChild(s);
   }, []);
   const kontrol = () => {
     const aktifSifre = localStorage.getItem("atolye_sifre") || "19671967*Mm";
@@ -1671,6 +1663,26 @@ function Atolye({ onSirketDegis }) {
     document.body.style.padding = "0";
     document.documentElement.style.margin = "0";
     document.documentElement.style.padding = "0";
+    // Model kart foto hover zoom — Atölye'de her zaman aktif olmalı
+    // (Giriş ekranı "beni hatırla" ile atlanınca da çalışsın diye burada)
+    if (!document.getElementById("atolye-hover-zoom")) {
+      const s = document.createElement("style");
+      s.id = "atolye-hover-zoom";
+      s.textContent = `.model-foto-wrap { overflow:hidden; position:relative; } .model-foto-wrap img { transition: transform .4s cubic-bezier(.25,.46,.45,.94), transform-origin 0s !important; transform-origin: center center; } .model-foto-wrap:hover img { transform: scale(1.90) !important; }`;
+      document.head.appendChild(s);
+    }
+    const hoverHandler = function(e) {
+      const el = e.target.closest && e.target.closest(".model-foto-wrap");
+      if (!el) return;
+      const img = el.querySelector("img");
+      if (!img) return;
+      const r = el.getBoundingClientRect();
+      const x = ((e.clientX - r.left) / r.width * 100).toFixed(1);
+      const y = ((e.clientY - r.top) / r.height * 100).toFixed(1);
+      img.style.transformOrigin = x + "% " + y + "%";
+    };
+    document.addEventListener("mousemove", hoverHandler);
+    return () => document.removeEventListener("mousemove", hoverHandler);
   }, []);
 
   // ═══ ÇAKIŞMA KORUMASI — versiyon takibi ═══
