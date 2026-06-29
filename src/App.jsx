@@ -1440,7 +1440,176 @@ function SirketSecimEkrani({ onSec }) {
   );
 }
 
+// ═══ MÜŞTERİ VİTRİN MODU ═══
+// Müşteriye verilen link (?vitrin=KOD) ile açılır. Salt okunur, mahrem veri YOK.
+// Sadece foto + ad + kod + gram + ayar gösterir. Seçtiklerinden PDF yapabilir.
+function VitrinModu({ kod }) {
+  const [durum, setDurum] = useState("yukleniyor"); // yukleniyor, gecersiz, hazir
+  const [vitrinAd, setVitrinAd] = useState("");
+  const [kollar, setKollar] = useState([]);
+  const [modeller, setModeller] = useState([]);
+  const [aktifKol, setAktifKol] = useState(null);
+  const [secili, setSecili] = useState(new Set());
+  const [arama, setArama] = useState("");
+
+  useEffect(() => { (async () => {
+    try {
+      // Müşteri kodlarını oku (her iki şirkette de aranır)
+      let kodKaydi = null, onek = "";
+      for (const o of ["", "bsp_"]) {
+        const eski = AKTIF_SIRKET_ONEK;
+        AKTIF_SIRKET_ONEK = o;
+        const kodlar = await ld("v7vitrin", []);
+        AKTIF_SIRKET_ONEK = eski;
+        const bulunan = (kodlar || []).find(k => k.kod === kod && k.aktif);
+        if (bulunan) { kodKaydi = bulunan; onek = o; break; }
+      }
+      if (!kodKaydi) { setDurum("gecersiz"); return; }
+
+      // Erişim kaydı tut (kim ne zaman açtı)
+      AKTIF_SIRKET_ONEK = onek;
+      try {
+        const kodlar = await ld("v7vitrin", []);
+        const idx = (kodlar || []).findIndex(k => k.kod === kod);
+        if (idx >= 0) {
+          kodlar[idx].sonErisim = Date.now();
+          kodlar[idx].erisimSayisi = (kodlar[idx].erisimSayisi || 0) + 1;
+          await sv("v7vitrin", kodlar);
+        }
+      } catch {}
+
+      setVitrinAd(kodKaydi.musteriAd || "Katalog");
+      // Veriyi çek
+      const [k, m] = await Promise.all([ld("v7k", []), ld("v7m", [])]);
+      AKTIF_SIRKET_ONEK = onek; // sabit kalsın
+      // Sadece "vitrinde göster" işaretli koleksiyonlar
+      const aktifKollar = (k || []).filter(kol => kol.vitrin === true);
+      const aktifKolIdler = new Set(aktifKollar.map(kol => kol.id));
+      // Mahrem alanları ÇIKAR — sadece güvenli alanlar kalır
+      const guvenliModeller = (m || [])
+        .filter(mod => aktifKolIdler.has(mod.ki))
+        .map(mod => ({
+          id: mod.id, ki: mod.ki, foto: mod.foto || "",
+          kod: mod.kod || "", ad: mod.ad || "",
+          gram: mod.gram || "", refAyar: mod.refAyar || "", kategori: mod.kategori || "",
+        }));
+      setKollar(aktifKollar);
+      setModeller(guvenliModeller);
+      if (aktifKollar.length > 0) setAktifKol(aktifKollar[0]);
+      setDurum("hazir");
+    } catch (e) {
+      console.error("Vitrin yükleme hatası:", e);
+      setDurum("gecersiz");
+    }
+  })(); }, [kod]);
+
+  const GOLD2 = "#c9a84c";
+  if (durum === "yukleniyor") {
+    return <div style={{ minHeight:"100vh", background:"#0d0b07", display:"flex", alignItems:"center", justifyContent:"center", color:GOLD2, fontFamily:"sans-serif", fontSize:14 }}>Katalog yükleniyor...</div>;
+  }
+  if (durum === "gecersiz") {
+    return <div style={{ minHeight:"100vh", background:"#0d0b07", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", color:"#e8dcc8", fontFamily:"sans-serif", textAlign:"center", padding:20 }}>
+      <div style={{ fontSize:40, marginBottom:12 }}>🔒</div>
+      <div style={{ fontSize:18, fontWeight:700, color:GOLD2, marginBottom:6 }}>Geçersiz veya Süresi Dolmuş Bağlantı</div>
+      <div style={{ fontSize:12, color:"#998a6e" }}>Bu katalog bağlantısı geçerli değil. Lütfen yetkiliyle iletişime geçin.</div>
+    </div>;
+  }
+
+  const koldaki = modeller.filter(m => m.ki === aktifKol?.id && (
+    !arama || (m.kod + " " + m.ad).toLowerCase().includes(arama.toLowerCase())
+  ));
+  const seciliModeller = modeller.filter(m => secili.has(m.id));
+
+  const vitrinPDF = () => {
+    const liste = seciliModeller.length > 0 ? seciliModeller : koldaki;
+    if (liste.length === 0) { alert("Önce model seçin veya bir koleksiyon açın."); return; }
+    const css = "*{margin:0;padding:0;box-sizing:border-box}body{font-family:Arial,sans-serif;background:#f3f3f3;color:#1a1a1a;padding:0}"
+      + "@media print{@page{size:A4 portrait;margin:8mm}}"
+      + ".hd{text-align:center;padding:20px;border-bottom:2px solid #c9a84c;margin-bottom:14px}"
+      + ".hd h1{font-size:22px;color:#1a1a1a;letter-spacing:.05em}.hd p{font-size:11px;color:#888;margin-top:4px}"
+      + ".grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;padding:0 12px}"
+      + ".cd{background:#fff;border:1px solid #e0e0e0;border-radius:10px;overflow:hidden;page-break-inside:avoid}"
+      + ".cd .ph{height:150px;background:#f3f3f3;display:flex;align-items:center;justify-content:center;overflow:hidden}"
+      + ".cd .ph img{width:100%;height:100%;object-fit:contain}"
+      + ".cd .inf{padding:8px 10px}.cd .kod{font-size:9px;color:#c9a84c;font-weight:700}.cd .ad{font-size:12px;font-weight:700;margin:2px 0}"
+      + ".cd .gr{font-size:10px;color:#666;font-weight:600}";
+    let h = "<!DOCTYPE html><html><head><meta charset='utf-8'><title>" + vitrinAd + "</title><style>" + css + "</style></head><body>";
+    h += "<div class='hd'><h1>" + vitrinAd + "</h1><p>" + new Date().toLocaleDateString("tr-TR") + " · " + liste.length + " model</p></div>";
+    h += "<div class='grid'>";
+    liste.forEach(m => {
+      h += "<div class='cd'><div class='ph'>" + (m.foto ? "<img src='" + m.foto + "'/>" : "◇") + "</div>";
+      h += "<div class='inf'><div class='kod'>" + (m.kod || "") + "</div><div class='ad'>" + (m.ad || "") + "</div>";
+      h += "<div class='gr'>" + (m.gram ? m.gram + "gr" : "") + (m.refAyar ? " · " + m.refAyar : "") + "</div></div></div>";
+    });
+    h += "</div></body></html>";
+    const w = window.open("", "_blank");
+    if (w) { w.document.write(h); w.document.close(); setTimeout(() => w.print(), 600); }
+  };
+
+  return (
+    <div style={{ minHeight:"100vh", background:"#0d0b07", color:"#e8dcc8", fontFamily:"sans-serif" }}>
+      <style>{"*{box-sizing:border-box}.vm-foto{transition:transform .3s}.vm-card:hover .vm-foto{transform:scale(1.08)}"}</style>
+      {/* HEADER */}
+      <div style={{ padding:"16px 18px", borderBottom:"1px solid rgba(201,168,76,0.12)", background:"rgba(201,168,76,0.03)", position:"sticky", top:0, zIndex:10, backdropFilter:"blur(8px)" }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:10 }}>
+          <div>
+            <div style={{ fontSize:18, fontWeight:800, color:GOLD2 }}>{vitrinAd}</div>
+            <div style={{ fontSize:10, color:"#665d4a" }}>Ürün Kataloğu</div>
+          </div>
+          <button onClick={vitrinPDF} style={{ background:"linear-gradient(135deg,#c9a84c,#b8943f)", border:"none", borderRadius:9, padding:"9px 18px", color:"#1a1a1a", fontSize:12, fontWeight:800, cursor:"pointer" }}>
+            {secili.size > 0 ? "Seçili " + secili.size + " Modeli PDF Yap" : "Bu Koleksiyonu PDF Yap"}
+          </button>
+        </div>
+      </div>
+
+      {/* KOLEKSİYON SEKMELERİ */}
+      <div style={{ display:"flex", gap:6, padding:"12px 18px", overflowX:"auto", borderBottom:"1px solid rgba(201,168,76,0.07)" }}>
+        {kollar.map(k => (
+          <button key={k.id} onClick={()=>{ setAktifKol(k); setArama(""); }} style={{ whiteSpace:"nowrap", background: aktifKol?.id===k.id ? "rgba(201,168,76,0.15)" : "rgba(255,255,255,0.03)", border:"1px solid "+(aktifKol?.id===k.id ? "rgba(201,168,76,0.4)" : "rgba(255,255,255,0.08)"), borderRadius:8, padding:"7px 14px", color: aktifKol?.id===k.id ? GOLD2 : "#998a6e", fontSize:12, fontWeight:700, cursor:"pointer" }}>{k.ad}</button>
+        ))}
+      </div>
+
+      {/* ARAMA */}
+      <div style={{ padding:"12px 18px 0" }}>
+        <input value={arama} onChange={e=>setArama(e.target.value)} placeholder="Model ara..." style={{ width:"100%", maxWidth:300, background:"rgba(201,168,76,0.05)", border:"1px solid rgba(201,168,76,0.12)", borderRadius:9, padding:"9px 14px", color:"#e8dcc8", fontSize:13, outline:"none" }}/>
+      </div>
+
+      {/* MODEL GRID */}
+      <div style={{ padding:"14px 18px 40px", display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(160px,1fr))", gap:12 }}>
+        {koldaki.length === 0 && <div style={{ gridColumn:"1/-1", textAlign:"center", color:"#665d4a", padding:"40px 0", fontSize:13 }}>Bu koleksiyonda model bulunamadı</div>}
+        {koldaki.map(m => {
+          const sec = secili.has(m.id);
+          return (
+            <div key={m.id} className="vm-card" onClick={()=>{ const ns=new Set(secili); sec?ns.delete(m.id):ns.add(m.id); setSecili(ns); }}
+              style={{ background:"#fff", borderRadius:12, overflow:"hidden", cursor:"pointer", border:"2px solid "+(sec?GOLD2:"transparent"), position:"relative" }}>
+              <div style={{ position:"absolute", top:8, right:8, zIndex:2, width:24, height:24, borderRadius:6, background: sec?GOLD2:"rgba(255,255,255,0.85)", border:"1px solid "+(sec?GOLD2:"#ccc"), display:"flex", alignItems:"center", justifyContent:"center", fontSize:13, fontWeight:800, color:"#1a1a1a" }}>{sec?"✓":""}</div>
+              <div style={{ height:170, background:"#f3f3f3", display:"flex", alignItems:"center", justifyContent:"center", overflow:"hidden" }}>
+                {m.foto ? <img className="vm-foto" src={m.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"contain" }}/> : <div style={{ fontSize:32, color:"#ccc" }}>◇</div>}
+              </div>
+              <div style={{ padding:"8px 11px", background:"#fff", color:"#1a1a1a" }}>
+                <div style={{ fontSize:9, color:GOLD2, fontWeight:700 }}>{m.kod}</div>
+                <div style={{ fontSize:13, fontWeight:700, margin:"1px 0" }}>{m.ad}</div>
+                <div style={{ fontSize:11, color:"#666", fontWeight:600 }}>{m.gram ? m.gram + "gr" : ""}{m.refAyar ? " · " + m.refAyar : ""}</div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export default function Root() {
+  // ═══ MÜŞTERİ VİTRİN MODU ═══
+  // URL'de ?vitrin=KOD varsa müşteri showroom modu açılır (şifre yok, salt okunur, mahrem veri yok)
+  const vitrinKod = (() => {
+    try {
+      const p = new URLSearchParams(window.location.search);
+      return p.get("vitrin") || null;
+    } catch { return null; }
+  })();
+  if (vitrinKod) return <VitrinModu kod={vitrinKod} />;
+
   const [giris, setGiris] = useState(() => {
     // "Beni Hatırla" — token varsa ve süresi dolmamışsa otomatik giriş
     try {
@@ -1579,6 +1748,8 @@ function Atolye({ onSirketDegis }) {
   // Ayarlar
   const [ayarEtiketler, setAyarEtiketler] = useState([]); // global etiket listesi
   const [ayarKategoriler, setAyarKategoriler] = useState(["yuzuk","kolye","kupe","bilezik","bileklik","pendant","set","diger"]);
+  const [vitrinKodlar, setVitrinKodlar] = useState([]); // müşteri vitrin kodları
+  const [yeniMusteriAd, setYeniMusteriAd] = useState("");
   const [ayarYeniKategori, setAyarYeniKategori] = useState("");
   const [ayarVarsAltinKg, setAyarVarsAltinKg] = useState("");
   const [ayarVarsMc, setAyarVarsMc] = useState("");
@@ -1970,6 +2141,12 @@ function Atolye({ onSirketDegis }) {
   }, [versiyonDamgala]);
   const svMus = useCallback(async d => { setMusteriler(d); await versiyonDamgala("v7u", d); }, [versiyonDamgala]);
   useEffect(() => { if (loaded) sv("v7c", { a: altinKg, mc }); }, [altinKg, mc, loaded]);
+  // Müşteri vitrin kodlarını Ayarlar açıldığında yükle
+  useEffect(() => {
+    if (sayfa === "ayarlar" && loaded) {
+      ld("v7vitrin", []).then(v => setVitrinKodlar(v || []));
+    }
+  }, [sayfa, loaded]);
 
   const kodToKol = useCallback(kod => {
     if (!kod) return null;
@@ -5034,6 +5211,67 @@ ${buildContext()}`;
 
             {/* ŞİFRE DEĞİŞTİR */}
             <SifreDegistir />
+
+            {/* MÜŞTERİ VİTRİNİ */}
+            <div style={{ background:"rgba(106,191,105,0.03)", border:"1px solid rgba(106,191,105,0.15)", borderRadius:12, padding:"14px 16px", marginBottom:14 }}>
+              <div style={{ fontSize:10, fontWeight:700, color:"#6abf69", marginBottom:8 }}>🛍️ MÜŞTERİ VİTRİNİ</div>
+              <div style={{ fontSize:9, color:"#665d4a", marginBottom:12 }}>Müşterilere özel link oluşturun. Müşteri sadece foto, model adı, gram ve ayar görür — fiyat, taş, işçilik gibi bilgiler gizlidir. Yalnızca "vitrinde göster" işaretli koleksiyonlar görünür.</div>
+
+              {/* Koleksiyon vitrin işaretleri */}
+              <div style={{ fontSize:9, fontWeight:700, color:"#998a6e", marginBottom:6 }}>Vitrinde gösterilecek koleksiyonlar:</div>
+              <div style={{ display:"flex", flexWrap:"wrap", gap:6, marginBottom:14 }}>
+                {kollar.length===0 && <div style={{ fontSize:9, color:"#665d4a" }}>Henüz koleksiyon yok</div>}
+                {kollar.map(k => {
+                  const acik = k.vitrin === true;
+                  return (
+                    <button key={k.id} onClick={()=>{ const yeni=kollar.map(x=>x.id===k.id?{...x,vitrin:!acik}:x); svK(yeni); }}
+                      style={{ background: acik?"rgba(106,191,105,0.15)":"rgba(255,255,255,0.03)", border:"1px solid "+(acik?"rgba(106,191,105,0.4)":"rgba(255,255,255,0.08)"), borderRadius:7, padding:"5px 11px", color: acik?"#6abf69":"#7a6f5a", fontSize:10, fontWeight:700, cursor:"pointer", display:"flex", alignItems:"center", gap:5 }}>
+                      {acik?"✓":"○"} {k.ad}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Yeni müşteri linki oluştur */}
+              <div style={{ fontSize:9, fontWeight:700, color:"#998a6e", marginBottom:6 }}>Yeni müşteri linki:</div>
+              <div style={{ display:"flex", gap:6, marginBottom:12, flexWrap:"wrap" }}>
+                <input value={yeniMusteriAd} onChange={e=>setYeniMusteriAd(e.target.value)} placeholder="Müşteri adı (örn. Ahmet Kuyumcu)" style={{ ...IS, flex:1, minWidth:160, padding:"7px 11px", fontSize:11 }}/>
+                <button onClick={async()=>{
+                  if(!yeniMusteriAd.trim()){ toastGoster("hata","Müşteri adı girin"); return; }
+                  const rastgele = Math.random().toString(36).slice(2,8).toUpperCase();
+                  const yeniKod = { kod: rastgele, musteriAd: yeniMusteriAd.trim(), aktif: true, olusturma: Date.now(), erisimSayisi: 0, sonErisim: null };
+                  const guncel = [...vitrinKodlar, yeniKod];
+                  setVitrinKodlar(guncel);
+                  await sv("v7vitrin", guncel);
+                  setYeniMusteriAd("");
+                  toastGoster("ok","Link oluşturuldu");
+                }} style={{ ...BG, fontSize:11, padding:"7px 14px" }}>+ Link Oluştur</button>
+              </div>
+
+              {/* Mevcut müşteri linkleri */}
+              {vitrinKodlar.length>0 && <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+                {vitrinKodlar.map((vk,i) => {
+                  const url = window.location.origin + "?vitrin=" + vk.kod;
+                  return (
+                    <div key={vk.kod} style={{ background:"rgba(0,0,0,0.15)", border:"1px solid rgba(255,255,255,0.06)", borderRadius:8, padding:"9px 11px" }}>
+                      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:8, flexWrap:"wrap" }}>
+                        <div style={{ minWidth:0 }}>
+                          <div style={{ fontSize:11, fontWeight:700, color: vk.aktif?GOLD:"#665d4a" }}>{vk.musteriAd} {!vk.aktif && <span style={{ fontSize:8, color:"#e85a4f" }}>(kapalı)</span>}</div>
+                          <div style={{ fontSize:8, color:"#665d4a" }}>
+                            {vk.erisimSayisi>0 ? vk.erisimSayisi+" kez açıldı · son: "+(vk.sonErisim?new Date(vk.sonErisim).toLocaleDateString("tr-TR"):"—") : "henüz açılmadı"}
+                          </div>
+                        </div>
+                        <div style={{ display:"flex", gap:5 }}>
+                          <button onClick={()=>{ navigator.clipboard?.writeText(url); toastGoster("ok","Link kopyalandı"); }} style={{ background:"rgba(91,155,213,0.12)", border:"1px solid rgba(91,155,213,0.25)", borderRadius:6, padding:"4px 9px", color:"#5b9bd5", fontSize:9, fontWeight:700, cursor:"pointer" }}>📋 Kopyala</button>
+                          <button onClick={async()=>{ const g=vitrinKodlar.map((x,j)=>j===i?{...x,aktif:!x.aktif}:x); setVitrinKodlar(g); await sv("v7vitrin",g); }} style={{ background:"rgba(255,255,255,0.04)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:6, padding:"4px 9px", color:"#998a6e", fontSize:9, fontWeight:700, cursor:"pointer" }}>{vk.aktif?"Kapat":"Aç"}</button>
+                          <button onClick={async()=>{ if(!window.confirm(vk.musteriAd+" linkini silmek istiyor musunuz?"))return; const g=vitrinKodlar.filter((_,j)=>j!==i); setVitrinKodlar(g); await sv("v7vitrin",g); toastGoster("ok","Silindi"); }} style={{ background:"rgba(232,90,79,0.1)", border:"1px solid rgba(232,90,79,0.2)", borderRadius:6, padding:"4px 9px", color:"#e85a4f", fontSize:9, fontWeight:700, cursor:"pointer" }}>Sil</button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>}
+            </div>
 
             {/* AKTİF ŞİRKET */}
             <div style={{ background:"rgba(167,139,250,0.04)", border:"1px solid rgba(167,139,250,0.15)", borderRadius:12, padding:"14px 16px", marginBottom:14 }}>
