@@ -2563,7 +2563,7 @@ function Atolye({ onSirketDegis }) {
   return (
     <div style={{ minHeight:"100vh", background:T.bg, color:T.text, fontFamily:"sans-serif" }}>
       <style>{`*{box-sizing:border-box}html,body,#root{background:${T.bg};margin:0;padding:0;min-height:100vh;width:100%}body{overflow-x:hidden;overflow-y:auto}:root{--gold:${T.gold};--goldtext:${T.text};--bg2:${T.bg2}}`}</style>
-      <style>{"@keyframes fadein{from{opacity:0}to{opacity:1}}@keyframes cardin{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}@keyframes toastin{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}*{box-sizing:border-box}::-webkit-scrollbar{width:4px}::-webkit-scrollbar-thumb{background:rgba(201,168,76,.15);border-radius:2px}select option{background:#1c1a15;color:#e8dcc8}"}</style>
+      <style>{"@keyframes fadein{from{opacity:0}to{opacity:1}}@keyframes cardin{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}@keyframes toastin{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}*{box-sizing:border-box}::-webkit-scrollbar{width:4px;height:4px}::-webkit-scrollbar-thumb{background:rgba(255,255,255,.12);border-radius:2px}::-webkit-scrollbar-track{background:transparent}select option{background:#1c1a15;color:#e8dcc8}"}</style>
 
       {/* TOAST BİLDİRİMİ */}
       {toast && (
@@ -2781,15 +2781,15 @@ function Atolye({ onSirketDegis }) {
             <div style={{ display:"flex", gap:3, marginBottom:6, overflowX:"auto", paddingBottom:2, alignItems:"center" }}>
             {/* Kategori filtresi */}
             <div style={{ display:"flex", gap:3, marginBottom:6, overflowX:"auto", paddingBottom:2, alignItems:"center" }}>
-              <span style={{ fontSize:7, color:"#7a6f5a", fontWeight:700, whiteSpace:"nowrap", marginRight:2 }}>KATEGORI:</span>
-              <button onClick={()=>setKategoriF("")} style={{ background:!kategoriF?"rgba(201,168,76,0.15)":"rgba(201,168,76,0.03)", border:"1px solid", borderColor:!kategoriF?"rgba(201,168,76,0.3)":"rgba(201,168,76,0.07)", borderRadius:5, padding:"3px 7px", color:!kategoriF?GOLD:"#7a6f5a", fontSize:8, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap" }}>Tumu</button>
+              <span style={{ fontSize:7, color:T.dim, fontWeight:700, whiteSpace:"nowrap", marginRight:2 }}>KATEGORI:</span>
+              <button onClick={()=>setKategoriF("")} style={{ background:!kategoriF?T.btnBg:T.card, border:"1px solid", borderColor:!kategoriF?T.btnBorder:T.border, borderRadius:5, padding:"3px 7px", color:!kategoriF?T.gold:T.dim, fontSize:8, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap" }}>Tumu</button>
               {KATEGORILER.map(k => { const cnt = aktMod.filter(m => (m.kategori||"") === k.id).length; if (!cnt) return null; return (
-                <button key={k.id} onClick={()=>setKategoriF(kategoriF===k.id?"":k.id)} style={{ background:kategoriF===k.id?"rgba(201,168,76,0.15)":"rgba(201,168,76,0.03)", border:"1px solid", borderColor:kategoriF===k.id?"rgba(201,168,76,0.3)":"rgba(201,168,76,0.07)", borderRadius:5, padding:"3px 7px", color:kategoriF===k.id?GOLD:"#7a6f5a", fontSize:8, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap" }}>{k.l} ({cnt})</button>
+                <button key={k.id} onClick={()=>setKategoriF(kategoriF===k.id?"":k.id)} style={{ background:kategoriF===k.id?T.btnBg:T.card, border:"1px solid", borderColor:kategoriF===k.id?T.btnBorder:T.border, borderRadius:5, padding:"3px 7px", color:kategoriF===k.id?T.gold:T.dim, fontSize:8, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap" }}>{k.l} ({cnt})</button>
               ); })}
             </div>
 
             {/* Sıralama */}
-            <span style={{ fontSize:7, color:"#7a6f5a", fontWeight:700, whiteSpace:"nowrap", marginRight:2 }}>SIRALA:</span>
+            <span style={{ fontSize:7, color:T.dim, fontWeight:700, whiteSpace:"nowrap", marginRight:2 }}>SIRALA:</span>
               {[
                 { id:"varsayilan",    l:"Varsayılan" },
                 { id:"yeni_eskiye",   l:"Yeni → Eski" },
@@ -2801,18 +2801,18 @@ function Atolye({ onSirketDegis }) {
                 { id:"kod",           l:"Koda göre" },
                 { id:"cok_satilan",   l:"Çok satılan" },
               ].map(s => (
-                <button key={s.id} onClick={()=>setSirala(s.id)} style={{ background:sirala===s.id?"rgba(201,168,76,0.18)":"rgba(201,168,76,0.03)", border:"1px solid", borderColor:sirala===s.id?"rgba(201,168,76,0.35)":"rgba(201,168,76,0.07)", borderRadius:5, padding:"3px 7px", color:sirala===s.id?GOLD:"#7a6f5a", fontSize:8, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap" }}>{s.l}</button>
+                <button key={s.id} onClick={()=>setSirala(s.id)} style={{ background:sirala===s.id?T.btnBg:T.card, border:"1px solid", borderColor:sirala===s.id?T.btnBorder:T.border, borderRadius:5, padding:"3px 7px", color:sirala===s.id?T.gold:T.dim, fontSize:8, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap" }}>{s.l}</button>
               ))}
             </div>
             <div style={{ display:"flex", gap:3, marginBottom:6, overflowX:"auto", paddingBottom:2 }}>
-              <button onClick={()=>setFiltre("all")} style={{ background:filtre==="all"?"rgba(201,168,76,0.15)":"rgba(201,168,76,0.03)", border:"1px solid", borderColor:filtre==="all"?"rgba(201,168,76,0.3)":"rgba(201,168,76,0.07)", borderRadius:5, padding:"3px 7px", color:filtre==="all"?GOLD:"#7a6f5a", fontSize:8, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap" }}>Tumu</button>
-              {DURUMLAR.map(d => { const cnt=aktMod.filter(m=>(m.durum||"baslanmadi")===d.id).length; if(!cnt)return null; return <button key={d.id} onClick={()=>setFiltre(d.id)} style={{ background:filtre===d.id?"rgba(0,0,0,0.3)":"rgba(201,168,76,0.03)", border:"1px solid", borderColor:filtre===d.id?d.c:"rgba(201,168,76,0.07)", borderRadius:5, padding:"3px 7px", color:filtre===d.id?d.c:"#7a6f5a", fontSize:8, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap" }}>{d.l} ({cnt})</button>; })}
+              <button onClick={()=>setFiltre("all")} style={{ background:filtre==="all"?T.btnBg:T.card, border:"1px solid", borderColor:filtre==="all"?T.btnBorder:T.border, borderRadius:5, padding:"3px 7px", color:filtre==="all"?T.gold:T.dim, fontSize:8, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap" }}>Tumu</button>
+              {DURUMLAR.map(d => { const cnt=aktMod.filter(m=>(m.durum||"baslanmadi")===d.id).length; if(!cnt)return null; return <button key={d.id} onClick={()=>setFiltre(d.id)} style={{ background:filtre===d.id?"rgba(0,0,0,0.3)":T.card, border:"1px solid", borderColor:filtre===d.id?d.c:T.border, borderRadius:5, padding:"3px 7px", color:filtre===d.id?d.c:T.dim, fontSize:8, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap" }}>{d.l} ({cnt})</button>; })}
             </div>
             {tumEtiketler.length>0 && (
               <div style={{ display:"flex", gap:3, marginBottom:10, overflowX:"auto", paddingBottom:2 }}>
-                <span style={{ fontSize:7, color:"#7a6f5a", fontWeight:700, whiteSpace:"nowrap", alignSelf:"center" }}>ETIKET:</span>
+                <span style={{ fontSize:7, color:T.dim, fontWeight:700, whiteSpace:"nowrap", alignSelf:"center" }}>ETIKET:</span>
                 {etiketF && <button onClick={()=>setEtiketF("")} style={{ ...RD, padding:"2px 6px", fontSize:7 }}>Temizle</button>}
-                {tumEtiketler.map(e => <button key={e} onClick={()=>setEtiketF(e===etiketF?"":e)} style={{ background:etiketF===e?"rgba(167,139,250,0.15)":"rgba(201,168,76,0.04)", border:"1px solid", borderColor:etiketF===e?"#a78bfa":"rgba(201,168,76,0.09)", borderRadius:4, padding:"2px 6px", color:etiketF===e?"#a78bfa":"#998a6e", fontSize:7, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap" }}>#{e}</button>)}
+                {tumEtiketler.map(e => <button key={e} onClick={()=>setEtiketF(e===etiketF?"":e)} style={{ background:etiketF===e?"rgba(167,139,250,0.15)":T.card, border:"1px solid", borderColor:etiketF===e?"#a78bfa":T.border, borderRadius:4, padding:"2px 6px", color:etiketF===e?"#a78bfa":"#998a6e", fontSize:7, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap" }}>#{e}</button>)}
               </div>
             )}
 
