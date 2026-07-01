@@ -2566,7 +2566,7 @@ function Atolye({ onSirketDegis }) {
       )}
 
       {/* HEADER */}
-      <div style={{ padding:"14px 14px 10px", background:"rgba(201,168,76,0.04)", borderBottom:"1px solid rgba(201,168,76,0.07)" }}>
+      <div style={{ padding:"14px 14px 10px", background:"rgba(255,255,255,0.02)", borderBottom:"1px solid rgba(255,255,255,0.06)" }}>
         <div style={{ width:"100%" }}>
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:8, marginBottom:10 }}>
             <h1 style={{ margin:0, fontSize:"clamp(13px,2vw,18px)", fontWeight:700, color:GOLD, display:"flex", alignItems:"center", gap:8 }}>
@@ -2584,7 +2584,7 @@ function Atolye({ onSirketDegis }) {
                 }
                 return (
                 <button key={n} onClick={() => { setSayfa(n); if (n==="koleksiyonlar") setAktifKol(null); if (n!=="kasa") setKasaKilitli(true); if (n!=="asistan") setAjanSoru(""); }}
-                  style={{ ...GH, background:sayfa===n?"rgba(201,168,76,0.18)":"rgba(201,168,76,0.04)", borderColor:sayfa===n?"rgba(201,168,76,0.35)":"rgba(201,168,76,0.1)", fontSize:9, padding:"5px 9px", position:"relative" }}>
+                  style={{ ...GH, color:sayfa===n?GOLD:"#998a6e", background:sayfa===n?"rgba(255,255,255,0.06)":"transparent", borderColor:sayfa===n?"rgba(255,255,255,0.15)":"rgba(255,255,255,0.06)", fontSize:9, padding:"5px 9px", position:"relative" }}>
                   {{"koleksiyonlar":"Koleksiyonlar","modeller":"Modeller","konfirmasyon":"Konfirmasyon","siparisler":"Siparişler","iadeler":"İadeler","musteriler":"Müşteriler","kasa":"Kasa","analiz":"Keşfet","asistan":"🤖 Asistan","ayarlar":"Ayarlar"}[n]||n.charAt(0).toUpperCase()+n.slice(1)}
                   {n==="konfirmasyon" && konfList.length>0 && <span style={{ position:"absolute", top:-4, right:-4, background:GOLD, color:DARK, width:13, height:13, borderRadius:7, fontSize:7, fontWeight:800, display:"flex", alignItems:"center", justifyContent:"center" }}>{konfList.length}</span>}
                   {n==="iadeler" && badgeSayi>0 && <span style={{ position:"absolute", top:-4, right:-4, background:"#a78bfa", color:"#fff", width:13, height:13, borderRadius:7, fontSize:7, fontWeight:800, display:"flex", alignItems:"center", justifyContent:"center" }}>{badgeSayi}</span>}
@@ -2594,7 +2594,7 @@ function Atolye({ onSirketDegis }) {
             </div>
           </div>
           {/* KUR */}
-          <div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap", background:"rgba(201,168,76,0.04)", border:"1px solid rgba(201,168,76,0.1)", borderRadius:10, padding:"7px 12px" }}>
+          <div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap", background:"rgba(255,255,255,0.02)", border:"1px solid rgba(255,255,255,0.06)", borderRadius:10, padding:"7px 12px" }}>
             <span style={{ fontSize:8, color:"#8a7d64", fontWeight:700 }}>ALTIN FIYATI:</span>
             <div style={{ display:"flex", alignItems:"center", gap:4 }}>
               <span style={{ fontSize:8, color:"#998a6e" }}>$/kg</span>
