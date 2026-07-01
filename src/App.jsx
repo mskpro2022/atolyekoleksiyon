@@ -1644,11 +1644,24 @@ function Atolye({ onSirketDegis }) {
     setYaziRenkleri(yeni);
     try { localStorage.setItem("atolye_yazi_renk", JSON.stringify(yeni)); } catch {}
   };
+  // Tüm renk alanları özelleştirilebilir — yaziRenkleri override eder, yoksa tema varsayılanı
   const T = { ...tema,
-    text: yaziRenkleri.text || tema.text,
-    sub:  yaziRenkleri.sub  || tema.sub,
-    dim:  yaziRenkleri.dim  || tema.dim,
-    gold: yaziRenkleri.gold || tema.gold,
+    bg:           yaziRenkleri.bg           || tema.bg,
+    bg2:          yaziRenkleri.bg2          || tema.bg2,
+    gold:         yaziRenkleri.gold         || tema.gold,
+    text:         yaziRenkleri.text         || tema.text,
+    sub:          yaziRenkleri.sub          || tema.sub,
+    dim:          yaziRenkleri.dim          || tema.dim,
+    card:         yaziRenkleri.card         || tema.card,
+    border:       yaziRenkleri.border       || tema.border,
+    header:       yaziRenkleri.header       || tema.header,
+    headerBorder: yaziRenkleri.headerBorder || tema.headerBorder,
+    btnBg:        yaziRenkleri.btnBg        || tema.btnBg,
+    btnBorder:    yaziRenkleri.btnBorder    || tema.btnBorder,
+    accent:       yaziRenkleri.accent       || tema.accent,
+    danger:       yaziRenkleri.danger       || tema.danger,
+    success:      yaziRenkleri.success      || tema.success,
+    info:         yaziRenkleri.info         || tema.info,
   };
   // GOLD ve DARK modül seviyesinde tanımlı ve birçok yerde kullanılıyor.
   // Tema değişince bu değişkenleri de güncelle ki tüm kullanımlar aktif temaya uysun.
@@ -2566,7 +2579,7 @@ function Atolye({ onSirketDegis }) {
       )}
 
       {/* HEADER */}
-      <div style={{ padding:"14px 14px 10px", background:"rgba(255,255,255,0.02)", borderBottom:"1px solid rgba(255,255,255,0.06)" }}>
+      <div style={{ padding:"14px 14px 10px", background:T.header, borderBottom:"1px solid "+T.headerBorder }}>
         <div style={{ width:"100%" }}>
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:8, marginBottom:10 }}>
             <h1 style={{ margin:0, fontSize:"clamp(13px,2vw,18px)", fontWeight:700, color:GOLD, display:"flex", alignItems:"center", gap:8 }}>
@@ -2584,7 +2597,7 @@ function Atolye({ onSirketDegis }) {
                 }
                 return (
                 <button key={n} onClick={() => { setSayfa(n); if (n==="koleksiyonlar") setAktifKol(null); if (n!=="kasa") setKasaKilitli(true); if (n!=="asistan") setAjanSoru(""); }}
-                  style={{ ...GH, color:sayfa===n?GOLD:"#998a6e", background:sayfa===n?"rgba(255,255,255,0.06)":"transparent", borderColor:sayfa===n?"rgba(255,255,255,0.15)":"rgba(255,255,255,0.06)", fontSize:9, padding:"5px 9px", position:"relative" }}>
+                  style={{ ...GH, color:sayfa===n?T.gold:T.sub, background:sayfa===n?T.btnBg:"transparent", borderColor:sayfa===n?T.btnBorder:T.border, fontSize:9, padding:"5px 9px", position:"relative" }}>
                   {{"koleksiyonlar":"Koleksiyonlar","modeller":"Modeller","konfirmasyon":"Konfirmasyon","siparisler":"Siparişler","iadeler":"İadeler","musteriler":"Müşteriler","kasa":"Kasa","analiz":"Keşfet","asistan":"🤖 Asistan","ayarlar":"Ayarlar"}[n]||n.charAt(0).toUpperCase()+n.slice(1)}
                   {n==="konfirmasyon" && konfList.length>0 && <span style={{ position:"absolute", top:-4, right:-4, background:GOLD, color:DARK, width:13, height:13, borderRadius:7, fontSize:7, fontWeight:800, display:"flex", alignItems:"center", justifyContent:"center" }}>{konfList.length}</span>}
                   {n==="iadeler" && badgeSayi>0 && <span style={{ position:"absolute", top:-4, right:-4, background:"#a78bfa", color:"#fff", width:13, height:13, borderRadius:7, fontSize:7, fontWeight:800, display:"flex", alignItems:"center", justifyContent:"center" }}>{badgeSayi}</span>}
@@ -2594,7 +2607,7 @@ function Atolye({ onSirketDegis }) {
             </div>
           </div>
           {/* KUR */}
-          <div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap", background:"rgba(255,255,255,0.02)", border:"1px solid rgba(255,255,255,0.06)", borderRadius:10, padding:"7px 12px" }}>
+          <div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap", background:T.card, border:"1px solid "+T.border, borderRadius:10, padding:"7px 12px" }}>
             <span style={{ fontSize:8, color:"#8a7d64", fontWeight:700 }}>ALTIN FIYATI:</span>
             <div style={{ display:"flex", alignItems:"center", gap:4 }}>
               <span style={{ fontSize:8, color:"#998a6e" }}>$/kg</span>
@@ -5176,37 +5189,67 @@ ${buildContext()}`;
               <div style={{ fontSize:8, color:T.dim, marginTop:10, textAlign:"center" }}>Tema seçimi tarayıcıya kaydedilir</div>
             </div>
 
-            {/* YAZI RENKLERİ */}
+            {/* ARAYÜZ RENKLERİ — TAM ÖZELLEŞTİRME */}
             <div style={{ background:T.card, border:"1px solid "+T.border, borderRadius:16, padding:"16px 18px", marginBottom:14 }}>
-              <div style={{ fontSize:11, fontWeight:700, color:T.gold, marginBottom:14, letterSpacing:"0.03em" }}>✏️ YAZI RENKLERİ</div>
-              <div style={{ fontSize:8, color:T.dim, marginBottom:12 }}>Aktif tema renklerini özelleştirin. Sıfırla'ya basınca tema varsayılanına döner.</div>
-              <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
-                {[
-                  { key:"text", label:"Ana Yazı",     hint:"Model adları, başlıklar",    def:tema.text },
-                  { key:"sub",  label:"İkincil Yazı", hint:"Açıklamalar, alt bilgiler", def:tema.sub },
-                  { key:"dim",  label:"Soluk Yazı",   hint:"Tarih, kod gibi detaylar",  def:tema.dim },
-                  { key:"gold", label:"Vurgu Rengi",  hint:"Başlıklar, aktif öğeler",   def:tema.gold },
-                ].map(({ key, label, hint, def }) => (
-                  <div key={key} style={{ display:"flex", alignItems:"center", gap:10 }}>
-                    <div style={{ flex:1 }}>
-                      <div style={{ fontSize:10, fontWeight:700, color:T.text }}>{label}</div>
-                      <div style={{ fontSize:8, color:T.dim }}>{hint}</div>
-                    </div>
-                    <div style={{ display:"flex", alignItems:"center", gap:6 }}>
-                      <div style={{ width:28, height:28, borderRadius:6, background:T[key], border:"2px solid "+T.border }}/>
-                      <input type="color" value={yaziRenkleri[key]||def} onChange={e=>yaziRenkUygula(key,e.target.value)}
-                        style={{ width:36, height:28, border:"1px solid "+T.border, borderRadius:6, cursor:"pointer", background:"none", padding:0 }}/>
-                      <span style={{ fontSize:9, color:T.dim, fontFamily:"monospace", minWidth:52 }}>{T[key]}</span>
-                      {yaziRenkleri[key] && (
-                        <button onClick={()=>{ const y={...yaziRenkleri}; delete y[key]; setYaziRenkleri(y); try{localStorage.setItem("atolye_yazi_renk",JSON.stringify(y))}catch{} }}
-                          style={{ ...RD, fontSize:8, padding:"2px 7px" }}>↺</button>
-                      )}
-                    </div>
+              <div style={{ fontSize:11, fontWeight:700, color:T.gold, marginBottom:6, letterSpacing:"0.03em" }}>🎨 ARAYÜZ RENKLERİ</div>
+              <div style={{ fontSize:8, color:T.dim, marginBottom:14 }}>Tüm arayüz renklerini tek tek ayarlayın. Her rengin yanındaki ↺ ile o rengi, alttaki buton ile hepsini varsayılana döndürebilirsiniz.</div>
+
+              {[
+                { grup:"Arka Planlar", renkler:[
+                  { key:"bg2",          label:"Sayfa Zemini",     hint:"Ana arka plan rengi" },
+                  { key:"card",         label:"Kart Zemini",      hint:"Kutu/kart arka planı" },
+                  { key:"header",       label:"Başlık Zemini",    hint:"Üst menü arka planı" },
+                  { key:"btnBg",        label:"Buton Zemini",     hint:"Buton arka planları" },
+                ]},
+                { grup:"Yazılar", renkler:[
+                  { key:"text",         label:"Ana Yazı",         hint:"Model adları, başlıklar" },
+                  { key:"sub",          label:"İkincil Yazı",     hint:"Açıklamalar, alt bilgiler" },
+                  { key:"dim",          label:"Soluk Yazı",       hint:"Tarih, kod gibi detaylar" },
+                ]},
+                { grup:"Kenarlıklar", renkler:[
+                  { key:"border",       label:"Kart Kenarlığı",   hint:"Kutu çizgileri" },
+                  { key:"headerBorder", label:"Başlık Kenarlığı", hint:"Üst menü çizgisi" },
+                  { key:"btnBorder",    label:"Buton Kenarlığı",  hint:"Buton çizgileri" },
+                ]},
+                { grup:"Vurgu & Durum", renkler:[
+                  { key:"gold",         label:"Vurgu Rengi",      hint:"Başlıklar, aktif öğeler" },
+                  { key:"accent",       label:"Aksan Rengi",      hint:"İkincil vurgu" },
+                  { key:"success",      label:"Başarı (Yeşil)",   hint:"Olumlu değerler, kâr" },
+                  { key:"danger",       label:"Uyarı (Kırmızı)",  hint:"Silme, hata, uyarı" },
+                  { key:"info",         label:"Bilgi (Mavi)",     hint:"Bilgi rozetleri" },
+                ]},
+              ].map(({ grup, renkler }) => (
+                <div key={grup} style={{ marginBottom:14 }}>
+                  <div style={{ fontSize:9, fontWeight:700, color:T.sub, marginBottom:8, textTransform:"uppercase", letterSpacing:"0.05em" }}>{grup}</div>
+                  <div style={{ display:"flex", flexDirection:"column", gap:9 }}>
+                    {renkler.map(({ key, label, hint }) => {
+                      // Renk seçici için geçerli hex değeri lazım; rgba/gradient ise seçici boş kalır ama uygulanır
+                      const mevcut = T[key] || "";
+                      const hexMi = /^#[0-9a-fA-F]{6}$/.test(mevcut);
+                      return (
+                        <div key={key} style={{ display:"flex", alignItems:"center", gap:10 }}>
+                          <div style={{ flex:1, minWidth:0 }}>
+                            <div style={{ fontSize:10, fontWeight:700, color:T.text }}>{label}</div>
+                            <div style={{ fontSize:8, color:T.dim }}>{hint}</div>
+                          </div>
+                          <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                            <div style={{ width:26, height:26, borderRadius:6, background:T[key], border:"2px solid "+T.border, flexShrink:0 }}/>
+                            <input type="color" value={hexMi?mevcut:"#888888"} onChange={e=>yaziRenkUygula(key,e.target.value)}
+                              style={{ width:34, height:26, border:"1px solid "+T.border, borderRadius:6, cursor:"pointer", background:"none", padding:0 }}/>
+                            {yaziRenkleri[key] && (
+                              <button onClick={()=>{ const y={...yaziRenkleri}; delete y[key]; setYaziRenkleri(y); try{localStorage.setItem("atolye_yazi_renk",JSON.stringify(y))}catch{} }}
+                                style={{ ...RD, fontSize:8, padding:"2px 7px" }}>↺</button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
-                ))}
-              </div>
+                </div>
+              ))}
+
               <button onClick={()=>{ setYaziRenkleri({}); try{localStorage.removeItem("atolye_yazi_renk")}catch{} }}
-                style={{ ...RD, fontSize:9, padding:"5px 14px", marginTop:12 }}>Tümünü Sıfırla</button>
+                style={{ ...RD, fontSize:9, padding:"6px 16px", marginTop:4 }}>Tüm Renkleri Sıfırla</button>
             </div>
 
             {/* ŞİFRE DEĞİŞTİR */}
