@@ -1956,6 +1956,7 @@ function Atolye({ onSirketDegis }) {
   useEffect(() => {
     if (!loaded) return;
     const kontrolEt = async () => {
+      if (document.hidden) return; // sekme arka planda — gereksiz sorgu atma
       try {
         const [vk, vm, vs, vu, vkasa] = await Promise.all([ld("v7k_v",0), ld("v7m_v",0), ld("v7s_v",0), ld("v7u_v",0), ld("v7kasa_v",0)]);
         const guncel = versiyonRef.current;
@@ -1991,8 +1992,11 @@ function Atolye({ onSirketDegis }) {
         }
       } catch (e) { /* sessiz geç — bir sonraki kontrolde tekrar denenir */ }
     };
-    const interval = setInterval(kontrolEt, 20000); // 20 saniyede bir kontrol
-    return () => clearInterval(interval);
+    const interval = setInterval(kontrolEt, 45000); // 45 saniyede bir kontrol (sadece sekme öndeyken)
+    // Sekme tekrar öne gelince hemen bir kontrol yap — kullanıcı beklemesin
+    const gorunurluk = () => { if (!document.hidden) kontrolEt(); };
+    document.addEventListener("visibilitychange", gorunurluk);
+    return () => { clearInterval(interval); document.removeEventListener("visibilitychange", gorunurluk); };
   }, [loaded]);
 
   // Kaydetmeden önce Supabase'deki versiyonla karşılaştırılır; fark varsa
@@ -2011,13 +2015,21 @@ function Atolye({ onSirketDegis }) {
         if (devamEt) { window.location.reload(); return false; }
       }
       await sv(key, data);
-      // Kaydın gerçekten gittiğini doğrula — geri okuyup karşılaştır
-      const dogrulama = await ld(key, null);
+      // Kaydın gerçekten gittiğini doğrula — AKILLI YÖNTEM:
+      // Chunked kayıtlarda dbSave en son "meta" kaydını yazar (kayıt sayısını içerir).
+      // Meta'daki sayı beklenen ile eşleşiyorsa kayıt tamamlanmıştır (1 sorgu).
+      // Meta yok/eşleşmiyorsa (küçük chunksız veri veya bayat meta) tam okuma ile kesin kontrol.
       const beklenenUzunluk = Array.isArray(data) ? data.length : null;
-      const gelenUzunluk = Array.isArray(dogrulama) ? dogrulama.length : null;
-      if (beklenenUzunluk !== null && gelenUzunluk !== beklenenUzunluk) {
-        toastGoster("hata", "✗ Kayıt doğrulanamadı — lütfen tekrar deneyin");
-        return false;
+      if (beklenenUzunluk !== null) {
+        const meta = await ld(key + "_meta", null);
+        if (!(meta && meta.total === beklenenUzunluk)) {
+          const dogrulama = await ld(key, null);
+          const gelenUzunluk = Array.isArray(dogrulama) ? dogrulama.length : null;
+          if (gelenUzunluk !== beklenenUzunluk) {
+            toastGoster("hata", "✗ Kayıt doğrulanamadı — lütfen tekrar deneyin");
+            return false;
+          }
+        }
       }
       const yeniVersiyon = Date.now();
       await sv(key + "_v", yeniVersiyon);
