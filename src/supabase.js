@@ -2,7 +2,7 @@ import { createClient } from '@supabase/supabase-js'
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
 const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 export const supabase = createClient(supabaseUrl, supabaseKey)
-const CHUNK_SIZE = 10
+const CHUNK_SIZE = 50
 // ═══ DATABASE ═══
 async function dbWrite(key, value) {
   const json = JSON.stringify(value)
@@ -33,13 +33,7 @@ export async function dbSave(key, value) {
         chunks.push(value.slice(i, i + CHUNK_SIZE))
       }
       const yeniChunkSayisi = chunks.length
-      // Eski fazla chunk'ları sil
       const eskiMeta = await dbRead(key + '_meta')
-      if (eskiMeta && eskiMeta.chunks > yeniChunkSayisi) {
-        for (let i = yeniChunkSayisi; i < eskiMeta.chunks; i++) {
-          await supabase.from('storage').delete().eq('key', key + '_chunk_' + i)
-        }
-      }
       // Chunk'ları sırayla kaydet (YAZMA MANTIĞI DEĞİŞMEDİ — güvenlik için sıralı kalıyor)
       let basarili = 0
       for (let i = 0; i < chunks.length; i++) {
@@ -52,6 +46,15 @@ export async function dbSave(key, value) {
       }
       await dbWrite(key + '_meta', { chunks: yeniChunkSayisi, total: value.length })
       await dbWrite(key, { _chunked: true, chunks: yeniChunkSayisi, total: value.length })
+      // Eski fazla chunk'ları EN SON temizle — ana kayıt güncellendiği için artık kimse
+      // bu chunk'ları okumuyor; silme paralel yapılır (hızlı, tek seferlik geçişte bekletmez)
+      if (eskiMeta && eskiMeta.chunks > yeniChunkSayisi) {
+        const silinecek = []
+        for (let i = yeniChunkSayisi; i < eskiMeta.chunks; i++) {
+          silinecek.push(supabase.from('storage').delete().eq('key', key + '_chunk_' + i))
+        }
+        try { await Promise.all(silinecek) } catch(e) { console.error('⚠ Eski chunk temizliği:', e.message) }
+      }
       console.log('✓ ' + key + ': ' + value.length + ' kayıt → ' + basarili + '/' + yeniChunkSayisi + ' chunk kaydedildi')
     } else {
       await dbWrite(key, value)
