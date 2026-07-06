@@ -2759,21 +2759,16 @@ function Atolye({ onSirketDegis }) {
                             const ortMly = milyemler.length > 0 ? milyemler.reduce((s,x)=>s+x,0)/milyemler.length : 0;
                             const minMly = milyemler.length > 0 ? Math.min(...milyemler) : 0;
                             const maxMly = milyemler.length > 0 ? Math.max(...milyemler) : 0;
-                            const gramBasiKar = topGram > 0 ? topKar / topGram : 0; // has kar / gram
                             return (
                               <div style={{ display:"flex", flexDirection:"column", gap:3 }}>
                                 <div style={{ display:"flex", gap:8 }}>
                                   <span style={{ fontSize:9, color:"#5b9bd5", fontWeight:600 }}>{fN(topGram,1)} gr</span>
                                   <span style={{ fontSize:9, color:"#6abf69", fontWeight:600 }}>{fN(topKar,3)} has kar</span>
                                 </div>
-                                <div style={{ display:"flex", gap:4, alignItems:"center", flexWrap:"wrap" }}>
+                                <div style={{ display:"flex", gap:4, alignItems:"center" }}>
                                   <span style={{ fontSize:8, color:T.dim }}>Ort. karlılık:</span>
                                   <span style={{ fontSize:10, color:GOLD, fontWeight:800 }}>{fN(ortMly,3)}</span>
                                   <span style={{ fontSize:7, color:T.dim }}>mly/gr ({fN(minMly,3)}–{fN(maxMly,3)})</span>
-                                  <span style={{ fontSize:8, color:T.dim, marginLeft:6 }}>·</span>
-                                  <span style={{ fontSize:8, color:T.dim }}>Gram başı:</span>
-                                  <span style={{ fontSize:10, color:"#6abf69", fontWeight:800 }}>{fN(gramBasiKar,4)}</span>
-                                  <span style={{ fontSize:7, color:T.dim }}>has/gr</span>
                                 </div>
                               </div>
                             );
