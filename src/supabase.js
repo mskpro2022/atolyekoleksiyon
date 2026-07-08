@@ -65,37 +65,43 @@ export async function dbLoad(key, def) {
     const data = await dbRead(key)
     if (data === null || data === undefined) return def
     if (data && typeof data === 'object' && data._chunked && data.chunks) {
-      // OKUMA PARALELLEŞTİRİLDİ — tüm chunk'lar aynı anda çekiliyor (sıralı değil)
-      const chunkPromises = []
-      for (let i = 0; i < data.chunks; i++) {
-        chunkPromises.push(dbRead(key + '_chunk_' + i))
-      }
-      const chunkSonuclari = await Promise.all(chunkPromises)
-      // BÜTÜNLÜK KONTROLÜ — herhangi bir chunk okunamadıysa (null) EKSİK veri döndürme.
-      // Eksik listeyi gerçek sanıp üzerine yazmak kalıcı veri kaybına yol açar.
-      const eksikChunk = chunkSonuclari.findIndex(c => !Array.isArray(c))
-      if (eksikChunk !== -1) {
-        console.error('❌ ' + key + ': chunk ' + eksikChunk + '/' + data.chunks + ' okunamadı — GÜVENLİK İÇİN eksik veri reddedildi. Tekrar denenecek.')
-        // Bir kez daha dene (geçici ağ hatası olabilir)
-        const tekrar = []
-        for (let i = 0; i < data.chunks; i++) tekrar.push(dbRead(key + '_chunk_' + i))
-        const tekrarSonuc = await Promise.all(tekrar)
-        if (tekrarSonuc.some(c => !Array.isArray(c))) {
-          throw new Error(key + ': chunk okuması eksik (' + data.chunks + ' chunk beklendi), veri kaybını önlemek için iptal edildi')
+      // Chunk'ları GRUPLU (batch) oku — 55'i birden değil, 8'erli gruplar halinde.
+      // Tek seferde çok fazla eşzamanlı istek Supabase'i tıkıyor, bazı chunk'lar boş dönüyordu.
+      const BATCH = 8;
+      const okuTekChunk = async (i) => {
+        // Her chunk için 3 deneme (geçici boş/hata durumuna karşı)
+        for (let deneme = 0; deneme < 3; deneme++) {
+          try {
+            const c = await dbRead(key + '_chunk_' + i);
+            if (Array.isArray(c)) return c;
+          } catch (e) { /* tekrar dene */ }
+          await new Promise(r => setTimeout(r, 150 * (deneme + 1))); // artan bekleme
         }
-        const t2 = []
-        tekrarSonuc.forEach(chunk => { if (Array.isArray(chunk)) t2.push(...chunk) })
-        return t2
+        return null; // 3 denemede de olmadı
+      };
+
+      const sonuc = new Array(data.chunks);
+      for (let start = 0; start < data.chunks; start += BATCH) {
+        const grup = [];
+        for (let i = start; i < Math.min(start + BATCH, data.chunks); i++) {
+          grup.push(okuTekChunk(i).then(c => { sonuc[i] = c; }));
+        }
+        await Promise.all(grup);
       }
-      const tumKayitlar = []
-      chunkSonuclari.forEach(chunk => {
-        if (Array.isArray(chunk)) tumKayitlar.push(...chunk)
-      })
-      // total ile tutarlılık uyarısı (opsiyonel, sadece log)
+
+      // Bütünlük kontrolü — bir chunk hâlâ null ise (3 denemeye rağmen) eksik veri döndürme
+      const eksik = sonuc.findIndex(c => !Array.isArray(c));
+      if (eksik !== -1) {
+        console.error('❌ ' + key + ': chunk ' + eksik + '/' + data.chunks + ' 3 denemede okunamadı — veri kaybını önlemek için iptal edildi');
+        throw new Error(key + ': chunk okuması eksik (' + data.chunks + ' chunk beklendi), veri kaybını önlemek için iptal edildi');
+      }
+
+      const tumKayitlar = [];
+      sonuc.forEach(chunk => { if (Array.isArray(chunk)) tumKayitlar.push(...chunk); });
       if (typeof data.total === 'number' && tumKayitlar.length !== data.total) {
-        console.warn('⚠ ' + key + ': beklenen ' + data.total + ' kayıt, okunan ' + tumKayitlar.length)
+        console.warn('⚠ ' + key + ': beklenen ' + data.total + ' kayıt, okunan ' + tumKayitlar.length);
       }
-      return tumKayitlar.length > 0 ? tumKayitlar : def
+      return tumKayitlar.length > 0 ? tumKayitlar : def;
     }
     return data
   } catch(e) {
