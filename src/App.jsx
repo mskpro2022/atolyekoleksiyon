@@ -2003,6 +2003,27 @@ function Atolye({ onSirketDegis }) {
   // başka bir cihaz/kullanıcı araya kayıt yapmış demektir — üzerine yazmayı durdurup uyarı verir.
   const guvenliKaydet = useCallback(async (key, data) => {
     try {
+      // ═══ BOŞALTMA KORUMASI ═══
+      // Bir liste (model/sipariş/koleksiyon) BOŞ olarak kaydedilmeye çalışılıyorsa,
+      // ama Supabase'de ŞU AN dolu veri varsa — bu büyük olasılıkla bir okuma hatası
+      // sonucu yanlışlıkla boşaltmadır. Kullanıcıya sorulur, sessizce silinmez.
+      if (Array.isArray(data) && data.length === 0) {
+        const mevcut = await ld(key, null);
+        const mevcutAdet = Array.isArray(mevcut) ? mevcut.length : 0;
+        if (mevcutAdet > 0) {
+          const silOnay = window.confirm(
+            "⚠ DİKKAT — VERİ KAYBI RİSKİ!\n\n" +
+            "Şu an kaydedilmek istenen liste BOŞ, ama sistemde " + mevcutAdet + " kayıt var.\n\n" +
+            "Bu işlem " + mevcutAdet + " kaydı SİLECEK.\n\n" +
+            "Eğer bunu siz kasıtlı yapmadıysanız, İPTAL edin ve sayfayı yenileyin.\n\n" +
+            "Yine de tümünü silmek istiyor musunuz?"
+          );
+          if (!silOnay) {
+            toastGoster("hata", "İşlem iptal edildi — veri korundu");
+            return false;
+          }
+        }
+      }
       const sunucuVersiyon = await ld(key + "_v", 0);
       const bilinenVersiyon = versiyonRef.current[key] || 0;
       if (sunucuVersiyon && bilinenVersiyon && sunucuVersiyon !== bilinenVersiyon) {
@@ -2015,21 +2036,13 @@ function Atolye({ onSirketDegis }) {
         if (devamEt) { window.location.reload(); return false; }
       }
       await sv(key, data);
-      // Kaydın gerçekten gittiğini doğrula — AKILLI YÖNTEM:
-      // Chunked kayıtlarda dbSave en son "meta" kaydını yazar (kayıt sayısını içerir).
-      // Meta'daki sayı beklenen ile eşleşiyorsa kayıt tamamlanmıştır (1 sorgu).
-      // Meta yok/eşleşmiyorsa (küçük chunksız veri veya bayat meta) tam okuma ile kesin kontrol.
+      // Kaydın gerçekten gittiğini doğrula — geri okuyup karşılaştır (güvenli tam okuma)
+      const dogrulama = await ld(key, null);
       const beklenenUzunluk = Array.isArray(data) ? data.length : null;
-      if (beklenenUzunluk !== null) {
-        const meta = await ld(key + "_meta", null);
-        if (!(meta && meta.total === beklenenUzunluk)) {
-          const dogrulama = await ld(key, null);
-          const gelenUzunluk = Array.isArray(dogrulama) ? dogrulama.length : null;
-          if (gelenUzunluk !== beklenenUzunluk) {
-            toastGoster("hata", "✗ Kayıt doğrulanamadı — lütfen tekrar deneyin");
-            return false;
-          }
-        }
+      const gelenUzunluk = Array.isArray(dogrulama) ? dogrulama.length : null;
+      if (beklenenUzunluk !== null && gelenUzunluk !== beklenenUzunluk) {
+        toastGoster("hata", "✗ Kayıt doğrulanamadı — lütfen tekrar deneyin");
+        return false;
       }
       const yeniVersiyon = Date.now();
       await sv(key + "_v", yeniVersiyon);
@@ -2686,6 +2699,17 @@ function Atolye({ onSirketDegis }) {
                     yaziRenkleri: yaziRenkYedek, tema: temaYedek,
                     v: Date.now() };
                   const json = JSON.stringify(data, null, 2);
+                  // Boş sipariş/model uyarısı — yanlışlıkla boş yedek almayı önle
+                  if (s.length === 0 || m.length === 0) {
+                    const devam = window.confirm(
+                      "⚠ DİKKAT — Yedek eksik olabilir!\n\n" +
+                      "Model: " + m.length + "\nSipariş: " + s.length + "\nKoleksiyon: " + k.length + "\n\n" +
+                      (s.length===0 ? "Sipariş listesi BOŞ! " : "") + (m.length===0 ? "Model listesi BOŞ! " : "") +
+                      "\nEğer veriler normalde doluysa, önce sayfayı yenileyip verilerin geldiğinden emin olun. " +
+                      "Boş yedek almak istediğinizden emin misiniz?"
+                    );
+                    if (!devam) { setDriveYukleniyor(null); return; }
+                  }
                   const blob = new Blob([json], { type: "application/json" });
                   const url = URL.createObjectURL(blob);
                   const a = document.createElement("a");
