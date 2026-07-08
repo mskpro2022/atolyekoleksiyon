@@ -2027,13 +2027,29 @@ function Atolye({ onSirketDegis }) {
       const sunucuVersiyon = await ld(key + "_v", 0);
       const bilinenVersiyon = versiyonRef.current[key] || 0;
       if (sunucuVersiyon && bilinenVersiyon && sunucuVersiyon !== bilinenVersiyon) {
-        const devamEt = window.confirm(
-          "⚠ Başka bir cihazdan/sekmeden bu sırada değişiklik yapıldı.\n\n" +
-          "Üzerine yazarsanız o değişiklik kaybolabilir.\n\n" +
-          "Sayfa yenilenip güncel veriyle devam edilsin mi?\n" +
-          "(İptal: yine de kaydetmeye devam et — riskli)"
-        );
-        if (devamEt) { window.location.reload(); return false; }
+        // ÇAKIŞMA — ama artık SESSİZ AKILLI BİRLEŞTİRME (reload/atılma YOK).
+        // Sunucudaki güncel liste ile senin listeni id bazında birleştir:
+        //  - Sende olup sunucuda olmayan (senin yeni eklediklerin) → korunur
+        //  - Sunucuda olup sende olmayan (başka cihazın eklediği) → korunur
+        //  - İkisinde de olan → SENİN versiyonun kazanır (en son düzenlediğin)
+        if (Array.isArray(data)) {
+          try {
+            const sunucuVeri = await ld(key, []);
+            if (Array.isArray(sunucuVeri) && sunucuVeri.length > 0) {
+              const benimIdler = new Set(data.map(x => x && x.id).filter(Boolean));
+              // Sunucuda olup bende olmayanları başa/sona ekle (başka cihazın kayıtları)
+              const digerCihazinEkledikleri = sunucuVeri.filter(x => x && x.id && !benimIdler.has(x.id));
+              if (digerCihazinEkledikleri.length > 0) {
+                data = [...data, ...digerCihazinEkledikleri];
+                // State'i de güncelle ki ekranda da görünsün
+                if (key === "v7m") setModeller(data);
+                else if (key === "v7s") setSiparisler(data);
+                else if (key === "v7k") setKollar(data);
+                toastGoster("ok", "↻ Diğer cihazın " + digerCihazinEkledikleri.length + " kaydıyla birleştirildi");
+              }
+            }
+          } catch (e) { /* birleştirme başarısızsa yine de kaydet, veri kaybetme */ }
+        }
       }
       await sv(key, data);
       // Kaydın gerçekten gittiğini doğrula — geri okuyup karşılaştır (güvenli tam okuma)
