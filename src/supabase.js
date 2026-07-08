@@ -2,18 +2,30 @@ import { createClient } from '@supabase/supabase-js'
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
 const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 export const supabase = createClient(supabaseUrl, supabaseKey)
-const CHUNK_SIZE = 50
+const CHUNK_SIZE = 8
 // ═══ DATABASE ═══
 async function dbWrite(key, value) {
   const json = JSON.stringify(value)
-  const { error } = await supabase
-    .from('storage')
-    .upsert({ key, value: json }, { onConflict: 'key' })
-  if (error) {
-    console.error('❌ dbWrite:', key, '(' + Math.round(json.length/1024) + 'KB)', error.message)
-    throw error
+  const boyutKB = Math.round(json.length / 1024)
+  // Timeout'a karşı 3 deneme — büyük chunk'lar (ağır foto) bazen ilk seferde timeout olur
+  let sonHata = null
+  for (let deneme = 0; deneme < 3; deneme++) {
+    const { error } = await supabase
+      .from('storage')
+      .upsert({ key, value: json }, { onConflict: 'key' })
+    if (!error) return // başarılı
+    sonHata = error
+    // 57014 = statement timeout → biraz bekleyip tekrar dene
+    if (error.code === '57014' || (error.message && error.message.includes('timeout'))) {
+      console.warn('⏳ dbWrite timeout: ' + key + ' (' + boyutKB + 'KB), deneme ' + (deneme + 1) + '/3')
+      await new Promise(r => setTimeout(r, 500 * (deneme + 1)))
+      continue
+    }
+    // Başka bir hata → tekrar denemeden çık
+    break
   }
-}
+  console.error('❌ dbWrite başarısız:', key, '(' + boyutKB + 'KB)', sonHata && sonHata.message)
+  throw sonHata
 async function dbRead(key) {
   const { data, error } = await supabase
     .from('storage')
