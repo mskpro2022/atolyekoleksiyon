@@ -33,8 +33,14 @@ export async function dbSave(key, value) {
         chunks.push(value.slice(i, i + CHUNK_SIZE))
       }
       const yeniChunkSayisi = chunks.length
+      // Eski fazla chunk'ları sil
       const eskiMeta = await dbRead(key + '_meta')
-      // Chunk'ları sırayla kaydet (YAZMA MANTIĞI DEĞİŞMEDİ — güvenlik için sıralı kalıyor)
+      if (eskiMeta && eskiMeta.chunks > yeniChunkSayisi) {
+        for (let i = yeniChunkSayisi; i < eskiMeta.chunks; i++) {
+          await supabase.from('storage').delete().eq('key', key + '_chunk_' + i)
+        }
+      }
+      // Chunk'ları sırayla kaydet
       let basarili = 0
       for (let i = 0; i < chunks.length; i++) {
         try {
@@ -46,15 +52,6 @@ export async function dbSave(key, value) {
       }
       await dbWrite(key + '_meta', { chunks: yeniChunkSayisi, total: value.length })
       await dbWrite(key, { _chunked: true, chunks: yeniChunkSayisi, total: value.length })
-      // Eski fazla chunk'ları EN SON temizle — ana kayıt güncellendiği için artık kimse
-      // bu chunk'ları okumuyor; silme paralel yapılır (hızlı, tek seferlik geçişte bekletmez)
-      if (eskiMeta && eskiMeta.chunks > yeniChunkSayisi) {
-        const silinecek = []
-        for (let i = yeniChunkSayisi; i < eskiMeta.chunks; i++) {
-          silinecek.push(supabase.from('storage').delete().eq('key', key + '_chunk_' + i))
-        }
-        try { await Promise.all(silinecek) } catch(e) { console.error('⚠ Eski chunk temizliği:', e.message) }
-      }
       console.log('✓ ' + key + ': ' + value.length + ' kayıt → ' + basarili + '/' + yeniChunkSayisi + ' chunk kaydedildi')
     } else {
       await dbWrite(key, value)
@@ -74,10 +71,30 @@ export async function dbLoad(key, def) {
         chunkPromises.push(dbRead(key + '_chunk_' + i))
       }
       const chunkSonuclari = await Promise.all(chunkPromises)
+      // BÜTÜNLÜK KONTROLÜ — herhangi bir chunk okunamadıysa (null) EKSİK veri döndürme.
+      // Eksik listeyi gerçek sanıp üzerine yazmak kalıcı veri kaybına yol açar.
+      const eksikChunk = chunkSonuclari.findIndex(c => !Array.isArray(c))
+      if (eksikChunk !== -1) {
+        console.error('❌ ' + key + ': chunk ' + eksikChunk + '/' + data.chunks + ' okunamadı — GÜVENLİK İÇİN eksik veri reddedildi. Tekrar denenecek.')
+        // Bir kez daha dene (geçici ağ hatası olabilir)
+        const tekrar = []
+        for (let i = 0; i < data.chunks; i++) tekrar.push(dbRead(key + '_chunk_' + i))
+        const tekrarSonuc = await Promise.all(tekrar)
+        if (tekrarSonuc.some(c => !Array.isArray(c))) {
+          throw new Error(key + ': chunk okuması eksik (' + data.chunks + ' chunk beklendi), veri kaybını önlemek için iptal edildi')
+        }
+        const t2 = []
+        tekrarSonuc.forEach(chunk => { if (Array.isArray(chunk)) t2.push(...chunk) })
+        return t2
+      }
       const tumKayitlar = []
       chunkSonuclari.forEach(chunk => {
         if (Array.isArray(chunk)) tumKayitlar.push(...chunk)
       })
+      // total ile tutarlılık uyarısı (opsiyonel, sadece log)
+      if (typeof data.total === 'number' && tumKayitlar.length !== data.total) {
+        console.warn('⚠ ' + key + ': beklenen ' + data.total + ' kayıt, okunan ' + tumKayitlar.length)
+      }
       return tumKayitlar.length > 0 ? tumKayitlar : def
     }
     return data
