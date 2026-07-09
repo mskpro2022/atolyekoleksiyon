@@ -1,4 +1,4 @@
-import { dbLoad, dbSave, fotoYukleStorage, yedekKaydet, yedekListesi, yedekGetir, bugunYedekVarMi, tabloModelleriToplu, tabloSiparisleriToplu, tabloMusterileriYaz } from "./supabase.js";
+import { dbLoad, dbSave, fotoYukleStorage, yedekKaydet, yedekListesi, yedekGetir, bugunYedekVarMi, tabloModelleriSenkron, tabloSiparisleriSenkron, tabloMusterileriYaz } from "./supabase.js";
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 
 const uid = () => "x" + Date.now() + Math.random().toString(36).substr(2, 5);
@@ -2136,15 +2136,15 @@ function Atolye({ onSirketDegis }) {
       localStorage.setItem("atolye_full_cache", JSON.stringify({...d, m:temiz, ts:Date.now()}));
     } catch {}
     await guvenliKaydet("v7m", temiz);
-    // ÇİFT YAZMA (Aşama 2) — tabloya arka planda sessizce yaz, hata olsa uygulamayı etkilemez
-    tabloModelleriToplu(AKTIF_SIRKET_ONEK, temiz).then(n => {
-      if (n !== temiz.length) console.warn("⚠ Tablo yazma: " + n + "/" + temiz.length);
-    }).catch(e => console.error("Tablo yazma (arka plan):", e.message));
+    // ÇİFT YAZMA (Aşama 2) — tabloya arka planda sessizce SENKRON et (silinenler de temizlenir)
+    tabloModelleriSenkron(AKTIF_SIRKET_ONEK, temiz).then(r => {
+      if (r.yazilan !== temiz.length) console.warn("⚠ Tablo senkron: " + r.yazilan + "/" + temiz.length);
+    }).catch(e => console.error("Tablo senkron (arka plan):", e.message));
   }, [guvenliKaydet]);
   const svS = useCallback(async d => {
     setSiparisler(d);
     await guvenliKaydet("v7s", d);
-    tabloSiparisleriToplu(AKTIF_SIRKET_ONEK, d).catch(e => console.error("Sipariş tablo (arka plan):", e.message));
+    tabloSiparisleriSenkron(AKTIF_SIRKET_ONEK, d).catch(e => console.error("Sipariş tablo (arka plan):", e.message));
   }, [guvenliKaydet]);
 
 
