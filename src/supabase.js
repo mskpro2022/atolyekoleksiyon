@@ -442,3 +442,30 @@ export async function islemGecmisiGetir(onek, limit = 50) {
     return data || []
   } catch { return [] }
 }
+
+// ═══ REALTIME SENKRON (Aşama 3) ═══
+// Tablo değişikliklerini canlı dinler. Değişiklik olunca callback tetiklenir.
+// Dönen fonksiyon çağrılınca abonelik iptal edilir (cleanup için).
+export function realtimeBaslat(onek, callback) {
+  try {
+    const kanal = supabase
+      .channel('atolye-degisiklikler-' + (onek || 'msk'))
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'modeller', filter: 'onek=eq.' + onek },
+        (payload) => callback('modeller', payload))
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'siparisler', filter: 'onek=eq.' + onek },
+        (payload) => callback('siparisler', payload))
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'musteriler', filter: 'onek=eq.' + onek },
+        (payload) => callback('musteriler', payload))
+      .subscribe((durum) => {
+        if (durum === 'SUBSCRIBED') console.log('📡 Realtime bağlandı')
+        else if (durum === 'CHANNEL_ERROR') console.warn('⚠ Realtime bağlantı hatası (polling devam ediyor)')
+      })
+    return () => { try { supabase.removeChannel(kanal) } catch {} }
+  } catch (e) {
+    console.error('realtimeBaslat:', e.message)
+    return () => {}
+  }
+}
