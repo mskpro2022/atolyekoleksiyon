@@ -1,4 +1,4 @@
-import { dbLoad, dbSave } from "./supabase.js";
+import { dbLoad, dbSave, fotoYukleStorage } from "./supabase.js";
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 
 const uid = () => "x" + Date.now() + Math.random().toString(36).substr(2, 5);
@@ -2277,18 +2277,31 @@ function Atolye({ onSirketDegis }) {
     const syncObj = Object.fromEntries(Object.entries(obj).filter(([k]) => !FIYAT_ALANLARI.includes(k)));
     const ayniKodlular = modeller.filter(m => m.kod === obj.kod && (!editM || m.id !== editM.id));
 
-    const kaydet = (onayliSync) => {
+    const kaydet = async (onayliSync) => {
       if (editM) {
+        // Foto base64 ise Storage'a yükle, URL'e çevir
+        let fotoURL = obj.foto;
+        if (fotoURL && fotoURL.startsWith("data:")) {
+          fotoURL = await fotoYukleStorage(fotoURL, editM.id, AKTIF_SIRKET_ONEK);
+        }
+        const objURLli = { ...obj, foto: fotoURL };
+        const syncURLli = { ...syncObj, foto: fotoURL };
         const yeniListe = modeller.map(m => {
-          if (m.id === editM.id) return { ...m, ...obj };
-          if (onayliSync && m.kod === obj.kod) return { ...m, ...syncObj };
+          if (m.id === editM.id) return { ...m, ...objURLli };
+          if (onayliSync && m.kod === obj.kod) return { ...m, ...syncURLli };
           return m;
         });
         svM(yeniListe);
       } else {
-        const yeniModel = { id: uid(), ...obj, t: Date.now() };
+        const yeniId = uid();
+        // Foto base64 ise Storage'a yükle
+        let fotoURL = obj.foto;
+        if (fotoURL && fotoURL.startsWith("data:")) {
+          fotoURL = await fotoYukleStorage(fotoURL, yeniId, AKTIF_SIRKET_ONEK);
+        }
+        const yeniModel = { id: yeniId, ...obj, foto: fotoURL, t: Date.now() };
         if (onayliSync && ayniKodlular.length > 0) {
-          svM([...modeller.map(m => m.kod === obj.kod ? { ...m, ...syncObj } : m), yeniModel]);
+          svM([...modeller.map(m => m.kod === obj.kod ? { ...m, ...syncObj, foto: fotoURL } : m), yeniModel]);
         } else {
           svM([...modeller, yeniModel]);
         }
