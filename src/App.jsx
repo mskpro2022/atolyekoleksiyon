@@ -1,4 +1,4 @@
-import { dbLoad, dbSave, fotoYukleStorage } from "./supabase.js";
+import { dbLoad, dbSave, fotoYukleStorage, yedekKaydet, yedekListesi, yedekGetir, bugunYedekVarMi } from "./supabase.js";
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 
 const uid = () => "x" + Date.now() + Math.random().toString(36).substr(2, 5);
@@ -1785,6 +1785,7 @@ function Atolye({ onSirketDegis }) {
   const [ayarKategoriler, setAyarKategoriler] = useState(["yuzuk","kolye","kupe","bilezik","bileklik","pendant","set","diger"]);
   const [vitrinKodlar, setVitrinKodlar] = useState([]); // müşteri vitrin kodları
   const [yeniMusteriAd, setYeniMusteriAd] = useState("");
+  const [otoYedekler, setOtoYedekler] = useState([]); // otomatik yedek listesi
   const [ayarYeniKategori, setAyarYeniKategori] = useState("");
   const [ayarVarsAltinKg, setAyarVarsAltinKg] = useState("");
   const [ayarVarsMc, setAyarVarsMc] = useState("");
@@ -2217,11 +2218,46 @@ function Atolye({ onSirketDegis }) {
     }
   }, [versiyonDamgala]);
   const svMus = useCallback(async d => { setMusteriler(d); await versiyonDamgala("v7u", d); }, [versiyonDamgala]);
+
+  // ═══ OTOMATİK GÜNLÜK YEDEKLEME ═══
+  // Yedek verisini topla (foto artık Storage'da olduğu için hafif)
+  const yedekVerisiTopla = useCallback(async () => {
+    const ks = await ld("v7kasa", null);
+    let yaziRenkYedek = {}, temaYedek = "", mizanEsl = {};
+    try { yaziRenkYedek = JSON.parse(localStorage.getItem("atolye_yazi_renk") || "{}"); } catch {}
+    try { temaYedek = localStorage.getItem("atolye_tema") || ""; } catch {}
+    try { mizanEsl = JSON.parse(localStorage.getItem("mizan_eslestirme") || "{}"); } catch {}
+    return {
+      kollar, modeller, siparisler, musteriler,
+      ayarlar: { kategoriler: ayarKategoriler },
+      kasa: ks || {}, mizanEslestirme: mizanEsl,
+      yaziRenkleri: yaziRenkYedek, tema: temaYedek, v: Date.now(),
+    };
+  }, [kollar, modeller, siparisler, musteriler, ayarKategoriler]);
+
+  // Açılışta günde 1 kez otomatik yedek (bugün alınmamışsa)
+  const otoYedekYapildiRef = useRef(false);
+  useEffect(() => {
+    if (!loaded || otoYedekYapildiRef.current) return;
+    if (modeller.length === 0) return; // boş veriyi yedekleme
+    otoYedekYapildiRef.current = true; // bu oturumda bir kez
+    (async () => {
+      try {
+        const varMi = await bugunYedekVarMi(AKTIF_SIRKET_ONEK);
+        if (varMi) return; // bugün zaten alınmış
+        const veri = await yedekVerisiTopla();
+        const ok = await yedekKaydet(AKTIF_SIRKET_ONEK, veri, modeller.length, siparisler.length);
+        if (ok) console.log("✓ Günlük otomatik yedek alındı");
+      } catch (e) { console.error("Otomatik yedek hatası:", e.message); }
+    })();
+  }, [loaded, modeller.length]);
+
   useEffect(() => { if (loaded) sv("v7c", { a: altinKg, mc }); }, [altinKg, mc, loaded]);
   // Müşteri vitrin kodlarını Ayarlar açıldığında yükle
   useEffect(() => {
     if (sayfa === "ayarlar" && loaded) {
       ld("v7vitrin", []).then(v => setVitrinKodlar(v || []));
+      yedekListesi(AKTIF_SIRKET_ONEK).then(setOtoYedekler);
     }
   }, [sayfa, loaded]);
 
@@ -5345,6 +5381,50 @@ ${buildContext()}`;
 
             {/* ŞİFRE DEĞİŞTİR */}
             <SifreDegistir />
+
+            {/* OTOMATİK YEDEKLER */}
+            <div style={{ background:"rgba(91,155,213,0.03)", border:"1px solid rgba(91,155,213,0.15)", borderRadius:12, padding:"14px 16px", marginBottom:14 }}>
+              <div style={{ fontSize:10, fontWeight:700, color:"#5b9bd5", marginBottom:8 }}>🔄 OTOMATİK YEDEKLER</div>
+              <div style={{ fontSize:9, color:"#665d4a", marginBottom:12 }}>Sistem her gün otomatik yedek alır (son 7 gün saklanır). Buradan geçmiş bir yedeğe dönebilirsiniz. Foto'lar Storage'da olduğu için yedekler hafiftir.</div>
+
+              <div style={{ display:"flex", gap:8, marginBottom:12 }}>
+                <button onClick={async()=>{
+                  const veri = await yedekVerisiTopla();
+                  const ok = await yedekKaydet(AKTIF_SIRKET_ONEK, veri, modeller.length, siparisler.length);
+                  if (ok) { toastGoster("ok","Yedek alındı"); yedekListesi(AKTIF_SIRKET_ONEK).then(setOtoYedekler); }
+                  else toastGoster("hata","Yedek alınamadı");
+                }} style={{ ...BG, fontSize:11, padding:"7px 14px" }}>💾 Şimdi Yedek Al</button>
+                <button onClick={()=>yedekListesi(AKTIF_SIRKET_ONEK).then(setOtoYedekler)} style={{ ...GH, fontSize:11, padding:"7px 14px" }}>↻ Listeyi Yenile</button>
+              </div>
+
+              {otoYedekler.length === 0 && <div style={{ fontSize:9, color:"#665d4a" }}>Henüz otomatik yedek yok. İlk yedek yarın (veya "Şimdi Yedek Al" ile) oluşur.</div>}
+              {otoYedekler.length > 0 && <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+                {otoYedekler.map(y => (
+                  <div key={y.id} style={{ background:"rgba(0,0,0,0.15)", border:"1px solid rgba(255,255,255,0.06)", borderRadius:8, padding:"9px 11px", display:"flex", justifyContent:"space-between", alignItems:"center", gap:8, flexWrap:"wrap" }}>
+                    <div>
+                      <div style={{ fontSize:11, fontWeight:700, color:GOLD }}>{new Date(y.tarih).toLocaleDateString("tr-TR", {day:"2-digit", month:"long", year:"numeric"})}</div>
+                      <div style={{ fontSize:8, color:"#665d4a" }}>{y.model_sayisi||0} model · {y.siparis_sayisi||0} sipariş · {new Date(y.olusturma).toLocaleTimeString("tr-TR",{hour:"2-digit",minute:"2-digit"})}</div>
+                    </div>
+                    <button onClick={async()=>{
+                      if(!window.confirm(new Date(y.tarih).toLocaleDateString("tr-TR")+" tarihli yedeğe dönmek istiyor musunuz?\n\nMevcut veriler bu yedekle değiştirilecek ("+(y.model_sayisi||0)+" model, "+(y.siparis_sayisi||0)+" sipariş).")) return;
+                      const veri = await yedekGetir(y.id);
+                      if (!veri) { toastGoster("hata","Yedek okunamadı"); return; }
+                      // Geri yükle
+                      if (veri.kollar) await svK(veri.kollar);
+                      if (veri.siparisler) await svS(veri.siparisler);
+                      if (veri.musteriler) await svMus(veri.musteriler);
+                      if (veri.kasa) await svKasa(veri.kasa);
+                      if (Array.isArray(veri.modeller)) {
+                        // Modelleri parça parça güvenli yaz
+                        await svM(veri.modeller);
+                      }
+                      toastGoster("ok","Yedek geri yüklendi — sayfa yenileniyor");
+                      setTimeout(()=>window.location.reload(), 1200);
+                    }} style={{ background:"rgba(106,191,105,0.12)", border:"1px solid rgba(106,191,105,0.3)", borderRadius:6, padding:"5px 12px", color:"#6abf69", fontSize:10, fontWeight:700, cursor:"pointer" }}>↶ Bu Yedeğe Dön</button>
+                  </div>
+                ))}
+              </div>}
+            </div>
 
             {/* MÜŞTERİ VİTRİNİ */}
             <div style={{ background:"rgba(106,191,105,0.03)", border:"1px solid rgba(106,191,105,0.15)", borderRadius:12, padding:"14px 16px", marginBottom:14 }}>
