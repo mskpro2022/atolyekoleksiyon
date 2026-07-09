@@ -366,3 +366,39 @@ export async function dbLoad(key, def) {
     return def
   }
 }
+
+// ═══ AKILLI OKUMA — önce tablo, boş/hata olursa chunk'a düş (Aşama 2 Adım 3) ═══
+export async function akilliModelOku(onek) {
+  try {
+    const tabloModeller = await tabloModelleriOku(onek)
+    if (tabloModeller && tabloModeller.length > 0) {
+      console.log('📊 Modeller TABLODAN okundu: ' + tabloModeller.length)
+      return tabloModeller
+    }
+    console.warn('⚠ Tablo boş, chunk sistemine düşülüyor')
+    return await dbLoad((onek || '') + 'v7m', [])
+  } catch (e) {
+    console.error('akilliModelOku, chunk fallback:', e.message)
+    return await dbLoad((onek || '') + 'v7m', [])
+  }
+}
+export async function akilliSiparisOku(onek) {
+  try {
+    const t = await tabloSiparisleriOku(onek)
+    const chunk = await dbLoad((onek || '') + 'v7s', [])
+    if (t.length >= chunk.length) return t
+    return chunk
+  } catch (e) {
+    console.error('akilliSiparisOku:', e.message)
+    return await dbLoad((onek || '') + 'v7s', [])
+  }
+}
+export async function akilliMusteriOku(onek) {
+  try {
+    const t = await tabloMusterileriOku(onek)
+    if (t && Object.keys(t).length > 0) return t
+    return await dbLoad((onek || '') + 'v7u', {})
+  } catch {
+    return await dbLoad((onek || '') + 'v7u', {})
+  }
+}
