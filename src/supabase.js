@@ -160,6 +160,31 @@ export async function tabloModelSayisi(onek) {
   } catch { return -1 }
 }
 
+// TAM SENKRON — verilen liste ile tabloyu birebir eşitler (silinenleri de temizler)
+export async function tabloModelleriSenkron(onek, modeller) {
+  try {
+    const yazilan = await tabloModelleriToplu(onek, modeller)
+    // Tablodaki id'leri çek, listede olmayanları (silinenleri) temizle
+    const listeIdler = new Set(modeller.map(m => String(m.id)))
+    const mevcutIdler = []
+    let bas = 0
+    for (let tur = 0; tur < 50; tur++) {
+      const { data, error } = await supabase.from('modeller')
+        .select('id').eq('onek', onek).range(bas, bas + 999)
+      if (error || !data || data.length === 0) break
+      data.forEach(r => mevcutIdler.push(r.id))
+      if (data.length < 1000) break
+      bas += 1000
+    }
+    const silinecek = mevcutIdler.filter(id => !listeIdler.has(id))
+    for (let i = 0; i < silinecek.length; i += 100) {
+      await supabase.from('modeller').delete().in('id', silinecek.slice(i, i + 100)).eq('onek', onek)
+    }
+    if (silinecek.length > 0) console.log('🗑 Tablodan ' + silinecek.length + ' silinen model temizlendi')
+    return { yazilan, silinen: silinecek.length }
+  } catch (e) { console.error('tabloModelleriSenkron:', e.message); return { yazilan: 0, silinen: 0 } }
+}
+
 // —— SIPARISLER —— (aynı desen)
 export async function tabloSiparisleriOku(onek) {
   try {
@@ -191,6 +216,19 @@ export async function tabloSiparisleriToplu(onek, siparisler) {
     }
   }
   return yazilan
+}
+// Sipariş tam senkron (silinenleri de temizler)
+export async function tabloSiparisleriSenkron(onek, siparisler) {
+  try {
+    await tabloSiparisleriToplu(onek, siparisler)
+    const listeIdler = new Set(siparisler.map(s => String(s.id)))
+    const { data } = await supabase.from('siparisler').select('id').eq('onek', onek)
+    const silinecek = (data || []).map(r => r.id).filter(id => !listeIdler.has(id))
+    for (let i = 0; i < silinecek.length; i += 100) {
+      await supabase.from('siparisler').delete().in('id', silinecek.slice(i, i + 100)).eq('onek', onek)
+    }
+    return { silinen: silinecek.length }
+  } catch (e) { console.error('tabloSiparisleriSenkron:', e.message); return { silinen: 0 } }
 }
 
 // —— MUSTERILER —— (tek satırda, ad->kod objesi)
