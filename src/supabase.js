@@ -31,6 +31,58 @@ export async function fotoYukleStorage(dataUrl, modelId, onek = '') {
   }
 }
 
+// ═══ OTOMATİK YEDEKLEME (yedekler tablosu) ═══
+// Yedek kaydet — aynı gün + önek için varsa günceller, son 7'yi tutar
+export async function yedekKaydet(onek, veri, modelSayisi, siparisSayisi) {
+  try {
+    const bugun = new Date().toISOString().slice(0, 10) // YYYY-MM-DD
+    // Bugünün yedeği var mı? Varsa güncelle (upsert mantığı: önce sil sonra ekle)
+    await supabase.from('yedekler').delete().eq('onek', onek).eq('tarih', bugun)
+    const { error } = await supabase.from('yedekler').insert({
+      onek, tarih: bugun, veri, model_sayisi: modelSayisi, siparis_sayisi: siparisSayisi
+    })
+    if (error) { console.error('yedekKaydet:', error.message); return false }
+    // Son 7'yi tut — fazlasını sil
+    const { data: hepsi } = await supabase.from('yedekler')
+      .select('id').eq('onek', onek).order('tarih', { ascending: false })
+    if (hepsi && hepsi.length > 7) {
+      const silinecekIdler = hepsi.slice(7).map(x => x.id)
+      await supabase.from('yedekler').delete().in('id', silinecekIdler)
+    }
+    return true
+  } catch (e) { console.error('yedekKaydet hata:', e.message); return false }
+}
+
+// Yedek listesini getir (veri hariç, sadece tarih/sayılar — hafif)
+export async function yedekListesi(onek) {
+  try {
+    const { data, error } = await supabase.from('yedekler')
+      .select('id, tarih, olusturma, model_sayisi, siparis_sayisi')
+      .eq('onek', onek).order('tarih', { ascending: false })
+    if (error) { console.error('yedekListesi:', error.message); return [] }
+    return data || []
+  } catch (e) { console.error('yedekListesi hata:', e.message); return [] }
+}
+
+// Belirli bir yedeğin tam verisini getir
+export async function yedekGetir(id) {
+  try {
+    const { data, error } = await supabase.from('yedekler').select('veri').eq('id', id).maybeSingle()
+    if (error || !data) return null
+    return data.veri
+  } catch (e) { console.error('yedekGetir hata:', e.message); return null }
+}
+
+// Bugün yedek alınmış mı? (günde 1 kez kontrolü için)
+export async function bugunYedekVarMi(onek) {
+  try {
+    const bugun = new Date().toISOString().slice(0, 10)
+    const { data } = await supabase.from('yedekler')
+      .select('id').eq('onek', onek).eq('tarih', bugun).maybeSingle()
+    return !!data
+  } catch { return false }
+}
+
 // ═══ DATABASE ═══
 async function dbWrite(key, value) {
   const json = JSON.stringify(value)
