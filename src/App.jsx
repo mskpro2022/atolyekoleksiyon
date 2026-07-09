@@ -1,4 +1,4 @@
-import { dbLoad, dbSave, fotoYukleStorage, yedekKaydet, yedekListesi, yedekGetir, bugunYedekVarMi, tabloModelleriSenkron, tabloSiparisleriSenkron, tabloMusterileriYaz } from "./supabase.js";
+import { dbLoad, dbSave, fotoYukleStorage, yedekKaydet, yedekListesi, yedekGetir, bugunYedekVarMi, tabloModelleriSenkron, tabloSiparisleriSenkron, tabloMusterileriYaz, akilliModelOku, akilliSiparisOku, akilliMusteriOku } from "./supabase.js";
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 
 const uid = () => "x" + Date.now() + Math.random().toString(36).substr(2, 5);
@@ -1940,10 +1940,14 @@ function Atolye({ onSirketDegis }) {
       }
     } catch {}
 
-    // 2. Cache yok — Supabase'den çek, sadece v7
+    // 2. Cache yok — Supabase'den çek
+    // AŞAMA 2 ADIM 3: modeller/siparişler/müşteriler TABLODAN (boş/hata olursa chunk'a düşer)
     const [k,m,s,u,c,ay,ks] = await Promise.all([
-      ld("v7k",[]), ld("v7m",[]), ld("v7s",[]),
-      ld("v7u",{}), ld("v7c",{}), ld("v7ay",{}), ld("v7kasa",null)
+      ld("v7k",[]),
+      akilliModelOku(AKTIF_SIRKET_ONEK),
+      akilliSiparisOku(AKTIF_SIRKET_ONEK),
+      akilliMusteriOku(AKTIF_SIRKET_ONEK),
+      ld("v7c",{}), ld("v7ay",{}), ld("v7kasa",null)
     ]);
     try { localStorage.setItem("atolye_full_cache", JSON.stringify({k,m,s,u,c,ay,ks,ts:Date.now()})); } catch {}
     applyData(k,m,s,u,c,ay,ks);
