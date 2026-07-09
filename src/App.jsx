@@ -1,4 +1,4 @@
-import { dbLoad, dbSave, fotoYukleStorage, yedekKaydet, yedekListesi, yedekGetir, bugunYedekVarMi, tabloModelleriSenkron, tabloSiparisleriSenkron, tabloMusterileriYaz, akilliModelOku, akilliSiparisOku, akilliMusteriOku } from "./supabase.js";
+import { dbLoad, dbSave, fotoYukleStorage, yedekKaydet, yedekListesi, yedekGetir, bugunYedekVarMi, tabloModelleriSenkron, tabloSiparisleriSenkron, tabloMusterileriYaz, akilliModelOku, akilliSiparisOku, akilliMusteriOku, islemKaydet, islemGecmisiGetir } from "./supabase.js";
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 
 const uid = () => "x" + Date.now() + Math.random().toString(36).substr(2, 5);
@@ -1786,6 +1786,7 @@ function Atolye({ onSirketDegis }) {
   const [vitrinKodlar, setVitrinKodlar] = useState([]); // müşteri vitrin kodları
   const [yeniMusteriAd, setYeniMusteriAd] = useState("");
   const [otoYedekler, setOtoYedekler] = useState([]); // otomatik yedek listesi
+  const [islemGecmisi, setIslemGecmisi] = useState([]); // işlem geçmişi
   const [ayarYeniKategori, setAyarYeniKategori] = useState("");
   const [ayarVarsAltinKg, setAyarVarsAltinKg] = useState("");
   const [ayarVarsMc, setAyarVarsMc] = useState("");
@@ -2274,6 +2275,7 @@ function Atolye({ onSirketDegis }) {
     if (sayfa === "ayarlar" && loaded) {
       ld("v7vitrin", []).then(v => setVitrinKodlar(v || []));
       yedekListesi(AKTIF_SIRKET_ONEK).then(setOtoYedekler);
+      islemGecmisiGetir(AKTIF_SIRKET_ONEK, 50).then(setIslemGecmisi);
     }
   }, [sayfa, loaded]);
 
@@ -2344,6 +2346,7 @@ function Atolye({ onSirketDegis }) {
           return m;
         });
         svM(yeniListe);
+        islemKaydet(AKTIF_SIRKET_ONEK, "düzenle", "model", (obj.kod || "") + " · " + (obj.ad || ""));
       } else {
         const yeniId = uid();
         // Foto base64 ise Storage'a yükle
@@ -2357,6 +2360,7 @@ function Atolye({ onSirketDegis }) {
         } else {
           svM([...modeller, yeniModel]);
         }
+        islemKaydet(AKTIF_SIRKET_ONEK, "ekle", "model", (obj.kod || "") + " · " + (obj.ad || ""));
       }
       setShowMM(false); rmf(); setEditM(null);
     };
@@ -2373,7 +2377,12 @@ function Atolye({ onSirketDegis }) {
     }
   };
 
-  const delMod = id => { svM(modeller.filter(m => m.id !== id)); setDelOnay(null); };
+  const delMod = id => {
+    const m = modeller.find(x => x.id === id);
+    svM(modeller.filter(m => m.id !== id));
+    setDelOnay(null);
+    if (m) islemKaydet(AKTIF_SIRKET_ONEK, "sil", "model", (m.kod || "") + " · " + (m.ad || ""));
+  };
   const delSip = id => {
     const sip = siparisler.find(s => s.id === id);
     if (sip) {
@@ -2385,6 +2394,7 @@ function Atolye({ onSirketDegis }) {
     }
     svS(siparisler.filter(s => s.id !== id));
     setDelOnay(null);
+    if (sip) islemKaydet(AKTIF_SIRKET_ONEK, "sil", "sipariş", (sip.musteri || "") + " · " + new Date(sip.tarih).toLocaleDateString("tr-TR"));
   };
 
   const openEK = k => { setFkAd(k.ad); setFkAc(k.ac||""); setFkOn(k.on||""); setEditK(k); setShowKM(true); };
@@ -2527,6 +2537,7 @@ function Atolye({ onSirketDegis }) {
     const musKod = yeniMusteriler[musAd];
     const yeni = { id: uid(), musteri: musAd, musKod, tarih: Date.now(), teslimTarihi: konfTeslim||"", aciklama: konfSipAciklama.trim(), altinKgUSD, mc: madenCarpan, kalemler: konfKalemler, gelir: kTop.gelir, maliyet: kTop.maliyet, kar: kTop.kar };
     svS([...siparisler, yeni]);
+    islemKaydet(AKTIF_SIRKET_ONEK, "ekle", "sipariş", (musAd || "") + " · " + (konfKalemler?.length || 0) + " kalem");
     svM(modeller.map(m => { const k = konfKalemler.find(x => x.id === m.id); return k ? { ...m, satisSayisi: (m.satisSayisi||0)+1 } : m; }));
     // Müşteri-model fiyat hafızasını güncelle
     if (musAd && Object.keys(konfFiyatlar).length > 0) {
@@ -5397,6 +5408,31 @@ ${buildContext()}`;
 
             {/* ŞİFRE DEĞİŞTİR */}
             <SifreDegistir />
+
+            {/* İŞLEM GEÇMİŞİ */}
+            <div style={{ background:"rgba(167,139,250,0.03)", border:"1px solid rgba(167,139,250,0.15)", borderRadius:12, padding:"14px 16px", marginBottom:14 }}>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
+                <div style={{ fontSize:10, fontWeight:700, color:"#a78bfa" }}>📋 İŞLEM GEÇMİŞİ</div>
+                <button onClick={()=>islemGecmisiGetir(AKTIF_SIRKET_ONEK, 50).then(setIslemGecmisi)} style={{ ...GH, fontSize:9, padding:"4px 10px" }}>↻ Yenile</button>
+              </div>
+              <div style={{ fontSize:9, color:"#665d4a", marginBottom:12 }}>Son 50 işlem (ekleme, düzenleme, silme). Bir şeyin ne zaman değiştiğini buradan görebilirsiniz.</div>
+              {islemGecmisi.length === 0 && <div style={{ fontSize:9, color:"#665d4a" }}>Henüz işlem kaydı yok.</div>}
+              {islemGecmisi.length > 0 && <div style={{ display:"flex", flexDirection:"column", gap:4, maxHeight:280, overflowY:"auto" }}>
+                {islemGecmisi.map(ig => {
+                  const renk = ig.islem==="sil" ? "#e85a4f" : ig.islem==="ekle" ? "#6abf69" : "#5b9bd5";
+                  const ikon = ig.islem==="sil" ? "🗑" : ig.islem==="ekle" ? "➕" : "✏️";
+                  return (
+                    <div key={ig.id} style={{ display:"flex", alignItems:"center", gap:8, padding:"5px 9px", background:"rgba(0,0,0,0.15)", borderRadius:6, fontSize:9 }}>
+                      <span style={{ fontSize:11 }}>{ikon}</span>
+                      <span style={{ color:renk, fontWeight:700, minWidth:44 }}>{ig.islem}</span>
+                      <span style={{ color:"#998a6e", minWidth:40 }}>{ig.tur}</span>
+                      <span style={{ color:"#e8dcc8", flex:1, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{ig.detay||""}</span>
+                      <span style={{ color:"#665d4a", fontSize:8, whiteSpace:"nowrap" }}>{new Date(ig.zaman).toLocaleString("tr-TR",{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"})}</span>
+                    </div>
+                  );
+                })}
+              </div>}
+            </div>
 
             {/* OTOMATİK YEDEKLER */}
             <div style={{ background:"rgba(91,155,213,0.03)", border:"1px solid rgba(91,155,213,0.15)", borderRadius:12, padding:"14px 16px", marginBottom:14 }}>
