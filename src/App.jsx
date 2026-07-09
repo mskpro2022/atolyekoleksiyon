@@ -1,4 +1,4 @@
-import { dbLoad, dbSave, fotoYukleStorage, yedekKaydet, yedekListesi, yedekGetir, bugunYedekVarMi } from "./supabase.js";
+import { dbLoad, dbSave, fotoYukleStorage, yedekKaydet, yedekListesi, yedekGetir, bugunYedekVarMi, tabloModelleriToplu, tabloSiparisleriToplu, tabloMusterileriYaz } from "./supabase.js";
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 
 const uid = () => "x" + Date.now() + Math.random().toString(36).substr(2, 5);
@@ -2136,8 +2136,16 @@ function Atolye({ onSirketDegis }) {
       localStorage.setItem("atolye_full_cache", JSON.stringify({...d, m:temiz, ts:Date.now()}));
     } catch {}
     await guvenliKaydet("v7m", temiz);
+    // ÇİFT YAZMA (Aşama 2) — tabloya arka planda sessizce yaz, hata olsa uygulamayı etkilemez
+    tabloModelleriToplu(AKTIF_SIRKET_ONEK, temiz).then(n => {
+      if (n !== temiz.length) console.warn("⚠ Tablo yazma: " + n + "/" + temiz.length);
+    }).catch(e => console.error("Tablo yazma (arka plan):", e.message));
   }, [guvenliKaydet]);
-  const svS = useCallback(async d => { setSiparisler(d); await guvenliKaydet("v7s", d); }, [guvenliKaydet]);
+  const svS = useCallback(async d => {
+    setSiparisler(d);
+    await guvenliKaydet("v7s", d);
+    tabloSiparisleriToplu(AKTIF_SIRKET_ONEK, d).catch(e => console.error("Sipariş tablo (arka plan):", e.message));
+  }, [guvenliKaydet]);
 
 
   // Sipariş durum geçmişini güncelle (opsiyonel manuel tarih)
@@ -2217,7 +2225,11 @@ function Atolye({ onSirketDegis }) {
       });
     }
   }, [versiyonDamgala]);
-  const svMus = useCallback(async d => { setMusteriler(d); await versiyonDamgala("v7u", d); }, [versiyonDamgala]);
+  const svMus = useCallback(async d => {
+    setMusteriler(d);
+    await versiyonDamgala("v7u", d);
+    tabloMusterileriYaz(AKTIF_SIRKET_ONEK, d).catch(e => console.error("Müşteri tablo (arka plan):", e.message));
+  }, [versiyonDamgala]);
 
   // ═══ OTOMATİK GÜNLÜK YEDEKLEME ═══
   // Yedek verisini topla (foto artık Storage'da olduğu için hafif)
