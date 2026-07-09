@@ -402,3 +402,43 @@ export async function akilliMusteriOku(onek) {
     return await dbLoad((onek || '') + 'v7u', {})
   }
 }
+
+// ═══ İŞLEM GEÇMİŞİ (Aşama 3) ═══
+// Cihaz kimliği — tarayıcı başına sabit, kim yaptı ayırt etmek için
+function cihazKimligi() {
+  try {
+    let c = localStorage.getItem('atolye_cihaz_id')
+    if (!c) {
+      c = 'cihaz-' + Math.random().toString(36).slice(2, 8)
+      localStorage.setItem('atolye_cihaz_id', c)
+    }
+    return c
+  } catch { return 'bilinmeyen' }
+}
+
+// İşlem kaydet (arka planda, sessiz — hata olsa uygulamayı etkilemez)
+export async function islemKaydet(onek, islem, tur, detay) {
+  try {
+    await supabase.from('islem_gecmisi').insert({
+      onek, islem, tur, detay: detay || null, cihaz: cihazKimligi()
+    })
+    // Son 500 kaydı tut, eskiyi temizle (ara sıra)
+    if (Math.random() < 0.1) { // %10 ihtimalle temizlik yap (her seferinde değil)
+      const { data } = await supabase.from('islem_gecmisi')
+        .select('id').eq('onek', onek).order('zaman', { ascending: false }).range(500, 500)
+      if (data && data.length > 0) {
+        await supabase.from('islem_gecmisi').delete().eq('onek', onek).lt('id', data[0].id)
+      }
+    }
+  } catch (e) { /* sessiz — geçmiş kaydı kritik değil */ }
+}
+
+// Son işlemleri getir
+export async function islemGecmisiGetir(onek, limit = 50) {
+  try {
+    const { data, error } = await supabase.from('islem_gecmisi')
+      .select('*').eq('onek', onek).order('zaman', { ascending: false }).limit(limit)
+    if (error) return []
+    return data || []
+  } catch { return [] }
+}
