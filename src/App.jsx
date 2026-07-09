@@ -5312,8 +5312,9 @@ ${buildContext()}`;
 
         {/* AYARLAR */}
         {sayfa==="ayarlar" && (
-          <div style={{ animation:"fadein .3s", maxWidth:700 }}>
+          <div style={{ animation:"fadein .3s", maxWidth:1200 }}>
             <h2 style={{ margin:"0 0 16px", fontSize:15, fontWeight:700, color:T.text }}>⚙ Ayarlar</h2>
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(340px, 1fr))", gap:14, alignItems:"start" }}>
 
             {/* TEMA SEÇİCİ */}
             <div style={{ background:T.card, border:"1px solid "+T.border, borderRadius:16, padding:"16px 18px", marginBottom:14 }}>
@@ -5749,6 +5750,7 @@ ${buildContext()}`;
                   </div>
                 );
               })}
+            </div>
             </div>
           </div>
         )}
