@@ -26,6 +26,7 @@ async function dbWrite(key, value) {
   }
   console.error('❌ dbWrite başarısız:', key, '(' + boyutKB + 'KB)', sonHata && sonHata.message)
   throw sonHata
+}
 async function dbRead(key) {
   const { data, error } = await supabase
     .from('storage')
