@@ -209,11 +209,11 @@ function resizeImg(file) {
       img.onload = () => {
         const c = document.createElement("canvas");
         let w = img.width, h = img.height;
-        if (w > 1200) { h = Math.round(h * 1200 / w); w = 1200; }
-        if (h > 1200) { w = Math.round(w * 1200 / h); h = 1200; }
+        if (w > 1600) { h = Math.round(h * 1600 / w); w = 1600; }
+        if (h > 1600) { w = Math.round(w * 1600 / h); h = 1600; }
         c.width = w; c.height = h;
         c.getContext("2d").drawImage(img, 0, 0, w, h);
-        resolve(c.toDataURL("image/jpeg", 0.75));
+        resolve(c.toDataURL("image/jpeg", 0.85));
       };
       img.src = e.target.result;
     };
