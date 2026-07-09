@@ -3,6 +3,34 @@ const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
 const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 export const supabase = createClient(supabaseUrl, supabaseKey)
 const CHUNK_SIZE = 8
+
+// ═══ FOTO STORAGE ═══
+const FOTO_BUCKET = 'FOTOLAR'
+// base64/blob fotoğrafı Storage'a yükler, public URL döndürür
+export async function fotoYukleStorage(dataUrl, modelId, onek = '') {
+  try {
+    // dataURL değilse (zaten URL) olduğu gibi bırak
+    if (!dataUrl || !dataUrl.startsWith('data:')) return dataUrl
+    const blob = await (await fetch(dataUrl)).blob()
+    const uzanti = blob.type.includes('png') ? 'png' : 'jpg'
+    const yol = onek + 'model-' + modelId + '.' + uzanti
+    for (let deneme = 0; deneme < 3; deneme++) {
+      const { error } = await supabase.storage.from(FOTO_BUCKET).upload(yol, blob, { upsert: true, contentType: blob.type })
+      if (!error) {
+        const { data } = supabase.storage.from(FOTO_BUCKET).getPublicUrl(yol)
+        return data.publicUrl
+      }
+      await new Promise(r => setTimeout(r, 400 * (deneme + 1)))
+    }
+    // Yükleme başarısızsa base64'ü koru (veri kaybetme)
+    console.warn('⚠ Foto Storage\'a yüklenemedi, base64 korundu:', modelId)
+    return dataUrl
+  } catch (e) {
+    console.error('fotoYukleStorage hata:', e.message)
+    return dataUrl // hata olursa base64 kalsın
+  }
+}
+
 // ═══ DATABASE ═══
 async function dbWrite(key, value) {
   const json = JSON.stringify(value)
