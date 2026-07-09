@@ -5344,10 +5344,10 @@ ${buildContext()}`;
         {sayfa==="ayarlar" && (
           <div style={{ animation:"fadein .3s", maxWidth:1200 }}>
             <h2 style={{ margin:"0 0 16px", fontSize:15, fontWeight:700, color:T.text }}>⚙ Ayarlar</h2>
-            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(340px, 1fr))", gap:14, alignItems:"start" }}>
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(320px, 1fr))", gap:12, alignItems:"start" }}>
 
             {/* TEMA SEÇİCİ */}
-            <div style={{ background:T.card, border:"1px solid "+T.border, borderRadius:16, padding:"16px 18px", marginBottom:14 }}>
+            <div style={{ background:T.card, border:"1px solid "+T.border, borderRadius:14, padding:"15px 16px" }}>
               <div style={{ fontSize:11, fontWeight:700, color:T.gold, marginBottom:14, letterSpacing:"0.03em" }}>🎨 UYGULAMA TEMASI</div>
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
                 {Object.values(TEMALAR).map(t => (
@@ -5375,7 +5375,7 @@ ${buildContext()}`;
             </div>
 
             {/* ARAYÜZ RENKLERİ — TAM ÖZELLEŞTİRME */}
-            <div style={{ background:T.card, border:"1px solid "+T.border, borderRadius:16, padding:"16px 18px", marginBottom:14 }}>
+            <div style={{ background:T.card, border:"1px solid "+T.border, borderRadius:14, padding:"15px 16px" }}>
               <div style={{ fontSize:11, fontWeight:700, color:T.gold, marginBottom:6, letterSpacing:"0.03em" }}>🎨 ARAYÜZ RENKLERİ</div>
               <div style={{ fontSize:8, color:T.dim, marginBottom:14 }}>Tüm arayüz renklerini tek tek ayarlayın. Her rengin yanındaki ↺ ile o rengi, alttaki buton ile hepsini varsayılana döndürebilirsiniz.</div>
 
@@ -5441,7 +5441,7 @@ ${buildContext()}`;
             <SifreDegistir />
 
             {/* İŞLEM GEÇMİŞİ */}
-            <div style={{ background:"rgba(167,139,250,0.03)", border:"1px solid rgba(167,139,250,0.15)", borderRadius:12, padding:"14px 16px", marginBottom:14 }}>
+            <div style={{ background:T.card, border:"1px solid "+T.border, borderRadius:14, padding:"15px 16px" }}>
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
                 <div style={{ fontSize:10, fontWeight:700, color:"#a78bfa" }}>📋 İŞLEM GEÇMİŞİ</div>
                 <button onClick={()=>islemGecmisiGetir(AKTIF_SIRKET_ONEK, 50).then(setIslemGecmisi)} style={{ ...GH, fontSize:9, padding:"4px 10px" }}>↻ Yenile</button>
@@ -5466,7 +5466,7 @@ ${buildContext()}`;
             </div>
 
             {/* OTOMATİK YEDEKLER */}
-            <div style={{ background:"rgba(91,155,213,0.03)", border:"1px solid rgba(91,155,213,0.15)", borderRadius:12, padding:"14px 16px", marginBottom:14 }}>
+            <div style={{ background:T.card, border:"1px solid "+T.border, borderRadius:14, padding:"15px 16px" }}>
               <div style={{ fontSize:10, fontWeight:700, color:"#5b9bd5", marginBottom:8 }}>🔄 OTOMATİK YEDEKLER</div>
               <div style={{ fontSize:9, color:"#665d4a", marginBottom:12 }}>Sistem her gün otomatik yedek alır (son 7 gün saklanır). Buradan geçmiş bir yedeğe dönebilirsiniz. Foto'lar Storage'da olduğu için yedekler hafiftir.</div>
 
@@ -5483,7 +5483,7 @@ ${buildContext()}`;
               {otoYedekler.length === 0 && <div style={{ fontSize:9, color:"#665d4a" }}>Henüz otomatik yedek yok. İlk yedek yarın (veya "Şimdi Yedek Al" ile) oluşur.</div>}
               {otoYedekler.length > 0 && <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
                 {otoYedekler.map(y => (
-                  <div key={y.id} style={{ background:"rgba(0,0,0,0.15)", border:"1px solid rgba(255,255,255,0.06)", borderRadius:8, padding:"9px 11px", display:"flex", justifyContent:"space-between", alignItems:"center", gap:8, flexWrap:"wrap" }}>
+                  <div key={y.id} style={{ background:"rgba(0,0,0,0.15)", border:"1px solid "+T.border, borderRadius:8, padding:"9px 11px", display:"flex", justifyContent:"space-between", alignItems:"center", gap:8, flexWrap:"wrap" }}>
                     <div>
                       <div style={{ fontSize:11, fontWeight:700, color:GOLD }}>{new Date(y.tarih).toLocaleDateString("tr-TR", {day:"2-digit", month:"long", year:"numeric"})}</div>
                       <div style={{ fontSize:8, color:"#665d4a" }}>{y.model_sayisi||0} model · {y.siparis_sayisi||0} sipariş · {new Date(y.olusturma).toLocaleTimeString("tr-TR",{hour:"2-digit",minute:"2-digit"})}</div>
@@ -5510,7 +5510,7 @@ ${buildContext()}`;
             </div>
 
             {/* MÜŞTERİ VİTRİNİ */}
-            <div style={{ background:"rgba(106,191,105,0.03)", border:"1px solid rgba(106,191,105,0.15)", borderRadius:12, padding:"14px 16px", marginBottom:14 }}>
+            <div style={{ background:T.card, border:"1px solid "+T.border, borderRadius:14, padding:"15px 16px" }}>
               <div style={{ fontSize:10, fontWeight:700, color:"#6abf69", marginBottom:8 }}>🛍️ MÜŞTERİ VİTRİNİ</div>
               <div style={{ fontSize:9, color:"#665d4a", marginBottom:12 }}>Müşterilere özel link oluşturun. Müşteri sadece foto, model adı, gram ve ayar görür — fiyat, taş, işçilik gibi bilgiler gizlidir. Yalnızca "vitrinde göster" işaretli koleksiyonlar görünür.</div>
 
@@ -5550,7 +5550,7 @@ ${buildContext()}`;
                 {vitrinKodlar.map((vk,i) => {
                   const url = window.location.origin + "?vitrin=" + vk.kod;
                   return (
-                    <div key={vk.kod} style={{ background:"rgba(0,0,0,0.15)", border:"1px solid rgba(255,255,255,0.06)", borderRadius:8, padding:"9px 11px" }}>
+                    <div key={vk.kod} style={{ background:"rgba(0,0,0,0.15)", border:"1px solid "+T.border, borderRadius:8, padding:"9px 11px" }}>
                       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:8, flexWrap:"wrap" }}>
                         <div style={{ minWidth:0 }}>
                           <div style={{ fontSize:11, fontWeight:700, color: vk.aktif?GOLD:"#665d4a" }}>{vk.musteriAd} {!vk.aktif && <span style={{ fontSize:8, color:"#e85a4f" }}>(kapalı)</span>}</div>
@@ -5560,7 +5560,7 @@ ${buildContext()}`;
                         </div>
                         <div style={{ display:"flex", gap:5 }}>
                           <button onClick={()=>{ navigator.clipboard?.writeText(url); toastGoster("ok","Link kopyalandı"); }} style={{ background:"rgba(91,155,213,0.12)", border:"1px solid rgba(91,155,213,0.25)", borderRadius:6, padding:"4px 9px", color:"#5b9bd5", fontSize:9, fontWeight:700, cursor:"pointer" }}>📋 Kopyala</button>
-                          <button onClick={async()=>{ const g=vitrinKodlar.map((x,j)=>j===i?{...x,aktif:!x.aktif}:x); setVitrinKodlar(g); await sv("v7vitrin",g); }} style={{ background:"rgba(255,255,255,0.04)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:6, padding:"4px 9px", color:"#998a6e", fontSize:9, fontWeight:700, cursor:"pointer" }}>{vk.aktif?"Kapat":"Aç"}</button>
+                          <button onClick={async()=>{ const g=vitrinKodlar.map((x,j)=>j===i?{...x,aktif:!x.aktif}:x); setVitrinKodlar(g); await sv("v7vitrin",g); }} style={{ background:T.card, border:"1px solid "+T.border, borderRadius:6, padding:"4px 9px", color:"#998a6e", fontSize:9, fontWeight:700, cursor:"pointer" }}>{vk.aktif?"Kapat":"Aç"}</button>
                           <button onClick={async()=>{ if(!window.confirm(vk.musteriAd+" linkini silmek istiyor musunuz?"))return; const g=vitrinKodlar.filter((_,j)=>j!==i); setVitrinKodlar(g); await sv("v7vitrin",g); toastGoster("ok","Silindi"); }} style={{ background:"rgba(232,90,79,0.1)", border:"1px solid rgba(232,90,79,0.2)", borderRadius:6, padding:"4px 9px", color:"#e85a4f", fontSize:9, fontWeight:700, cursor:"pointer" }}>Sil</button>
                         </div>
                       </div>
@@ -5571,7 +5571,7 @@ ${buildContext()}`;
             </div>
 
             {/* AKTİF ŞİRKET */}
-            <div style={{ background:"rgba(167,139,250,0.04)", border:"1px solid rgba(167,139,250,0.15)", borderRadius:12, padding:"14px 16px", marginBottom:14 }}>
+            <div style={{ background:T.card, border:"1px solid "+T.border, borderRadius:14, padding:"15px 16px" }}>
               <div style={{ fontSize:10, fontWeight:700, color:"#a78bfa", marginBottom:8 }}>🏢 AKTİF ŞİRKET</div>
               <div style={{ fontSize:14, fontWeight:800, color:GOLD, marginBottom:4 }}>{AKTIF_SIRKET}</div>
               <div style={{ fontSize:9, color:"#665d4a", marginBottom:10 }}>Şu an bu şirketin kataloğundasınız. Diğer şirkete geçmek için aşağıdaki butonu kullanın (verileriniz korunur).</div>
@@ -5580,7 +5580,7 @@ ${buildContext()}`;
             </div>
 
             {/* DİĞER SİSTEM — PERSONEL */}
-            <div style={{ background:"rgba(91,155,213,0.03)", border:"1px solid rgba(91,155,213,0.12)", borderRadius:12, padding:"14px 16px", marginBottom:14 }}>
+            <div style={{ background:T.card, border:"1px solid "+T.border, borderRadius:14, padding:"15px 16px" }}>
               <div style={{ fontSize:10, fontWeight:700, color:"#5b9bd5", marginBottom:8 }}>👥 PERSONEL SİSTEMİ</div>
               <div style={{ fontSize:9, color:"#665d4a", marginBottom:10 }}>Personel, bordro, mesai, avans, izin ve gider takibi için diğer sisteme geçiş yapın.</div>
               <button onClick={()=>{ window.open("https://personeltakip-pearl.vercel.app/", "_blank"); }}
@@ -5588,7 +5588,7 @@ ${buildContext()}`;
             </div>
 
             {/* OTURUMU KAPAT */}
-            <div style={{ background:"rgba(232,90,79,0.03)", border:"1px solid rgba(232,90,79,0.1)", borderRadius:12, padding:"14px 16px", marginBottom:14 }}>
+            <div style={{ background:T.card, border:"1px solid "+T.border, borderRadius:14, padding:"15px 16px" }}>
               <div style={{ fontSize:10, fontWeight:700, color:"#e85a4f", marginBottom:8 }}>🚪 OTURUM</div>
               <div style={{ fontSize:9, color:"#665d4a", marginBottom:10 }}>"Beni hatırla" ile açık oturumu kapatır, bir dahaki açılışta tekrar şifre sorulur.</div>
               <button onClick={()=>{
@@ -5599,7 +5599,7 @@ ${buildContext()}`;
             </div>
 
             {/* VARSAYILAN DEGERLER */}
-            <div style={{ background:"rgba(201,168,76,0.04)", border:"1px solid rgba(201,168,76,0.1)", borderRadius:12, padding:"14px 16px", marginBottom:14 }}>
+            <div style={{ background:T.card, border:"1px solid "+T.border, borderRadius:14, padding:"15px 16px" }}>
               <div style={{ fontSize:10, fontWeight:700, color:GOLD, marginBottom:12 }}>💰 VARSAYILAN DEGERLER</div>
               <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginBottom:8 }}>
                 <div style={{ flex:1 }}><Fl label="Altin $/kg">
@@ -5632,7 +5632,7 @@ ${buildContext()}`;
             </div>
 
             {/* ETİKET YÖNETİMİ */}
-            <div style={{ background:"rgba(167,139,250,0.04)", border:"1px solid rgba(167,139,250,0.1)", borderRadius:12, padding:"14px 16px", marginBottom:14 }}>
+            <div style={{ background:T.card, border:"1px solid "+T.border, borderRadius:14, padding:"15px 16px" }}>
               <div style={{ fontSize:10, fontWeight:700, color:"#a78bfa", marginBottom:10 }}>🏷 ETİKET YÖNETİMİ</div>
               <div style={{ fontSize:9, color:"#665d4a", marginBottom:8 }}>Modellerde kullanilan tum etiketler:</div>
               <div style={{ display:"flex", gap:5, flexWrap:"wrap", marginBottom:10 }}>
@@ -5654,7 +5654,7 @@ ${buildContext()}`;
             </div>
 
             {/* KATEGORİ YÖNETİMİ */}
-            <div style={{ background:"rgba(91,155,213,0.04)", border:"1px solid rgba(91,155,213,0.1)", borderRadius:12, padding:"14px 16px", marginBottom:14 }}>
+            <div style={{ background:T.card, border:"1px solid "+T.border, borderRadius:14, padding:"15px 16px" }}>
               <div style={{ fontSize:10, fontWeight:700, color:"#5b9bd5", marginBottom:10 }}>📂 KATEGORİ YÖNETİMİ</div>
               <div style={{ display:"flex", gap:5, flexWrap:"wrap", marginBottom:10 }}>
                 {ayarKategoriler.map(k => (
@@ -5684,7 +5684,7 @@ ${buildContext()}`;
             </div>
 
             {/* ÖZEL TAŞ YÖNETİMİ */}
-            <div style={{ background:"rgba(91,155,213,0.04)", border:"1px solid rgba(91,155,213,0.12)", borderRadius:12, padding:"14px 16px", marginBottom:14 }}>
+            <div style={{ background:T.card, border:"1px solid "+T.border, borderRadius:14, padding:"15px 16px" }}>
               <div style={{ fontSize:10, fontWeight:700, color:"#5b9bd5", marginBottom:10 }}>💎 ÖZEL TAŞ BOYUTLARI</div>
               <div style={{ fontSize:9, color:"#665d4a", marginBottom:10 }}>Tabloda olmayan taş boyutlarını buraya ekleyin. Model formunda otomatik kullanılır.</div>
               {ozelTaslar.length === 0 && (
@@ -5703,7 +5703,7 @@ ${buildContext()}`;
                 <div style={{ marginBottom:10 }}>
                   <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
                     {ozelTaslar.map((t, i) => (
-                      <div key={i} style={{ display:"flex", alignItems:"center", gap:8, padding:"6px 10px", background:"rgba(91,155,213,0.06)", borderRadius:7 }}>
+                      <div key={i} style={{ display:"flex", alignItems:"center", gap:8, padding:"6px 10px", background:T.card, borderRadius:7 }}>
                         <span style={{ fontSize:10, fontWeight:700, color:"#5b9bd5", minWidth:70 }}>{t.sekil}</span>
                         <span style={{ fontSize:10, color:"var(--goldtext)", minWidth:80 }}>{t.boyut}</span>
                         <span style={{ fontSize:9, color:"#6abf69" }}>{t.gramPerAdet.toFixed(6)} gr/adet</span>
