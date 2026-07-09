@@ -83,6 +83,132 @@ export async function bugunYedekVarMi(onek) {
   } catch { return false }
 }
 
+// ═══════════════════════════════════════════════════════
+// AŞAMA 2 — GERÇEK TABLOLAR (modeller / siparisler / musteriler)
+// Kademeli geçiş: bu fonksiyonlar eski chunk sistemiyle PARALEL çalışır.
+// ═══════════════════════════════════════════════════════
+
+// —— MODELLER ——
+// Tüm modelleri tablodan oku (sayfalama ile, 1000'er) 
+export async function tabloModelleriOku(onek) {
+  try {
+    const hepsi = []
+    let bas = 0
+    const ADIM = 1000
+    for (let tur = 0; tur < 50; tur++) { // max 50k model güvenlik
+      const { data, error } = await supabase.from('modeller')
+        .select('veri').eq('onek', onek).range(bas, bas + ADIM - 1)
+      if (error) { console.error('tabloModelleriOku:', error.message); break }
+      if (!data || data.length === 0) break
+      data.forEach(r => { if (r.veri) hepsi.push(r.veri) })
+      if (data.length < ADIM) break
+      bas += ADIM
+    }
+    return hepsi
+  } catch (e) { console.error('tabloModelleriOku hata:', e.message); return [] }
+}
+
+// Tek model yaz (upsert) — satır bazlı, sadece bu model
+export async function tabloModelYaz(onek, model) {
+  try {
+    const { error } = await supabase.from('modeller').upsert({
+      id: String(model.id), onek,
+      kod: model.kod || null, ki: model.ki || null, kategori: model.kategori || null,
+      veri: model, guncelleme: new Date().toISOString()
+    }, { onConflict: 'id' })
+    if (error) { console.error('tabloModelYaz:', error.message); return false }
+    return true
+  } catch (e) { console.error('tabloModelYaz hata:', e.message); return false }
+}
+
+// Tek model sil
+export async function tabloModelSil(id) {
+  try {
+    const { error } = await supabase.from('modeller').delete().eq('id', String(id))
+    return !error
+  } catch { return false }
+}
+
+// Toplu model yaz (migration + toplu işlemler için) — 100'er batch, retry'lı
+export async function tabloModelleriToplu(onek, modeller, ilerlemeCb) {
+  const BATCH = 100
+  let yazilan = 0
+  for (let i = 0; i < modeller.length; i += BATCH) {
+    const grup = modeller.slice(i, i + BATCH).map(m => ({
+      id: String(m.id), onek,
+      kod: m.kod || null, ki: m.ki || null, kategori: m.kategori || null,
+      veri: m, guncelleme: new Date().toISOString()
+    }))
+    let ok = false
+    for (let deneme = 0; deneme < 3 && !ok; deneme++) {
+      const { error } = await supabase.from('modeller').upsert(grup, { onConflict: 'id' })
+      if (!error) { ok = true; yazilan += grup.length }
+      else { await new Promise(r => setTimeout(r, 500 * (deneme + 1))) }
+    }
+    if (ilerlemeCb) ilerlemeCb(yazilan, modeller.length)
+  }
+  return yazilan
+}
+
+// Tablodaki model sayısı (doğrulama için)
+export async function tabloModelSayisi(onek) {
+  try {
+    const { count, error } = await supabase.from('modeller')
+      .select('id', { count: 'exact', head: true }).eq('onek', onek)
+    if (error) return -1
+    return count ?? -1
+  } catch { return -1 }
+}
+
+// —— SIPARISLER —— (aynı desen)
+export async function tabloSiparisleriOku(onek) {
+  try {
+    const { data, error } = await supabase.from('siparisler').select('veri').eq('onek', onek)
+    if (error) { console.error('tabloSiparisleriOku:', error.message); return [] }
+    return (data || []).map(r => r.veri).filter(Boolean)
+  } catch (e) { console.error(e.message); return [] }
+}
+export async function tabloSiparisYaz(onek, siparis) {
+  try {
+    const { error } = await supabase.from('siparisler').upsert({
+      id: String(siparis.id), onek, veri: siparis, guncelleme: new Date().toISOString()
+    }, { onConflict: 'id' })
+    return !error
+  } catch { return false }
+}
+export async function tabloSiparisSil(id) {
+  try { const { error } = await supabase.from('siparisler').delete().eq('id', String(id)); return !error } catch { return false }
+}
+export async function tabloSiparisleriToplu(onek, siparisler) {
+  const BATCH = 100
+  let yazilan = 0
+  for (let i = 0; i < siparisler.length; i += BATCH) {
+    const grup = siparisler.slice(i, i + BATCH).map(s => ({ id: String(s.id), onek, veri: s, guncelleme: new Date().toISOString() }))
+    for (let d = 0; d < 3; d++) {
+      const { error } = await supabase.from('siparisler').upsert(grup, { onConflict: 'id' })
+      if (!error) { yazilan += grup.length; break }
+      await new Promise(r => setTimeout(r, 500 * (d + 1)))
+    }
+  }
+  return yazilan
+}
+
+// —— MUSTERILER —— (tek satırda, ad->kod objesi)
+export async function tabloMusterileriOku(onek) {
+  try {
+    const { data } = await supabase.from('musteriler').select('veri').eq('onek', onek).maybeSingle()
+    return data?.veri || {}
+  } catch { return {} }
+}
+export async function tabloMusterileriYaz(onek, musteriler) {
+  try {
+    const { error } = await supabase.from('musteriler').upsert({
+      onek, veri: musteriler, guncelleme: new Date().toISOString()
+    }, { onConflict: 'onek' })
+    return !error
+  } catch { return false }
+}
+
 // ═══ DATABASE ═══
 async function dbWrite(key, value) {
   const json = JSON.stringify(value)
