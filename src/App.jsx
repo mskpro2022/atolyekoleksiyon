@@ -1,4 +1,4 @@
-import { dbLoad, dbSave, fotoYukleStorage, yedekKaydet, yedekListesi, yedekGetir, bugunYedekVarMi, tabloModelleriSenkron, tabloSiparisleriSenkron, tabloMusterileriYaz, akilliModelOku, akilliSiparisOku, akilliMusteriOku, islemKaydet, islemGecmisiGetir } from "./supabase.js";
+import { dbLoad, dbSave, fotoYukleStorage, yedekKaydet, yedekListesi, yedekGetir, bugunYedekVarMi, tabloModelleriSenkron, tabloSiparisleriSenkron, tabloMusterileriYaz, akilliModelOku, akilliSiparisOku, akilliMusteriOku, islemKaydet, islemGecmisiGetir, realtimeBaslat } from "./supabase.js";
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 
 const uid = () => "x" + Date.now() + Math.random().toString(36).substr(2, 5);
@@ -2005,6 +2005,34 @@ function Atolye({ onSirketDegis }) {
     return () => { clearInterval(interval); document.removeEventListener("visibilitychange", gorunurluk); };
   }, [loaded]);
 
+  // ═══ REALTIME SENKRON (Aşama 3) — polling'in yanında, anlık güncelleme ═══
+  const sonKendiYazma = useRef(0); // kendi yazdığımız değişikliği tekrar çekmemek için
+  useEffect(() => {
+    if (!loaded) return;
+    const durdur = realtimeBaslat(AKTIF_SIRKET_ONEK, async (tablo, payload) => {
+      // Kendi yazdığımız değişiklikse (son 4 sn içinde) yok say — kendi ekranımız zaten güncel
+      if (Date.now() - sonKendiYazma.current < 4000) return;
+      // Başka cihazdan değişiklik geldi — ilgili veriyi tazele
+      try {
+        if (tablo === "modeller") {
+          const m = await akilliModelOku(AKTIF_SIRKET_ONEK);
+          if (Array.isArray(m) && m.length > 0) {
+            setModeller(m);
+            toastGoster("ok", "↻ Modeller güncellendi (başka cihaz)");
+          }
+        } else if (tablo === "siparisler") {
+          const s = await akilliSiparisOku(AKTIF_SIRKET_ONEK);
+          setSiparisler(s);
+          toastGoster("ok", "↻ Siparişler güncellendi");
+        } else if (tablo === "musteriler") {
+          const u = await akilliMusteriOku(AKTIF_SIRKET_ONEK);
+          setMusteriler(u);
+        }
+      } catch (e) { console.error("Realtime tazeleme:", e.message); }
+    });
+    return durdur;
+  }, [loaded]);
+
   // Kaydetmeden önce Supabase'deki versiyonla karşılaştırılır; fark varsa
   // başka bir cihaz/kullanıcı araya kayıt yapmış demektir — üzerine yazmayı durdurup uyarı verir.
   const guvenliKaydet = useCallback(async (key, data) => {
@@ -2141,6 +2169,7 @@ function Atolye({ onSirketDegis }) {
       localStorage.setItem("atolye_full_cache", JSON.stringify({...d, m:temiz, ts:Date.now()}));
     } catch {}
     await guvenliKaydet("v7m", temiz);
+    sonKendiYazma.current = Date.now(); // Realtime kendi yazmamızı yok saysın
     // ÇİFT YAZMA (Aşama 2) — tabloya arka planda sessizce SENKRON et (silinenler de temizlenir)
     tabloModelleriSenkron(AKTIF_SIRKET_ONEK, temiz).then(r => {
       if (r.yazilan !== temiz.length) console.warn("⚠ Tablo senkron: " + r.yazilan + "/" + temiz.length);
@@ -2149,6 +2178,7 @@ function Atolye({ onSirketDegis }) {
   const svS = useCallback(async d => {
     setSiparisler(d);
     await guvenliKaydet("v7s", d);
+    sonKendiYazma.current = Date.now();
     tabloSiparisleriSenkron(AKTIF_SIRKET_ONEK, d).catch(e => console.error("Sipariş tablo (arka plan):", e.message));
   }, [guvenliKaydet]);
 
