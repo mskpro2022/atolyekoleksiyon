@@ -1972,22 +1972,24 @@ function Atolye({ onSirketDegis }) {
           versiyonRef.current.v7k = vk;
         }
         if (vm && vm !== guncel.v7m) {
-          const yeni = await ld("v7m", []);
-          setModeller(yeni);
-          versiyonRef.current.v7m = vm;
-          try {
-            const fc = localStorage.getItem("atolye_full_cache");
-            const d = fc ? JSON.parse(fc) : {};
-            localStorage.setItem("atolye_full_cache", JSON.stringify({...d, m:yeni, ts:Date.now()}));
-          } catch {}
+          const yeni = await akilliModelOku(AKTIF_SIRKET_ONEK);
+          if (Array.isArray(yeni) && yeni.length > 0) {
+            setModeller(yeni);
+            versiyonRef.current.v7m = vm;
+            try {
+              const fc = localStorage.getItem("atolye_full_cache");
+              const d = fc ? JSON.parse(fc) : {};
+              localStorage.setItem("atolye_full_cache", JSON.stringify({...d, m:yeni, ts:Date.now()}));
+            } catch {}
+          }
         }
         if (vs && vs !== guncel.v7s) {
-          const yeni = await ld("v7s", []);
+          const yeni = await akilliSiparisOku(AKTIF_SIRKET_ONEK);
           setSiparisler(yeni);
           versiyonRef.current.v7s = vs;
         }
         if (vu && vu !== guncel.v7u) {
-          const yeni = await ld("v7u", {});
+          const yeni = await akilliMusteriOku(AKTIF_SIRKET_ONEK);
           setMusteriler(yeni);
           versiyonRef.current.v7u = vu;
         }
