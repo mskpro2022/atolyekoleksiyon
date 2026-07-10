@@ -602,3 +602,33 @@ export async function ekranSunucuFarki(onek, ekranModelSayisi) {
     return { sunucu, ekran: ekranModelSayisi, fark, sorunVar: Math.abs(fark) > Math.max(5, sunucu * 0.05) }
   } catch { return null }
 }
+
+// ═══ TOPTANCI KAYIT (vitrin bülteni) ═══
+// Toptancı kaydı ekle (vitrinden). Aynı telefon varsa günceller (mükerrer önlenir).
+export async function toptanciKaydet(onek, ad, telefon, vitrinKod) {
+  try {
+    // Telefonu normalize et (sadece rakam)
+    const tel = String(telefon).replace(/\D/g, '')
+    if (tel.length < 10) return { ok: false, hata: 'Geçersiz telefon numarası' }
+    const { error } = await supabase.from('toptancilar').upsert({
+      onek, ad: String(ad).trim(), telefon: tel, vitrin_kod: vitrinKod || null, aktif: true
+    }, { onConflict: 'onek,telefon' })
+    if (error) return { ok: false, hata: error.message }
+    return { ok: true }
+  } catch (e) { return { ok: false, hata: e.message } }
+}
+
+// Kayıtlı toptancıları getir (senin panelin için)
+export async function toptancilariGetir(onek) {
+  try {
+    const { data, error } = await supabase.from('toptancilar')
+      .select('*').eq('onek', onek).order('kayit_tarihi', { ascending: false })
+    if (error) return []
+    return data || []
+  } catch { return [] }
+}
+
+// Toptancı sil
+export async function toptanciSil(id) {
+  try { const { error } = await supabase.from('toptancilar').delete().eq('id', id); return !error } catch { return false }
+}
