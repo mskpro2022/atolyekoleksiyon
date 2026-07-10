@@ -469,3 +469,53 @@ export function realtimeBaslat(onek, callback) {
     return () => {}
   }
 }
+
+// ═══ KOLEKSIYONLAR + KASA tablosu (Aşama 3 — chunk temizliği hazırlığı) ═══
+export async function tabloKoleksiyonlariOku(onek) {
+  try {
+    const { data } = await supabase.from('koleksiyonlar').select('veri').eq('onek', onek).maybeSingle()
+    return Array.isArray(data?.veri) ? data.veri : null
+  } catch { return null }
+}
+export async function tabloKoleksiyonlariYaz(onek, kollar) {
+  try {
+    const { error } = await supabase.from('koleksiyonlar').upsert({
+      onek, veri: kollar, guncelleme: new Date().toISOString()
+    }, { onConflict: 'onek' })
+    return !error
+  } catch { return false }
+}
+export async function tabloKasaOku(onek) {
+  try {
+    const { data } = await supabase.from('kasa').select('veri').eq('onek', onek).maybeSingle()
+    return data?.veri || null
+  } catch { return null }
+}
+export async function tabloKasaYaz(onek, kasa) {
+  try {
+    const { error } = await supabase.from('kasa').upsert({
+      onek, veri: kasa, guncelleme: new Date().toISOString()
+    }, { onConflict: 'onek' })
+    return !error
+  } catch { return false }
+}
+
+// Akıllı okuma — koleksiyon ve kasa (tablo öncelikli, chunk fallback)
+export async function akilliKoleksiyonOku(onek) {
+  try {
+    const t = await tabloKoleksiyonlariOku(onek)
+    if (t && t.length > 0) return t
+    return await dbLoad((onek || '') + 'v7k', [])
+  } catch {
+    return await dbLoad((onek || '') + 'v7k', [])
+  }
+}
+export async function akilliKasaOku(onek) {
+  try {
+    const t = await tabloKasaOku(onek)
+    if (t) return t
+    return await dbLoad((onek || '') + 'v7kasa', null)
+  } catch {
+    return await dbLoad((onek || '') + 'v7kasa', null)
+  }
+}
