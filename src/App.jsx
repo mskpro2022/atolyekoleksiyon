@@ -1978,6 +1978,7 @@ function Atolye({ onSirketDegis }) {
   const [delOnay, setDelOnay] = useState(null);
   const [kopyalaModal, setKopyalaModal] = useState(null); // {model, hedefKolId}
   const [seciliModeller, setSeciliModeller] = useState(new Set()); // seçili model id'leri
+  const [detayModel, setDetayModel] = useState(null); // model detay/büyük foto modalı
   const [topluKopyalaModal, setTopluKopyalaModal] = useState(false);
   const [topluHedefKolId, setTopluHedefKolId] = useState("");
 
@@ -3380,7 +3381,7 @@ function Atolye({ onSirketDegis }) {
                 return (
                   <div key={m.id} style={{ background:ik?"rgba(201,168,76,0.07)":"rgba(201,168,76,0.02)", border:"1px solid", borderColor:ik?"rgba(201,168,76,0.28)":"rgba(201,168,76,0.07)", borderRadius:11, overflow:"hidden", animation:"cardin .3s ease "+(i*.03)+"s both" }}>
                     <div className="model-foto-wrap" style={{ position:"relative", height:180, background:"rgba(0,0,0,0.25)", overflow:"hidden" }}>
-                      {m.foto ? <img src={m.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"cover", objectPosition:"center center", display:"block" }}/> : <div style={{ width:"100%", height:"100%", display:"flex", alignItems:"center", justifyContent:"center", color:"rgba(201,168,76,0.1)", fontSize:24 }}>-</div>}
+                      {m.foto ? <img onClick={()=>setDetayModel(m)} src={m.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"cover", objectPosition:"center center", display:"block", cursor:"zoom-in" }}/> : <div style={{ width:"100%", height:"100%", display:"flex", alignItems:"center", justifyContent:"center", color:"rgba(201,168,76,0.1)", fontSize:24 }}>-</div>}
                       <button onClick={()=>togKonf(m)} style={{ position:"absolute", top:4, right:4, width:20, height:20, borderRadius:5, background:ik?"rgba(201,168,76,0.9)":"rgba(0,0,0,0.55)", border:"2px solid rgba(201,168,76,0.45)", color:ik?DARK:"transparent", fontSize:9, fontWeight:800, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}>V</button>
                       {seciliModeller.has(m.id) && <div style={{ position:"absolute", inset:0, background:"rgba(91,155,213,0.15)", border:"2px solid rgba(91,155,213,0.5)", pointerEvents:"none" }}/>}
                       {h&&h.karUyari&&!h.gumusMu && <div style={{ position:"absolute", bottom:3, left:3, background:"rgba(232,90,79,0.88)", color:"#fff", padding:"1px 5px", borderRadius:3, fontSize:6, fontWeight:800 }}>⚠ {fN(h.karMly,3)} mly/gr</div>}
@@ -6202,6 +6203,98 @@ ${buildContext()}`;
           </button>
         </Modal>
       )}
+
+      {/* MODEL DETAY MODALI — büyük foto + tüm bilgiler */}
+      {detayModel && (() => {
+        const m = detayModel;
+        const hd = hesapla(m, m.refAyar, altinKg, mc);
+        const kol = kollar.find(k => k.id === m.ki);
+        return (
+          <div onClick={()=>setDetayModel(null)} style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.8)", zIndex:200, display:"flex", alignItems:"center", justifyContent:"center", padding:20, backdropFilter:"blur(4px)" }}>
+            <div onClick={e=>e.stopPropagation()} style={{ background:T.card, borderRadius:16, maxWidth:820, width:"100%", maxHeight:"92vh", overflow:"auto", border:"1px solid "+T.border, position:"relative" }}>
+              <button onClick={()=>setDetayModel(null)} style={{ position:"absolute", top:14, right:14, zIndex:5, width:34, height:34, borderRadius:"50%", background:"rgba(0,0,0,0.5)", border:"none", color:"#fff", fontSize:18, cursor:"pointer" }}>✕</button>
+              <div style={{ display:"flex", flexWrap:"wrap" }}>
+                {/* Sol: büyük foto */}
+                <div style={{ flex:"1 1 340px", minHeight:340, maxHeight:460, background:"#f5f5f5", display:"flex", alignItems:"center", justifyContent:"center", overflow:"hidden" }}>
+                  {m.foto ? <img src={m.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"contain" }}/> : <div style={{ fontSize:60, color:"#ccc" }}>◇</div>}
+                </div>
+                {/* Sağ: bilgiler */}
+                <div style={{ flex:"1 1 320px", padding:"22px 24px", color:T.text }}>
+                  <div style={{ fontSize:11, color:GOLD, fontWeight:800, letterSpacing:"0.05em" }}>{m.kod}</div>
+                  <div style={{ fontSize:22, fontWeight:800, margin:"3px 0 4px" }}>{m.ad}</div>
+                  <div style={{ fontSize:11, color:T.sub, marginBottom:16 }}>{kol?.ad || ""}{m.kategori ? " · " + m.kategori : ""}</div>
+
+                  {/* Temel bilgiler */}
+                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:16 }}>
+                    <div style={{ background:"rgba(0,0,0,0.15)", borderRadius:9, padding:"10px 12px" }}>
+                      <div style={{ fontSize:9, color:T.sub, textTransform:"uppercase", letterSpacing:"0.05em" }}>Gram</div>
+                      <div style={{ fontSize:17, fontWeight:800, color:GOLD }}>{m.gram || "—"} <span style={{ fontSize:11, color:T.sub }}>{m.refAyar}</span></div>
+                    </div>
+                    <div style={{ background:"rgba(0,0,0,0.15)", borderRadius:9, padding:"10px 12px" }}>
+                      <div style={{ fontSize:9, color:T.sub, textTransform:"uppercase", letterSpacing:"0.05em" }}>Taş Gramı</div>
+                      <div style={{ fontSize:17, fontWeight:800, color:"#5b9bd5" }}>{m.tasGram ? fN(m.tasGram,3) : "—"}</div>
+                    </div>
+                  </div>
+
+                  {/* Taş detayı */}
+                  {(m.taslar?.length > 0 || m.tasSekil) && (
+                    <div style={{ marginBottom:14 }}>
+                      <div style={{ fontSize:9, color:T.sub, textTransform:"uppercase", letterSpacing:"0.05em", marginBottom:5 }}>Taşlar</div>
+                      <div style={{ fontSize:12, color:"#5b9bd5", background:"rgba(91,155,213,0.08)", borderRadius:8, padding:"8px 11px" }}>
+                        {m.taslar?.length>0 ? m.taslar.map(t=>t.sekil+" "+t.boyut+"mm ×"+t.adet).join(" + ") : (m.tasSekil+" "+m.tasBoyut+"mm ×"+m.tasAdet)}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* İşçilik + Maliyet + Kâr */}
+                  {hd && (
+                    <div style={{ background:"rgba(0,0,0,0.2)", borderRadius:10, padding:"12px 14px", marginBottom:14 }}>
+                      <div style={{ display:"flex", justifyContent:"space-between", fontSize:12, color:T.text, marginBottom:6 }}>
+                        <span style={{ color:T.sub }}>İşçilik</span>
+                        <span style={{ fontWeight:700, color:"#e8833a" }}>{m.iscilikDolar ? fUSD(m.iscilikDolar) + "/gr" : "—"}</span>
+                      </div>
+                      <div style={{ display:"flex", justifyContent:"space-between", fontSize:12, marginBottom:6 }}>
+                        <span style={{ color:T.sub }}>Taş Has</span>
+                        <span style={{ fontWeight:700 }}>{fN(hd.tasHas,4)} has</span>
+                      </div>
+                      <div style={{ display:"flex", justifyContent:"space-between", fontSize:12, marginBottom:6 }}>
+                        <span style={{ color:T.sub }}>İşçilik Has</span>
+                        <span style={{ fontWeight:700 }}>{fN(hd.iscilikHas,4)} has</span>
+                      </div>
+                      <div style={{ display:"flex", justifyContent:"space-between", fontSize:12, marginBottom:8, paddingBottom:8, borderBottom:"1px solid rgba(255,255,255,0.08)" }}>
+                        <span style={{ color:T.sub }}>{hd.gumusMu ? "Gümüş" : "Toplam Maliyet"}</span>
+                        <span style={{ fontWeight:700 }}>{hd.gumusMu ? "925" : fN(hd.topMaliyetHas,4) + " has"}</span>
+                      </div>
+                      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline" }}>
+                        <span style={{ fontSize:12, color:T.sub }}>Karlılık</span>
+                        <span style={{ fontSize:18, fontWeight:800, color: hd.gumusMu?"#c0c0c0":(hd.karUyari?"#e85a4f":"#6abf69") }}>
+                          {hd.gumusMu ? "$"+fN(hd.gumusIscilikGr,2)+"/gr" : (hd.mamulGram>0 ? fN(hd.karMly||hd.karHas/hd.mamulGram,3)+" mly/gr" : fN(hd.karHas,4)+" has")}
+                        </span>
+                      </div>
+                      {!hd.gumusMu && hd.mamulGram>0 && (
+                        <div style={{ textAlign:"right", fontSize:10, color:hd.karUyari?"#e85a4f":"#6abf69", opacity:0.8, marginTop:2 }}>({fN(hd.karHas,4)} has kâr)</div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Etiketler */}
+                  {(m.etiketler||[]).length>0 && (
+                    <div style={{ display:"flex", gap:5, flexWrap:"wrap", marginBottom:14 }}>
+                      {m.etiketler.map(e => <span key={e} style={{ fontSize:10, color:"#a78bfa", background:"rgba(167,139,250,0.1)", padding:"3px 9px", borderRadius:6, fontWeight:600 }}>#{e}</span>)}
+                    </div>
+                  )}
+
+                  {/* Aksiyon butonları */}
+                  <div style={{ display:"flex", gap:8 }}>
+                    <button onClick={()=>{ setDetayModel(null); openEM(m); }} style={{ flex:1, background:"linear-gradient(135deg,#c9a84c,#b8943f)", border:"none", borderRadius:9, padding:"11px", color:"#1a1a1a", fontSize:13, fontWeight:800, cursor:"pointer" }}>✏️ Düzenle</button>
+                    <button onClick={()=>{ setDetayModel(null); setKopyalaModal({ model:m, hedefKolId:"" }); }} style={{ flex:1, background:"rgba(91,155,213,0.12)", border:"1px solid rgba(91,155,213,0.3)", borderRadius:9, padding:"11px", color:"#5b9bd5", fontSize:13, fontWeight:800, cursor:"pointer" }}>Kopyala</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* KOPYALA MODAL */}
       {kopyalaModal && (
