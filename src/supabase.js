@@ -92,29 +92,31 @@ export async function bugunYedekVarMi(onek) {
 // Tüm modelleri tablodan oku (sayfalama ile, 1000'er) 
 export async function tabloModelleriOku(onek) {
   try {
+    // Önce toplam sayıyı öğren (doğrulama için)
+    const beklenen = await tabloModelSayisi(onek)
     const hepsi = []
     let bas = 0
     const ADIM = 1000
-    for (let tur = 0; tur < 50; tur++) { // max 50k model güvenlik
+    for (let tur = 0; tur < 100; tur++) { // max 100k güvenlik
       const { data, error } = await supabase.from('modeller')
         .select('veri')
         .eq('onek', onek)
-        .order('id', { ascending: true }) // TUTARLI SIRA — sayfalar arası kayma/eksik önler
+        .order('id', { ascending: true })
         .range(bas, bas + ADIM - 1)
-      if (error) {
-        console.error('tabloModelleriOku:', error.message)
-        // Hata olursa eksik veri döndürme — throw et ki fallback devreye girsin
-        throw new Error('Model okuma hatası: ' + error.message)
-      }
+      if (error) throw new Error('Model okuma: ' + error.message)
       if (!data || data.length === 0) break
       data.forEach(r => { if (r.veri) hepsi.push(r.veri) })
       if (data.length < ADIM) break
       bas += ADIM
     }
+    // DOĞRULAMA: okunan sayı beklenenle uyuşmuyorsa hata fırlat (eksik veri döndürme!)
+    if (beklenen > 0 && hepsi.length < beklenen) {
+      throw new Error('Eksik okuma: ' + hepsi.length + '/' + beklenen + ' — tekrar denenecek')
+    }
     return hepsi
   } catch (e) {
     console.error('tabloModelleriOku hata:', e.message)
-    throw e // Eksik veri döndürmektense hata fırlat (çağıran fallback'e düşer veya boş korumasına takılır)
+    throw e
   }
 }
 
@@ -387,18 +389,25 @@ export async function dbLoad(key, def) {
 
 // ═══ AKILLI OKUMA — önce tablo, boş/hata olursa chunk'a düş (Aşama 2 Adım 3) ═══
 export async function akilliModelOku(onek) {
-  try {
-    const tabloModeller = await tabloModelleriOku(onek)
-    if (tabloModeller && tabloModeller.length > 0) {
-      console.log('📊 Modeller TABLODAN okundu: ' + tabloModeller.length)
-      return tabloModeller
+  // Eksik okumaya karşı 3 deneme — tam okuyana kadar
+  for (let deneme = 0; deneme < 3; deneme++) {
+    try {
+      const tabloModeller = await tabloModelleriOku(onek)
+      if (tabloModeller && tabloModeller.length > 0) {
+        console.log('📊 Modeller TABLODAN okundu: ' + tabloModeller.length)
+        return tabloModeller
+      }
+      // Boş döndü — chunk'a düş
+      console.warn('⚠ Tablo boş, chunk sistemine düşülüyor')
+      return await dbLoad((onek || '') + 'v7m', [])
+    } catch (e) {
+      console.warn('⏳ Model okuma denemesi ' + (deneme + 1) + '/3: ' + e.message)
+      await new Promise(r => setTimeout(r, 800 * (deneme + 1)))
     }
-    console.warn('⚠ Tablo boş, chunk sistemine düşülüyor')
-    return await dbLoad((onek || '') + 'v7m', [])
-  } catch (e) {
-    console.error('akilliModelOku, chunk fallback:', e.message)
-    return await dbLoad((onek || '') + 'v7m', [])
   }
+  // 3 deneme de eksik — chunk'a düş (son çare)
+  console.error('❌ Tablo 3 denemede tam okunamadı, chunk fallback')
+  return await dbLoad((onek || '') + 'v7m', [])
 }
 export async function akilliSiparisOku(onek) {
   try {
