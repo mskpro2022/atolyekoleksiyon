@@ -537,3 +537,59 @@ export async function akilliKasaOku(onek) {
     return await dbLoad((onek || '') + 'v7kasa', null)
   }
 }
+
+// ═══ SAĞLIK DENETİMİ (Aşama 3 — otomatik tutarlılık kontrolü) ═══
+// Tablo ve chunk sayılarını karşılaştırır, tutarsızlık varsa raporlar.
+export async function saglikDenetimi(onek) {
+  const rapor = { saglikli: true, uyarilar: [], detay: {} }
+  try {
+    // 1. Modeller: tablo sayısı
+    const tabloModel = await tabloModelSayisi(onek)
+    rapor.detay.tabloModel = tabloModel
+    // 2. Modeller: chunk sayısı (meta'dan)
+    let chunkModel = -1
+    try {
+      const meta = await dbRead((onek || '') + 'v7m_meta')
+      if (meta && typeof meta.total === 'number') chunkModel = meta.total
+    } catch {}
+    rapor.detay.chunkModel = chunkModel
+    // Karşılaştır — tablo ile chunk arası %5'ten fazla fark şüpheli
+    if (tabloModel > 0 && chunkModel > 0) {
+      const fark = Math.abs(tabloModel - chunkModel)
+      if (fark > Math.max(5, tabloModel * 0.05)) {
+        rapor.saglikli = false
+        rapor.uyarilar.push('Model sayısı uyuşmuyor: tablo ' + tabloModel + ', chunk ' + chunkModel)
+      }
+    }
+    // 3. Siparişler
+    try {
+      const { count } = await supabase.from('siparisler').select('id', { count: 'exact', head: true }).eq('onek', onek)
+      rapor.detay.tabloSiparis = count ?? -1
+    } catch { rapor.detay.tabloSiparis = -1 }
+    // 4. Koleksiyon + Kasa tablo var mı
+    try {
+      const { count: kc } = await supabase.from('koleksiyonlar').select('onek', { count: 'exact', head: true }).eq('onek', onek)
+      rapor.detay.koleksiyonTablo = (kc ?? 0) > 0
+      if (!rapor.detay.koleksiyonTablo) rapor.uyarilar.push('Koleksiyon tablosu boş')
+    } catch { rapor.detay.koleksiyonTablo = false }
+    try {
+      const { count: ksc } = await supabase.from('kasa').select('onek', { count: 'exact', head: true }).eq('onek', onek)
+      rapor.detay.kasaTablo = (ksc ?? 0) > 0
+    } catch { rapor.detay.kasaTablo = false }
+    return rapor
+  } catch (e) {
+    rapor.saglikli = false
+    rapor.uyarilar.push('Denetim hatası: ' + e.message)
+    return rapor
+  }
+}
+
+// Açılışta hızlı tutarlılık: ekrandaki sayı vs sunucudaki gerçek sayı
+export async function ekranSunucuFarki(onek, ekranModelSayisi) {
+  try {
+    const sunucu = await tabloModelSayisi(onek)
+    if (sunucu < 0) return null // sayılamadı
+    const fark = sunucu - ekranModelSayisi
+    return { sunucu, ekran: ekranModelSayisi, fark, sorunVar: Math.abs(fark) > Math.max(5, sunucu * 0.05) }
+  } catch { return null }
+}
