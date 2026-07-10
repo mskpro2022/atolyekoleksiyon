@@ -1929,13 +1929,25 @@ function Atolye({ onSirketDegis }) {
         const d = JSON.parse(fc);
         if (d?.m?.length > 0 || d?.k?.length > 0) {
           applyData(d.k, d.m, d.s, d.u, d.c, d.ay, d.ks);
-          // Arka planda Supabase'den güncelle — sadece v7 key'leri
+          // Arka planda Supabase'den güncelle — TABLODAN (akıllı okuma, Aşama 2)
           Promise.all([
-            ld("v7k",[]), ld("v7m",[]), ld("v7s",[]),
-            ld("v7u",{}), ld("v7c",{}), ld("v7ay",{}), ld("v7kasa",null)
+            akilliKoleksiyonOku(AKTIF_SIRKET_ONEK),
+            akilliModelOku(AKTIF_SIRKET_ONEK),
+            akilliSiparisOku(AKTIF_SIRKET_ONEK),
+            akilliMusteriOku(AKTIF_SIRKET_ONEK),
+            ld("v7c",{}), ld("v7ay",{}), akilliKasaOku(AKTIF_SIRKET_ONEK)
           ]).then(([k,m,s,u,c,ay,ks]) => {
-            try { localStorage.setItem("atolye_full_cache", JSON.stringify({k,m,s,u,c,ay,ks,ts:Date.now()})); } catch {}
-            if (m?.length > 0) applyData(k,m,s,u,c,ay,ks);
+            if (m?.length > 0) {
+              try { localStorage.setItem("atolye_full_cache", JSON.stringify({k,m,s,u,c,ay,ks,ts:Date.now()})); } catch {}
+              applyData(k,m,s,u,c,ay,ks);
+              // Okuma doğrulaması — sunucuyla karşılaştır
+              ekranSunucuFarki(AKTIF_SIRKET_ONEK, m.length).then(fark => {
+                if (fark && fark.sorunVar && fark.fark > 0) {
+                  setSaglikUyari({ tip:"eksik", mesaj:"Eksik veri yüklendi: ekranda "+fark.ekran+" model, sunucuda "+fark.sunucu+". Kayıt YAPMAYIN, sayfayı yenileyin.", ekran:fark.ekran, sunucu:fark.sunucu });
+                  console.error("🛑 EKSİK OKUMA: ekran "+fark.ekran+", sunucu "+fark.sunucu);
+                }
+              });
+            }
           });
           versiyonlariYukle();
           return;
