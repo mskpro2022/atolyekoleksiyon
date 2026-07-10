@@ -5348,7 +5348,7 @@ ${buildContext()}`;
 
             {/* TEMA SEÇİCİ */}
             <div style={{ background:T.card, border:"1px solid "+T.border, borderRadius:14, padding:"15px 16px" }}>
-              <div style={{ fontSize:11, fontWeight:700, color:T.gold, marginBottom:14, letterSpacing:"0.03em" }}>🎨 UYGULAMA TEMASI</div>
+              <div style={{ fontSize:10, fontWeight:700, color:T.sub, marginBottom:10, letterSpacing:"0.05em", textTransform:"uppercase" }}>Tema</div>
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
                 {Object.values(TEMALAR).map(t => (
                   <button key={t.id} onClick={()=>temaUygula(t)} style={{
@@ -5376,7 +5376,7 @@ ${buildContext()}`;
 
             {/* ARAYÜZ RENKLERİ — TAM ÖZELLEŞTİRME */}
             <div style={{ background:T.card, border:"1px solid "+T.border, borderRadius:14, padding:"15px 16px" }}>
-              <div style={{ fontSize:11, fontWeight:700, color:T.gold, marginBottom:6, letterSpacing:"0.03em" }}>🎨 ARAYÜZ RENKLERİ</div>
+              <div style={{ fontSize:10, fontWeight:700, color:T.sub, marginBottom:10, letterSpacing:"0.05em", textTransform:"uppercase" }}>Arayüz Renkleri</div>
               <div style={{ fontSize:8, color:T.dim, marginBottom:14 }}>Tüm arayüz renklerini tek tek ayarlayın. Her rengin yanındaki ↺ ile o rengi, alttaki buton ile hepsini varsayılana döndürebilirsiniz.</div>
 
               {[
@@ -5443,7 +5443,7 @@ ${buildContext()}`;
             {/* İŞLEM GEÇMİŞİ */}
             <div style={{ background:T.card, border:"1px solid "+T.border, borderRadius:14, padding:"15px 16px" }}>
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
-                <div style={{ fontSize:10, fontWeight:700, color:"#a78bfa" }}>📋 İŞLEM GEÇMİŞİ</div>
+                <div style={{ fontSize:10, fontWeight:700, color:T.sub, marginBottom:10, letterSpacing:"0.05em", textTransform:"uppercase" }}>İşlem Geçmişi</div>
                 <button onClick={()=>islemGecmisiGetir(AKTIF_SIRKET_ONEK, 50).then(setIslemGecmisi)} style={{ ...GH, fontSize:9, padding:"4px 10px" }}>↻ Yenile</button>
               </div>
               <div style={{ fontSize:9, color:"#665d4a", marginBottom:12 }}>Son 50 işlem (ekleme, düzenleme, silme). Bir şeyin ne zaman değiştiğini buradan görebilirsiniz.</div>
@@ -5467,7 +5467,7 @@ ${buildContext()}`;
 
             {/* OTOMATİK YEDEKLER */}
             <div style={{ background:T.card, border:"1px solid "+T.border, borderRadius:14, padding:"15px 16px" }}>
-              <div style={{ fontSize:10, fontWeight:700, color:"#5b9bd5", marginBottom:8 }}>🔄 OTOMATİK YEDEKLER</div>
+              <div style={{ fontSize:10, fontWeight:700, color:T.sub, marginBottom:10, letterSpacing:"0.05em", textTransform:"uppercase" }}>Otomatik Yedekler</div>
               <div style={{ fontSize:9, color:"#665d4a", marginBottom:12 }}>Sistem her gün otomatik yedek alır (son 7 gün saklanır). Buradan geçmiş bir yedeğe dönebilirsiniz. Foto'lar Storage'da olduğu için yedekler hafiftir.</div>
 
               <div style={{ display:"flex", gap:8, marginBottom:12 }}>
@@ -5511,7 +5511,7 @@ ${buildContext()}`;
 
             {/* MÜŞTERİ VİTRİNİ */}
             <div style={{ background:T.card, border:"1px solid "+T.border, borderRadius:14, padding:"15px 16px" }}>
-              <div style={{ fontSize:10, fontWeight:700, color:"#6abf69", marginBottom:8 }}>🛍️ MÜŞTERİ VİTRİNİ</div>
+              <div style={{ fontSize:10, fontWeight:700, color:T.sub, marginBottom:10, letterSpacing:"0.05em", textTransform:"uppercase" }}>Müşteri Vitrini</div>
               <div style={{ fontSize:9, color:"#665d4a", marginBottom:12 }}>Müşterilere özel link oluşturun. Müşteri sadece foto, model adı, gram ve ayar görür — fiyat, taş, işçilik gibi bilgiler gizlidir. Yalnızca "vitrinde göster" işaretli koleksiyonlar görünür.</div>
 
               {/* Koleksiyon vitrin işaretleri */}
@@ -5572,7 +5572,7 @@ ${buildContext()}`;
 
             {/* AKTİF ŞİRKET */}
             <div style={{ background:T.card, border:"1px solid "+T.border, borderRadius:14, padding:"15px 16px" }}>
-              <div style={{ fontSize:10, fontWeight:700, color:"#a78bfa", marginBottom:8 }}>🏢 AKTİF ŞİRKET</div>
+              <div style={{ fontSize:10, fontWeight:700, color:T.sub, marginBottom:10, letterSpacing:"0.05em", textTransform:"uppercase" }}>Aktif Şirket</div>
               <div style={{ fontSize:14, fontWeight:800, color:GOLD, marginBottom:4 }}>{AKTIF_SIRKET}</div>
               <div style={{ fontSize:9, color:"#665d4a", marginBottom:10 }}>Şu an bu şirketin kataloğundasınız. Diğer şirkete geçmek için aşağıdaki butonu kullanın (verileriniz korunur).</div>
               <button onClick={()=>{ if (onSirketDegis) onSirketDegis(); }}
@@ -5589,7 +5589,7 @@ ${buildContext()}`;
 
             {/* OTURUMU KAPAT */}
             <div style={{ background:T.card, border:"1px solid "+T.border, borderRadius:14, padding:"15px 16px" }}>
-              <div style={{ fontSize:10, fontWeight:700, color:"#e85a4f", marginBottom:8 }}>🚪 OTURUM</div>
+              <div style={{ fontSize:10, fontWeight:700, color:T.sub, marginBottom:10, letterSpacing:"0.05em", textTransform:"uppercase" }}>Oturum</div>
               <div style={{ fontSize:9, color:"#665d4a", marginBottom:10 }}>"Beni hatırla" ile açık oturumu kapatır, bir dahaki açılışta tekrar şifre sorulur.</div>
               <button onClick={()=>{
                 if (!window.confirm("Oturumu kapatmak istediğinize emin misiniz? Tekrar şifre girmeniz gerekecek.")) return;
@@ -5633,7 +5633,7 @@ ${buildContext()}`;
 
             {/* ETİKET YÖNETİMİ */}
             <div style={{ background:T.card, border:"1px solid "+T.border, borderRadius:14, padding:"15px 16px" }}>
-              <div style={{ fontSize:10, fontWeight:700, color:"#a78bfa", marginBottom:10 }}>🏷 ETİKET YÖNETİMİ</div>
+              <div style={{ fontSize:10, fontWeight:700, color:T.sub, marginBottom:10, letterSpacing:"0.05em", textTransform:"uppercase" }}>Etiket Yönetimi</div>
               <div style={{ fontSize:9, color:"#665d4a", marginBottom:8 }}>Modellerde kullanilan tum etiketler:</div>
               <div style={{ display:"flex", gap:5, flexWrap:"wrap", marginBottom:10 }}>
                 {tumEtiketler.length === 0 && <span style={{ fontSize:9, color:"#665d4a" }}>Henuz etiket yok</span>}
@@ -5685,7 +5685,7 @@ ${buildContext()}`;
 
             {/* ÖZEL TAŞ YÖNETİMİ */}
             <div style={{ background:T.card, border:"1px solid "+T.border, borderRadius:14, padding:"15px 16px" }}>
-              <div style={{ fontSize:10, fontWeight:700, color:"#5b9bd5", marginBottom:10 }}>💎 ÖZEL TAŞ BOYUTLARI</div>
+              <div style={{ fontSize:10, fontWeight:700, color:T.sub, marginBottom:10, letterSpacing:"0.05em", textTransform:"uppercase" }}>Özel Taş Boyutları</div>
               <div style={{ fontSize:9, color:"#665d4a", marginBottom:10 }}>Tabloda olmayan taş boyutlarını buraya ekleyin. Model formunda otomatik kullanılır.</div>
               {ozelTaslar.length === 0 && (
                 <button onClick={()=>{
