@@ -632,3 +632,37 @@ export async function toptancilariGetir(onek) {
 export async function toptanciSil(id) {
   try { const { error } = await supabase.from('toptancilar').delete().eq('id', id); return !error } catch { return false }
 }
+
+// ═══ VİTRİN AKTİVİTE TAKİBİ (müşteri davranışı) ═══
+export async function vitrinAktiviteKaydet(onek, musteriKod, musteriAd, eylem, koleksiyon, modelKod, modelAd) {
+  try {
+    await supabase.from('vitrin_aktivite').insert({
+      onek, musteri_kod: musteriKod, musteri_ad: musteriAd || null,
+      eylem, koleksiyon: koleksiyon || null, model_kod: modelKod || null, model_ad: modelAd || null
+    })
+  } catch (e) { /* sessiz */ }
+}
+export async function vitrinGecmisiGetir(onek, musteriKod, limit = 100) {
+  try {
+    const { data, error } = await supabase.from('vitrin_aktivite')
+      .select('*').eq('onek', onek).eq('musteri_kod', musteriKod)
+      .order('zaman', { ascending: false }).limit(limit)
+    if (error) return []
+    return data || []
+  } catch { return [] }
+}
+export async function vitrinEnCokBakilan(onek, musteriKod) {
+  try {
+    const { data } = await supabase.from('vitrin_aktivite')
+      .select('model_kod, model_ad').eq('onek', onek).eq('musteri_kod', musteriKod)
+      .eq('eylem', 'model').limit(500)
+    if (!data) return []
+    const say = {}
+    data.forEach(r => {
+      if (!r.model_kod) return
+      if (!say[r.model_kod]) say[r.model_kod] = { kod: r.model_kod, ad: r.model_ad, sayi: 0 }
+      say[r.model_kod].sayi++
+    })
+    return Object.values(say).sort((a, b) => b.sayi - a.sayi).slice(0, 10)
+  } catch { return [] }
+}
