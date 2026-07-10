@@ -97,15 +97,25 @@ export async function tabloModelleriOku(onek) {
     const ADIM = 1000
     for (let tur = 0; tur < 50; tur++) { // max 50k model güvenlik
       const { data, error } = await supabase.from('modeller')
-        .select('veri').eq('onek', onek).range(bas, bas + ADIM - 1)
-      if (error) { console.error('tabloModelleriOku:', error.message); break }
+        .select('veri')
+        .eq('onek', onek)
+        .order('id', { ascending: true }) // TUTARLI SIRA — sayfalar arası kayma/eksik önler
+        .range(bas, bas + ADIM - 1)
+      if (error) {
+        console.error('tabloModelleriOku:', error.message)
+        // Hata olursa eksik veri döndürme — throw et ki fallback devreye girsin
+        throw new Error('Model okuma hatası: ' + error.message)
+      }
       if (!data || data.length === 0) break
       data.forEach(r => { if (r.veri) hepsi.push(r.veri) })
       if (data.length < ADIM) break
       bas += ADIM
     }
     return hepsi
-  } catch (e) { console.error('tabloModelleriOku hata:', e.message); return [] }
+  } catch (e) {
+    console.error('tabloModelleriOku hata:', e.message)
+    throw e // Eksik veri döndürmektense hata fırlat (çağıran fallback'e düşer veya boş korumasına takılır)
+  }
 }
 
 // Tek model yaz (upsert) — satır bazlı, sadece bu model
@@ -163,6 +173,14 @@ export async function tabloModelSayisi(onek) {
 // TAM SENKRON — verilen liste ile tabloyu birebir eşitler (silinenleri de temizler)
 export async function tabloModelleriSenkron(onek, modeller) {
   try {
+    // ═══ GÜVENLİK: Tabloda mevcut sayı ile yeni liste arasında ANİ BÜYÜK DÜŞÜŞ varsa DURDUR ═══
+    // (eksik okunmuş bir listenin gerçek silme yapmasını önler)
+    const mevcutSayi = await tabloModelSayisi(onek)
+    if (mevcutSayi > 50 && modeller.length < mevcutSayi * 0.85) {
+      // %15'ten fazla düşüş şüpheli — muhtemelen eksik okuma, senkronu iptal et
+      console.error('🛑 Senkron iptal: ' + mevcutSayi + ' → ' + modeller.length + ' (şüpheli büyük düşüş, eksik okuma olabilir). Tablo korundu.')
+      return { yazilan: 0, silinen: 0, iptal: true }
+    }
     const yazilan = await tabloModelleriToplu(onek, modeller)
     // Tablodaki id'leri çek, listede olmayanları (silinenleri) temizle
     const listeIdler = new Set(modeller.map(m => String(m.id)))
