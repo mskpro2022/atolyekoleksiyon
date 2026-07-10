@@ -1,4 +1,4 @@
-import { dbLoad, dbSave, fotoYukleStorage, yedekKaydet, yedekListesi, yedekGetir, bugunYedekVarMi, tabloModelleriSenkron, tabloSiparisleriSenkron, tabloMusterileriYaz, akilliModelOku, akilliSiparisOku, akilliMusteriOku, islemKaydet, islemGecmisiGetir, realtimeBaslat, tabloKoleksiyonlariYaz, tabloKasaYaz, akilliKoleksiyonOku, akilliKasaOku, tabloKoleksiyonlariOku, tabloKasaOku, saglikDenetimi, ekranSunucuFarki } from "./supabase.js";
+import { dbLoad, dbSave, fotoYukleStorage, yedekKaydet, yedekListesi, yedekGetir, bugunYedekVarMi, tabloModelleriSenkron, tabloSiparisleriSenkron, tabloMusterileriYaz, akilliModelOku, akilliSiparisOku, akilliMusteriOku, islemKaydet, islemGecmisiGetir, realtimeBaslat, tabloKoleksiyonlariYaz, tabloKasaYaz, akilliKoleksiyonOku, akilliKasaOku, tabloKoleksiyonlariOku, tabloKasaOku, saglikDenetimi, ekranSunucuFarki, toptanciKaydet, toptancilariGetir, toptanciSil } from "./supabase.js";
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 
 const uid = () => "x" + Date.now() + Math.random().toString(36).substr(2, 5);
@@ -1476,6 +1476,10 @@ function VitrinModu({ kod }) {
   const [aktifAyar, setAktifAyar] = useState("14K"); // üstten seçilen ayar — gramlar buna göre
   const [detayModel, setDetayModel] = useState(null); // büyük foto/detay modal
   const [gramFiltre, setGramFiltre] = useState({ min: "", max: "" }); // gram aralığı filtresi
+  const [aktifOnek, setAktifOnek] = useState(""); // vitrin hangi şirkete ait
+  const [kayitAd, setKayitAd] = useState(""); // toptancı kayıt: isim
+  const [kayitTel, setKayitTel] = useState(""); // toptancı kayıt: telefon
+  const [kayitDurum, setKayitDurum] = useState(null); // null | "gonderiliyor" | "basarili" | "hata:..."
   const VITRIN_AYARLAR = [
     { id: "10K", l: "10 Ayar" },
     { id: "14K", l: "14 Ayar" },
@@ -1529,6 +1533,7 @@ function VitrinModu({ kod }) {
         }));
       setKollar(aktifKollar);
       setModeller(guvenliModeller);
+      setAktifOnek(onek);
       if (aktifKollar.length > 0) setAktifKol(aktifKollar[0]);
       setDurum("hazir");
     } catch (e) {
@@ -1676,6 +1681,44 @@ function VitrinModu({ kod }) {
             </div>
           );
         })}
+      </div>
+
+      {/* BÜLTENE KAYDOL — yeni modellerden haberdar ol */}
+      <div style={{ maxWidth:1400, margin:"0 auto", padding:"0 20px 50px" }}>
+        <div style={{ background:"linear-gradient(135deg, rgba(201,168,76,0.08), rgba(201,168,76,0.02))", border:"1px solid rgba(201,168,76,0.2)", borderRadius:16, padding:"24px 28px" }}>
+          <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:6 }}>
+            <span style={{ fontSize:22 }}>🔔</span>
+            <div style={{ fontSize:17, fontWeight:800, color:GOLD2 }}>Yeni Modellerden Haberdar Olun</div>
+          </div>
+          <div style={{ fontSize:12, color:"#998a6e", marginBottom:16, lineHeight:1.5 }}>Kaydolun, yeni modeller eklendiğinde size bildirelim. Sadece isim ve telefon yeterli.</div>
+          {kayitDurum === "basarili" ? (
+            <div style={{ background:"rgba(106,191,105,0.1)", border:"1px solid rgba(106,191,105,0.3)", borderRadius:12, padding:"18px 20px", textAlign:"center" }}>
+              <div style={{ fontSize:32, marginBottom:8 }}>✓</div>
+              <div style={{ fontSize:15, fontWeight:800, color:"#6abf69", marginBottom:4 }}>Kaydınız Alındı!</div>
+              <div style={{ fontSize:12, color:"#998a6e" }}>Yeni modeller eklendiğinde sizi bilgilendireceğiz. Teşekkürler.</div>
+            </div>
+          ) : (
+            <div style={{ display:"flex", gap:10, flexWrap:"wrap", alignItems:"flex-start" }}>
+              <input value={kayitAd} onChange={e=>{setKayitAd(e.target.value); setKayitDurum(null);}} placeholder="Adınız / Firma adınız"
+                style={{ flex:"1 1 200px", background:"rgba(0,0,0,0.25)", border:"1px solid rgba(201,168,76,0.2)", borderRadius:10, padding:"12px 16px", color:"#e8dcc8", fontSize:14, outline:"none" }}/>
+              <input value={kayitTel} onChange={e=>{setKayitTel(e.target.value); setKayitDurum(null);}} placeholder="Telefon (5xx xxx xx xx)" type="tel"
+                style={{ flex:"1 1 200px", background:"rgba(0,0,0,0.25)", border:"1px solid rgba(201,168,76,0.2)", borderRadius:10, padding:"12px 16px", color:"#e8dcc8", fontSize:14, outline:"none" }}/>
+              <button disabled={kayitDurum==="gonderiliyor"} onClick={async()=>{
+                if (!kayitAd.trim()) { setKayitDurum("hata:İsim girin"); return; }
+                if (kayitTel.replace(/\D/g,"").length < 10) { setKayitDurum("hata:Geçerli telefon girin"); return; }
+                setKayitDurum("gonderiliyor");
+                const r = await toptanciKaydet(aktifOnek, kayitAd, kayitTel, kod);
+                if (r.ok) { setKayitDurum("basarili"); }
+                else { setKayitDurum("hata:" + (r.hata || "Kayıt başarısız")); }
+              }} style={{ flex:"0 0 auto", background:"linear-gradient(135deg,#c9a84c,#b8943f)", border:"none", borderRadius:10, padding:"12px 28px", color:"#1a1a1a", fontSize:14, fontWeight:800, cursor: kayitDurum==="gonderiliyor"?"wait":"pointer", opacity: kayitDurum==="gonderiliyor"?0.6:1 }}>
+                {kayitDurum==="gonderiliyor" ? "Kaydediliyor..." : "Kaydol"}
+              </button>
+              {kayitDurum && kayitDurum.startsWith("hata:") && (
+                <div style={{ flexBasis:"100%", fontSize:12, color:"#e85a4f", fontWeight:600 }}>⚠ {kayitDurum.slice(5)}</div>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* DETAY MODAL — büyük foto + 3 ayar gram */}
@@ -1885,6 +1928,7 @@ function Atolye({ onSirketDegis }) {
   const [islemGecmisi, setIslemGecmisi] = useState([]); // işlem geçmişi
   const [saglikUyari, setSaglikUyari] = useState(null); // okuma tutarsızlık uyarısı
   const [saglikRapor, setSaglikRapor] = useState(null); // detaylı sağlık raporu
+  const [toptancilar, setToptancilar] = useState([]); // kayıtlı toptancılar
   const [ayarYeniKategori, setAyarYeniKategori] = useState("");
   const [ayarVarsAltinKg, setAyarVarsAltinKg] = useState("");
   const [ayarVarsMc, setAyarVarsMc] = useState("");
@@ -2465,6 +2509,7 @@ function Atolye({ onSirketDegis }) {
       ld("v7vitrin", []).then(v => setVitrinKodlar(v || []));
       yedekListesi(AKTIF_SIRKET_ONEK).then(setOtoYedekler);
       islemGecmisiGetir(AKTIF_SIRKET_ONEK, 50).then(setIslemGecmisi);
+      toptancilariGetir(AKTIF_SIRKET_ONEK).then(setToptancilar);
     }
   }, [sayfa, loaded]);
 
@@ -5711,6 +5756,31 @@ ${buildContext()}`;
                   </div>
                 ))}
               </div>}
+            </div>
+
+            {/* KAYITLI TOPTANCILAR */}
+            <div style={{ background:T.card, border:"1px solid "+T.border, borderRadius:14, padding:"15px 16px" }}>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
+                <div style={{ fontSize:10, fontWeight:700, color:T.sub, letterSpacing:"0.05em", textTransform:"uppercase" }}>Kayıtlı Toptancılar</div>
+                <button onClick={()=>toptancilariGetir(AKTIF_SIRKET_ONEK).then(setToptancilar)} style={{ ...GH, fontSize:9, padding:"4px 10px" }}>↻ Yenile</button>
+              </div>
+              <div style={{ fontSize:9, color:"#665d4a", marginBottom:12 }}>Vitrin bülteninden kaydolan toptancılar. İleride bu listeye yeni model bildirimi gönderebilirsiniz.</div>
+              {toptancilar.length === 0 && <div style={{ fontSize:9, color:"#665d4a" }}>Henüz kayıtlı toptancı yok.</div>}
+              {toptancilar.length > 0 && <>
+                <div style={{ fontSize:9, color:"#998a6e", marginBottom:8 }}>Toplam {toptancilar.length} kayıt</div>
+                <div style={{ display:"flex", flexDirection:"column", gap:6, maxHeight:300, overflowY:"auto" }}>
+                  {toptancilar.map(t => (
+                    <div key={t.id} style={{ display:"flex", alignItems:"center", gap:8, padding:"8px 10px", background:"rgba(0,0,0,0.15)", borderRadius:8 }}>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{ fontSize:12, fontWeight:700, color:"#e8dcc8", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{t.ad}</div>
+                        <div style={{ fontSize:10, color:"#998a6e" }}>{t.telefon} · {new Date(t.kayit_tarihi).toLocaleDateString("tr-TR")}</div>
+                      </div>
+                      <a href={"https://wa.me/9" + t.telefon} target="_blank" rel="noreferrer" style={{ fontSize:9, color:"#6abf69", textDecoration:"none", padding:"4px 8px", background:"rgba(106,191,105,0.1)", borderRadius:6, fontWeight:700 }}>WhatsApp</a>
+                      <button onClick={async()=>{ if(!window.confirm(t.ad+" silinsin mi?"))return; await toptanciSil(t.id); toptancilariGetir(AKTIF_SIRKET_ONEK).then(setToptancilar); }} style={{ background:"none", border:"none", color:"#e85a4f", cursor:"pointer", fontSize:13, padding:"0 4px" }}>🗑</button>
+                    </div>
+                  ))}
+                </div>
+              </>}
             </div>
 
             {/* MÜŞTERİ VİTRİNİ */}
