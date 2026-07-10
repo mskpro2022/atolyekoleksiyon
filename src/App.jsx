@@ -1,4 +1,4 @@
-import { dbLoad, dbSave, fotoYukleStorage, yedekKaydet, yedekListesi, yedekGetir, bugunYedekVarMi, tabloModelleriSenkron, tabloSiparisleriSenkron, tabloMusterileriYaz, akilliModelOku, akilliSiparisOku, akilliMusteriOku, islemKaydet, islemGecmisiGetir, realtimeBaslat, tabloKoleksiyonlariYaz, tabloKasaYaz, akilliKoleksiyonOku, akilliKasaOku, tabloKoleksiyonlariOku, tabloKasaOku } from "./supabase.js";
+import { dbLoad, dbSave, fotoYukleStorage, yedekKaydet, yedekListesi, yedekGetir, bugunYedekVarMi, tabloModelleriSenkron, tabloSiparisleriSenkron, tabloMusterileriYaz, akilliModelOku, akilliSiparisOku, akilliMusteriOku, islemKaydet, islemGecmisiGetir, realtimeBaslat, tabloKoleksiyonlariYaz, tabloKasaYaz, akilliKoleksiyonOku, akilliKasaOku, tabloKoleksiyonlariOku, tabloKasaOku, saglikDenetimi, ekranSunucuFarki } from "./supabase.js";
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 
 const uid = () => "x" + Date.now() + Math.random().toString(36).substr(2, 5);
@@ -1787,6 +1787,8 @@ function Atolye({ onSirketDegis }) {
   const [yeniMusteriAd, setYeniMusteriAd] = useState("");
   const [otoYedekler, setOtoYedekler] = useState([]); // otomatik yedek listesi
   const [islemGecmisi, setIslemGecmisi] = useState([]); // işlem geçmişi
+  const [saglikUyari, setSaglikUyari] = useState(null); // okuma tutarsızlık uyarısı
+  const [saglikRapor, setSaglikRapor] = useState(null); // detaylı sağlık raporu
   const [ayarYeniKategori, setAyarYeniKategori] = useState("");
   const [ayarVarsAltinKg, setAyarVarsAltinKg] = useState("");
   const [ayarVarsMc, setAyarVarsMc] = useState("");
@@ -1968,6 +1970,24 @@ function Atolye({ onSirketDegis }) {
           console.log("✓ Kasa tabloya taşındı");
         }
       } catch (e) { console.error("Koleksiyon/kasa taşıma:", e.message); }
+    })();
+    // ═══ OTOMATİK OKUMA DOĞRULAMASI — ekran vs sunucu sayısı ═══
+    // Eksik okuma olduysa kullanıcıyı uyar (kayıt yapmadan önce)
+    (async () => {
+      try {
+        if (Array.isArray(m) && m.length > 0) {
+          const fark = await ekranSunucuFarki(AKTIF_SIRKET_ONEK, m.length);
+          if (fark && fark.sorunVar && fark.fark > 0) {
+            // Sunucuda daha fazla var — ekran eksik okumuş
+            setSaglikUyari({
+              tip: "eksik",
+              mesaj: "Eksik veri yüklendi: ekranda " + fark.ekran + " model, sunucuda " + fark.sunucu + ". Kayıt YAPMAYIN, sayfayı yenileyin.",
+              ekran: fark.ekran, sunucu: fark.sunucu
+            });
+            console.error("🛑 EKSİK OKUMA: ekran " + fark.ekran + ", sunucu " + fark.sunucu);
+          }
+        }
+      } catch (e) { console.error("Okuma doğrulama:", e.message); }
     })();
   })(); }, []);
 
@@ -2776,6 +2796,17 @@ function Atolye({ onSirketDegis }) {
           display:"flex", alignItems:"center", gap:8, maxWidth:"90vw"
         }}>
           {toast.msg}
+        </div>
+      )}
+
+      {/* SAĞLIK UYARI BANDI — eksik okuma tespit edilince */}
+      {saglikUyari && (
+        <div style={{ background:"#e85a4f", color:"#fff", padding:"10px 16px", display:"flex", alignItems:"center", justifyContent:"space-between", gap:12, flexWrap:"wrap", fontSize:13, fontWeight:600, position:"sticky", top:0, zIndex:9999 }}>
+          <span>⚠ {saglikUyari.mesaj}</span>
+          <div style={{ display:"flex", gap:8 }}>
+            <button onClick={()=>window.location.reload()} style={{ background:"#fff", color:"#e85a4f", border:"none", borderRadius:6, padding:"6px 14px", fontWeight:800, fontSize:12, cursor:"pointer" }}>🔄 Sayfayı Yenile</button>
+            <button onClick={()=>setSaglikUyari(null)} style={{ background:"rgba(255,255,255,0.2)", color:"#fff", border:"none", borderRadius:6, padding:"6px 12px", fontWeight:700, fontSize:12, cursor:"pointer" }}>Kapat</button>
+          </div>
         </div>
       )}
 
@@ -5470,6 +5501,40 @@ ${buildContext()}`;
 
             {/* ŞİFRE DEĞİŞTİR */}
             <SifreDegistir />
+
+            {/* SİSTEM DURUMU */}
+            <div style={{ background:T.card, border:"1px solid "+T.border, borderRadius:14, padding:"15px 16px" }}>
+              <div style={{ fontSize:10, fontWeight:700, color:T.sub, marginBottom:10, letterSpacing:"0.05em", textTransform:"uppercase" }}>Sistem Durumu</div>
+              <div style={{ fontSize:9, color:"#665d4a", marginBottom:12 }}>Tablo ve chunk verilerinin tutarlılığını kontrol eder. Bir sorun varsa buradan görürsünüz.</div>
+              <button onClick={async()=>{
+                setSaglikRapor({ yukleniyor:true });
+                const r = await saglikDenetimi(AKTIF_SIRKET_ONEK);
+                setSaglikRapor(r);
+              }} style={{ ...BG, fontSize:11, padding:"7px 14px", marginBottom:12 }}>🔍 Sistemi Denetle</button>
+              {saglikRapor && saglikRapor.yukleniyor && <div style={{ fontSize:10, color:T.sub }}>Denetleniyor...</div>}
+              {saglikRapor && !saglikRapor.yukleniyor && (
+                <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:8, padding:"8px 10px", borderRadius:8, background: saglikRapor.saglikli ? "rgba(106,191,105,0.1)" : "rgba(232,90,79,0.1)", border:"1px solid "+(saglikRapor.saglikli?"rgba(106,191,105,0.3)":"rgba(232,90,79,0.3)") }}>
+                    <span style={{ fontSize:14 }}>{saglikRapor.saglikli ? "✅" : "⚠️"}</span>
+                    <span style={{ fontSize:11, fontWeight:700, color: saglikRapor.saglikli ? "#6abf69" : "#e85a4f" }}>
+                      {saglikRapor.saglikli ? "Sistem sağlıklı" : "Sorun tespit edildi"}
+                    </span>
+                  </div>
+                  {saglikRapor.uyarilar && saglikRapor.uyarilar.map((u,i)=>(
+                    <div key={i} style={{ fontSize:10, color:"#e85a4f", padding:"4px 10px" }}>• {u}</div>
+                  ))}
+                  {saglikRapor.detay && (
+                    <div style={{ fontSize:9, color:T.sub, padding:"6px 10px", lineHeight:1.6 }}>
+                      Tablo modeller: {saglikRapor.detay.tabloModel ?? "?"}<br/>
+                      Chunk modeller: {saglikRapor.detay.chunkModel ?? "?"}<br/>
+                      Tablo siparişler: {saglikRapor.detay.tabloSiparis ?? "?"}<br/>
+                      Koleksiyon tablosu: {saglikRapor.detay.koleksiyonTablo ? "✓ dolu" : "✗ boş"}<br/>
+                      Kasa tablosu: {saglikRapor.detay.kasaTablo ? "✓ dolu" : "✗ boş"}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
 
             {/* İŞLEM GEÇMİŞİ */}
             <div style={{ background:T.card, border:"1px solid "+T.border, borderRadius:14, padding:"15px 16px" }}>
