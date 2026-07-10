@@ -1,4 +1,4 @@
-import { dbLoad, dbSave, fotoYukleStorage, yedekKaydet, yedekListesi, yedekGetir, bugunYedekVarMi, tabloModelleriSenkron, tabloSiparisleriSenkron, tabloMusterileriYaz, akilliModelOku, akilliSiparisOku, akilliMusteriOku, islemKaydet, islemGecmisiGetir, realtimeBaslat } from "./supabase.js";
+import { dbLoad, dbSave, fotoYukleStorage, yedekKaydet, yedekListesi, yedekGetir, bugunYedekVarMi, tabloModelleriSenkron, tabloSiparisleriSenkron, tabloMusterileriYaz, akilliModelOku, akilliSiparisOku, akilliMusteriOku, islemKaydet, islemGecmisiGetir, realtimeBaslat, tabloKoleksiyonlariYaz, tabloKasaYaz, akilliKoleksiyonOku, akilliKasaOku, tabloKoleksiyonlariOku, tabloKasaOku } from "./supabase.js";
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 
 const uid = () => "x" + Date.now() + Math.random().toString(36).substr(2, 5);
@@ -1944,16 +1944,31 @@ function Atolye({ onSirketDegis }) {
     // 2. Cache yok — Supabase'den çek
     // AŞAMA 2 ADIM 3: modeller/siparişler/müşteriler TABLODAN (boş/hata olursa chunk'a düşer)
     const [k,m,s,u,c,ay,ks] = await Promise.all([
-      ld("v7k",[]),
+      akilliKoleksiyonOku(AKTIF_SIRKET_ONEK),
       akilliModelOku(AKTIF_SIRKET_ONEK),
       akilliSiparisOku(AKTIF_SIRKET_ONEK),
       akilliMusteriOku(AKTIF_SIRKET_ONEK),
-      ld("v7c",{}), ld("v7ay",{}), ld("v7kasa",null)
+      ld("v7c",{}), ld("v7ay",{}), akilliKasaOku(AKTIF_SIRKET_ONEK)
     ]);
     try { localStorage.setItem("atolye_full_cache", JSON.stringify({k,m,s,u,c,ay,ks,ts:Date.now()})); } catch {}
     applyData(k,m,s,u,c,ay,ks);
     setLoaded(true);
     versiyonlariYukle();
+    // Koleksiyon + Kasa tablosu boşsa mevcut veriyi bir kez taşı (chunk temizliği hazırlığı)
+    (async () => {
+      try {
+        const tk = await tabloKoleksiyonlariOku(AKTIF_SIRKET_ONEK);
+        if ((!tk || tk.length === 0) && Array.isArray(k) && k.length > 0) {
+          await tabloKoleksiyonlariYaz(AKTIF_SIRKET_ONEK, k);
+          console.log("✓ Koleksiyonlar tabloya taşındı");
+        }
+        const tks = await tabloKasaOku(AKTIF_SIRKET_ONEK);
+        if (!tks && ks) {
+          await tabloKasaYaz(AKTIF_SIRKET_ONEK, ks);
+          console.log("✓ Kasa tabloya taşındı");
+        }
+      } catch (e) { console.error("Koleksiyon/kasa taşıma:", e.message); }
+    })();
   })(); }, []);
 
   // ═══ OTOMATİK SENKRONİZASYON — periyodik kontrol ═══
@@ -1967,9 +1982,8 @@ function Atolye({ onSirketDegis }) {
         const [vk, vm, vs, vu, vkasa] = await Promise.all([ld("v7k_v",0), ld("v7m_v",0), ld("v7s_v",0), ld("v7u_v",0), ld("v7kasa_v",0)]);
         const guncel = versiyonRef.current;
         if (vk && vk !== guncel.v7k) {
-          const yeni = await ld("v7k", []);
-          setKollar(yeni);
-          versiyonRef.current.v7k = vk;
+          const yeni = await akilliKoleksiyonOku(AKTIF_SIRKET_ONEK);
+          if (Array.isArray(yeni) && yeni.length > 0) { setKollar(yeni); versiyonRef.current.v7k = vk; }
         }
         if (vm && vm !== guncel.v7m) {
           const yeni = await akilliModelOku(AKTIF_SIRKET_ONEK);
@@ -1994,7 +2008,7 @@ function Atolye({ onSirketDegis }) {
           versiyonRef.current.v7u = vu;
         }
         if (vkasa && vkasa !== guncel.v7kasa) {
-          const yeni = await ld("v7kasa", null);
+          const yeni = await akilliKasaOku(AKTIF_SIRKET_ONEK);
           if (yeni) setKasa(prev => ({ ...prev, ...yeni }));
           versiyonRef.current.v7kasa = vkasa;
         }
@@ -2120,8 +2134,17 @@ function Atolye({ onSirketDegis }) {
     } catch (e) { console.error("versiyonDamgala hata:", key, e); }
   }, []);
 
-  const svK = useCallback(async d => { setKollar(d);    await guvenliKaydet("v7k", d); }, [guvenliKaydet]);
-  const svKasa = useCallback(async d => { setKasa(d); await versiyonDamgala("v7kasa", d); }, [versiyonDamgala]);
+  const svK = useCallback(async d => {
+    setKollar(d);
+    await guvenliKaydet("v7k", d);
+    sonKendiYazma.current = Date.now();
+    tabloKoleksiyonlariYaz(AKTIF_SIRKET_ONEK, d).catch(e => console.error("Koleksiyon tablo (arka plan):", e.message));
+  }, [guvenliKaydet]);
+  const svKasa = useCallback(async d => {
+    setKasa(d);
+    await versiyonDamgala("v7kasa", d);
+    tabloKasaYaz(AKTIF_SIRKET_ONEK, d).catch(e => console.error("Kasa tablo (arka plan):", e.message));
+  }, [versiyonDamgala]);
   const kasaModalAc = (data) => {
     setKfMus(data.mus||""); setKfHas(""); setKfAc(""); setKfTip("giris");
     setKfTarih(new Date().toISOString().slice(0,10));
