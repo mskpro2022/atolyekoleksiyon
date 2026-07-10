@@ -1481,6 +1481,7 @@ function VitrinModu({ kod }) {
   const [kayitTel, setKayitTel] = useState(""); // toptancı kayıt: telefon
   const [kayitDurum, setKayitDurum] = useState(null); // null | "gonderiliyor" | "basarili" | "hata:..."
   const [oncekiZiyaret, setOncekiZiyaret] = useState(0); // toptancının önceki ziyareti (yeni model tespiti)
+  const [siralama, setSiralama] = useState("yeni"); // yeni | kod | kodTers | gramArtan | gramAzalan
   const VITRIN_AYARLAR = [
     { id: "10K", l: "10 Ayar" },
     { id: "14K", l: "14 Ayar" },
@@ -1576,10 +1577,16 @@ function VitrinModu({ kod }) {
     if (gramFiltre.max && g > Number(gramFiltre.max)) return false;
     return true;
   }).sort((a, b) => {
-    // Yeniler üstte, sonra eklenme zamanına göre (yeni→eski)
+    // YENİ olanlar her zaman en üstte (hangi sıralama olursa olsun)
     const ay = yeniMi(a) ? 1 : 0, by = yeniMi(b) ? 1 : 0;
-    if (ay !== by) return by - ay; // yeni olan önce
-    return (b.t || 0) - (a.t || 0); // sonra en yeni eklenen önce
+    if (ay !== by) return by - ay;
+    // Seçilen sıralama
+    if (siralama === "kod") return dogalSirala(a, b);
+    if (siralama === "kodTers") return dogalSirala(b, a);
+    if (siralama === "gramArtan") return (Number(ayarliGram(a))||0) - (Number(ayarliGram(b))||0);
+    if (siralama === "gramAzalan") return (Number(ayarliGram(b))||0) - (Number(ayarliGram(a))||0);
+    // varsayılan "yeni" — en son eklenen (t) üstte
+    return (b.t || 0) - (a.t || 0);
   });
   const seciliModeller = modeller.filter(m => secili.has(m.id));
   const yeniSayisi = modeller.filter(m => m.ki === aktifKol?.id && yeniMi(m)).length;
@@ -1664,6 +1671,13 @@ function VitrinModu({ kod }) {
           <input value={gramFiltre.max} onChange={e=>setGramFiltre(p=>({...p,max:e.target.value}))} placeholder="max" type="number" style={{ width:60, background:"rgba(0,0,0,0.3)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:6, padding:"5px 8px", color:"#e8dcc8", fontSize:12, outline:"none" }}/>
           {(gramFiltre.min || gramFiltre.max) && <button onClick={()=>setGramFiltre({min:"",max:""})} style={{ background:"none", border:"none", color:"#e85a4f", cursor:"pointer", fontSize:14, padding:"0 4px" }}>✕</button>}
         </div>
+        <select value={siralama} onChange={e=>setSiralama(e.target.value)} style={{ background:"rgba(255,255,255,0.02)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:10, padding:"9px 12px", color:"#e8dcc8", fontSize:12, outline:"none", cursor:"pointer" }}>
+          <option value="yeni" style={{background:"#1a1a1a"}}>Sıralama: En Yeni Eklenen</option>
+          <option value="kodTers" style={{background:"#1a1a1a"}}>Sıralama: Koda Göre (yeni→eski)</option>
+          <option value="kod" style={{background:"#1a1a1a"}}>Sıralama: Koda Göre (eski→yeni)</option>
+          <option value="gramAzalan" style={{background:"#1a1a1a"}}>Sıralama: Gram (yüksek→düşük)</option>
+          <option value="gramArtan" style={{background:"#1a1a1a"}}>Sıralama: Gram (düşük→yüksek)</option>
+        </select>
         <span style={{ fontSize:11, color:"#665d4a", marginLeft:"auto" }}>
           {yeniSayisi > 0 && <span style={{ color:"#6abf69", fontWeight:700, marginRight:8 }}>🆕 {yeniSayisi} yeni</span>}
           {koldaki.length} model
