@@ -1714,7 +1714,7 @@ function VitrinModu({ kod }) {
               <div onClick={()=>{ const ns=new Set(secili); sec?ns.delete(m.id):ns.add(m.id); setSecili(ns); }}
                 style={{ position:"absolute", top:10, right:10, zIndex:3, width:26, height:26, borderRadius:7, background: sec?GOLD2:"rgba(0,0,0,0.5)", border:"1px solid "+(sec?GOLD2:"rgba(255,255,255,0.2)"), display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, fontWeight:800, color: sec?"#1a1a1a":"#fff", cursor:"pointer", backdropFilter:"blur(4px)" }}>{sec?"✓":""}</div>
               {/* Foto — tıklayınca detay açılır */}
-              <div onClick={()=>{ setDetayModel(m); if(vitrinMusteri) vitrinAktiviteKaydet(vitrinMusteri.onek, vitrinMusteri.kod, vitrinMusteri.ad, "model", aktifKol?.ad, m.kod, m.ad); }} style={{ height:200, background:"#f0f0ef", display:"flex", alignItems:"center", justifyContent:"center", overflow:"hidden", cursor:"zoom-in" }}>
+              <div onClick={()=>{ setDetayModel(m); if(vitrinMusteri) vitrinAktiviteKaydet(vitrinMusteri.onek, vitrinMusteri.kod, vitrinMusteri.ad, "model", aktifKol?.ad, m.kod, m.ad); }} style={{ height:200, background:"#f3f3f3", display:"flex", alignItems:"center", justifyContent:"center", overflow:"hidden", cursor:"zoom-in" }}>
                 {m.foto ? <img className="vm-foto" src={m.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"contain" }}/> : <div style={{ fontSize:36, color:"#ccc" }}>◇</div>}
               </div>
               <div style={{ padding:"11px 13px", background:"#1a1713", color:"#e8dcc8" }}>
@@ -1773,7 +1773,7 @@ function VitrinModu({ kod }) {
         <div onClick={()=>setDetayModel(null)} style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.85)", zIndex:100, display:"flex", alignItems:"center", justifyContent:"center", padding:20, backdropFilter:"blur(4px)" }}>
           <div onClick={e=>e.stopPropagation()} style={{ background:"#1a1713", borderRadius:18, maxWidth:600, width:"100%", maxHeight:"90vh", overflow:"auto", color:"#e8dcc8", position:"relative", border:"1px solid rgba(201,168,76,0.15)" }}>
             <button onClick={()=>setDetayModel(null)} style={{ position:"absolute", top:14, right:14, zIndex:5, width:36, height:36, borderRadius:"50%", background:"rgba(0,0,0,0.5)", border:"none", color:"#fff", fontSize:20, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}>✕</button>
-            <div style={{ height:380, background:"#f0f0ef", display:"flex", alignItems:"center", justifyContent:"center", overflow:"hidden" }}>
+            <div style={{ height:380, background:"#f3f3f3", display:"flex", alignItems:"center", justifyContent:"center", overflow:"hidden" }}>
               {detayModel.foto ? <img src={detayModel.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"contain" }}/> : <div style={{ fontSize:60, color:"#ccc" }}>◇</div>}
             </div>
             <div style={{ padding:"20px 24px" }}>
