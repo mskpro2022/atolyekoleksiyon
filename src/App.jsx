@@ -1637,7 +1637,7 @@ function VitrinModu({ kod }) {
       <style>{"*{box-sizing:border-box}.vm-foto{transition:transform .4s}.vm-card:hover .vm-foto{transform:scale(1.09)}.vm-card{transition:border-color .2s, box-shadow .2s}.vm-card:hover{box-shadow:0 8px 24px rgba(0,0,0,0.4)}.vm-ayar{transition:all .2s}"}</style>
 
       {/* HEADER */}
-      <div style={{ padding:"18px 20px", borderBottom:"1px solid rgba(201,168,76,0.15)", background:"linear-gradient(180deg, rgba(201,168,76,0.06), rgba(13,11,7,0.9))", position:"sticky", top:0, zIndex:20, backdropFilter:"blur(10px)" }}>
+      <div style={{ padding:"18px 20px", borderBottom:"1px solid rgba(201,168,76,0.12)", background:"rgba(0,0,0,0.3)", position:"sticky", top:0, zIndex:20, backdropFilter:"blur(10px)" }}>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:12, maxWidth:1400, margin:"0 auto" }}>
           <div>
             <div style={{ fontSize:22, fontWeight:800, color:GOLD2, letterSpacing:"0.02em" }}>{vitrinAd}</div>
@@ -1699,7 +1699,7 @@ function VitrinModu({ kod }) {
       </div>
 
       {/* MODEL GRID */}
-      <div style={{ padding:"16px 20px 40px", maxWidth:1400, margin:"0 auto", display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(190px,1fr))", gap:14 }}>
+      <div style={{ padding:"16px 20px 40px", maxWidth:1400, margin:"0 auto", display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))", gap:9 }}>
         {koldaki.length === 0 && <div style={{ gridColumn:"1/-1", textAlign:"center", color:"#665d4a", padding:"50px 0", fontSize:13 }}>Bu koleksiyonda model bulunamadı</div>}
         {koldaki.map(m => {
           const sec = secili.has(m.id);
@@ -1707,22 +1707,26 @@ function VitrinModu({ kod }) {
           const yeni = yeniMi(m);
           return (
             <div key={m.id} className="vm-card"
-              style={{ background:"#1a1713", borderRadius:14, overflow:"hidden", border:"1px solid "+(sec?GOLD2:(yeni?"rgba(106,191,105,0.4)":"rgba(201,168,76,0.1)")), position:"relative" }}>
-              {/* YENİ rozeti */}
-              {yeni && <div style={{ position:"absolute", top:10, left:10, zIndex:3, background:"linear-gradient(135deg,#6abf69,#4a9d49)", color:"#fff", fontSize:9, fontWeight:800, padding:"3px 9px", borderRadius:6, letterSpacing:"0.05em", boxShadow:"0 2px 8px rgba(106,191,105,0.4)" }}>YENİ</div>}
-              {/* Seçim tuşu */}
-              <div onClick={()=>{ const ns=new Set(secili); sec?ns.delete(m.id):ns.add(m.id); setSecili(ns); }}
-                style={{ position:"absolute", top:10, right:10, zIndex:3, width:26, height:26, borderRadius:7, background: sec?GOLD2:"rgba(0,0,0,0.5)", border:"1px solid "+(sec?GOLD2:"rgba(255,255,255,0.2)"), display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, fontWeight:800, color: sec?"#1a1a1a":"#fff", cursor:"pointer", backdropFilter:"blur(4px)" }}>{sec?"✓":""}</div>
-              {/* Foto — tıklayınca detay açılır */}
-              <div onClick={()=>{ setDetayModel(m); if(vitrinMusteri) vitrinAktiviteKaydet(vitrinMusteri.onek, vitrinMusteri.kod, vitrinMusteri.ad, "model", aktifKol?.ad, m.kod, m.ad); }} style={{ height:200, background:"#f3f3f3", display:"flex", alignItems:"center", justifyContent:"center", overflow:"hidden", cursor:"zoom-in" }}>
-                {m.foto ? <img className="vm-foto" src={m.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"contain" }}/> : <div style={{ fontSize:36, color:"#ccc" }}>◇</div>}
+              style={{ background:"rgba(201,168,76,0.02)", border:"1px solid", borderColor: sec?"rgba(201,168,76,0.5)":(yeni?"rgba(106,191,105,0.35)":"rgba(201,168,76,0.07)"), borderRadius:11, overflow:"hidden", position:"relative" }}>
+              <div className="model-foto-wrap" style={{ position:"relative", height:180, background:"#f3f3f3", overflow:"hidden" }}>
+                {m.foto
+                  ? <img className="vm-foto" onClick={()=>{ setDetayModel(m); if(vitrinMusteri) vitrinAktiviteKaydet(vitrinMusteri.onek, vitrinMusteri.kod, vitrinMusteri.ad, "model", aktifKol?.ad, m.kod, m.ad); }} src={m.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"cover", objectPosition:"center center", display:"block", cursor:"zoom-in" }}/>
+                  : <div style={{ width:"100%", height:"100%", display:"flex", alignItems:"center", justifyContent:"center", color:"rgba(201,168,76,0.15)", fontSize:24 }}>-</div>}
+                {/* YENİ rozeti */}
+                {yeni && <div style={{ position:"absolute", top:4, left:4, background:"rgba(106,191,105,0.9)", color:"#fff", padding:"1px 6px", borderRadius:3, fontSize:7, fontWeight:800, letterSpacing:"0.04em" }}>YENİ</div>}
+                {/* Seçim tuşu */}
+                <button onClick={()=>{ const ns=new Set(secili); sec?ns.delete(m.id):ns.add(m.id); setSecili(ns); }}
+                  style={{ position:"absolute", top:4, right:4, width:20, height:20, borderRadius:5, background: sec?"rgba(201,168,76,0.9)":"rgba(0,0,0,0.55)", border:"2px solid rgba(201,168,76,0.45)", color: sec?"#1a1a1a":"transparent", fontSize:9, fontWeight:800, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}>V</button>
               </div>
-              <div style={{ padding:"11px 13px", background:"#1a1713", color:"#e8dcc8" }}>
-                <div style={{ fontSize:9, color:GOLD2, fontWeight:800, letterSpacing:"0.03em" }}>{m.kod}</div>
-                <div style={{ fontSize:13, fontWeight:700, margin:"2px 0", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis", color:"#e8dcc8" }}>{m.ad}</div>
-                <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginTop:5 }}>
-                  <span style={{ fontSize:16, fontWeight:800, color:GOLD2 }}>{g ? g + " gr" : "—"}</span>
-                  <span style={{ fontSize:10, color:"#998a6e", fontWeight:600, background:"rgba(201,168,76,0.08)", padding:"2px 8px", borderRadius:5 }}>{aktifAyar.replace("K"," Ayar")}</span>
+              <div style={{ padding:"6px 8px" }}>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:3 }}>
+                  {m.kategori && <span style={{ background:"rgba(201,168,76,0.12)", color:GOLD2, padding:"1px 5px", borderRadius:3, fontSize:7, fontWeight:600 }}>{m.kategori}</span>}
+                  {m.kod && <span style={{ fontSize:7, color:GOLD2, fontWeight:700, marginLeft:"auto" }}>{m.kod}</span>}
+                </div>
+                <div style={{ fontSize:10, fontWeight:700, color:"#e8dcc8", marginBottom:3 }}>{m.ad}</div>
+                <div style={{ display:"flex", gap:3, flexWrap:"wrap" }}>
+                  {g && <span style={{ fontSize:8, color:GOLD2, background:"rgba(201,168,76,0.1)", padding:"2px 6px", borderRadius:3, fontWeight:800 }}>{g} gr</span>}
+                  <span style={{ fontSize:8, color:"#998a6e", background:"rgba(201,168,76,0.06)", padding:"2px 6px", borderRadius:3, fontWeight:600 }}>{aktifAyar.replace("K"," Ayar")}</span>
                 </div>
               </div>
             </div>
