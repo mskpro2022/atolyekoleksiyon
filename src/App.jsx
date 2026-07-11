@@ -1605,31 +1605,15 @@ function VitrinModu({ kod }) {
   const seciliModeller = modeller.filter(m => secili.has(m.id));
   const yeniSayisi = modeller.filter(m => m.ki === aktifKol?.id && yeniMi(m)).length;
 
-  const vitrinPDF = () => {
+  const vitrinPDF = (sutun) => {
     const liste = seciliModeller.length > 0 ? seciliModeller : koldaki;
     if (liste.length === 0) { alert("Önce model seçin veya bir koleksiyon açın."); return; }
-    const css = "*{margin:0;padding:0;box-sizing:border-box}body{font-family:Arial,sans-serif;background:#f3f3f3;color:#1a1a1a;padding:0}"
-      + "@media print{@page{size:A4 portrait;margin:8mm}}"
-      + ".hd{text-align:center;padding:20px;border-bottom:2px solid #c9a84c;margin-bottom:14px}"
-      + ".hd h1{font-size:22px;color:#1a1a1a;letter-spacing:.05em}.hd p{font-size:11px;color:#888;margin-top:4px}"
-      + ".grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;padding:0 12px}"
-      + ".cd{background:#fff;border:1px solid #e0e0e0;border-radius:10px;overflow:hidden;page-break-inside:avoid}"
-      + ".cd .ph{height:150px;background:#f3f3f3;display:flex;align-items:center;justify-content:center;overflow:hidden}"
-      + ".cd .ph img{width:100%;height:100%;object-fit:contain}"
-      + ".cd .inf{padding:8px 10px}.cd .kod{font-size:9px;color:#c9a84c;font-weight:700}.cd .ad{font-size:12px;font-weight:700;margin:2px 0}"
-      + ".cd .gr{font-size:10px;color:#666;font-weight:600}";
-    let h = "<!DOCTYPE html><html><head><meta charset='utf-8'><title>" + vitrinAd + "</title><style>" + css + "</style></head><body>";
-    h += "<div class='hd'><h1>" + vitrinAd + "</h1><p>" + new Date().toLocaleDateString("tr-TR") + " · " + liste.length + " model · " + aktifAyar.replace("K"," Ayar") + "</p></div>";
-    h += "<div class='grid'>";
-    liste.forEach(m => {
-      const g = ayarliGram(m);
-      h += "<div class='cd'><div class='ph'>" + (m.foto ? "<img src='" + m.foto + "'/>" : "◇") + "</div>";
-      h += "<div class='inf'><div class='kod'>" + (m.kod || "") + "</div><div class='ad'>" + (m.ad || "") + "</div>";
-      h += "<div class='gr'>" + (g ? g + "gr" : "") + (aktifAyar ? " · " + aktifAyar.replace("K"," Ayar") : "") + "</div></div></div>";
-    });
-    h += "</div></body></html>";
+    // ANA SİSTEMİN KATALOG MOTORU — kapak, kategori bazlı kart boyutları, sayfa düzeni
+    // (fiyat/kâr bilgisi zaten içermiyor — sadece kod + gram + ayar)
+    const sahteKol = { ad: vitrinAd, on: "", id: aktifKol?.id || "" };
+    const html = buildKatalogHTML(sahteKol, liste, sutun || 3, aktifAyar, kollar);
     const w = window.open("", "_blank");
-    if (w) { w.document.write(h); w.document.close(); setTimeout(() => w.print(), 600); }
+    if (w) { w.document.write(html); w.document.close(); setTimeout(() => w.print(), 700); }
   };
 
   return (
@@ -1643,9 +1627,14 @@ function VitrinModu({ kod }) {
             <div style={{ fontSize:22, fontWeight:800, color:GOLD2, letterSpacing:"0.02em" }}>{vitrinAd}</div>
             <div style={{ fontSize:10, color:"#8a7d64", letterSpacing:"0.1em", textTransform:"uppercase", marginTop:2 }}>Ürün Kataloğu</div>
           </div>
-          <button onClick={vitrinPDF} style={{ background:"#e8e3da", border:"none", borderRadius:10, padding:"11px 20px", color:"#1a1a1a", fontSize:12, fontWeight:800, cursor:"pointer", boxShadow:"0 4px 14px rgba(0,0,0,0.3)" }}>
-            {secili.size > 0 ? "📄 Seçili " + secili.size + " Modeli PDF Yap" : "📄 Bu Koleksiyonu PDF Yap"}
-          </button>
+          <div style={{ display:"flex", gap:7 }}>
+            <button onClick={()=>vitrinPDF(3)} style={{ background:"#e8e3da", border:"none", borderRadius:9, padding:"11px 18px", color:"#1a1a1a", fontSize:12, fontWeight:800, cursor:"pointer" }}>
+              📄 PDF 3'lü{secili.size > 0 ? " ("+secili.size+")" : ""}
+            </button>
+            <button onClick={()=>vitrinPDF(4)} style={{ background:"rgba(255,255,255,0.06)", border:"1px solid rgba(255,255,255,0.15)", borderRadius:9, padding:"11px 18px", color:"#d8d3cb", fontSize:12, fontWeight:800, cursor:"pointer" }}>
+              📄 PDF 4'lü{secili.size > 0 ? " ("+secili.size+")" : ""}
+            </button>
+          </div>
         </div>
       </div>
 
