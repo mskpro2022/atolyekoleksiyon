@@ -2,6 +2,15 @@ import { dbLoad, dbSave, fotoYukleStorage, yedekKaydet, yedekListesi, yedekGetir
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 
 const uid = () => "x" + Date.now() + Math.random().toString(36).substr(2, 5);
+// ═══ GLOBAL SIFIRLAMA — Vite'ın varsayılan #root kısıtını (max-width:1280px, padding:2rem) ezer ═══
+// Dosya yüklenirken BİR KEZ çalışır, TÜM ekranları kapsar (giriş, seçim, vitrin, ana sistem)
+if (typeof document !== "undefined" && !document.getElementById("atolye-global-reset")) {
+  const gs = document.createElement("style");
+  gs.id = "atolye-global-reset";
+  gs.textContent = "html,body,#root{margin:0!important;padding:0!important;width:100%!important;max-width:100%!important;min-height:100vh!important;text-align:left!important;display:block!important;background:#0d0b07!important;border:0!important}body{overflow-x:hidden}*{box-sizing:border-box}";
+  document.head.appendChild(gs);
+}
+
 const fHas = (n) => (Number(n) || 0).toFixed(4) + " has";
 const fUSD = (p) => "$" + (Number(p) || 0).toFixed(2);
 const fN = (n, d) => (Number(n) || 0).toFixed(d || 3);
