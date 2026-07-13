@@ -666,3 +666,24 @@ export async function vitrinEnCokBakilan(onek, musteriKod) {
     return Object.values(say).sort((a, b) => b.sayi - a.sayi).slice(0, 10)
   } catch { return [] }
 }
+
+// Tüm müşterilerin vitrin özeti (tek sorgu) → { MUSKOD: {giris, model, koleksiyon, son} }
+export async function vitrinOzetGetir(onek) {
+  try {
+    const { data, error } = await supabase.from('vitrin_aktivite')
+      .select('musteri_kod, eylem, zaman').eq('onek', onek)
+      .order('zaman', { ascending: false }).limit(5000)
+    if (error || !data) return {}
+    const ozet = {}
+    data.forEach(r => {
+      const k = r.musteri_kod
+      if (!k) return
+      if (!ozet[k]) ozet[k] = { giris: 0, model: 0, koleksiyon: 0, son: null }
+      if (r.eylem === 'giris') ozet[k].giris++
+      else if (r.eylem === 'model') ozet[k].model++
+      else if (r.eylem === 'koleksiyon') ozet[k].koleksiyon++
+      if (!ozet[k].son || new Date(r.zaman) > new Date(ozet[k].son)) ozet[k].son = r.zaman
+    })
+    return ozet
+  } catch { return {} }
+}
