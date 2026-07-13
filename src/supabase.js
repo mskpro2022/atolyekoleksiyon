@@ -687,3 +687,43 @@ export async function vitrinOzetGetir(onek) {
     return ozet
   } catch { return {} }
 }
+
+// Vitrin analizi — TÜM müşteriler genelinde en çok bakılan modeller + koleksiyon ilgisi
+export async function vitrinAnaliz(onek) {
+  try {
+    const { data } = await supabase.from('vitrin_aktivite')
+      .select('musteri_kod, musteri_ad, eylem, koleksiyon, model_kod, model_ad, zaman')
+      .eq('onek', onek).order('zaman', { ascending: false }).limit(5000)
+    if (!data) return { modeller: [], koleksiyonlar: [], musteriler: [], toplamGiris: 0, toplamModel: 0 }
+
+    const modelSay = {}, kolSay = {}, musSay = {}
+    let toplamGiris = 0, toplamModel = 0
+
+    data.forEach(r => {
+      if (r.eylem === 'giris') toplamGiris++
+      if (r.eylem === 'model' && r.model_kod) {
+        toplamModel++
+        if (!modelSay[r.model_kod]) modelSay[r.model_kod] = { kod: r.model_kod, ad: r.model_ad, sayi: 0, musteriler: new Set(), sonBakis: r.zaman }
+        modelSay[r.model_kod].sayi++
+        if (r.musteri_kod) modelSay[r.model_kod].musteriler.add(r.musteri_kod)
+      }
+      if (r.eylem === 'koleksiyon' && r.koleksiyon) {
+        if (!kolSay[r.koleksiyon]) kolSay[r.koleksiyon] = { ad: r.koleksiyon, sayi: 0 }
+        kolSay[r.koleksiyon].sayi++
+      }
+      if (r.musteri_kod) {
+        if (!musSay[r.musteri_kod]) musSay[r.musteri_kod] = { kod: r.musteri_kod, ad: r.musteri_ad, giris: 0, model: 0, son: r.zaman }
+        if (r.eylem === 'giris') musSay[r.musteri_kod].giris++
+        if (r.eylem === 'model') musSay[r.musteri_kod].model++
+      }
+    })
+
+    return {
+      modeller: Object.values(modelSay).map(m => ({ ...m, musteriSayisi: m.musteriler.size, musteriler: undefined }))
+        .sort((a, b) => b.sayi - a.sayi).slice(0, 24),
+      koleksiyonlar: Object.values(kolSay).sort((a, b) => b.sayi - a.sayi).slice(0, 10),
+      musteriler: Object.values(musSay).sort((a, b) => b.model - a.model).slice(0, 20),
+      toplamGiris, toplamModel
+    }
+  } catch { return { modeller: [], koleksiyonlar: [], musteriler: [], toplamGiris: 0, toplamModel: 0 } }
+}
