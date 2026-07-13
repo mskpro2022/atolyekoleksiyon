@@ -1474,7 +1474,7 @@ function SirketSecimEkrani({ onSec }) {
 // ═══ MÜŞTERİ VİTRİN MODU ═══
 // Müşteriye verilen link (?vitrin=KOD) ile açılır. Salt okunur, mahrem veri YOK.
 // Sadece foto + ad + kod + gram + ayar gösterir. Seçtiklerinden PDF yapabilir.
-function VitrinModu({ kod }) {
+function VitrinModu({ kod, onizleme }) {
   const [durum, setDurum] = useState("yukleniyor"); // yukleniyor, gecersiz, hazir
   const [vitrinAd, setVitrinAd] = useState("");
   const [kollar, setKollar] = useState([]);
@@ -1533,14 +1533,14 @@ function VitrinModu({ kod }) {
       try {
         const ziyaretKey = "vitrin_ziyaret_" + kod;
         oncekiZiyaret = Number(localStorage.getItem(ziyaretKey)) || 0;
-        localStorage.setItem(ziyaretKey, String(Date.now()));
+        if (!onizleme) localStorage.setItem(ziyaretKey, String(Date.now()));
       } catch {}
       setOncekiZiyaret(oncekiZiyaret);
       setVitrinMusteri({ ad: musteriAd, kod: musteriKod, onek });
 
       setVitrinAd(musteriAd || "Katalog");
       // Giriş aktivitesi kaydet
-      try { vitrinAktiviteKaydet(onek, musteriKod, musteriAd, "giris", null, null, null); } catch {}
+      if (!onizleme) { try { vitrinAktiviteKaydet(onek, musteriKod, musteriAd, "giris", null, null, null); } catch {} }
       // Veriyi çek — TABLODAN (akıllı okuma, fallback chunk)
       const [k, m] = await Promise.all([
         akilliKoleksiyonOku(onek),
@@ -1630,6 +1630,14 @@ function VitrinModu({ kod }) {
     <div style={{ minHeight:"100vh", background:"#0a0a0a", color:"#f5f5f7", fontFamily:"-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif", WebkitFontSmoothing:"antialiased" }}>
       <style>{"*{box-sizing:border-box}html,body,#root{margin:0!important;padding:0!important;width:100%!important;max-width:100%!important;min-height:100vh;background:#0a0a0a!important;text-align:left}body{overflow-x:hidden}.vm-card{cursor:pointer}.vm-ph{transition:transform .5s cubic-bezier(.2,.8,.2,1)}.vm-card:hover .vm-ph{transform:scale(1.04)}.vm-pill{transition:all .2s ease}.vm-sel{transition:opacity .18s ease}.vm-card:hover .vm-sel{opacity:1}"}</style>
 
+      {/* ÖNİZLEME BANDI — sahibi kendi bakıyor, kayıt tutulmuyor */}
+      {onizleme && (
+        <div style={{ background:"rgba(10,132,255,0.12)", borderBottom:"0.5px solid rgba(10,132,255,0.25)", padding:"9px 28px", fontSize:12, color:"#0a84ff", fontWeight:500, display:"flex", alignItems:"center", gap:8 }}>
+          <span style={{ width:6, height:6, borderRadius:"50%", background:"#0a84ff" }}></span>
+          Önizleme modu — müşterinin gördüğü ekran. Bu ziyaret analize kaydedilmiyor.
+        </div>
+      )}
+
       {/* BAŞLIK */}
       <div style={{ padding:"26px 28px 20px", display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:14 }}>
         <div>
@@ -1688,7 +1696,7 @@ function VitrinModu({ kod }) {
         {kollar.map(k => {
           const on = aktifKol?.id === k.id;
           return (
-            <button key={k.id} className="vm-pill" onClick={()=>{ setAktifKol(k); setArama(""); if(vitrinMusteri) vitrinAktiviteKaydet(vitrinMusteri.onek, vitrinMusteri.kod, vitrinMusteri.ad, "koleksiyon", k.ad, null, null); }}
+            <button key={k.id} className="vm-pill" onClick={()=>{ setAktifKol(k); setArama(""); if(vitrinMusteri && !onizleme) vitrinAktiviteKaydet(vitrinMusteri.onek, vitrinMusteri.kod, vitrinMusteri.ad, "koleksiyon", k.ad, null, null); }}
               style={{ fontSize:12, color: on?"#0a0a0a":"#a1a1a6", padding:"6px 14px", borderRadius:980, background: on?"#f5f5f7":"rgba(255,255,255,0.05)", border:"none", fontWeight: on?500:400, cursor:"pointer", whiteSpace:"nowrap" }}>
               {k.ad}
             </button>
@@ -1705,7 +1713,7 @@ function VitrinModu({ kod }) {
           const yeni = yeniMi(m);
           return (
             <div key={m.id} className="vm-card">
-              <div onClick={()=>{ setDetayModel(m); if(vitrinMusteri) vitrinAktiviteKaydet(vitrinMusteri.onek, vitrinMusteri.kod, vitrinMusteri.ad, "model", aktifKol?.ad, m.kod, m.ad); }}
+              <div onClick={()=>{ setDetayModel(m); if(vitrinMusteri && !onizleme) vitrinAktiviteKaydet(vitrinMusteri.onek, vitrinMusteri.kod, vitrinMusteri.ad, "model", aktifKol?.ad, m.kod, m.ad); }}
                 style={{ aspectRatio:"1", background:"#f7f7f8", borderRadius:12, position:"relative", overflow:"hidden", outline: sec?"2px solid #0a84ff":"none", outlineOffset:2 }}>
                 {m.foto
                   ? <img className="vm-ph" src={m.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"cover", display:"block" }}/>
@@ -1803,7 +1811,14 @@ export default function Root() {
       return p.get("vitrin") || null;
     } catch { return null; }
   })();
-  if (vitrinKod) return <VitrinModu kod={vitrinKod} />;
+  // Önizleme modu (?onizle=1) — sahibi kendi bakıyor, aktivite KAYDEDİLMEZ
+  const onizleme = (() => {
+    try {
+      const p = new URLSearchParams(window.location.search);
+      return p.get("onizle") === "1";
+    } catch { return false; }
+  })();
+  if (vitrinKod) return <VitrinModu kod={vitrinKod} onizleme={onizleme} />;
 
   const [giris, setGiris] = useState(() => {
     // "Beni Hatırla" — token varsa ve süresi dolmamışsa otomatik giriş
@@ -3192,7 +3207,7 @@ function Atolye({ onSirketDegis }) {
                               ]);
                               setVitrinGecmis({ musteriAd:ad, kod, kayitlar, encok });
                             }} style={{ background:"rgba(91,155,213,0.1)", border:"1px solid rgba(91,155,213,0.25)", borderRadius:7, padding:"6px 12px", color:"#5b9bd5", fontSize:10, fontWeight:700, cursor:"pointer" }}>📊 Analiz</button>
-                            <a href={url} target="_blank" rel="noreferrer" style={{ background:"rgba(255,255,255,0.04)", border:"1px solid "+T.border, borderRadius:7, padding:"6px 12px", color:T.sub, fontSize:10, fontWeight:700, textDecoration:"none" }}>Önizle</a>
+                            <a href={url + "&onizle=1"} target="_blank" rel="noreferrer" title="Önizleme — analize kaydedilmez" style={{ background:"rgba(255,255,255,0.04)", border:"1px solid "+T.border, borderRadius:7, padding:"6px 12px", color:T.sub, fontSize:10, fontWeight:700, textDecoration:"none" }}>Önizle</a>
                           </div>
                         </div>
                       );
