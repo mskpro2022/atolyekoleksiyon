@@ -1619,11 +1619,11 @@ function VitrinModu({ kod }) {
 
   return (
     <div style={{ minHeight:"100vh", background:"#0d0b07", color:"#e8dcc8", fontFamily:"sans-serif" }}>
-      <style>{"*{box-sizing:border-box}.vm-foto{transition:transform .4s}.vm-card:hover .vm-foto{transform:scale(1.09)}.vm-card{transition:border-color .2s, box-shadow .2s}.vm-card:hover{box-shadow:0 8px 24px rgba(0,0,0,0.4)}.vm-ayar{transition:all .2s}"}</style>
+      <style>{"*{box-sizing:border-box}html,body,#root{margin:0!important;padding:0!important;width:100%!important;max-width:100%!important;min-height:100vh;background:#0d0b07;text-align:left}body{overflow-x:hidden}.vm-foto{transition:transform .4s}.vm-card:hover .vm-foto{transform:scale(1.09)}.vm-card{transition:border-color .2s, box-shadow .2s}.vm-card:hover{box-shadow:0 8px 24px rgba(0,0,0,0.4)}.vm-ayar{transition:all .2s}"}</style>
 
       {/* HEADER */}
-      <div style={{ padding:"18px 20px", borderBottom:"1px solid rgba(255,255,255,0.07)", background:"rgba(0,0,0,0.3)", position:"sticky", top:0, zIndex:20, backdropFilter:"blur(10px)" }}>
-        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:12, maxWidth:1400, margin:"0 auto" }}>
+      <div style={{ padding:"14px 14px", borderBottom:"1px solid rgba(255,255,255,0.07)", background:"rgba(0,0,0,0.3)", position:"sticky", top:0, zIndex:20, backdropFilter:"blur(10px)" }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:12 }}>
           <div>
             <div style={{ fontSize:22, fontWeight:800, color:GOLD2, letterSpacing:"0.02em" }}>{vitrinAd}</div>
             <div style={{ fontSize:10, color:"#8a7d64", letterSpacing:"0.1em", textTransform:"uppercase", marginTop:2 }}>Ürün Kataloğu</div>
@@ -1640,7 +1640,7 @@ function VitrinModu({ kod }) {
       </div>
 
       {/* AYAR SEÇİCİ — gramlar buna göre revize olur */}
-      <div style={{ padding:"14px 20px 0", maxWidth:1400, margin:"0 auto" }}>
+      <div style={{ padding:"12px 12px 0" }}>
         <div style={{ display:"flex", alignItems:"center", gap:12, flexWrap:"wrap", background:"rgba(255,255,255,0.02)", border:"1px solid rgba(255,255,255,0.07)", borderRadius:12, padding:"12px 16px" }}>
           <span style={{ fontSize:11, fontWeight:700, color:"#998a6e", letterSpacing:"0.05em" }}>AYAR SEÇİMİ:</span>
           <div style={{ display:"flex", gap:6 }}>
@@ -1659,14 +1659,14 @@ function VitrinModu({ kod }) {
       </div>
 
       {/* KOLEKSİYON SEKMELERİ */}
-      <div style={{ display:"flex", gap:7, padding:"14px 20px 0", overflowX:"auto", maxWidth:1400, margin:"0 auto" }}>
+      <div style={{ display:"flex", gap:7, padding:"12px 12px 0", overflowX:"auto" }}>
         {kollar.map(k => (
           <button key={k.id} onClick={()=>{ setAktifKol(k); setArama(""); if(vitrinMusteri) vitrinAktiviteKaydet(vitrinMusteri.onek, vitrinMusteri.kod, vitrinMusteri.ad, "koleksiyon", k.ad, null, null); }} style={{ whiteSpace:"nowrap", background: aktifKol?.id===k.id ? "rgba(255,255,255,0.09)" : "rgba(255,255,255,0.03)", border:"1px solid "+(aktifKol?.id===k.id ? "rgba(255,255,255,0.25)" : "rgba(255,255,255,0.08)"), borderRadius:9, padding:"8px 16px", color: aktifKol?.id===k.id ? GOLD2 : "#998a6e", fontSize:12, fontWeight:700, cursor:"pointer" }}>{k.ad}</button>
         ))}
       </div>
 
       {/* ARAMA + GRAM FİLTRE */}
-      <div style={{ padding:"14px 20px 0", maxWidth:1400, margin:"0 auto", display:"flex", gap:10, flexWrap:"wrap", alignItems:"center" }}>
+      <div style={{ padding:"12px 12px 0", display:"flex", gap:10, flexWrap:"wrap", alignItems:"center" }}>
         <input value={arama} onChange={e=>setArama(e.target.value)} placeholder="🔍 Model ara..." style={{ flex:"1 1 240px", maxWidth:320, background:"rgba(255,255,255,0.03)", border:"1px solid rgba(255,255,255,0.09)", borderRadius:10, padding:"10px 14px", color:"#e8dcc8", fontSize:13, outline:"none" }}/>
         <div style={{ display:"flex", alignItems:"center", gap:6, background:"rgba(255,255,255,0.02)", border:"1px solid rgba(255,255,255,0.08)", borderRadius:10, padding:"6px 12px" }}>
           <span style={{ fontSize:11, color:"#998a6e", fontWeight:600 }}>Gram:</span>
@@ -1689,7 +1689,7 @@ function VitrinModu({ kod }) {
       </div>
 
       {/* MODEL GRID */}
-      <div style={{ padding:"16px 20px 40px", maxWidth:1400, margin:"0 auto", display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))", gap:9 }}>
+      <div style={{ padding:"12px 12px 40px", display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))", gap:9 }}>
         {koldaki.length === 0 && <div style={{ gridColumn:"1/-1", textAlign:"center", color:"#665d4a", padding:"50px 0", fontSize:13 }}>Bu koleksiyonda model bulunamadı</div>}
         {koldaki.map(m => {
           const sec = secili.has(m.id);
@@ -1720,7 +1720,7 @@ function VitrinModu({ kod }) {
       </div>
 
       {/* BÜLTENE KAYDOL — yeni modellerden haberdar ol */}
-      <div style={{ maxWidth:1400, margin:"0 auto", padding:"0 20px 50px" }}>
+      <div style={{ padding:"0 12px 50px" }}>
         <div style={{ background:"linear-gradient(135deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02))", border:"1px solid rgba(255,255,255,0.12)", borderRadius:16, padding:"24px 28px" }}>
           <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:6 }}>
             <span style={{ fontSize:22 }}>🔔</span>
@@ -1728,7 +1728,7 @@ function VitrinModu({ kod }) {
           </div>
           <div style={{ fontSize:12, color:"#998a6e", marginBottom:16, lineHeight:1.5 }}>Kaydolun, yeni modeller eklendiğinde size bildirelim. Sadece isim ve telefon yeterli.</div>
           {kayitDurum === "basarili" ? (
-            <div style={{ background:"rgba(106,191,105,0.1)", border:"1px solid rgba(106,191,105,0.3)", borderRadius:12, padding:"18px 20px", textAlign:"center" }}>
+            <div style={{ background:"rgba(106,191,105,0.1)", border:"1px solid rgba(106,191,105,0.3)", borderRadius:12, padding:"14px 14px", textAlign:"center" }}>
               <div style={{ fontSize:32, marginBottom:8 }}>✓</div>
               <div style={{ fontSize:15, fontWeight:800, color:"#6abf69", marginBottom:4 }}>Kaydınız Alındı!</div>
               <div style={{ fontSize:12, color:"#998a6e" }}>Yeni modeller eklendiğinde sizi bilgilendireceğiz. Teşekkürler.</div>
