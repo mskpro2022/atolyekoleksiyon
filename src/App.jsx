@@ -218,11 +218,14 @@ function resizeImg(file) {
       img.onload = () => {
         const c = document.createElement("canvas");
         let w = img.width, h = img.height;
-        if (w > 1600) { h = Math.round(h * 1600 / w); w = 1600; }
-        if (h > 1600) { w = Math.round(w * 1600 / h); h = 1600; }
+        if (w > 2000) { h = Math.round(h * 2000 / w); w = 2000; }
+        if (h > 2000) { w = Math.round(w * 2000 / h); h = 2000; }
         c.width = w; c.height = h;
-        c.getContext("2d").drawImage(img, 0, 0, w, h);
-        resolve(c.toDataURL("image/jpeg", 0.85));
+        const ctx = c.getContext("2d");
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = "high";
+        ctx.drawImage(img, 0, 0, w, h);
+        resolve(c.toDataURL("image/jpeg", 0.94));
       };
       img.src = e.target.result;
     };
@@ -1714,9 +1717,9 @@ function VitrinModu({ kod, onizleme }) {
           return (
             <div key={m.id} className="vm-card">
               <div onClick={()=>{ setDetayModel(m); if(vitrinMusteri && !onizleme) vitrinAktiviteKaydet(vitrinMusteri.onek, vitrinMusteri.kod, vitrinMusteri.ad, "model", aktifKol?.ad, m.kod, m.ad); }}
-                style={{ aspectRatio:"1", background:"#f7f7f8", borderRadius:12, position:"relative", overflow:"hidden", outline: sec?"2px solid #0a84ff":"none", outlineOffset:2 }}>
+                style={{ aspectRatio:"4/3", background:"#f7f7f8", borderRadius:12, position:"relative", overflow:"hidden", outline: sec?"2px solid #0a84ff":"none", outlineOffset:2 }}>
                 {m.foto
-                  ? <img className="vm-ph" src={m.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"cover", display:"block" }}/>
+                  ? <img className="vm-ph" src={m.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"contain", display:"block" }}/>
                   : <div style={{ width:"100%", height:"100%", display:"flex", alignItems:"center", justifyContent:"center", color:"#d2d2d7", fontSize:26 }}>◇</div>}
                 {yeni && <span style={{ position:"absolute", top:10, left:10, background:"#0a84ff", color:"#fff", fontSize:9, padding:"3px 9px", borderRadius:980, fontWeight:500, letterSpacing:"0.03em" }}>YENİ</span>}
                 <button className="vm-sel" onClick={(e)=>{ e.stopPropagation(); const ns=new Set(secili); sec?ns.delete(m.id):ns.add(m.id); setSecili(ns); }}
@@ -1769,8 +1772,8 @@ function VitrinModu({ kod, onizleme }) {
         <div onClick={()=>setDetayModel(null)} style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.7)", zIndex:100, display:"flex", alignItems:"center", justifyContent:"center", padding:20, backdropFilter:"blur(20px)" }}>
           <div onClick={e=>e.stopPropagation()} style={{ background:"#1c1c1e", borderRadius:18, maxWidth:560, width:"100%", maxHeight:"90vh", overflow:"auto", position:"relative" }}>
             <button onClick={()=>setDetayModel(null)} style={{ position:"absolute", top:14, right:14, zIndex:5, width:30, height:30, borderRadius:"50%", background:"rgba(120,120,128,0.5)", border:"none", color:"#fff", fontSize:15, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}>✕</button>
-            <div style={{ aspectRatio:"1", background:"#f7f7f8", display:"flex", alignItems:"center", justifyContent:"center", overflow:"hidden" }}>
-              {detayModel.foto ? <img src={detayModel.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }}/> : <div style={{ fontSize:50, color:"#d2d2d7" }}>◇</div>}
+            <div style={{ aspectRatio:"4/3", background:"#f7f7f8", display:"flex", alignItems:"center", justifyContent:"center", overflow:"hidden" }}>
+              {detayModel.foto ? <img src={detayModel.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"contain" }}/> : <div style={{ fontSize:50, color:"#d2d2d7" }}>◇</div>}
             </div>
             <div style={{ padding:"22px 24px 24px" }}>
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", marginBottom:20 }}>
