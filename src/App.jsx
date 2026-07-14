@@ -1655,7 +1655,7 @@ function VitrinModu({ kod, onizleme }) {
         </div>
         <div style={{ display:"flex", gap:8 }}>
           <button onClick={()=>vitrinPDF(3)} style={{ background:"#f5f5f7", color:"#1d1d1f", border:"none", borderRadius:980, padding:"9px 18px", fontSize:13, fontWeight:500, cursor:"pointer" }}>
-            PDF 3'lü{secili.size > 0 ? " · "+secili.size : ""}
+            PDF 3'lü
           </button>
           <button onClick={()=>vitrinPDF(4)} style={{ background:"rgba(255,255,255,0.08)", color:"#f5f5f7", border:"none", borderRadius:980, padding:"9px 18px", fontSize:13, fontWeight:500, cursor:"pointer" }}>
             PDF 4'lü
@@ -1707,6 +1707,17 @@ function VitrinModu({ kod, onizleme }) {
         })}
       </div>
 
+      {/* SEÇİM ÇUBUĞU — model seçilince görünür */}
+      {secili.size > 0 && (
+        <div style={{ margin:"0 28px 16px", background:"rgba(10,132,255,0.12)", borderRadius:11, padding:"11px 16px", display:"flex", alignItems:"center", justifyContent:"space-between", gap:12, flexWrap:"wrap" }}>
+          <span style={{ fontSize:13, color:"#0a84ff", fontWeight:500 }}>{secili.size} model seçildi</span>
+          <div style={{ display:"flex", gap:8 }}>
+            <button onClick={()=>vitrinPDF(3)} style={{ background:"#0a84ff", border:"none", borderRadius:8, padding:"7px 16px", color:"#fff", fontSize:12, fontWeight:500, cursor:"pointer" }}>Seçilenlerden PDF</button>
+            <button onClick={()=>setSecili(new Set())} style={{ background:"transparent", border:"none", color:"#86868b", fontSize:12, fontWeight:500, cursor:"pointer", padding:"7px 10px" }}>Temizle</button>
+          </div>
+        </div>
+      )}
+
       {/* MODEL IZGARASI */}
       <div style={{ padding:"0 28px 40px", display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))", gap:16 }}>
         {koldaki.length === 0 && <div style={{ gridColumn:"1/-1", textAlign:"center", color:"#6e6e73", padding:"60px 0", fontSize:14 }}>Model bulunamadı</div>}
@@ -1722,11 +1733,11 @@ function VitrinModu({ kod, onizleme }) {
                   ? <img className="vm-ph" src={m.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"contain", display:"block" }}/>
                   : <div style={{ width:"100%", height:"100%", display:"flex", alignItems:"center", justifyContent:"center", color:"#d2d2d7", fontSize:26 }}>◇</div>}
                 {yeni && <span style={{ position:"absolute", top:10, left:10, background:"#0a84ff", color:"#fff", fontSize:9, padding:"3px 9px", borderRadius:980, fontWeight:500, letterSpacing:"0.03em" }}>YENİ</span>}
-                <button className="vm-sel" onClick={(e)=>{ e.stopPropagation(); const ns=new Set(secili); sec?ns.delete(m.id):ns.add(m.id); setSecili(ns); }}
-                  style={{ position:"absolute", top:9, right:9, width:24, height:24, borderRadius:"50%", background: sec?"#0a84ff":"rgba(255,255,255,0.9)", border:"none", color: sec?"#fff":"#86868b", fontSize:12, fontWeight:600, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", opacity: sec?1:0 }}>✓</button>
+                <button onClick={(e)=>{ e.stopPropagation(); const ns=new Set(secili); sec?ns.delete(m.id):ns.add(m.id); setSecili(ns); }}
+                  style={{ position:"absolute", top:9, right:9, width:26, height:26, borderRadius:"50%", background: sec?"#0a84ff":"rgba(255,255,255,0.92)", border: sec?"none":"1px solid rgba(0,0,0,0.08)", color: sec?"#fff":"#c7c7cc", fontSize:13, fontWeight:600, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", transition:"all .15s ease", boxShadow:"0 1px 3px rgba(0,0,0,0.12)" }}>✓</button>
               </div>
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", marginTop:10, padding:"0 2px" }}>
-                <span style={{ fontSize:17, color:"#f5f5f7", fontWeight:500, letterSpacing:"-0.02em" }}>{g || "—"}<span style={{ fontSize:12, color:"#86868b", marginLeft:2 }}>g</span></span>
+                <span style={{ fontSize:14, color:"#f5f5f7", fontWeight:500, letterSpacing:"-0.01em" }}>{g || "—"}<span style={{ fontSize:11, color:"#86868b", marginLeft:2 }}>g</span></span>
                 <span style={{ fontSize:11, color:"#6e6e73", letterSpacing:"0.02em" }}>{m.kod}</span>
               </div>
             </div>
