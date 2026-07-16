@@ -1532,7 +1532,7 @@ function VitrinModu({ kod, onizleme }) {
       if (!musteriKod) { setDurum("gecersiz"); return; }
 
       // Önceki ziyareti localStorage'dan al (yeni model tespiti için) — cihaz bazlı
-      AKTIF_SIRKET_ONEK = onek;
+      // NOT: Global AKTIF_SIRKET_ONEK'i KALICI değiştirmiyoruz (ana sistemi kirletmemek için)
       try {
         const ziyaretKey = "vitrin_ziyaret_" + kod;
         oncekiZiyaret = Number(localStorage.getItem(ziyaretKey)) || 0;
@@ -1544,12 +1544,18 @@ function VitrinModu({ kod, onizleme }) {
       setVitrinAd(musteriAd || "Katalog");
       // Giriş aktivitesi kaydet
       if (!onizleme) { try { vitrinAktiviteKaydet(onek, musteriKod, musteriAd, "giris", null, null, null); } catch {} }
-      // Veriyi çek — TABLODAN (akıllı okuma, fallback chunk)
-      const [k, m] = await Promise.all([
-        akilliKoleksiyonOku(onek),
-        akilliModelOku(onek)
-      ]);
-      AKTIF_SIRKET_ONEK = onek; // sabit kalsın
+      // Veriyi çek — TABLODAN. Global öneği GEÇİCİ değiştir, HEMEN geri al (kirlenmesin)
+      const oncekiGlobalOnek = AKTIF_SIRKET_ONEK;
+      let k, m;
+      try {
+        AKTIF_SIRKET_ONEK = onek;
+        [k, m] = await Promise.all([
+          akilliKoleksiyonOku(onek),
+          akilliModelOku(onek)
+        ]);
+      } finally {
+        AKTIF_SIRKET_ONEK = oncekiGlobalOnek; // HER durumda geri al
+      }
       // Sadece "vitrinde göster" işaretli koleksiyonlar
       const aktifKollar = (k || []).filter(kol => kol.vitrin === true);
       const aktifKolIdler = new Set(aktifKollar.map(kol => kol.id));
@@ -2412,6 +2418,7 @@ function Atolye({ onSirketDegis }) {
   });
 
   const svM = useCallback(async d => {
+    console.log("💾 Model yazılıyor → şirket öneği: [" + AKTIF_SIRKET_ONEK + "] (" + (AKTIF_SIRKET_ONEK==="bsp_"?"BSP":AKTIF_SIRKET_ONEK===""?"MSK":AKTIF_SIRKET_ONEK) + "), " + d.length + " model");
     // DUPLICATE TEMİZLEME — aynı koleksiyonda aynı kod/ID varsa son eklenen kazanır
     // FARKLI KOLEKSİYONLARDA aynı kod NORMAL (kopyalama için)
     const idMap = new Map();
