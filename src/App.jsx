@@ -53,6 +53,7 @@ try { const t = localStorage.getItem("atolye_tema"); if (t && TEMALAR[t]) _tema 
 
 // ═══ VURGU RENGİ — Ayarlar'dan değiştirilebilir (charcoal zemin sabit, sadece vurgu) ═══
 const VURGU_RENKLERI = {
+  beyaz:    { l:"Beyaz",    ana:"#e8e8ea", koyu:"#c4c4c8" },
   mavi:     { l:"Mavi",     ana:"#0a84ff", koyu:"#0968cc" },
   yesil:    { l:"Yeşil",    ana:"#30d158", koyu:"#28a745" },
   mor:      { l:"Mor",      ana:"#8b7cf6", koyu:"#6d5ce0" },
@@ -61,7 +62,7 @@ const VURGU_RENKLERI = {
   pembe:    { l:"Pembe",    ana:"#ff375f", koyu:"#e01f47" },
   altin:    { l:"Altın",    ana:"#c9a84c", koyu:"#b8943f" },
 };
-let _vurgu = "mavi";
+let _vurgu = "beyaz";
 try { const v = localStorage.getItem("atolye_vurgu"); if (v && VURGU_RENKLERI[v]) _vurgu = v; } catch {}
 const _vurguRenk = VURGU_RENKLERI[_vurgu];
 // Charcoal temasının vurgu değerlerini seçilen renge uygula (rgba türevleriyle)
@@ -5904,7 +5905,7 @@ ${buildContext()}`;
                 <div style={{ fontSize:10, fontWeight:700, color:T.sub, marginBottom:10, letterSpacing:"0.05em", textTransform:"uppercase" }}>Vurgu Rengi</div>
                 <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
                   {Object.entries(VURGU_RENKLERI).map(([id, v]) => {
-                    const aktif = (localStorage.getItem("atolye_vurgu") || "mavi") === id;
+                    const aktif = (localStorage.getItem("atolye_vurgu") || "beyaz") === id;
                     return (
                       <button key={id} onClick={()=>setVurguRenk(id)} title={v.l} style={{
                         display:"flex", flexDirection:"column", alignItems:"center", gap:4,
