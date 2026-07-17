@@ -193,6 +193,10 @@ function hesapla(m, secilenAyar, altinKgUSD, varsayilanMly) {
 // Aktif şirketin Supabase anahtar öneki. MSK = "" (mevcut veriler korunur), BSP = "bsp_".
 // Şirket bağımsız anahtarlar (önek almayan): şifre, ayarlar gibi global olanlar burada listelenir.
 let AKTIF_SIRKET_ONEK = (() => {
+  try {
+    // Eski şirketler-arası karışık cache'i temizle (bir kereye mahsus)
+    localStorage.removeItem("atolye_full_cache");
+  } catch {}
   try { return localStorage.getItem("atolye_sirket_onek") || ""; } catch { return ""; }
 })();
 function setSirketOnek(onek) {
@@ -2137,7 +2141,7 @@ function Atolye({ onSirketDegis }) {
 
     // 1. Önce TÜM veriyi localStorage'dan göster (anında — sıfır network)
     try {
-      const fc = localStorage.getItem("atolye_full_cache");
+      const fc = localStorage.getItem("atolye_full_cache_" + AKTIF_SIRKET_ONEK);
       if (fc) {
         const d = JSON.parse(fc);
         if (d?.m?.length > 0 || d?.k?.length > 0) {
@@ -2151,7 +2155,7 @@ function Atolye({ onSirketDegis }) {
             ld("v7c",{}), ld("v7ay",{}), akilliKasaOku(AKTIF_SIRKET_ONEK)
           ]).then(([k,m,s,u,c,ay,ks]) => {
             if (m?.length > 0) {
-              try { localStorage.setItem("atolye_full_cache", JSON.stringify({k,m,s,u,c,ay,ks,ts:Date.now()})); } catch {}
+              try { localStorage.setItem("atolye_full_cache_" + AKTIF_SIRKET_ONEK, JSON.stringify({k,m,s,u,c,ay,ks,ts:Date.now()})); } catch {}
               applyData(k,m,s,u,c,ay,ks);
               // Okuma doğrulaması — sunucuyla karşılaştır
               ekranSunucuFarki(AKTIF_SIRKET_ONEK, m.length).then(fark => {
@@ -2177,7 +2181,7 @@ function Atolye({ onSirketDegis }) {
       akilliMusteriOku(AKTIF_SIRKET_ONEK),
       ld("v7c",{}), ld("v7ay",{}), akilliKasaOku(AKTIF_SIRKET_ONEK)
     ]);
-    try { localStorage.setItem("atolye_full_cache", JSON.stringify({k,m,s,u,c,ay,ks,ts:Date.now()})); } catch {}
+    try { localStorage.setItem("atolye_full_cache_" + AKTIF_SIRKET_ONEK, JSON.stringify({k,m,s,u,c,ay,ks,ts:Date.now()})); } catch {}
     applyData(k,m,s,u,c,ay,ks);
     setLoaded(true);
     versiyonlariYukle();
@@ -2236,9 +2240,9 @@ function Atolye({ onSirketDegis }) {
             setModeller(yeni);
             versiyonRef.current.v7m = vm;
             try {
-              const fc = localStorage.getItem("atolye_full_cache");
+              const fc = localStorage.getItem("atolye_full_cache_" + AKTIF_SIRKET_ONEK);
               const d = fc ? JSON.parse(fc) : {};
-              localStorage.setItem("atolye_full_cache", JSON.stringify({...d, m:yeni, ts:Date.now()}));
+              localStorage.setItem("atolye_full_cache_" + AKTIF_SIRKET_ONEK, JSON.stringify({...d, m:yeni, ts:Date.now()}));
             } catch {}
           }
         }
@@ -2440,9 +2444,9 @@ function Atolye({ onSirketDegis }) {
     }
     setModeller(temiz);
     try {
-      const fc = localStorage.getItem("atolye_full_cache");
+      const fc = localStorage.getItem("atolye_full_cache_" + AKTIF_SIRKET_ONEK);
       const d = fc ? JSON.parse(fc) : {};
-      localStorage.setItem("atolye_full_cache", JSON.stringify({...d, m:temiz, ts:Date.now()}));
+      localStorage.setItem("atolye_full_cache_" + AKTIF_SIRKET_ONEK, JSON.stringify({...d, m:temiz, ts:Date.now()}));
     } catch {}
     await guvenliKaydet("v7m", temiz);
     sonKendiYazma.current = Date.now(); // Realtime kendi yazmamızı yok saysın
@@ -3441,7 +3445,7 @@ function Atolye({ onSirketDegis }) {
                 return (
                   <div key={m.id} style={{ background:ik?"rgba(201,168,76,0.07)":"rgba(201,168,76,0.02)", border:"1px solid", borderColor:ik?"rgba(201,168,76,0.28)":"rgba(201,168,76,0.07)", borderRadius:11, overflow:"hidden", animation:"cardin .3s ease "+(i*.03)+"s both" }}>
                     <div className="model-foto-wrap" style={{ position:"relative", height:180, background:"rgba(0,0,0,0.25)", overflow:"hidden" }}>
-                      {m.foto ? <img onClick={()=>setDetayModel(m)} src={m.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"cover", objectPosition:"center center", display:"block", cursor:"zoom-in" }}/> : <div style={{ width:"100%", height:"100%", display:"flex", alignItems:"center", justifyContent:"center", color:"rgba(201,168,76,0.1)", fontSize:24 }}>-</div>}
+                      {m.foto ? <img onClick={()=>openEM(m)} src={m.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"cover", objectPosition:"center center", display:"block", cursor:"pointer" }}/> : <div onClick={()=>openEM(m)} style={{ width:"100%", height:"100%", display:"flex", alignItems:"center", justifyContent:"center", color:"rgba(201,168,76,0.1)", fontSize:24, cursor:"pointer" }}>-</div>}
                       {Array.isArray(m.gizliMus) && m.gizliMus.length>0 && <div title={m.gizliMus.length+" müşteriden gizli"} style={{ position:"absolute", bottom:4, left:4, background:"rgba(232,90,79,0.85)", color:"#fff", padding:"1px 5px", borderRadius:3, fontSize:7, fontWeight:800 }}>🚫 {m.gizliMus.length}</div>}
                       <button onClick={()=>togKonf(m)} style={{ position:"absolute", top:4, right:4, width:20, height:20, borderRadius:5, background:ik?"rgba(201,168,76,0.9)":"rgba(0,0,0,0.55)", border:"2px solid rgba(201,168,76,0.45)", color:ik?DARK:"transparent", fontSize:9, fontWeight:800, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}>V</button>
                       {seciliModeller.has(m.id) && <div style={{ position:"absolute", inset:0, background:"rgba(91,155,213,0.15)", border:"2px solid rgba(91,155,213,0.5)", pointerEvents:"none" }}/>}
@@ -3488,7 +3492,6 @@ function Atolye({ onSirketDegis }) {
                       <div style={{ display:"flex", gap:3, marginTop:4, justifyContent:"flex-end" }}>
                         <button onClick={e=>{ e.stopPropagation(); setSeciliModeller(prev=>{ const s=new Set(prev); s.has(m.id)?s.delete(m.id):s.add(m.id); return s; }); }} style={{ background:seciliModeller.has(m.id)?"rgba(91,155,213,0.2)":"rgba(91,155,213,0.06)", border:"1px solid "+(seciliModeller.has(m.id)?"rgba(91,155,213,0.5)":"rgba(91,155,213,0.15)"), borderRadius:3, padding:"2px 5px", color:"#5b9bd5", fontSize:7, fontWeight:700, cursor:"pointer" }}>{seciliModeller.has(m.id)?"✓ Seçildi":"□ Seç"}</button>
                         <button onClick={()=>setKopyalaModal({ model:m, hedefKolId:"" })} style={{ background:"rgba(91,155,213,0.09)", border:"none", borderRadius:3, padding:"2px 5px", color:"#5b9bd5", fontSize:7, fontWeight:700, cursor:"pointer" }}>Kopyala</button>
-                        <button onClick={()=>openEM(m)} style={{ background:"rgba(201,168,76,0.09)", border:"none", borderRadius:3, padding:"2px 5px", color:GOLD, fontSize:7, fontWeight:700, cursor:"pointer" }}>Edit</button>
                         <button onClick={()=>setDelOnay({ type:"mod", id:m.id })} style={{ background:"rgba(232,90,79,0.07)", border:"none", borderRadius:3, padding:"2px 4px", color:"#e85a4f", fontSize:7, fontWeight:700, cursor:"pointer" }}>Sil</button>
                       </div>
                     </div>
@@ -5233,7 +5236,7 @@ function Atolye({ onSirketDegis }) {
                   {vitrinAnalizVeri.modeller.slice(0,12).map((vm,i) => {
                     const model = modeller.find(x => x.kod === vm.kod);
                     return (
-                      <div key={vm.kod} onClick={()=>model && setDetayModel(model)} style={{ background:"rgba(0,0,0,0.15)", borderRadius:10, overflow:"hidden", cursor: model?"pointer":"default", border:"1px solid "+(i<3?"rgba(232,131,58,0.3)":T.border), position:"relative" }}>
+                      <div key={vm.kod} onClick={()=>model && openEM(model)} style={{ background:"rgba(0,0,0,0.15)", borderRadius:10, overflow:"hidden", cursor: model?"pointer":"default", border:"1px solid "+(i<3?"rgba(232,131,58,0.3)":T.border), position:"relative" }}>
                         <div style={{ height:110, background:"#f3f3f3", overflow:"hidden", position:"relative" }}>
                           {model?.foto ? <img src={model.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }}/> : <div style={{ width:"100%", height:"100%", display:"flex", alignItems:"center", justifyContent:"center", color:"#ccc", fontSize:22 }}>◇</div>}
                           {i < 3 && <div style={{ position:"absolute", top:5, left:5, background:"#e8833a", color:"#fff", width:18, height:18, borderRadius:"50%", display:"flex", alignItems:"center", justifyContent:"center", fontSize:9, fontWeight:800 }}>{i+1}</div>}
@@ -7436,8 +7439,30 @@ ${buildContext()}`;
 
       {/* MODEL MODAL */}
       <Modal open={showMM} onClose={()=>{setShowMM(false);setEditM(null);}} title={editM?"Modeli Duzenle":"Yeni Model"}>
+        {/* DÜZENLEMEDE: büyük foto önizleme + 3 ayar gram tablosu */}
+        {editM && (
+          <div style={{ marginBottom:12 }}>
+            <div style={{ height:220, borderRadius:12, overflow:"hidden", background:"#f3f3f3", display:"flex", alignItems:"center", justifyContent:"center", marginBottom:8 }}>
+              {fFoto ? <img src={fFoto} alt="" style={{ width:"100%", height:"100%", objectFit:"contain" }}/> : <div style={{ fontSize:40, color:"#ccc" }}>◇</div>}
+            </div>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8, marginBottom:4 }}>
+              {["10K","14K","18K"].map(a => {
+                const gg = gramDonustur(Number(fGram)||0, fRefAyar||"14K", a, Number(fTasGram)||0);
+                const on = a === fRefAyar;
+                return (
+                  <div key={a} style={{ background: on?"rgba(201,168,76,0.12)":"rgba(255,255,255,0.03)", border:"1px solid "+(on?"rgba(201,168,76,0.35)":"rgba(255,255,255,0.07)"), borderRadius:9, padding:"9px 6px", textAlign:"center" }}>
+                    <div style={{ fontSize:9, color: on?GOLD:"#998a6e", fontWeight:700 }}>{a.replace("K"," Ayar")}</div>
+                    <div style={{ fontSize:16, fontWeight:800, color: on?GOLD:T.text, marginTop:2 }}>{gg>0?gg.toFixed(2):"—"}</div>
+                    <div style={{ fontSize:8, color:"#665d4a" }}>gram</div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
         {/* Foto */}
         <div style={{ marginBottom:10 }}>
+          <div style={{ fontSize:9, color:T.sub, marginBottom:4 }}>{editM ? "Fotoğrafı değiştir:" : ""}</div>
           <div onClick={()=>fileRef.current&&fileRef.current.click()} style={{ width:"100%", height:120, borderRadius:10, overflow:"hidden", cursor:"pointer", background:fFoto?"transparent":"rgba(201,168,76,0.04)", border:"2px dashed "+(fFoto?"rgba(201,168,76,0.2)":"rgba(201,168,76,0.13)"), display:"flex", alignItems:"center", justifyContent:"center", position:"relative" }}>
             {fFoto ? <img src={fFoto} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }}/> : <div style={{ textAlign:"center", color:"#7a6f5a" }}><div style={{ fontSize:20 }}>+</div><div style={{ fontSize:9 }}>Fotograf yukleyin</div></div>}
             {fFoto && <button onClick={e=>{e.stopPropagation();setFFoto("");}} style={{ position:"absolute", top:4, right:4, background:"rgba(0,0,0,0.6)", border:"none", borderRadius:4, width:18, height:18, color:"#fff", fontSize:9, cursor:"pointer" }}>X</button>}
@@ -7723,6 +7748,35 @@ ${buildContext()}`;
         </div>
 
         <Fl label="Aciklama"><textarea value={fAc} onChange={e=>setFAc(e.target.value)} placeholder="Detaylar..." rows={2} style={{ ...IS, resize:"vertical" }}/></Fl>
+
+        {/* MÜŞTERİ GİZLEME — sadece mevcut modeli düzenlerken */}
+        {editM && Object.keys(musteriler).length > 0 && (
+          <div style={{ background:"rgba(232,90,79,0.04)", border:"1px solid rgba(232,90,79,0.15)", borderRadius:10, padding:"11px 13px", marginTop:8 }}>
+            <div style={{ fontSize:9, color:"#e85a4f", fontWeight:800, textTransform:"uppercase", letterSpacing:"0.05em", marginBottom:3 }}>🚫 Vitrinde Gizle</div>
+            <div style={{ fontSize:9, color:T.sub, marginBottom:8 }}>Seçili müşteriler bu modeli vitrinde göremez.</div>
+            <div style={{ display:"flex", flexWrap:"wrap", gap:5, maxHeight:110, overflowY:"auto" }}>
+              {Object.entries(musteriler).sort((a,b)=>a[0].localeCompare(b[0],"tr")).map(([mad, mkod]) => {
+                const gizli = Array.isArray(editM.gizliMus) && editM.gizliMus.includes(mkod);
+                return (
+                  <button key={mkod} onClick={()=>{
+                    const mevcut = Array.isArray(editM.gizliMus) ? editM.gizliMus : [];
+                    const yeniGizli = gizli ? mevcut.filter(x=>x!==mkod) : [...mevcut, mkod];
+                    const guncelModel = { ...editM, gizliMus: yeniGizli };
+                    setEditM(guncelModel);
+                    svM(modeller.map(x => x.id===editM.id ? { ...x, gizliMus: yeniGizli } : x));
+                    toastGoster("ok", gizli ? mad+" artık görebilir" : mad+" artık göremez");
+                  }} style={{ background: gizli?"rgba(232,90,79,0.18)":"rgba(255,255,255,0.03)", border:"1px solid "+(gizli?"rgba(232,90,79,0.45)":"rgba(255,255,255,0.08)"), borderRadius:6, padding:"4px 9px", color: gizli?"#e85a4f":T.sub, fontSize:10, fontWeight:700, cursor:"pointer" }}>
+                    {gizli ? "🚫 " : ""}{mad}
+                  </button>
+                );
+              })}
+            </div>
+            {Array.isArray(editM.gizliMus) && editM.gizliMus.length>0 && (
+              <div style={{ fontSize:9, color:"#e85a4f", marginTop:7, fontWeight:600 }}>{editM.gizliMus.length} müşteriden gizli</div>
+            )}
+          </div>
+        )}
+
         <button onClick={saveModel} disabled={!fAd.trim()} style={{ ...BG, width:"100%", marginTop:4, opacity:fAd.trim()?1:0.4 }}>{editM?"Kaydet":"Ekle"}</button>
       </Modal>
 
