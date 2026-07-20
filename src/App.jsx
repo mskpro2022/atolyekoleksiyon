@@ -1532,7 +1532,7 @@ function VitrinModu({ kod, onizleme }) {
   const [kayitTel, setKayitTel] = useState(""); // toptancı kayıt: telefon
   const [kayitDurum, setKayitDurum] = useState(null); // null | "gonderiliyor" | "basarili" | "hata:..."
   const [oncekiZiyaret, setOncekiZiyaret] = useState(0); // toptancının önceki ziyareti (yeni model tespiti)
-  const [siralama, setSiralama] = useState("yeni"); // yeni | kod | kodTers | gramArtan | gramAzalan
+  const [siralama, setSiralama] = useState("kodTers"); // kodTers (varsayılan: en yüksek kod üstte) | kod | yeni | gramArtan | gramAzalan
   const [vitrinMusteri, setVitrinMusteri] = useState(null); // { ad, kod, onek } — aktivite takibi için
   const VITRIN_AYARLAR = [
     { id: "10K", l: "10 Ayar" },
@@ -1731,11 +1731,11 @@ function VitrinModu({ kod, onizleme }) {
         </div>
         <select value={siralama} onChange={e=>setSiralama(e.target.value)}
           style={{ background:"rgba(255,255,255,0.07)", border:"none", borderRadius:9, padding:"9px 12px", color:"#f5f5f7", fontSize:13, outline:"none", cursor:"pointer" }}>
-          <option value="yeni" style={{background:"#1c1c1e"}}>En yeni</option>
-          <option value="kodTers" style={{background:"#1c1c1e"}}>Kod ↓</option>
-          <option value="kod" style={{background:"#1c1c1e"}}>Kod ↑</option>
-          <option value="gramAzalan" style={{background:"#1c1c1e"}}>Gram ↓</option>
-          <option value="gramArtan" style={{background:"#1c1c1e"}}>Gram ↑</option>
+          <option value="kodTers" style={{background:"#1c1c1e"}}>Kod: Yeni → Eski</option>
+          <option value="kod" style={{background:"#1c1c1e"}}>Kod: Eski → Yeni</option>
+          <option value="yeni" style={{background:"#1c1c1e"}}>Son Eklenen</option>
+          <option value="gramAzalan" style={{background:"#1c1c1e"}}>Gram: Yüksek → Düşük</option>
+          <option value="gramArtan" style={{background:"#1c1c1e"}}>Gram: Düşük → Yüksek</option>
         </select>
       </div>
 
@@ -2831,7 +2831,7 @@ function Atolye({ onSirketDegis }) {
     else if (sirala==="gram_asc") r=[...r].sort((a,b)=>(Number(a.gram)||0)-(Number(b.gram)||0));
     else if (sirala==="gram_desc") r=[...r].sort((a,b)=>(Number(b.gram)||0)-(Number(a.gram)||0));
     else if (sirala==="cok_satilan") r=[...r].sort((a,b)=>(b.satisSayisi||0)-(a.satisSayisi||0));
-    else r=[...r].sort(kodSirala); // varsayilan ve kod — her ikisi de sayısal kod sırası
+    else r=[...r].sort((a,b)=>kodSirala(b,a)); // VARSAYILAN: en yüksek kod üstte (ALT185 > ALT184 > ALT183)
     return r;
   }, [aktMod, filtre, etiketF, kategoriF, arama, sirala, altinKgUSD, madenCarpan]);
 
