@@ -224,6 +224,32 @@ function hesapla(m, secilenAyar, altinKgUSD, varsayilanMly) {
   };
 }
 
+// ═══ 14K KÂRINI KORUYAN HEDEF FİYAT ═══
+// madenCarpan = MALİYET milyemi. Kâr = gelirHas(taş+işçilik) - maliyetHas.
+// Taşlı üründe düşük ayarda taş has değer kaybeder → aynı kârı korumak için
+// müşteriye daha yüksek fiyat gerekir. Bu fonksiyon o hedef fiyatı (has) verir.
+// Dönüş: { ref14Kar, aktifKarHas, hedefSatisHas, aktifSatisHas, ekHas, farkli }
+function karKoruyanFiyat(m, aktifAyar, altinKgUSD, varsayilanMly) {
+  const tasGram = Number(m.tasGram) || 0;
+  if (tasGram <= 0) return null; // taşsızda telafiye gerek yok
+  const ref14 = hesapla({ ...m }, "14K", altinKgUSD, varsayilanMly);
+  const aktif = hesapla({ ...m }, aktifAyar, altinKgUSD, varsayilanMly);
+  if (aktif.mamulGram <= 0) return null;
+  const ref14Kar = ref14.karHas;         // 14K'da korunacak kâr (has)
+  const aktifKarHas = aktif.karHas;      // aktif ayarda mevcut kâr (has)
+  // Aktif ayarda satış = gelir (taş+işçilik). Kârı 14K'ya eşitlemek için gereken ek:
+  const ekHas = ref14Kar - aktifKarHas;  // pozitifse (10K) fiyat artmalı
+  const aktifSatisHas = aktif.gelirHas;  // şu anki satış karşılığı (has)
+  const hedefSatisHas = aktifSatisHas + ekHas;
+  return {
+    ref14Kar, aktifKarHas,
+    aktifSatisHas, hedefSatisHas, ekHas,
+    aktifMamul: aktif.mamulGram,
+    hedefMlyGr: aktif.mamulGram > 0 ? hedefSatisHas / aktif.mamulGram : 0,
+    farkli: Math.abs(ekHas) > 0.0005,
+  };
+}
+
 // ═══ ŞİRKET (MULTI-COMPANY) ═══
 // Aktif şirketin Supabase anahtar öneki. MSK = "" (mevcut veriler korunur), BSP = "bsp_".
 // Şirket bağımsız anahtarlar (önek almayan): şifre, ayarlar gibi global olanlar burada listelenir.
@@ -1358,6 +1384,34 @@ function OnizlemeBox({ m, altinKgUSD, mc }) {
           <span style={{ fontSize: r.big ? 12 : 9, color: r.c || "#e8dcc8", fontWeight: r.bold ? 800 : 600 }}>{r.v} has</span>
         </div>
       ))}
+
+      {/* 14K KÂRINI KORUYAN FİYAT — sadece taşlı ürünlerde */}
+      {!pv.gumusMu && (Number(m.tasGram) || 0) > 0 && (() => {
+        const ayarlar = ["10K", "14K", "18K"];
+        const veriler = ayarlar.map(a => ({ ayar: a, kk: karKoruyanFiyat(m, a, altinKgUSD, mc) })).filter(x => x.kk);
+        if (veriler.length === 0) return null;
+        return (
+          <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid rgba(255,255,255,0.08)" }}>
+            <div style={{ fontSize: 8, color: "#e8933a", fontWeight: 700, marginBottom: 6, letterSpacing: ".05em" }}>🎯 14K KÂRINI KORUYAN FİYAT (taş telafili)</div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>
+              {veriler.map(({ ayar, kk }) => {
+                const ref = ayar === "14K";
+                return (
+                  <div key={ayar} style={{ background: ref ? "rgba(106,191,105,0.1)" : "rgba(232,147,58,0.07)", border: "1px solid " + (ref ? "rgba(106,191,105,0.25)" : "rgba(232,147,58,0.18)"), borderRadius: 8, padding: "8px 6px", textAlign: "center" }}>
+                    <div style={{ fontSize: 8, color: ref ? "#6abf69" : "#e8933a", fontWeight: 700 }}>{ayar}{ref ? " (ref)" : ""}</div>
+                    <div style={{ fontSize: 13, fontWeight: 800, color: ref ? "#6abf69" : "#e8933a", marginTop: 2 }}>{fN(kk.hedefSatisHas, 3)}</div>
+                    <div style={{ fontSize: 7, color: "#998a6e" }}>has satış</div>
+                    <div style={{ fontSize: 7, color: "#8a7d64", marginTop: 2 }}>{fN(kk.hedefMlyGr, 3)} mly/gr</div>
+                    {!ref && kk.ekHas > 0.0005 && <div style={{ fontSize: 7, color: "#e85a4f", marginTop: 1 }}>+{fN(kk.ekHas, 3)} telafi</div>}
+                    {!ref && kk.ekHas < -0.0005 && <div style={{ fontSize: 7, color: "#6abf69", marginTop: 1 }}>{fN(kk.ekHas, 3)}</div>}
+                  </div>
+                );
+              })}
+            </div>
+            <div style={{ fontSize: 7, color: "#665d4a", marginTop: 6, lineHeight: 1.4 }}>10K'da taşın has dönüşü azaldığı için aynı kârı korumak için fiyat yükselir. Bu değerler 14K'daki toplam kârı ({fN(pv.karHas, 4)} has) korur.</div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
@@ -6242,17 +6296,35 @@ ${buildContext()}`;
                         <span style={{ fontSize:9, color:"#6abf69" }}>{t.gramPerAdet.toFixed(6)} gr/adet</span>
                         <span style={{ fontSize:8, color:"#665d4a" }}>({Math.round(1/t.gramPerAdet)} adet/gr)</span>
                         <button onClick={() => {
+                          // Değerleri forma yükle — düzenle, tekrar "Ekle"ye bas (aynı şekil+boyut üzerine yazılır)
+                          const bilinen = ["ROUND","OVAL","DAMLA","MARKİZ","TRAPEZ","BAGET","KARE","KALP"];
+                          if (bilinen.includes(t.sekil)) { setOzelTasSekil(t.sekil); setOzelTasOzelIsim(""); }
+                          else { setOzelTasSekil("DİĞER"); setOzelTasOzelIsim(t.sekil); }
+                          setOzelTasBoyut(t.boyut);
+                          setOzelTasGram(String(t.gramPerAdet));
+                          // Alttaki forma kaydır
+                          setTimeout(()=>{ try { document.querySelector('input[placeholder="0.0100"]')?.scrollIntoView({behavior:"smooth",block:"center"}); } catch {} }, 50);
+                        }} style={{ marginLeft:"auto", background:"rgba(91,155,213,0.12)", border:"none", borderRadius:4, padding:"2px 8px", color:"#5b9bd5", fontSize:9, fontWeight:700, cursor:"pointer" }}>✏️ Düzelt</button>
+                        <button onClick={() => {
+                          if (!window.confirm(t.sekil+" "+t.boyut+" silinsin mi?")) return;
                           const yeni = ozelTaslar.filter((_,j)=>j!==i);
                           setOzelTaslar(yeni);
                           sv("v7ay",{kategoriler:ayarKategoriler,etiketler:ayarEtiketler,varsAltinKg:ayarVarsAltinKg,varsMc:ayarVarsMc,varsIscilik:ayarVarsIscilik,varsIscilikBirim:ayarVarsIscilikBirim,kayitliNotlar,ozelTaslar:yeni});
-                        }} style={{ marginLeft:"auto", background:"rgba(232,90,79,0.1)", border:"none", borderRadius:4, padding:"2px 7px", color:"#e85a4f", fontSize:9, cursor:"pointer" }}>×</button>
+                        }} style={{ background:"rgba(232,90,79,0.1)", border:"none", borderRadius:4, padding:"2px 7px", color:"#e85a4f", fontSize:9, cursor:"pointer" }}>×</button>
                       </div>
                     ))}
                   </div>
                 </div>
               )}
 
-              {/* Yeni özel taş ekle */}
+              {/* Yeni özel taş ekle / düzenle */}
+              {(() => {
+                const gercekSekilOnizle = ozelTasSekil==="DİĞER" ? (ozelTasOzelIsim||"").trim().toUpperCase() : ozelTasSekil;
+                const duzenlemeMi = ozelTaslar.some(t => t.sekil===gercekSekilOnizle && t.boyut===ozelTasBoyut.trim());
+                return duzenlemeMi && ozelTasBoyut.trim() ? (
+                  <div style={{ fontSize:9, color:"#5b9bd5", marginBottom:6, fontWeight:600 }}>✏️ "{gercekSekilOnizle} {ozelTasBoyut}" düzenleniyor — değiştirip "Güncelle"ye basın</div>
+                ) : null;
+              })()}
               <div style={{ display:"flex", gap:6, flexWrap:"wrap", alignItems:"flex-end" }}>
                 <div>
                   <div style={{ fontSize:8, color:"#8a7d64", marginBottom:3 }}>Şekil</div>
@@ -6285,7 +6357,7 @@ ${buildContext()}`;
                   setOzelTaslar(yeni);
                   setOzelTasBoyut(""); setOzelTasGram(""); if(ozelTasSekil==="DİĞER") setOzelTasOzelIsim("");
                   sv("v7ay",{kategoriler:ayarKategoriler,etiketler:ayarEtiketler,varsAltinKg:ayarVarsAltinKg,varsMc:ayarVarsMc,varsIscilik:ayarVarsIscilik,varsIscilikBirim:ayarVarsIscilikBirim,kayitliNotlar,ozelTaslar:yeni});
-                }} style={{ ...BG, padding:"8px 14px", fontSize:10, alignSelf:"flex-end" }}>+ Ekle</button>
+                }} style={{ ...BG, padding:"8px 14px", fontSize:10, alignSelf:"flex-end" }}>{ozelTaslar.some(t => t.sekil===(ozelTasSekil==="DİĞER"?(ozelTasOzelIsim||"").trim().toUpperCase():ozelTasSekil) && t.boyut===ozelTasBoyut.trim()) && ozelTasBoyut.trim() ? "✏️ Güncelle" : "+ Ekle"}</button>
               </div>
 
               {ozelTasBoyut && ozelTasGram && (
