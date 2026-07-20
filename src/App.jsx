@@ -2766,7 +2766,12 @@ function Atolye({ onSirketDegis }) {
     setFKategori(m.kategori||"yuzuk"); setFEtiketler(m.etiketler||[]); setEditM(m); setShowMM(true);
   };
 
-  const handleFoto = async e => { const f = e.target.files && e.target.files[0]; if (!f) return; setFFoto(await resizeImg(f)); };
+  const handleFoto = async e => {
+    const f = e.target.files && e.target.files[0];
+    e.target.value = ""; // SIFIRLA — aynı/yeni dosya tekrar seçilebilsin (yoksa onChange tetiklenmez)
+    if (!f) return;
+    setFFoto(await resizeImg(f));
+  };
   const handleKod  = v => {
     setFKod(v);
     const es = kodToKol(v);
