@@ -18,7 +18,8 @@ export async function fotoYukleStorage(dataUrl, modelId, onek = '') {
       const { error } = await supabase.storage.from(FOTO_BUCKET).upload(yol, blob, { upsert: true, contentType: blob.type })
       if (!error) {
         const { data } = supabase.storage.from(FOTO_BUCKET).getPublicUrl(yol)
-        return data.publicUrl
+        // Cache-busting: her yüklemede değişen sürüm işareti — tarayıcı eski resmi göstermesin
+        return data.publicUrl + '?v=' + Date.now()
       }
       await new Promise(r => setTimeout(r, 400 * (deneme + 1)))
     }
