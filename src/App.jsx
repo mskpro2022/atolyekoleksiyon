@@ -443,7 +443,7 @@ function buildKatalogHTML(kol, modeller, sutun, hedefAyar, kollar, gruplu) {
     + ".ft{display:flex;justify-content:space-between;align-items:center;padding:5px 3px 0;border-top:1px solid #e0e0e0;flex-shrink:0}"
     + ".ft span{font-size:7px;color:#666;font-weight:700;letter-spacing:.08em;text-transform:uppercase}"
     + ".ft small{font-size:7px;color:#ccc}"
-    + ".pb{position:fixed;bottom:16px;right:16px;background:#0a84ff;border:none;border-radius:8px;padding:10px 20px;color:#fff;font-size:13px;cursor:pointer;font-family:sans-serif}";
+    + ".pb{position:fixed;bottom:16px;right:16px;background:#1a1a1a;border:none;border-radius:8px;padding:10px 20px;color:#fff;font-size:13px;cursor:pointer;font-family:sans-serif}";
 
   const gridClass = cols === 4 ? "grid4" : "grid3";
 
@@ -526,9 +526,9 @@ function buildKatalogHTML(kol, modeller, sutun, hedefAyar, kollar, gruplu) {
     h += "<div style='font-size:10px;color:#999;letter-spacing:.15em;text-transform:uppercase;text-align:center;margin-bottom:14px;font-weight:700'>İçindekiler</div>";
     h += "<div style='display:flex;flex-direction:column;gap:8px'>";
     haritaListesi.forEach(([ad, r]) => {
-      h += "<div style='display:flex;justify-content:space-between;align-items:baseline;padding:8px 14px;background:rgba(var(--vurgu-rgb),0.04);border-left:3px solid #0a84ff;border-radius:4px'>";
+      h += "<div style='display:flex;justify-content:space-between;align-items:baseline;padding:8px 14px;background:#f7f7f7;border-left:3px solid #1a1a1a;border-radius:4px'>";
       h += "<div><span style='font-size:13px;color:#1a1a1a;font-weight:700'>" + ad + "</span> <span style='font-size:9px;color:#999'>(" + r.sayi + " model)</span></div>";
-      h += "<span style='font-size:11px;color:#0a84ff;font-weight:700'>";
+      h += "<span style='font-size:11px;color:#1a1a1a;font-weight:700'>";
       h += r.baslangic === r.bitis ? "Sayfa " + r.baslangic : "Sayfa " + r.baslangic + " – " + r.bitis;
       h += "</span></div>";
     });
@@ -1776,8 +1776,8 @@ function VitrinModu({ kod, onizleme }) {
             <div style={{ fontSize:14, color:"#a1a1a6", marginTop:6 }}>👇 Beğendiğiniz modelleri seçin, size özel katalog hazırlayalım</div>
           </div>
           <div style={{ display:"flex", gap:8 }}>
-            <button onClick={()=>vitrinPDF(3)} style={{ background:"#f5f5f7", color:"#1d1d1f", border:"none", borderRadius:980, padding:"10px 20px", fontSize:14, fontWeight:600, cursor:"pointer" }}>
-              Katalog Al
+            <button onClick={()=>{ if (seciliKlasorler.length > 0) vitrinKlasorPDF(3); else vitrinPDF(3); }} style={{ background:"#f5f5f7", color:"#1d1d1f", border:"none", borderRadius:980, padding:"10px 20px", fontSize:14, fontWeight:600, cursor:"pointer" }}>
+              Katalog Al{seciliKlasorler.length > 0 ? " ("+seciliKlasorler.length+")" : ""}
             </button>
           </div>
         </div>
@@ -1886,7 +1886,7 @@ function VitrinModu({ kod, onizleme }) {
             <div style={{ margin:"0 28px 14px", background:"rgba(var(--vurgu-rgb),0.12)", borderRadius:12, padding:"12px 18px", display:"flex", alignItems:"center", justifyContent:"space-between", gap:12, flexWrap:"wrap" }}>
               <span style={{ fontSize:14, color:"var(--vurgu)", fontWeight:600 }}>{seciliKlasorler.length} koleksiyon seçildi</span>
               <div style={{ display:"flex", gap:8 }}>
-                <button onClick={()=>vitrinKlasorPDF(3)} style={{ background:"var(--vurgu)", border:"none", borderRadius:10, padding:"9px 20px", color:"#fff", fontSize:14, fontWeight:600, cursor:"pointer" }}>Seçilenlerden Katalog Al</button>
+                <button onClick={()=>vitrinKlasorPDF(3)} style={{ background:"var(--vurgu)", border:"none", borderRadius:10, padding:"9px 20px", color:"#fff", fontSize:14, fontWeight:600, cursor:"pointer" }}>Katalog Al</button>
                 <button onClick={()=>setSeciliKlasorler([])} style={{ background:"transparent", border:"none", color:"#86868b", fontSize:13, fontWeight:500, cursor:"pointer", padding:"9px 10px" }}>Temizle</button>
               </div>
             </div>
