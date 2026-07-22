@@ -1566,6 +1566,8 @@ function VitrinModu({ kod, onizleme }) {
   const [kayitDurum, setKayitDurum] = useState(null); // null | "gonderiliyor" | "basarili" | "hata:..."
   const [oncekiZiyaret, setOncekiZiyaret] = useState(0); // toptancının önceki ziyareti (yeni model tespiti)
   const [siralama, setSiralama] = useState("kodTers"); // kodTers (varsayılan: en yüksek kod üstte) | kod | yeni | gramArtan | gramAzalan
+  const [vOnEkF, setVOnEkF] = useState(""); // vitrin kod ön eki filtresi
+  const [vGrupla, setVGrupla] = useState(true); // vitrin: kod ön ekine göre grupla (varsayılan AÇIK)
   const [vitrinMusteri, setVitrinMusteri] = useState(null); // { ad, kod, onek } — aktivite takibi için
   const VITRIN_AYARLAR = [
     { id: "10K", l: "10 Ayar" },
@@ -1680,6 +1682,7 @@ function VitrinModu({ kod, onizleme }) {
     const g = Number(ayarliGram(m)) || 0;
     if (gramFiltre.min && g < Number(gramFiltre.min)) return false;
     if (gramFiltre.max && g > Number(gramFiltre.max)) return false;
+    if (vOnEkF && kodOnEk(m.kod) !== vOnEkF) return false;
     return true;
   }).sort((a, b) => {
     // YENİ olanlar her zaman en üstte (hangi sıralama olursa olsun)
@@ -1785,6 +1788,22 @@ function VitrinModu({ kod, onizleme }) {
         })}
       </div>
 
+      {/* KOD ÖN EKİ FİLTRESİ — farklı koleksiyonlardan toplanan modeller için */}
+      {(() => {
+        const tumu = modeller.filter(m => m.ki === aktifKol?.id);
+        const onEkler = [...new Set(tumu.map(m => kodOnEk(m.kod)))].filter(e=>e && e!=="—").sort();
+        if (onEkler.length < 2) return null;
+        return (
+          <div style={{ padding:"0 28px 16px", display:"flex", gap:7, flexWrap:"wrap", alignItems:"center" }}>
+            <button onClick={()=>setVOnEkF("")} style={{ fontSize:12, color: !vOnEkF?"#0a0a0a":"#a1a1a6", padding:"5px 13px", borderRadius:980, background: !vOnEkF?"#f5f5f7":"rgba(255,255,255,0.05)", border:"none", fontWeight: !vOnEkF?500:400, cursor:"pointer" }}>Tümü</button>
+            {onEkler.map(ek => { const cnt = tumu.filter(m=>kodOnEk(m.kod)===ek).length; const on = vOnEkF===ek; return (
+              <button key={ek} onClick={()=>setVOnEkF(on?"":ek)} style={{ fontSize:12, color: on?"#0a0a0a":"#a1a1a6", padding:"5px 13px", borderRadius:980, background: on?"#f5f5f7":"rgba(255,255,255,0.05)", border:"none", fontWeight: on?500:400, cursor:"pointer" }}>{ek} · {cnt}</button>
+            ); })}
+            <button onClick={()=>setVGrupla(!vGrupla)} style={{ marginLeft:6, fontSize:12, color: vGrupla?"var(--vurgu)":"#86868b", padding:"5px 13px", borderRadius:980, background: vGrupla?"rgba(var(--vurgu-rgb),0.12)":"rgba(255,255,255,0.05)", border:"none", fontWeight:500, cursor:"pointer" }}>{vGrupla?"☑":"☐"} Grupla</button>
+          </div>
+        );
+      })()}
+
       {/* SEÇİM ÇUBUĞU — model seçilince görünür */}
       {secili.size > 0 && (
         <div style={{ margin:"0 28px 16px", background:"rgba(var(--vurgu-rgb),0.12)", borderRadius:11, padding:"11px 16px", display:"flex", alignItems:"center", justifyContent:"space-between", gap:12, flexWrap:"wrap" }}>
@@ -1797,16 +1816,18 @@ function VitrinModu({ kod, onizleme }) {
       )}
 
       {/* MODEL IZGARASI */}
-      <div style={{ padding:"0 28px 40px", display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))", gap:16 }}>
-        {koldaki.length === 0 && <div style={{ gridColumn:"1/-1", textAlign:"center", color:"#6e6e73", padding:"60px 0", fontSize:14 }}>Model bulunamadı</div>}
-        {koldaki.map(m => {
-          const sec = secili.has(m.id);
-          const g = ayarliGram(m);
-          const yeni = yeniMi(m);
-          return (
+      <div style={{ padding:"0 28px 40px" }}>
+        {koldaki.length === 0 && <div style={{ textAlign:"center", color:"#6e6e73", padding:"60px 0", fontSize:14 }}>Model bulunamadı</div>}
+        {(() => {
+          const vGridStil = { display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))", gap:16 };
+          const vKart = (m) => {
+            const sec = secili.has(m.id);
+            const g = ayarliGram(m);
+            const yeni = yeniMi(m);
+            return (
             <div key={m.id} className="vm-card">
               <div onClick={()=>{ setDetayModel(m); if(vitrinMusteri && !onizleme) vitrinAktiviteKaydet(vitrinMusteri.onek, vitrinMusteri.kod, vitrinMusteri.ad, "model", aktifKol?.ad, m.kod, m.ad); }}
-                style={{ aspectRatio:"4/3", background:"#f7f7f8", borderRadius:12, position:"relative", overflow:"hidden", outline: sec?"2px solid #0a84ff":"none", outlineOffset:2 }}>
+                style={{ aspectRatio:"4/3", background:"#f7f7f8", borderRadius:12, position:"relative", overflow:"hidden", outline: sec?"2px solid var(--vurgu)":"none", outlineOffset:2 }}>
                 {m.foto
                   ? <img className="vm-ph" src={m.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"contain", display:"block" }}/>
                   : <div style={{ width:"100%", height:"100%", display:"flex", alignItems:"center", justifyContent:"center", color:"#d2d2d7", fontSize:26 }}>◇</div>}
@@ -1819,8 +1840,28 @@ function VitrinModu({ kod, onizleme }) {
                 <span style={{ fontSize:11, color:"#6e6e73", letterSpacing:"0.02em" }}>{m.kod}</span>
               </div>
             </div>
+            );
+          };
+          if (!vGrupla) return <div style={vGridStil}>{koldaki.map(vKart)}</div>;
+          // Kod ön ekine göre grupla (grup içi sıralama koldaki'den gelen sırayı korur = yüksek kod üstte)
+          const gruplar = {};
+          koldaki.forEach(m => { const ek = kodOnEk(m.kod); (gruplar[ek] = gruplar[ek] || []).push(m); });
+          const ekSirali = Object.keys(gruplar).sort();
+          return (
+            <div>
+              {ekSirali.map(ek => (
+                <div key={ek} style={{ marginBottom:28 }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:14 }}>
+                    <span style={{ fontSize:15, fontWeight:600, color:"#f5f5f7", letterSpacing:"-0.01em" }}>{ek}</span>
+                    <span style={{ fontSize:11, color:"#6e6e73" }}>{gruplar[ek].length} model</span>
+                    <div style={{ flex:1, height:0.5, background:"rgba(255,255,255,0.1)" }}/>
+                  </div>
+                  <div style={vGridStil}>{gruplar[ek].map(vKart)}</div>
+                </div>
+              ))}
+            </div>
           );
-        })}
+        })()}
       </div>
 
       {/* KAYIT */}
