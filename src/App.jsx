@@ -1835,21 +1835,55 @@ function VitrinModu({ kod, onizleme }) {
       </div>
       </>)}
 
-      {/* KAYNAK KOLEKSİYON FİLTRESİ — farklı koleksiyonlardan toplanan modeller için */}
-      {aktifKol && (() => {
+      {/* KAYNAK KOLEKSİYON KLASÖR KARTLARI — kaynak seçilmemişken göster */}
+      {aktifKol && !vOnEkF && (() => {
         const tumu = modeller.filter(m => m.ki === aktifKol?.id);
-        const kaynaklar = [...new Set(tumu.map(m => m.kaynakAd || "Diğer"))].filter(Boolean).sort((a,b)=>a.localeCompare(b,"tr"));
-        if (kaynaklar.length < 2) return null;
+        const kaynaklar = [...new Set(tumu.map(m => m.kaynakAd || "Diğer"))].filter(Boolean);
+        if (kaynaklar.length < 2) return null; // tek kaynak varsa klasör göstermeye gerek yok, düz liste
+        // Kaynakları son eklenen modele göre sırala
+        const kaynakBilgi = kaynaklar.map(ka => {
+          const kaynakModelleri = tumu.filter(m => (m.kaynakAd || "Diğer") === ka);
+          const sonEklenen = [...kaynakModelleri].sort((a,b)=>(b.t||0)-(a.t||0));
+          const kapaklar = sonEklenen.filter(m => m.foto).slice(0, 4).map(m => m.foto);
+          const yeniSay = kaynakModelleri.filter(m => yeniMi(m)).length;
+          const sonZaman = Math.max(0, ...kaynakModelleri.map(m => m.t || 0));
+          return { ka, adet: kaynakModelleri.length, kapaklar, yeniSay, sonZaman };
+        }).sort((a, b) => b.sonZaman - a.sonZaman);
         return (
-          <div style={{ padding:"0 28px 16px", display:"flex", gap:7, flexWrap:"wrap", alignItems:"center" }}>
-            <button onClick={()=>setVOnEkF("")} style={{ fontSize:12, color: !vOnEkF?"#0a0a0a":"#a1a1a6", padding:"5px 13px", borderRadius:980, background: !vOnEkF?"#f5f5f7":"rgba(255,255,255,0.05)", border:"none", fontWeight: !vOnEkF?500:400, cursor:"pointer" }}>Tümü</button>
-            {kaynaklar.map(ka => { const cnt = tumu.filter(m=>(m.kaynakAd||"Diğer")===ka).length; const on = vOnEkF===ka; return (
-              <button key={ka} onClick={()=>setVOnEkF(on?"":ka)} style={{ fontSize:12, color: on?"#0a0a0a":"#a1a1a6", padding:"5px 13px", borderRadius:980, background: on?"#f5f5f7":"rgba(255,255,255,0.05)", border:"none", fontWeight: on?500:400, cursor:"pointer" }}>{ka} · {cnt}</button>
-            ); })}
-            <button onClick={()=>setVGrupla(!vGrupla)} style={{ marginLeft:6, fontSize:12, color: vGrupla?"var(--vurgu)":"#86868b", padding:"5px 13px", borderRadius:980, background: vGrupla?"rgba(var(--vurgu-rgb),0.12)":"rgba(255,255,255,0.05)", border:"none", fontWeight:500, cursor:"pointer" }}>{vGrupla?"☑":"☐"} Grupla</button>
+          <div style={{ padding:"6px 28px 8px", display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(230px,1fr))", gap:14 }}>
+            {kaynakBilgi.map(({ ka, adet, kapaklar, yeniSay }) => (
+              <div key={ka} onClick={()=>setVOnEkF(ka)} className="vm-card"
+                style={{ borderRadius:14, overflow:"hidden", background:"rgba(255,255,255,0.04)", cursor:"pointer", position:"relative", border: yeniSay>0 ? "1.5px solid rgba(var(--vurgu-rgb),0.4)" : "1.5px solid transparent" }}>
+                {yeniSay > 0 && (
+                  <div style={{ position:"absolute", top:10, right:10, zIndex:3, background:"var(--vurgu)", color:"#fff", fontSize:11, fontWeight:700, padding:"4px 11px", borderRadius:980, boxShadow:"0 2px 8px rgba(0,0,0,0.3)" }}>{yeniSay} yeni</div>
+                )}
+                <div style={{ aspectRatio:"4/3", background:"#f7f7f8", display:"grid", gridTemplateColumns:"1fr 1fr", gridTemplateRows:"1fr 1fr", gap:1 }}>
+                  {kapaklar.length > 0 ? [0,1,2,3].map(i => (
+                    <div key={i} style={{ overflow:"hidden", background:"#f0f0f0" }}>
+                      {kapaklar[i] ? <img src={kapaklar[i]} alt="" style={{ width:"100%", height:"100%", objectFit:"cover", display:"block" }}/> : <div style={{ width:"100%", height:"100%", background:"#eee" }}/>}
+                    </div>
+                  )) : <div style={{ gridColumn:"1/-1", gridRow:"1/-1", display:"flex", alignItems:"center", justifyContent:"center", color:"#d2d2d7", fontSize:32 }}>◇</div>}
+                </div>
+                <div style={{ padding:"12px 14px" }}>
+                  <div style={{ fontSize:15, fontWeight:500, color:"#f5f5f7", letterSpacing:"-0.01em" }}>{ka}</div>
+                  <div style={{ fontSize:11, color:"#86868b", marginTop:3 }}>{adet} model</div>
+                </div>
+              </div>
+            ))}
           </div>
         );
       })()}
+
+      {/* KAYNAK KLASÖRÜ İÇİ — geri butonu */}
+      {aktifKol && vOnEkF && (
+        <div style={{ padding:"6px 28px 12px", display:"flex", alignItems:"center", gap:12 }}>
+          <button onClick={()=>setVOnEkF("")} style={{ background:"rgba(255,255,255,0.08)", border:"none", borderRadius:"50%", width:34, height:34, color:"#f5f5f7", fontSize:16, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}>‹</button>
+          <div>
+            <div style={{ fontSize:17, fontWeight:600, color:"#f5f5f7" }}>{vOnEkF}</div>
+            <div style={{ fontSize:11, color:"#86868b" }}>{koldaki.length} model</div>
+          </div>
+        </div>
+      )}
 
       {/* SEÇİM ÇUBUĞU — model seçilince görünür */}
       {aktifKol && secili.size > 0 && (
@@ -1862,8 +1896,13 @@ function VitrinModu({ kod, onizleme }) {
         </div>
       )}
 
-      {/* MODEL IZGARASI — sadece koleksiyon seçiliyken */}
-      {aktifKol && (
+      {/* MODEL IZGARASI — koleksiyon seçili + (tek kaynak VEYA bir kaynağa girilmiş) */}
+      {aktifKol && (() => {
+        const tumu = modeller.filter(m => m.ki === aktifKol?.id);
+        const kaynakSayisi = new Set(tumu.map(m => m.kaynakAd || "Diğer")).size;
+        // Birden çok kaynak var ve hiçbiri seçilmemişse → klasör kartları görünüyor, grid gizle
+        if (kaynakSayisi >= 2 && !vOnEkF) return null;
+        return (
       <div style={{ padding:"0 28px 40px" }}>
         {koldaki.length === 0 && <div style={{ textAlign:"center", color:"#6e6e73", padding:"60px 0", fontSize:14 }}>Model bulunamadı</div>}
         {(() => {
@@ -1890,28 +1929,12 @@ function VitrinModu({ kod, onizleme }) {
             </div>
             );
           };
-          if (!vGrupla) return <div style={vGridStil}>{koldaki.map(vKart)}</div>;
-          // Geldiği orijinal koleksiyona göre grupla (kaynakAd), grup içi sıra korunur (yüksek kod üstte)
-          const gruplar = {};
-          koldaki.forEach(m => { const ad = m.kaynakAd || "Diğer"; (gruplar[ad] = gruplar[ad] || []).push(m); });
-          const adSirali = Object.keys(gruplar).sort((a,b)=>a.localeCompare(b,"tr"));
-          return (
-            <div>
-              {adSirali.map(ad => (
-                <div key={ad} style={{ marginBottom:28 }}>
-                  <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:14 }}>
-                    <span style={{ fontSize:15, fontWeight:600, color:"#f5f5f7", letterSpacing:"-0.01em" }}>{ad}</span>
-                    <span style={{ fontSize:11, color:"#6e6e73" }}>{gruplar[ad].length} model</span>
-                    <div style={{ flex:1, height:0.5, background:"rgba(255,255,255,0.1)" }}/>
-                  </div>
-                  <div style={vGridStil}>{gruplar[ad].map(vKart)}</div>
-                </div>
-              ))}
-            </div>
-          );
+          // Kaynak klasörüne girildiğinde DÜZ liste (gruplama yok)
+          return <div style={vGridStil}>{koldaki.map(vKart)}</div>;
         })()}
       </div>
-      )}
+        );
+      })()}
 
       {/* KAYIT */}
       <div style={{ padding:"0 28px 50px" }}>
