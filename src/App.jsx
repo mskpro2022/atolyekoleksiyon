@@ -412,7 +412,7 @@ function buildKatalogHTML(kol, modeller, sutun, hedefAyar, kollar) {
     + "body{font-family:Arial,Helvetica,sans-serif;background:#f3f3f3;color:#1a1a1a}"
     + "@media print{.np{display:none!important}@page{size:A4 portrait;margin:6mm}}"
     + ".cv{height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;page-break-after:always;background:#f3f3f3}"
-    + ".cv .ln{width:44px;height:1px;background:#0a84ff;margin:14px 0}"
+    + ".cv .ln{width:44px;height:1px;background:#1a1a1a;margin:14px 0}"
     + ".cv h1{font-size:28px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;text-align:center}"
     + ".cv p{font-size:11px;color:#aaa;letter-spacing:.1em;text-transform:uppercase}"
     + ".pg{padding:7px 16px 5px;page-break-after:always;height:99vh;display:flex;flex-direction:column;background:#f3f3f3}"
@@ -428,13 +428,13 @@ function buildKatalogHTML(kol, modeller, sutun, hedefAyar, kollar) {
     + ".ph .ni{position:absolute;top:0;left:0;width:100%;height:100%;background:#f3f3f3;display:flex;align-items:center;justify-content:center;color:#ddd;font-size:20px}"
     + ".cd-bileklik .ph img{object-fit:cover;transform:none;top:0;left:0}"
     + ".cd-kolye-3 .ph img,.cd-kolye-4 .ph img{width:105%;height:105%;object-fit:contain}"
-    + ".inf{padding:6px 9px 7px 10px;flex-shrink:0;background:#fff;border-top:1px solid #f0f0f0;border-left:3px solid #0a84ff}"
+    + ".inf{padding:6px 9px 7px 10px;flex-shrink:0;background:#fff;border-top:1px solid #f0f0f0;border-left:3px solid #1a1a1a}"
     + ".r1{display:flex;justify-content:space-between;align-items:baseline}"
-    + ".kod{font-size:13px;color:#0a84ff;font-weight:700;letter-spacing:.04em}"
+    + ".kod{font-size:13px;color:#1a1a1a;font-weight:700;letter-spacing:.04em}"
     + ".gram{font-size:10px;font-weight:700;color:#333}"
     + ".ac{font-size:8px;color:#aaa;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}"
     + ".ft{display:flex;justify-content:space-between;align-items:center;padding:5px 3px 0;border-top:1px solid #e0e0e0;flex-shrink:0}"
-    + ".ft span{font-size:7px;color:#0a84ff;font-weight:700;letter-spacing:.08em;text-transform:uppercase}"
+    + ".ft span{font-size:7px;color:#666;font-weight:700;letter-spacing:.08em;text-transform:uppercase}"
     + ".ft small{font-size:7px;color:#ccc}"
     + ".pb{position:fixed;bottom:16px;right:16px;background:#0a84ff;border:none;border-radius:8px;padding:10px 20px;color:#fff;font-size:13px;cursor:pointer;font-family:sans-serif}";
 
@@ -504,7 +504,7 @@ function buildKatalogHTML(kol, modeller, sutun, hedefAyar, kollar) {
 
   // KAPAK SAYFASI
   h += "<div class='cv'><div class='ln'></div><h1>" + kol.ad + "</h1>";
-  if (hedefAyar) h += "<p style='margin-top:6px;font-size:14px;color:#0a84ff;letter-spacing:.08em'>" + hedefAyar + "</p>";
+  if (hedefAyar) h += "<p style='margin-top:6px;font-size:14px;color:#333;letter-spacing:.08em'>" + hedefAyar + "</p>";
   if (kol.ac) h += "<p style='margin-top:8px'>" + kol.ac + "</p>";
   h += "<div class='ln'></div>";
 
@@ -928,7 +928,7 @@ function buildSatisRaporuHTML(modeller, siparisler) {
   sirali.forEach(([id,d]) => {
     h += "<tr>";
     h += "<td>" + (d.foto ? "<img src='"+d.foto+"' style='width:36px;height:36px;object-fit:cover;border-radius:5px'/>" : "<div style='width:36px;height:36px;background:#f0f0f0;border-radius:5px'></div>") + "</td>";
-    h += "<td style='color:#0a84ff;font-weight:800'>" + (d.kod||"—") + "</td>";
+    h += "<td style='color:#1a1a1a;font-weight:800'>" + (d.kod||"—") + "</td>";
     h += "<td><div style='font-weight:700'>" + d.ad + "</div><div class='bar'><div style='width:"+Math.round(d.adet/maxAdet*100)+"%'></div></div></td>";
     h += "<td class='r' style='font-weight:800;font-size:13px'>" + d.adet + "</td>";
     h += "<td class='r'>" + fN(d.gram,1) + " gr</td>";
@@ -1030,9 +1030,9 @@ function buildSipListeRaporuHTML(siparisler, altinKgUSD, mc) {
     + "tr.tot td{background:#faf5e8;font-weight:800;border-top:2px solid #0a84ff}"
     + "tr.kayip-row{background:#fff8f5}"
     + ".mly{font-size:10px;font-weight:800}"
-    + ".sec{font-size:10px;font-weight:800;color:#0a84ff;text-transform:uppercase;letter-spacing:.06em;margin:14px 0 8px;padding-bottom:4px;border-bottom:1.5px solid #e8d5a0}"
+    + ".sec{font-size:10px;font-weight:800;color:#1a1a1a;text-transform:uppercase;letter-spacing:.06em;margin:14px 0 8px;padding-bottom:4px;border-bottom:1.5px solid #ccc}"
     + ".kayip-model{display:flex;align-items:flex-start;gap:10px;padding:7px 0;border-bottom:1px solid #f5f0e8}"
-    + ".km-kod{font-size:11px;font-weight:800;color:#0a84ff;width:90px;flex-shrink:0}"
+    + ".km-kod{font-size:11px;font-weight:800;color:#1a1a1a;width:90px;flex-shrink:0}"
     + ".km-ad{font-size:10px;color:#555;flex:1}"
     + ".km-badges{display:flex;gap:5px;flex-wrap:wrap}"
     + ".badge{display:inline-flex;align-items:center;gap:3px;border-radius:5px;padding:2px 8px;font-size:9px;font-weight:700}"
@@ -1184,7 +1184,7 @@ function buildMusteriDetayHTML(musAd, musKod, siparisler) {
     + ".wrap{background:#fff;border-radius:10px;padding:16px 20px;width:100%;max-width:720px}"
     + ".hdr{border-bottom:2px solid #0a84ff;padding-bottom:10px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:flex-start}"
     + ".hdr h1{font-size:20px;font-weight:800;color:#1a1a1a;margin-bottom:2px}"
-    + ".hdr .kod{font-size:11px;color:#0a84ff;font-weight:700}"
+    + ".hdr .kod{font-size:11px;color:#1a1a1a;font-weight:700}"
     + ".sum{display:flex;gap:10px;margin-bottom:16px}"
     + ".sbox{background:#faf5e8;border:1px solid #e8d5a0;border-radius:8px;padding:8px 14px;flex:1;text-align:center}"
     + ".sbox .lb{font-size:8px;color:#999;text-transform:uppercase;margin-bottom:2px}"
@@ -1229,7 +1229,7 @@ function buildMusteriDetayHTML(musAd, musKod, siparisler) {
       const hurda = kDurum==="hurda";
       h += "<tr style='" + (hurda?"background:#fff5f5;":"") + "'>";
       h += "<td>" + (k.foto?"<img src='"+k.foto+"' style='width:30px;height:30px;object-fit:cover;border-radius:4px'/>":"<div style='width:30px;height:30px;background:#f0f0f0;border-radius:4px'></div>") + "</td>";
-      h += "<td style='color:#0a84ff;font-weight:700'>" + (k.kod||"—") + "</td>";
+      h += "<td style='color:#1a1a1a;font-weight:700'>" + (k.kod||"—") + "</td>";
       h += "<td style='font-weight:600'>" + (k.ad||"") + "</td>";
       h += "<td style='color:"+renkRenk+";font-weight:700'>" + (k.renk||"Sari") + "</td>";
       const hurdaNeden = hurda ? ((s.kalemHurdaNeden||{})[k.id]||"") : "";
