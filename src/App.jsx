@@ -1637,12 +1637,18 @@ function VitrinModu({ kod, onizleme }) {
       const guvenliModeller = (m || [])
         .filter(mod => aktifKolIdler.has(mod.ki))
         .filter(mod => !(Array.isArray(mod.gizliMus) && mod.gizliMus.includes(musteriKod))) // bu müşteriye gizli mi?
-        .map(mod => ({
-          id: mod.id, ki: mod.ki, foto: mod.foto || "",
-          kod: mod.kod || "", ad: mod.ad || "",
-          gram: mod.gram || "", refAyar: mod.refAyar || "14K", kategori: mod.kategori || "",
-          tasGram: mod.tasGram || 0, t: mod.t || 0,
-        }));
+        .map(mod => {
+          const kaynakId = mod.kaynakKi || mod.ki;
+          const kaynakKolObj = (k || []).find(kk => kk.id === kaynakId);
+          return {
+            id: mod.id, ki: mod.ki, kaynakKi: kaynakId,
+            kaynakAd: kaynakKolObj ? kaynakKolObj.ad : "Diğer",
+            foto: mod.foto || "",
+            kod: mod.kod || "", ad: mod.ad || "",
+            gram: mod.gram || "", refAyar: mod.refAyar || "14K", kategori: mod.kategori || "",
+            tasGram: mod.tasGram || 0, t: mod.t || 0,
+          };
+        });
       setKollar(aktifKollar);
       setModeller(guvenliModeller);
       setAktifOnek(onek);
@@ -1682,7 +1688,7 @@ function VitrinModu({ kod, onizleme }) {
     const g = Number(ayarliGram(m)) || 0;
     if (gramFiltre.min && g < Number(gramFiltre.min)) return false;
     if (gramFiltre.max && g > Number(gramFiltre.max)) return false;
-    if (vOnEkF && kodOnEk(m.kod) !== vOnEkF) return false;
+    if (vOnEkF && (m.kaynakAd || "Diğer") !== vOnEkF) return false;
     return true;
   }).sort((a, b) => {
     // YENİ olanlar her zaman en üstte (hangi sıralama olursa olsun)
@@ -1723,21 +1729,48 @@ function VitrinModu({ kod, onizleme }) {
       )}
 
       {/* KOLEKSİYON SEÇİM EKRANI — henüz koleksiyon seçilmemişken kartlar */}
-      {!aktifKol && (
+      {!aktifKol && (() => {
+        // Her koleksiyon için yeni model sayısı + toplam
+        const kolBilgi = kollar.map(k => {
+          const kolModelleri = modeller.filter(m => m.ki === k.id);
+          const yeniSay = kolModelleri.filter(m => yeniMi(m)).length;
+          return { k, kolModelleri, yeniSay };
+        });
+        // Yeni modelli koleksiyonlar öne (yeni sayısı çok olan en başta)
+        const sirali = [...kolBilgi].sort((a, b) => b.yeniSay - a.yeniSay);
+        const toplamYeni = kolBilgi.reduce((s, x) => s + x.yeniSay, 0);
+        return (
         <div style={{ padding:"26px 28px 50px" }}>
           <div style={{ marginBottom:22 }}>
             <div style={{ fontSize:25, fontWeight:500, color:"#f5f5f7", letterSpacing:"-0.03em" }}>{vitrinAd}</div>
             <div style={{ fontSize:12, color:"#86868b", marginTop:4 }}>{kollar.length} koleksiyon · {modeller.length} model</div>
           </div>
+
+          {/* YENİ MODEL ÖZETİ — son ziyaretten beri eklenenler */}
+          {toplamYeni > 0 && (
+            <div style={{ marginBottom:20, background:"rgba(var(--vurgu-rgb),0.1)", border:"1px solid rgba(var(--vurgu-rgb),0.25)", borderRadius:12, padding:"14px 18px", display:"flex", alignItems:"center", gap:12 }}>
+              <div style={{ width:38, height:38, borderRadius:"50%", background:"var(--vurgu)", color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontSize:16, fontWeight:700, flexShrink:0 }}>✨</div>
+              <div>
+                <div style={{ fontSize:15, fontWeight:600, color:"var(--vurgu)" }}>Son ziyaretinizden beri {toplamYeni} yeni model eklendi</div>
+                <div style={{ fontSize:12, color:"#86868b", marginTop:2 }}>Yeni modelli koleksiyonlar aşağıda önce gösteriliyor.</div>
+              </div>
+            </div>
+          )}
+
           {kollar.length === 0 && <div style={{ textAlign:"center", color:"#6e6e73", padding:"60px 0", fontSize:14 }}>Henüz koleksiyon yok</div>}
           <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(240px,1fr))", gap:14 }}>
-            {kollar.map(k => {
-              const kolModelleri = modeller.filter(m => m.ki === k.id);
+            {sirali.map(({ k, kolModelleri, yeniSay }) => {
               const kapaklar = kolModelleri.filter(m => m.foto).slice(0, 4).map(m => m.foto);
               const onEk = kolModelleri.length > 0 ? kodOnEk(kolModelleri[0].kod) : "";
               return (
                 <div key={k.id} onClick={()=>{ setAktifKol(k); setArama(""); setVOnEkF(""); if(vitrinMusteri && !onizleme) vitrinAktiviteKaydet(vitrinMusteri.onek, vitrinMusteri.kod, vitrinMusteri.ad, "koleksiyon", k.ad, null, null); }}
-                  className="vm-card" style={{ borderRadius:14, overflow:"hidden", background:"rgba(255,255,255,0.04)", cursor:"pointer" }}>
+                  className="vm-card" style={{ borderRadius:14, overflow:"hidden", background:"rgba(255,255,255,0.04)", cursor:"pointer", position:"relative", border: yeniSay>0 ? "1.5px solid rgba(var(--vurgu-rgb),0.4)" : "1.5px solid transparent" }}>
+                  {/* YENİ ROZETİ */}
+                  {yeniSay > 0 && (
+                    <div style={{ position:"absolute", top:10, right:10, zIndex:3, background:"var(--vurgu)", color:"#fff", fontSize:11, fontWeight:700, padding:"4px 11px", borderRadius:980, boxShadow:"0 2px 8px rgba(0,0,0,0.3)" }}>
+                      {yeniSay} yeni
+                    </div>
+                  )}
                   <div style={{ aspectRatio:"4/3", background:"#f7f7f8", display:"grid", gridTemplateColumns:"1fr 1fr", gridTemplateRows:"1fr 1fr", gap:1 }}>
                     {kapaklar.length > 0 ? (
                       [0,1,2,3].map(i => (
@@ -1758,7 +1791,8 @@ function VitrinModu({ kod, onizleme }) {
             })}
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {/* BAŞLIK — sadece koleksiyon seçiliyken */}
       {aktifKol && (<>
@@ -1844,16 +1878,16 @@ function VitrinModu({ kod, onizleme }) {
       </div>
       </>)}
 
-      {/* KOD ÖN EKİ FİLTRESİ — farklı koleksiyonlardan toplanan modeller için */}
-      {(() => {
+      {/* KAYNAK KOLEKSİYON FİLTRESİ — farklı koleksiyonlardan toplanan modeller için */}
+      {aktifKol && (() => {
         const tumu = modeller.filter(m => m.ki === aktifKol?.id);
-        const onEkler = [...new Set(tumu.map(m => kodOnEk(m.kod)))].filter(e=>e && e!=="—").sort();
-        if (onEkler.length < 2) return null;
+        const kaynaklar = [...new Set(tumu.map(m => m.kaynakAd || "Diğer"))].filter(Boolean).sort((a,b)=>a.localeCompare(b,"tr"));
+        if (kaynaklar.length < 2) return null;
         return (
           <div style={{ padding:"0 28px 16px", display:"flex", gap:7, flexWrap:"wrap", alignItems:"center" }}>
             <button onClick={()=>setVOnEkF("")} style={{ fontSize:12, color: !vOnEkF?"#0a0a0a":"#a1a1a6", padding:"5px 13px", borderRadius:980, background: !vOnEkF?"#f5f5f7":"rgba(255,255,255,0.05)", border:"none", fontWeight: !vOnEkF?500:400, cursor:"pointer" }}>Tümü</button>
-            {onEkler.map(ek => { const cnt = tumu.filter(m=>kodOnEk(m.kod)===ek).length; const on = vOnEkF===ek; return (
-              <button key={ek} onClick={()=>setVOnEkF(on?"":ek)} style={{ fontSize:12, color: on?"#0a0a0a":"#a1a1a6", padding:"5px 13px", borderRadius:980, background: on?"#f5f5f7":"rgba(255,255,255,0.05)", border:"none", fontWeight: on?500:400, cursor:"pointer" }}>{ek} · {cnt}</button>
+            {kaynaklar.map(ka => { const cnt = tumu.filter(m=>(m.kaynakAd||"Diğer")===ka).length; const on = vOnEkF===ka; return (
+              <button key={ka} onClick={()=>setVOnEkF(on?"":ka)} style={{ fontSize:12, color: on?"#0a0a0a":"#a1a1a6", padding:"5px 13px", borderRadius:980, background: on?"#f5f5f7":"rgba(255,255,255,0.05)", border:"none", fontWeight: on?500:400, cursor:"pointer" }}>{ka} · {cnt}</button>
             ); })}
             <button onClick={()=>setVGrupla(!vGrupla)} style={{ marginLeft:6, fontSize:12, color: vGrupla?"var(--vurgu)":"#86868b", padding:"5px 13px", borderRadius:980, background: vGrupla?"rgba(var(--vurgu-rgb),0.12)":"rgba(255,255,255,0.05)", border:"none", fontWeight:500, cursor:"pointer" }}>{vGrupla?"☑":"☐"} Grupla</button>
           </div>
@@ -1900,20 +1934,20 @@ function VitrinModu({ kod, onizleme }) {
             );
           };
           if (!vGrupla) return <div style={vGridStil}>{koldaki.map(vKart)}</div>;
-          // Kod ön ekine göre grupla (grup içi sıralama koldaki'den gelen sırayı korur = yüksek kod üstte)
+          // Geldiği orijinal koleksiyona göre grupla (kaynakAd), grup içi sıra korunur (yüksek kod üstte)
           const gruplar = {};
-          koldaki.forEach(m => { const ek = kodOnEk(m.kod); (gruplar[ek] = gruplar[ek] || []).push(m); });
-          const ekSirali = Object.keys(gruplar).sort();
+          koldaki.forEach(m => { const ad = m.kaynakAd || "Diğer"; (gruplar[ad] = gruplar[ad] || []).push(m); });
+          const adSirali = Object.keys(gruplar).sort((a,b)=>a.localeCompare(b,"tr"));
           return (
             <div>
-              {ekSirali.map(ek => (
-                <div key={ek} style={{ marginBottom:28 }}>
+              {adSirali.map(ad => (
+                <div key={ad} style={{ marginBottom:28 }}>
                   <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:14 }}>
-                    <span style={{ fontSize:15, fontWeight:600, color:"#f5f5f7", letterSpacing:"-0.01em" }}>{ek}</span>
-                    <span style={{ fontSize:11, color:"#6e6e73" }}>{gruplar[ek].length} model</span>
+                    <span style={{ fontSize:15, fontWeight:600, color:"#f5f5f7", letterSpacing:"-0.01em" }}>{ad}</span>
+                    <span style={{ fontSize:11, color:"#6e6e73" }}>{gruplar[ad].length} model</span>
                     <div style={{ flex:1, height:0.5, background:"rgba(255,255,255,0.1)" }}/>
                   </div>
-                  <div style={vGridStil}>{gruplar[ek].map(vKart)}</div>
+                  <div style={vGridStil}>{gruplar[ad].map(vKart)}</div>
                 </div>
               ))}
             </div>
