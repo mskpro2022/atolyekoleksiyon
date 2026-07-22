@@ -388,6 +388,13 @@ function downloadPDF(html, filename) {
 }
 
 // Sıralama: SADECE koddaki rakam (sayısal)
+// Kodun harf ön ekini çıkarır ("ALT185" → "ALT", "01GS21" → "GS", "KDN003" → "KDN")
+function kodOnEk(kod) {
+  if (!kod) return "—";
+  const m = String(kod).match(/([A-Za-zÇĞİÖŞÜçğışöşü]+)/);
+  return m ? m[1].toUpperCase() : "—";
+}
+
 function dogalSirala(a, b) {
   const ka = a.kod || "", kb = b.kod || "";
   // Karmaşık kodları doğru sırala: prefix + ana sayı + suffix
@@ -2031,6 +2038,8 @@ function Atolye({ onSirketDegis }) {
   const [sirala,    setSirala]    = useState("varsayilan");
   const [etiketF,    setEtiketF]    = useState("");
   const [kategoriF,  setKategoriF]  = useState("");
+  const [onEkF,      setOnEkF]      = useState(""); // kod ön eki filtresi (ALT, KDN, FER...)
+  const [grupla,     setGrupla]     = useState(false); // kod ön ekine göre grupla
   const [arama,     setArama]     = useState("");
 
   const [showKM,  setShowKM]  = useState(false);
@@ -2832,6 +2841,7 @@ function Atolye({ onSirketDegis }) {
     if (filtre !== "all") r = r.filter(m => (m.durum||"baslanmadi") === filtre);
     if (etiketF) r = r.filter(m => (m.etiketler||[]).includes(etiketF));
     if (kategoriF) r = r.filter(m => (m.kategori||"") === kategoriF);
+    if (onEkF) r = r.filter(m => kodOnEk(m.kod) === onEkF);
     if (arama.trim()) { const q = arama.toLowerCase(); r = r.filter(m => (m.ad||"").toLowerCase().includes(q) || (m.kod||"").toLowerCase().includes(q) || (m.etiketler||[]).some(e => e.includes(q))); }
     const kodSirala = (a,b) => {
       const ka=a.kod||"", kb=b.kod||"";
@@ -2859,7 +2869,7 @@ function Atolye({ onSirketDegis }) {
     else if (sirala==="cok_satilan") r=[...r].sort((a,b)=>(b.satisSayisi||0)-(a.satisSayisi||0));
     else r=[...r].sort((a,b)=>kodSirala(b,a)); // VARSAYILAN: en yüksek kod üstte (ALT185 > ALT184 > ALT183)
     return r;
-  }, [aktMod, filtre, etiketF, kategoriF, arama, sirala, altinKgUSD, madenCarpan]);
+  }, [aktMod, filtre, etiketF, kategoriF, onEkF, arama, sirala, altinKgUSD, madenCarpan]);
 
   const togKonf     = m => setKonfList(p => p.find(x => x.id === m.id) ? p.filter(x => x.id !== m.id) : [...p, m]);
   const konfAyarSec  = (id, ayar) => setKonfAyarlar(p => ({ ...p, [id]: ayar }));
@@ -3449,6 +3459,22 @@ function Atolye({ onSirketDegis }) {
               ); })}
             </div>
 
+            {/* Kod ön eki filtresi + gruplama (farklı koleksiyonlardan toplanan modeller için) */}
+            {(() => {
+              const onEkler = [...new Set(aktMod.map(m => kodOnEk(m.kod)))].filter(e=>e && e!=="—").sort();
+              if (onEkler.length < 2) return null; // tek ön ek varsa göstermeye gerek yok
+              return (
+                <div style={{ display:"flex", gap:3, marginBottom:6, overflowX:"auto", paddingBottom:2, alignItems:"center", flexWrap:"wrap" }}>
+                  <span style={{ fontSize:7, color:T.dim, fontWeight:700, whiteSpace:"nowrap", marginRight:2 }}>KOD:</span>
+                  <button onClick={()=>setOnEkF("")} style={{ background:!onEkF?T.btnBg:T.card, border:"1px solid", borderColor:!onEkF?T.btnBorder:T.border, borderRadius:5, padding:"3px 7px", color:!onEkF?T.gold:T.dim, fontSize:8, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap" }}>Tumu</button>
+                  {onEkler.map(ek => { const cnt = aktMod.filter(m => kodOnEk(m.kod)===ek).length; return (
+                    <button key={ek} onClick={()=>setOnEkF(onEkF===ek?"":ek)} style={{ background:onEkF===ek?T.btnBg:T.card, border:"1px solid", borderColor:onEkF===ek?T.btnBorder:T.border, borderRadius:5, padding:"3px 7px", color:onEkF===ek?T.gold:T.dim, fontSize:8, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap" }}>{ek} ({cnt})</button>
+                  ); })}
+                  <button onClick={()=>setGrupla(!grupla)} title="Kod ön ekine göre grupla" style={{ marginLeft:6, background:grupla?T.btnBg:T.card, border:"1px solid", borderColor:grupla?T.btnBorder:T.border, borderRadius:5, padding:"3px 9px", color:grupla?T.gold:T.dim, fontSize:8, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap" }}>{grupla?"☑":"☐"} Grupla</button>
+                </div>
+              );
+            })()}
+
             {/* Sıralama */}
             <span style={{ fontSize:7, color:T.dim, fontWeight:700, whiteSpace:"nowrap", marginRight:2 }}>SIRALA:</span>
               {[
@@ -3503,8 +3529,8 @@ function Atolye({ onSirketDegis }) {
               </div>
             )}
             {gorunen.length===0 && <p style={{ color:"#665d4a", textAlign:"center", padding:"30px", fontSize:12 }}>Model bulunamadi</p>}
-            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))", gap:9 }}>
-              {gorunen.map((m,i) => {
+            {(() => {
+              const renderKart = (m,i) => {
                 const ik  = konfList.find(x=>x.id===m.id);
                 const dur = DURUMLAR.find(d=>d.id===m.durum)||DURUMLAR[0];
                 const h   = altinKgUSD>0 ? hesapla(m, m.refAyar, altinKgUSD, madenCarpan) : null;
@@ -3563,8 +3589,29 @@ function Atolye({ onSirketDegis }) {
                     </div>
                   </div>
                 );
-              })}
-            </div>
+              };
+              const gridStil = { display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))", gap:9 };
+              if (!grupla) {
+                return <div style={gridStil}>{gorunen.map((m,i)=>renderKart(m,i))}</div>;
+              }
+              const gruplar = {};
+              gorunen.forEach(m => { const ek = kodOnEk(m.kod); (gruplar[ek] = gruplar[ek] || []).push(m); });
+              const ekSirali = Object.keys(gruplar).sort();
+              return (
+                <div>
+                  {ekSirali.map(ek => (
+                    <div key={ek} style={{ marginBottom:18 }}>
+                      <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:8 }}>
+                        <span style={{ fontSize:12, fontWeight:800, color:T.gold, letterSpacing:"0.05em" }}>{ek}</span>
+                        <span style={{ fontSize:9, color:T.dim }}>{gruplar[ek].length} model</span>
+                        <div style={{ flex:1, height:1, background:T.border }}/>
+                      </div>
+                      <div style={gridStil}>{gruplar[ek].map((m,i)=>renderKart(m,i))}</div>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
 
             {/* ALTTA + MODEL + EKSİK KOD TESPİTİ */}
             <div style={{ marginTop:16, display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:12, flexWrap:"wrap" }}>
