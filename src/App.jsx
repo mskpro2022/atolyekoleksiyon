@@ -1646,7 +1646,7 @@ function VitrinModu({ kod, onizleme }) {
       setKollar(aktifKollar);
       setModeller(guvenliModeller);
       setAktifOnek(onek);
-      if (aktifKollar.length > 0) setAktifKol(aktifKollar[0]);
+      // aktifKol otomatik seçilmiyor — önce koleksiyon KART seçim ekranı gösterilir
       setDurum("hazir");
     } catch (e) {
       console.error("Vitrin yükleme hatası:", e);
@@ -1722,7 +1722,73 @@ function VitrinModu({ kod, onizleme }) {
         </div>
       )}
 
-      {/* BAŞLIK */}
+      {/* KOLEKSİYON SEÇİM EKRANI — henüz koleksiyon seçilmemişken kartlar */}
+      {!aktifKol && (
+        <div style={{ padding:"26px 28px 50px" }}>
+          <div style={{ marginBottom:22 }}>
+            <div style={{ fontSize:25, fontWeight:500, color:"#f5f5f7", letterSpacing:"-0.03em" }}>{vitrinAd}</div>
+            <div style={{ fontSize:12, color:"#86868b", marginTop:4 }}>{kollar.length} koleksiyon · {modeller.length} model</div>
+          </div>
+          {kollar.length === 0 && <div style={{ textAlign:"center", color:"#6e6e73", padding:"60px 0", fontSize:14 }}>Henüz koleksiyon yok</div>}
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(240px,1fr))", gap:14 }}>
+            {kollar.map(k => {
+              const kolModelleri = modeller.filter(m => m.ki === k.id);
+              const kapaklar = kolModelleri.filter(m => m.foto).slice(0, 4).map(m => m.foto);
+              const onEk = kolModelleri.length > 0 ? kodOnEk(kolModelleri[0].kod) : "";
+              return (
+                <div key={k.id} onClick={()=>{ setAktifKol(k); setArama(""); setVOnEkF(""); if(vitrinMusteri && !onizleme) vitrinAktiviteKaydet(vitrinMusteri.onek, vitrinMusteri.kod, vitrinMusteri.ad, "koleksiyon", k.ad, null, null); }}
+                  className="vm-card" style={{ borderRadius:14, overflow:"hidden", background:"rgba(255,255,255,0.04)", cursor:"pointer" }}>
+                  <div style={{ aspectRatio:"4/3", background:"#f7f7f8", display:"grid", gridTemplateColumns:"1fr 1fr", gridTemplateRows:"1fr 1fr", gap:1 }}>
+                    {kapaklar.length > 0 ? (
+                      [0,1,2,3].map(i => (
+                        <div key={i} style={{ overflow:"hidden", background:"#f0f0f0" }}>
+                          {kapaklar[i] ? <img src={kapaklar[i]} alt="" style={{ width:"100%", height:"100%", objectFit:"cover", display:"block" }}/> : <div style={{ width:"100%", height:"100%", background:"#eee" }}/>}
+                        </div>
+                      ))
+                    ) : (
+                      <div style={{ gridColumn:"1/-1", gridRow:"1/-1", display:"flex", alignItems:"center", justifyContent:"center", color:"#d2d2d7", fontSize:32 }}>◇</div>
+                    )}
+                  </div>
+                  <div style={{ padding:"12px 14px" }}>
+                    <div style={{ fontSize:15, fontWeight:500, color:"#f5f5f7", letterSpacing:"-0.01em" }}>{k.ad}</div>
+                    <div style={{ fontSize:11, color:"#86868b", marginTop:3 }}>{kolModelleri.length} model{onEk ? " · " + onEk : ""}</div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* BAŞLIK — sadece koleksiyon seçiliyken */}
+      {aktifKol && (<>
+      <div style={{ padding:"26px 28px 20px", display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:14 }}>
+        <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+          <button onClick={()=>{ setAktifKol(null); setVOnEkF(""); setArama(""); }} style={{ background:"rgba(255,255,255,0.08)", border:"none", borderRadius:"50%", width:34, height:34, color:"#f5f5f7", fontSize:16, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}>‹</button>
+          <div>
+            <div style={{ fontSize:22, fontWeight:500, color:"#f5f5f7", letterSpacing:"-0.02em" }}>{aktifKol.ad}</div>
+            <div style={{ display:"flex", gap:9, marginTop:3, alignItems:"center" }}>
+              <span style={{ fontSize:12, color:"#86868b" }}>{koldaki.length} model</span>
+              {yeniSayisi > 0 && <>
+                <span style={{ width:3, height:3, borderRadius:"50%", background:"#48484a" }}></span>
+                <span style={{ fontSize:12, color:"var(--vurgu)", fontWeight:500 }}>{yeniSayisi} yeni</span>
+              </>}
+            </div>
+          </div>
+        </div>
+        <div style={{ display:"flex", gap:8 }}>
+          <button onClick={()=>vitrinPDF(3)} style={{ background:"#f5f5f7", color:"#1d1d1f", border:"none", borderRadius:980, padding:"9px 18px", fontSize:13, fontWeight:500, cursor:"pointer" }}>
+            PDF 3'lü
+          </button>
+          <button onClick={()=>vitrinPDF(4)} style={{ background:"rgba(255,255,255,0.08)", color:"#f5f5f7", border:"none", borderRadius:980, padding:"9px 18px", fontSize:13, fontWeight:500, cursor:"pointer" }}>
+            PDF 4'lü
+          </button>
+        </div>
+      </div>
+      </>)}
+
+      {/* ESKİ BAŞLIK — GİZLENDİ */}
+      <div style={{ display:"none" }}>
       <div style={{ padding:"26px 28px 20px", display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:14 }}>
         <div>
           <div style={{ fontSize:25, fontWeight:500, color:"#f5f5f7", letterSpacing:"-0.03em" }}>{vitrinAd}</div>
@@ -1743,8 +1809,10 @@ function VitrinModu({ kod, onizleme }) {
           </button>
         </div>
       </div>
+      </div>
 
-      {/* AYAR + ARAMA */}
+      {/* AYAR + ARAMA — sadece koleksiyon seçiliyken */}
+      {aktifKol && (<>
       <div style={{ padding:"0 28px 14px", display:"flex", alignItems:"center", gap:10, flexWrap:"wrap" }}>
         <div style={{ display:"inline-flex", background:"rgba(255,255,255,0.07)", borderRadius:9, padding:3 }}>
           {VITRIN_AYARLAR.map(a => {
@@ -1774,19 +1842,7 @@ function VitrinModu({ kod, onizleme }) {
           <option value="gramArtan" style={{background:"#1c1c1e"}}>Gram: Düşük → Yüksek</option>
         </select>
       </div>
-
-      {/* KOLEKSİYONLAR */}
-      <div style={{ padding:"0 28px 20px", display:"flex", gap:7, flexWrap:"wrap" }}>
-        {kollar.map(k => {
-          const on = aktifKol?.id === k.id;
-          return (
-            <button key={k.id} className="vm-pill" onClick={()=>{ setAktifKol(k); setArama(""); if(vitrinMusteri && !onizleme) vitrinAktiviteKaydet(vitrinMusteri.onek, vitrinMusteri.kod, vitrinMusteri.ad, "koleksiyon", k.ad, null, null); }}
-              style={{ fontSize:12, color: on?"#0a0a0a":"#a1a1a6", padding:"6px 14px", borderRadius:980, background: on?"#f5f5f7":"rgba(255,255,255,0.05)", border:"none", fontWeight: on?500:400, cursor:"pointer", whiteSpace:"nowrap" }}>
-              {k.ad}
-            </button>
-          );
-        })}
-      </div>
+      </>)}
 
       {/* KOD ÖN EKİ FİLTRESİ — farklı koleksiyonlardan toplanan modeller için */}
       {(() => {
@@ -1805,7 +1861,7 @@ function VitrinModu({ kod, onizleme }) {
       })()}
 
       {/* SEÇİM ÇUBUĞU — model seçilince görünür */}
-      {secili.size > 0 && (
+      {aktifKol && secili.size > 0 && (
         <div style={{ margin:"0 28px 16px", background:"rgba(var(--vurgu-rgb),0.12)", borderRadius:11, padding:"11px 16px", display:"flex", alignItems:"center", justifyContent:"space-between", gap:12, flexWrap:"wrap" }}>
           <span style={{ fontSize:13, color:"var(--vurgu)", fontWeight:500 }}>{secili.size} model seçildi</span>
           <div style={{ display:"flex", gap:8 }}>
@@ -1815,7 +1871,8 @@ function VitrinModu({ kod, onizleme }) {
         </div>
       )}
 
-      {/* MODEL IZGARASI */}
+      {/* MODEL IZGARASI — sadece koleksiyon seçiliyken */}
+      {aktifKol && (
       <div style={{ padding:"0 28px 40px" }}>
         {koldaki.length === 0 && <div style={{ textAlign:"center", color:"#6e6e73", padding:"60px 0", fontSize:14 }}>Model bulunamadı</div>}
         {(() => {
@@ -1863,6 +1920,7 @@ function VitrinModu({ kod, onizleme }) {
           );
         })()}
       </div>
+      )}
 
       {/* KAYIT */}
       <div style={{ padding:"0 28px 50px" }}>
