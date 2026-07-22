@@ -411,7 +411,7 @@ function dogalSirala(a, b) {
   return ka.localeCompare(kb, "tr");
 }
 
-function buildKatalogHTML(kol, modeller, sutun, hedefAyar, kollar) {
+function buildKatalogHTML(kol, modeller, sutun, hedefAyar, kollar, gruplu) {
   const cols = sutun || 3;
   const perPage = cols === 4 ? 16 : 12;
 
@@ -478,13 +478,18 @@ function buildKatalogHTML(kol, modeller, sutun, hedefAyar, kollar) {
   let mevcutSayfa = [];
   let mevcutKapasite = 0;
   
-  modeller.forEach(m => {
+  modeller.forEach((m, mi) => {
     let yer = 1;
     if (m.kategori === "bileklik") yer = cols;
     else if (m.kategori === "kolye") yer = cols * 2;
-    
-    if (mevcutKapasite + yer > perPage) {
-      sayfalar.push(mevcutSayfa);
+
+    // Gruplu modda: kaynak koleksiyon değişince yeni sayfa başlat
+    const buKaynak = m.kaynakAd || "—";
+    const oncekiKaynak = mi > 0 ? (modeller[mi-1].kaynakAd || "—") : buKaynak;
+    const kaynakDegisti = gruplu && mi > 0 && buKaynak !== oncekiKaynak;
+
+    if (kaynakDegisti || mevcutKapasite + yer > perPage) {
+      if (mevcutSayfa.length > 0) sayfalar.push(mevcutSayfa);
       mevcutSayfa = [];
       mevcutKapasite = 0;
     }
@@ -500,7 +505,7 @@ function buildKatalogHTML(kol, modeller, sutun, hedefAyar, kollar) {
     pg.forEach(m => {
       const kolId = m.kaynakKi || m.ki;
       const kaynakKol = (kollar || []).find(k => k.id === kolId);
-      const kolAd = kaynakKol?.ad || "—";
+      const kolAd = m.kaynakAd || kaynakKol?.ad || "—"; // vitrin modelleri kaynakAd taşır
       if (!haritaMap[kolAd]) haritaMap[kolAd] = { baslangic: sayfaNo, bitis: sayfaNo, sayi: 0 };
       haritaMap[kolAd].baslangic = Math.min(haritaMap[kolAd].baslangic, sayfaNo);
       haritaMap[kolAd].bitis = Math.max(haritaMap[kolAd].bitis, sayfaNo);
@@ -537,7 +542,13 @@ function buildKatalogHTML(kol, modeller, sutun, hedefAyar, kollar) {
 
   sayfalar.forEach((pg) => {
     pageNum++;
-    h += "<div class='pg'><div class='" + gridClass + "'>";
+    h += "<div class='pg'>";
+    // Gruplu modda: sayfa başına kaynak koleksiyon başlığı
+    if (gruplu && pg.length > 0) {
+      const sayfaKaynak = pg[0].kaynakAd || kol.ad;
+      h += "<div style='font-size:13px;font-weight:800;color:#1a1a1a;text-transform:uppercase;letter-spacing:.08em;padding:0 0 8px;margin-bottom:6px;border-bottom:1.5px solid #ccc'>" + sayfaKaynak + "</div>";
+    }
+    h += "<div class='" + gridClass + "'>";
     pg.forEach(m => h += kartHTML(m));
     h += "</div><div class='ft'><span>" + kol.ad + "</span><small>" + pageNum + " / " + totalPages + "</small></div></div>";
   });
@@ -1738,7 +1749,7 @@ function VitrinModu({ kod, onizleme }) {
     });
     if (liste.length === 0) { alert("Seçili koleksiyonlarda model yok."); return; }
     const sahteKol = { ad: vitrinAd, on: "", id: aktifKol?.id || "" };
-    const html = buildKatalogHTML(sahteKol, liste, sutun || 3, aktifAyar, kollar);
+    const html = buildKatalogHTML(sahteKol, liste, sutun || 3, aktifAyar, kollar, true); // gruplu=true (sıra korunur + başlıklar)
     const w = window.open("", "_blank");
     if (w) { w.document.write(html); w.document.close(); setTimeout(() => w.print(), 700); }
   };
