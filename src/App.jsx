@@ -1556,6 +1556,7 @@ function VitrinModu({ kod, onizleme }) {
   const [modeller, setModeller] = useState([]);
   const [aktifKol, setAktifKol] = useState(null);
   const [secili, setSecili] = useState(new Set());
+  const [seciliKlasorler, setSeciliKlasorler] = useState([]); // sıralı kaynak adları [1.,2.,3.]
   const [arama, setArama] = useState("");
   const [aktifAyar, setAktifAyar] = useState("14K"); // üstten seçilen ayar — gramlar buna göre
   const [detayModel, setDetayModel] = useState(null); // büyük foto/detay modal
@@ -1724,6 +1725,24 @@ function VitrinModu({ kod, onizleme }) {
     if (w) { w.document.write(html); w.document.close(); setTimeout(() => w.print(), 700); }
   };
 
+  // Seçili klasörlerin (kaynak koleksiyon) modellerini, VERİLEN SIRAYLA tek PDF'te topla
+  const vitrinKlasorPDF = (sutun) => {
+    if (seciliKlasorler.length === 0) { alert("Önce koleksiyon seçin."); return; }
+    const tumu = modeller.filter(m => m.ki === aktifKol?.id);
+    // Seçim sırasına göre modelleri diz (1. klasör önce, 2. sonra...)
+    let liste = [];
+    seciliKlasorler.forEach(ka => {
+      const grup = tumu.filter(m => (m.kaynakAd || "Diğer") === ka)
+        .sort((a, b) => dogalSirala(b, a)); // grup içi yüksek kod üstte
+      liste = liste.concat(grup);
+    });
+    if (liste.length === 0) { alert("Seçili koleksiyonlarda model yok."); return; }
+    const sahteKol = { ad: vitrinAd, on: "", id: aktifKol?.id || "" };
+    const html = buildKatalogHTML(sahteKol, liste, sutun || 3, aktifAyar, kollar);
+    const w = window.open("", "_blank");
+    if (w) { w.document.write(html); w.document.close(); setTimeout(() => w.print(), 700); }
+  };
+
   return (
     <div style={{ minHeight:"100vh", background:"#0a0a0a", color:"#f5f5f7", fontFamily:"-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif", WebkitFontSmoothing:"antialiased" }}>
       <style>{"*{box-sizing:border-box}html,body,#root{margin:0!important;padding:0!important;width:100%!important;max-width:100%!important;min-height:100vh;background:#0a0a0a!important;text-align:left}body{overflow-x:hidden}.vm-card{cursor:pointer}.vm-ph{transition:transform .5s cubic-bezier(.2,.8,.2,1)}.vm-card:hover .vm-ph{transform:scale(1.04)}.vm-pill{transition:all .2s ease}.vm-sel{transition:opacity .18s ease}.vm-card:hover .vm-sel{opacity:1}"}</style>
@@ -1850,10 +1869,29 @@ function VitrinModu({ kod, onizleme }) {
           return { ka, adet: kaynakModelleri.length, kapaklar, yeniSay, sonZaman };
         }).sort((a, b) => b.sonZaman - a.sonZaman);
         return (
+          <div>
+          {/* Katalog seçim çubuğu — klasör seçilince */}
+          {seciliKlasorler.length > 0 && (
+            <div style={{ margin:"0 28px 14px", background:"rgba(var(--vurgu-rgb),0.12)", borderRadius:12, padding:"12px 18px", display:"flex", alignItems:"center", justifyContent:"space-between", gap:12, flexWrap:"wrap" }}>
+              <span style={{ fontSize:14, color:"var(--vurgu)", fontWeight:600 }}>{seciliKlasorler.length} koleksiyon seçildi</span>
+              <div style={{ display:"flex", gap:8 }}>
+                <button onClick={()=>vitrinKlasorPDF(3)} style={{ background:"var(--vurgu)", border:"none", borderRadius:10, padding:"9px 20px", color:"#fff", fontSize:14, fontWeight:600, cursor:"pointer" }}>Seçilenlerden Katalog Al</button>
+                <button onClick={()=>setSeciliKlasorler([])} style={{ background:"transparent", border:"none", color:"#86868b", fontSize:13, fontWeight:500, cursor:"pointer", padding:"9px 10px" }}>Temizle</button>
+              </div>
+            </div>
+          )}
           <div style={{ padding:"6px 28px 8px", display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(230px,1fr))", gap:14 }}>
-            {kaynakBilgi.map(({ ka, adet, kapaklar, yeniSay }) => (
+            {kaynakBilgi.map(({ ka, adet, kapaklar, yeniSay }) => {
+              const sira = seciliKlasorler.indexOf(ka); // -1 = seçili değil
+              const secildi = sira >= 0;
+              return (
               <div key={ka} onClick={()=>setVOnEkF(ka)} className="vm-card"
-                style={{ borderRadius:14, overflow:"hidden", background:"rgba(255,255,255,0.04)", cursor:"pointer", position:"relative", border: yeniSay>0 ? "1.5px solid rgba(var(--vurgu-rgb),0.4)" : "1.5px solid transparent" }}>
+                style={{ borderRadius:14, overflow:"hidden", background:"rgba(255,255,255,0.04)", cursor:"pointer", position:"relative", border: secildi ? "2px solid var(--vurgu)" : (yeniSay>0 ? "1.5px solid rgba(var(--vurgu-rgb),0.4)" : "1.5px solid transparent") }}>
+                {/* KATALOG SEÇİM BUTONU — sıra numarası */}
+                <button onClick={(e)=>{ e.stopPropagation(); setSeciliKlasorler(p => secildi ? p.filter(x=>x!==ka) : [...p, ka]); }}
+                  style={{ position:"absolute", top:10, left:10, zIndex:4, minWidth:30, height:30, borderRadius:"50%", background: secildi?"var(--vurgu)":"rgba(255,255,255,0.92)", border: secildi?"none":"1px solid rgba(0,0,0,0.1)", color: secildi?"#fff":"#86868b", fontSize:14, fontWeight:800, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", boxShadow:"0 2px 8px rgba(0,0,0,0.25)", padding:"0 8px" }}>
+                  {secildi ? (sira+1) : "+"}
+                </button>
                 {yeniSay > 0 && (
                   <div style={{ position:"absolute", top:10, right:10, zIndex:3, background:"var(--vurgu)", color:"#fff", fontSize:11, fontWeight:700, padding:"4px 11px", borderRadius:980, boxShadow:"0 2px 8px rgba(0,0,0,0.3)" }}>{yeniSay} yeni</div>
                 )}
@@ -1869,18 +1907,23 @@ function VitrinModu({ kod, onizleme }) {
                   <div style={{ fontSize:11, color:"#86868b", marginTop:3 }}>{adet} model</div>
                 </div>
               </div>
-            ))}
+              );
+            })}
+          </div>
           </div>
         );
       })()}
 
-      {/* KAYNAK KLASÖRÜ İÇİ — geri butonu */}
+      {/* KAYNAK KLASÖRÜ İÇİ — geri butonu (belirgin) */}
       {aktifKol && vOnEkF && (
-        <div style={{ padding:"6px 28px 12px", display:"flex", alignItems:"center", gap:12 }}>
-          <button onClick={()=>setVOnEkF("")} style={{ background:"rgba(255,255,255,0.08)", border:"none", borderRadius:"50%", width:34, height:34, color:"#f5f5f7", fontSize:16, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}>‹</button>
-          <div>
-            <div style={{ fontSize:17, fontWeight:600, color:"#f5f5f7" }}>{vOnEkF}</div>
-            <div style={{ fontSize:11, color:"#86868b" }}>{koldaki.length} model</div>
+        <div style={{ padding:"6px 28px 14px" }}>
+          <button onClick={()=>setVOnEkF("")}
+            style={{ display:"inline-flex", alignItems:"center", gap:8, background:"var(--vurgu)", border:"none", borderRadius:12, padding:"11px 20px", color:"#fff", fontSize:14, fontWeight:600, cursor:"pointer", boxShadow:"0 3px 12px rgba(var(--vurgu-rgb),0.3)", marginBottom:14 }}>
+            <span style={{ fontSize:18, lineHeight:1 }}>‹</span> Tüm Koleksiyonlar
+          </button>
+          <div style={{ display:"flex", alignItems:"baseline", gap:10 }}>
+            <span style={{ fontSize:20, fontWeight:600, color:"#f5f5f7", letterSpacing:"-0.02em" }}>{vOnEkF}</span>
+            <span style={{ fontSize:12, color:"#86868b" }}>{koldaki.length} model</span>
           </div>
         </div>
       )}
