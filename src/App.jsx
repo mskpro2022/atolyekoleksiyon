@@ -649,14 +649,19 @@ function buildKonfHTML(siparis, altinKgUSD, mc, fiyatli) {
     ".pb{position:fixed;bottom:20px;right:20px;background:#0f1923;color:#fff;border:none;border-radius:8px;padding:11px 24px;font-size:12px;font-weight:600;cursor:pointer;font-family:sans-serif;box-shadow:0 4px 12px rgba(0,0,0,.2)}",
   ].join("\n");
 
+  // Aktif şirkete göre marka (MSK / BSP) — PDF ayrı pencerede açıldığı için CSS değişkeni YOK, sabit renk
+  const _sirketKisa = AKTIF_SIRKET_ONEK === "bsp_" ? "BSP" : "MSK";
+  const _sirketTam  = AKTIF_SIRKET_ONEK === "bsp_" ? "BSP Jewelry Design" : "MSK Kuyumculuk";
+  const _logoRenk = "#1a1a1a";
+
   const logoSVG = '<svg viewBox="0 0 160 70" fill="none" xmlns="http://www.w3.org/2000/svg">'
-    + '<text x="80" y="48" text-anchor="middle" font-family="Arial" font-size="44" font-weight="300" fill="var(--vurgu)" letter-spacing="14">MSK</text>'
-    + '<line x1="4" y1="58" x2="62" y2="58" stroke="var(--vurgu)" stroke-width="0.8"/>'
-    + '<polygon points="80,52 86,58 80,64 74,58" fill="none" stroke="var(--vurgu)" stroke-width="1.1"/>'
-    + '<line x1="98" y1="58" x2="156" y2="58" stroke="var(--vurgu)" stroke-width="0.8"/>'
+    + '<text x="80" y="48" text-anchor="middle" font-family="Arial" font-size="44" font-weight="300" fill="' + _logoRenk + '" letter-spacing="14">' + _sirketKisa + '</text>'
+    + '<line x1="4" y1="58" x2="62" y2="58" stroke="' + _logoRenk + '" stroke-width="0.8"/>'
+    + '<polygon points="80,52 86,58 80,64 74,58" fill="none" stroke="' + _logoRenk + '" stroke-width="1.1"/>'
+    + '<line x1="98" y1="58" x2="156" y2="58" stroke="' + _logoRenk + '" stroke-width="0.8"/>'
     + '</svg>';
 
-  let h = "<!DOCTYPE html><html><head><meta charset='utf-8'><title>" + (fiyatli ? "MSK Siparis Formu - Fiyatli" : "MSK Ic Konfirmasyon - Fiyatsiz") + "</title><style>" + css + "</style></head><body><div class='wrap'>";
+  let h = "<!DOCTYPE html><html><head><meta charset='utf-8'><title>" + (fiyatli ? _sirketKisa + " Siparis Formu - Fiyatli" : _sirketKisa + " Ic Konfirmasyon - Fiyatsiz") + "</title><style>" + css + "</style></head><body><div class='wrap'>";
 
   // HEADER
   h += "<div class='hdr'>";
@@ -805,7 +810,7 @@ function buildKonfHTML(siparis, altinKgUSD, mc, fiyatli) {
   h += "</div>";
 
   // FOOTER
-  h += "<div class='footer'><div class='footer-left'>MSK Kuyumculuk &nbsp;·&nbsp; " + new Date().toLocaleDateString("tr-TR") + " &nbsp;·&nbsp; " + sipNo + "</div>";
+  h += "<div class='footer'><div class='footer-left'>" + _sirketTam + " &nbsp;·&nbsp; " + new Date().toLocaleDateString("tr-TR") + " &nbsp;·&nbsp; " + sipNo + "</div>";
   h += "<div class='footer-sig'><div class='sig-box'><div class='sig-line'></div><div class='sig-lbl'>Hazirlayan</div></div>";
   h += "<div class='sig-box'><div class='sig-line'></div><div class='sig-lbl'>Musteri Onayi</div></div></div></div>";
   h += "</div><button class='noprint pb' onclick='window.print()'>Yazdir / PDF</button></body></html>";
@@ -1642,8 +1647,11 @@ function VitrinModu({ kod, onizleme }) {
       } finally {
         AKTIF_SIRKET_ONEK = oncekiGlobalOnek; // HER durumda geri al
       }
-      // Sadece "vitrinde göster" işaretli koleksiyonlar
-      const aktifKollar = (k || []).filter(kol => kol.vitrin === true);
+      // MÜŞTERİ BAZLI: sadece bu müşteriye AÇIK koleksiyonlar (vitrinMus listesinde kodu varsa)
+      // Varsayılan güvenli: liste yoksa/boşsa o koleksiyon kimseye görünmez
+      const aktifKollar = (k || []).filter(kol =>
+        Array.isArray(kol.vitrinMus) && kol.vitrinMus.includes(musteriKod)
+      );
       const aktifKolIdler = new Set(aktifKollar.map(kol => kol.id));
       // Mahrem alanları ÇIKAR + bu müşteriye GİZLENEN modelleri filtrele
       const guvenliModeller = (m || [])
@@ -2258,6 +2266,8 @@ function Atolye({ onSirketDegis }) {
   const [detayModel, setDetayModel] = useState(null); // model detay/büyük foto modalı
   const [vitrinGecmis, setVitrinGecmis] = useState(null); // { musteriAd, kod, kayitlar, encok } — müşteri vitrin geçmişi modalı
   const [vitrinOzet, setVitrinOzet] = useState({}); // { MUSKOD: {giris, model, son} } — vitrin sayfasi ozeti
+  const [kolMusModal, setKolMusModal] = useState(null); // koleksiyon id → hangi musteriler gorsun
+  const [musKolModal, setMusKolModal] = useState(null); // musteri kodu → hangi koleksiyonlari gorsun
   const [vitrinAnalizVeri, setVitrinAnalizVeri] = useState(null); // Kesfet vitrin analizi
   const [topluKopyalaModal, setTopluKopyalaModal] = useState(false);
   const [topluHedefKolId, setTopluHedefKolId] = useState("");
@@ -3008,7 +3018,11 @@ function Atolye({ onSirketDegis }) {
     if (filtre !== "all") r = r.filter(m => (m.durum||"baslanmadi") === filtre);
     if (etiketF) r = r.filter(m => (m.etiketler||[]).includes(etiketF));
     if (kategoriF) r = r.filter(m => (m.kategori||"") === kategoriF);
-    if (onEkF) r = r.filter(m => kodOnEk(m.kod) === onEkF);
+    if (onEkF) r = r.filter(m => {
+      const kid = m.kaynakKi || m.ki;
+      const kad = (kollar.find(k => k.id === kid) || {}).ad || "Diğer";
+      return kad === onEkF;
+    });
     if (arama.trim()) { const q = arama.toLowerCase(); r = r.filter(m => (m.ad||"").toLowerCase().includes(q) || (m.kod||"").toLowerCase().includes(q) || (m.etiketler||[]).some(e => e.includes(q))); }
     const kodSirala = (a,b) => {
       const ka=a.kod||"", kb=b.kod||"";
@@ -3036,7 +3050,7 @@ function Atolye({ onSirketDegis }) {
     else if (sirala==="cok_satilan") r=[...r].sort((a,b)=>(b.satisSayisi||0)-(a.satisSayisi||0));
     else r=[...r].sort((a,b)=>kodSirala(b,a)); // VARSAYILAN: en yüksek kod üstte (ALT185 > ALT184 > ALT183)
     return r;
-  }, [aktMod, filtre, etiketF, kategoriF, onEkF, arama, sirala, altinKgUSD, madenCarpan]);
+  }, [aktMod, filtre, etiketF, kategoriF, onEkF, arama, sirala, altinKgUSD, madenCarpan, kollar]);
 
   const togKonf     = m => setKonfList(p => p.find(x => x.id === m.id) ? p.filter(x => x.id !== m.id) : [...p, m]);
   const konfAyarSec  = (id, ayar) => setKonfAyarlar(p => ({ ...p, [id]: ayar }));
@@ -3415,18 +3429,20 @@ function Atolye({ onSirketDegis }) {
 
             <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(340px, 1fr))", gap:14, alignItems:"start" }}>
 
-              {/* VİTRİN KOLEKSİYONLARI */}
+              {/* VİTRİN KOLEKSİYONLARI — her koleksiyon: hangi müşteriler görsün */}
               <div style={{ background:T.card, border:"1px solid "+T.border, borderRadius:14, padding:"15px 16px" }}>
-                <div style={{ fontSize:10, fontWeight:700, color:T.sub, marginBottom:10, letterSpacing:"0.05em", textTransform:"uppercase" }}>Vitrinde Gösterilecek Koleksiyonlar</div>
-                <div style={{ fontSize:9, color:"#665d4a", marginBottom:12 }}>Sadece işaretli koleksiyonlar müşteriye görünür.</div>
-                <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
+                <div style={{ fontSize:10, fontWeight:700, color:T.sub, marginBottom:10, letterSpacing:"0.05em", textTransform:"uppercase" }}>Koleksiyon → Müşteri Erişimi</div>
+                <div style={{ fontSize:9, color:"#665d4a", marginBottom:12 }}>Her koleksiyona tıklayıp o koleksiyonu hangi müşterilerin göreceğini seçin. Kimse seçilmezse o koleksiyon kimseye görünmez.</div>
+                <div style={{ display:"flex", flexDirection:"column", gap:5 }}>
                   {kollar.length===0 && <div style={{ fontSize:9, color:"#665d4a" }}>Henüz koleksiyon yok</div>}
                   {kollar.map(k => {
-                    const acik = k.vitrin === true;
+                    const izinli = Array.isArray(k.vitrinMus) ? k.vitrinMus : [];
+                    const sayi = izinli.length;
                     return (
-                      <button key={k.id} onClick={()=>{ const yeni=kollar.map(x=>x.id===k.id?{...x,vitrin:!acik}:x); svK(yeni); }}
-                        style={{ background: acik?"rgba(106,191,105,0.15)":"rgba(255,255,255,0.03)", border:"1px solid "+(acik?"rgba(106,191,105,0.4)":"rgba(255,255,255,0.08)"), borderRadius:7, padding:"6px 12px", color: acik?"#6abf69":"#7a6f5a", fontSize:11, fontWeight:700, cursor:"pointer", display:"flex", alignItems:"center", gap:5 }}>
-                        {acik?"✓":"○"} {k.ad}
+                      <button key={k.id} onClick={()=>setKolMusModal(k.id)}
+                        style={{ background: sayi>0?"rgba(106,191,105,0.1)":"rgba(255,255,255,0.03)", border:"1px solid "+(sayi>0?"rgba(106,191,105,0.3)":"rgba(255,255,255,0.08)"), borderRadius:8, padding:"8px 12px", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"space-between", gap:8, textAlign:"left" }}>
+                        <span style={{ color: sayi>0?"#6abf69":"#7a6f5a", fontSize:11, fontWeight:700 }}>{k.ad}</span>
+                        <span style={{ fontSize:9, color: sayi>0?"#6abf69":"#665d4a", whiteSpace:"nowrap" }}>{sayi>0 ? sayi+" müşteri" : "kapalı"} ›</span>
                       </button>
                     );
                   })}
@@ -3465,6 +3481,15 @@ function Atolye({ onSirketDegis }) {
                           </div>
                           {/* Butonlar */}
                           <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
+                            {(() => {
+                              const acikSayi = kollar.filter(k => Array.isArray(k.vitrinMus) && k.vitrinMus.includes(kod)).length;
+                              return (
+                                <button onClick={()=>setMusKolModal(kod)}
+                                  style={{ background: acikSayi>0?"rgba(201,168,76,0.12)":"rgba(232,90,79,0.1)", border:"1px solid "+(acikSayi>0?"rgba(201,168,76,0.3)":"rgba(232,90,79,0.25)"), borderRadius:7, padding:"6px 12px", color: acikSayi>0?T.gold:"#e85a4f", fontSize:10, fontWeight:700, cursor:"pointer" }}>
+                                  📁 {acikSayi>0 ? acikSayi+" koleksiyon" : "Koleksiyon YOK"}
+                                </button>
+                              );
+                            })()}
                             <button onClick={()=>{ navigator.clipboard?.writeText(url); toastGoster("ok","🛍 "+ad+" linki kopyalandı"); }}
                               style={{ background:"rgba(106,191,105,0.1)", border:"1px solid rgba(106,191,105,0.25)", borderRadius:7, padding:"6px 12px", color:"#6abf69", fontSize:10, fontWeight:700, cursor:"pointer" }}>🛍 Linki Kopyala</button>
                             <button onClick={async()=>{
@@ -3626,18 +3651,58 @@ function Atolye({ onSirketDegis }) {
               ); })}
             </div>
 
-            {/* Kod ön eki filtresi + gruplama (farklı koleksiyonlardan toplanan modeller için) */}
+            {/* KAYNAK KOLEKSİYON KLASÖR KARTLARI — farklı koleksiyonlardan toplanan modeller için */}
             {(() => {
-              const onEkler = [...new Set(aktMod.map(m => kodOnEk(m.kod)))].filter(e=>e && e!=="—").sort();
-              if (onEkler.length < 2) return null; // tek ön ek varsa göstermeye gerek yok
+              const kaynakAdBul = (m) => {
+                const kid = m.kaynakKi || m.ki;
+                return (kollar.find(k => k.id === kid) || {}).ad || "Diğer";
+              };
+              const kaynaklar = [...new Set(aktMod.map(kaynakAdBul))].filter(Boolean);
+              if (kaynaklar.length < 2) return null; // tek kaynak varsa klasör gösterme
+
+              // Kaynak seçiliyse: geri butonu
+              if (onEkF) {
+                return (
+                  <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:10 }}>
+                    <button onClick={()=>setOnEkF("")} style={{ display:"inline-flex", alignItems:"center", gap:6, background:T.btnBg, border:"1px solid "+T.btnBorder, borderRadius:8, padding:"7px 14px", color:T.gold, fontSize:11, fontWeight:700, cursor:"pointer" }}>
+                      <span style={{ fontSize:14, lineHeight:1 }}>‹</span> Tüm Koleksiyonlar
+                    </button>
+                    <span style={{ fontSize:13, fontWeight:700, color:T.text }}>{onEkF}</span>
+                    <span style={{ fontSize:9, color:T.dim }}>{gorunen.length} model</span>
+                  </div>
+                );
+              }
+
+              // Kaynak seçili değilse: klasör kartları (son eklenene göre sıralı)
+              const kaynakBilgi = kaynaklar.map(ka => {
+                const grup = aktMod.filter(m => kaynakAdBul(m) === ka);
+                const sonEklenen = [...grup].sort((a,b)=>(b.t||0)-(a.t||0));
+                return {
+                  ka,
+                  adet: grup.length,
+                  kapaklar: sonEklenen.filter(m=>m.foto).slice(0,4).map(m=>m.foto),
+                  sonZaman: Math.max(0, ...grup.map(m=>m.t||0)),
+                };
+              }).sort((a,b)=>b.sonZaman-a.sonZaman);
+
               return (
-                <div style={{ display:"flex", gap:3, marginBottom:6, overflowX:"auto", paddingBottom:2, alignItems:"center", flexWrap:"wrap" }}>
-                  <span style={{ fontSize:7, color:T.dim, fontWeight:700, whiteSpace:"nowrap", marginRight:2 }}>KOD:</span>
-                  <button onClick={()=>setOnEkF("")} style={{ background:!onEkF?T.btnBg:T.card, border:"1px solid", borderColor:!onEkF?T.btnBorder:T.border, borderRadius:5, padding:"3px 7px", color:!onEkF?T.gold:T.dim, fontSize:8, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap" }}>Tumu</button>
-                  {onEkler.map(ek => { const cnt = aktMod.filter(m => kodOnEk(m.kod)===ek).length; return (
-                    <button key={ek} onClick={()=>setOnEkF(onEkF===ek?"":ek)} style={{ background:onEkF===ek?T.btnBg:T.card, border:"1px solid", borderColor:onEkF===ek?T.btnBorder:T.border, borderRadius:5, padding:"3px 7px", color:onEkF===ek?T.gold:T.dim, fontSize:8, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap" }}>{ek} ({cnt})</button>
-                  ); })}
-                  <button onClick={()=>setGrupla(!grupla)} title="Kod ön ekine göre grupla" style={{ marginLeft:6, background:grupla?T.btnBg:T.card, border:"1px solid", borderColor:grupla?T.btnBorder:T.border, borderRadius:5, padding:"3px 9px", color:grupla?T.gold:T.dim, fontSize:8, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap" }}>{grupla?"☑":"☐"} Grupla</button>
+                <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(150px,1fr))", gap:9, marginBottom:12 }}>
+                  {kaynakBilgi.map(({ ka, adet, kapaklar }) => (
+                    <div key={ka} onClick={()=>setOnEkF(ka)}
+                      style={{ borderRadius:10, overflow:"hidden", background:T.card, border:"1px solid "+T.border, cursor:"pointer" }}>
+                      <div style={{ aspectRatio:"4/3", background:"#f3f3f3", display:"grid", gridTemplateColumns:"1fr 1fr", gridTemplateRows:"1fr 1fr", gap:1 }}>
+                        {kapaklar.length > 0 ? [0,1,2,3].map(i => (
+                          <div key={i} style={{ overflow:"hidden", background:"#eee" }}>
+                            {kapaklar[i] ? <img src={kapaklar[i]} alt="" style={{ width:"100%", height:"100%", objectFit:"cover", display:"block" }}/> : null}
+                          </div>
+                        )) : <div style={{ gridColumn:"1/-1", gridRow:"1/-1", display:"flex", alignItems:"center", justifyContent:"center", color:"#ccc", fontSize:22 }}>◇</div>}
+                      </div>
+                      <div style={{ padding:"8px 10px" }}>
+                        <div style={{ fontSize:11, fontWeight:700, color:T.text, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{ka}</div>
+                        <div style={{ fontSize:9, color:T.dim, marginTop:2 }}>{adet} model</div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               );
             })()}
@@ -3697,6 +3762,11 @@ function Atolye({ onSirketDegis }) {
             )}
             {gorunen.length===0 && <p style={{ color:"#665d4a", textAlign:"center", padding:"30px", fontSize:12 }}>Model bulunamadi</p>}
             {(() => {
+              // Birden çok kaynak koleksiyon var ve hiçbiri seçilmemişse → klasör kartları gösteriliyor, grid gizle
+              const kaynakAdBul2 = (m) => { const kid = m.kaynakKi || m.ki; return (kollar.find(k => k.id === kid) || {}).ad || "Diğer"; };
+              const kaynakSayisi2 = new Set(aktMod.map(kaynakAdBul2)).size;
+              if (kaynakSayisi2 >= 2 && !onEkF) return null;
+
               const renderKart = (m,i) => {
                 const ik  = konfList.find(x=>x.id===m.id);
                 const dur = DURUMLAR.find(d=>d.id===m.durum)||DURUMLAR[0];
@@ -3758,26 +3828,8 @@ function Atolye({ onSirketDegis }) {
                 );
               };
               const gridStil = { display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))", gap:9 };
-              if (!grupla) {
-                return <div style={gridStil}>{gorunen.map((m,i)=>renderKart(m,i))}</div>;
-              }
-              const gruplar = {};
-              gorunen.forEach(m => { const ek = kodOnEk(m.kod); (gruplar[ek] = gruplar[ek] || []).push(m); });
-              const ekSirali = Object.keys(gruplar).sort();
-              return (
-                <div>
-                  {ekSirali.map(ek => (
-                    <div key={ek} style={{ marginBottom:18 }}>
-                      <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:8 }}>
-                        <span style={{ fontSize:12, fontWeight:800, color:T.gold, letterSpacing:"0.05em" }}>{ek}</span>
-                        <span style={{ fontSize:9, color:T.dim }}>{gruplar[ek].length} model</span>
-                        <div style={{ flex:1, height:1, background:T.border }}/>
-                      </div>
-                      <div style={gridStil}>{gruplar[ek].map((m,i)=>renderKart(m,i))}</div>
-                    </div>
-                  ))}
-                </div>
-              );
+              // Klasör sistemi gruplama işini yapıyor → burada hep düz liste
+              return <div style={gridStil}>{gorunen.map((m,i)=>renderKart(m,i))}</div>;
             })()}
 
             {/* ALTTA + MODEL + EKSİK KOD TESPİTİ */}
@@ -6673,6 +6725,95 @@ ${buildContext()}`;
       )}
 
       {/* VİTRİN GEÇMİŞİ MODALI */}
+      {/* KOLEKSİYON → MÜŞTERİLER modalı */}
+      {kolMusModal && (() => {
+        const kol = kollar.find(k => k.id === kolMusModal);
+        if (!kol) return null;
+        const izinli = Array.isArray(kol.vitrinMus) ? kol.vitrinMus : [];
+        const musListe = Object.entries(musteriler).sort((a,b)=>a[0].localeCompare(b[0],"tr"));
+        const toggle = (mkod) => {
+          const yeni = izinli.includes(mkod) ? izinli.filter(x=>x!==mkod) : [...izinli, mkod];
+          svK(kollar.map(x => x.id===kol.id ? { ...x, vitrinMus: yeni, vitrin: yeni.length>0 } : x));
+        };
+        return (
+          <div onClick={()=>setKolMusModal(null)} style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.7)", zIndex:200, display:"flex", alignItems:"center", justifyContent:"center", padding:20 }}>
+            <div onClick={e=>e.stopPropagation()} style={{ background:T.bg2, border:"1px solid "+T.border, borderRadius:14, maxWidth:460, width:"100%", maxHeight:"85vh", overflow:"auto", padding:"18px 20px" }}>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:4 }}>
+                <span style={{ fontSize:15, fontWeight:800, color:T.text }}>{kol.ad}</span>
+                <button onClick={()=>setKolMusModal(null)} style={{ background:"transparent", border:"none", color:T.sub, fontSize:18, cursor:"pointer" }}>✕</button>
+              </div>
+              <div style={{ fontSize:10, color:T.sub, marginBottom:14 }}>Bu koleksiyonu hangi müşteriler görsün?</div>
+              <div style={{ display:"flex", gap:6, marginBottom:12 }}>
+                <button onClick={()=>svK(kollar.map(x => x.id===kol.id ? { ...x, vitrinMus: musListe.map(([,kd])=>kd), vitrin:true } : x))}
+                  style={{ ...GH, fontSize:9, padding:"5px 10px" }}>Tümünü Aç</button>
+                <button onClick={()=>svK(kollar.map(x => x.id===kol.id ? { ...x, vitrinMus: [], vitrin:false } : x))}
+                  style={{ ...GH, fontSize:9, padding:"5px 10px" }}>Tümünü Kapat</button>
+              </div>
+              {musListe.length===0 && <div style={{ fontSize:10, color:T.sub }}>Müşteri yok.</div>}
+              <div style={{ display:"flex", flexDirection:"column", gap:5 }}>
+                {musListe.map(([mad, mkod]) => {
+                  const acik = izinli.includes(mkod);
+                  return (
+                    <button key={mkod} onClick={()=>toggle(mkod)}
+                      style={{ background: acik?"rgba(106,191,105,0.12)":"rgba(255,255,255,0.03)", border:"1px solid "+(acik?"rgba(106,191,105,0.35)":T.border), borderRadius:8, padding:"9px 12px", cursor:"pointer", display:"flex", alignItems:"center", gap:8, textAlign:"left" }}>
+                      <span style={{ fontSize:13, color: acik?"#6abf69":T.dim }}>{acik?"✓":"○"}</span>
+                      <span style={{ fontSize:9, color:T.sub, background:"rgba(255,255,255,0.06)", borderRadius:4, padding:"1px 6px" }}>{mkod}</span>
+                      <span style={{ fontSize:12, fontWeight:700, color: acik?T.text:T.dim }}>{mad}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* MÜŞTERİ → KOLEKSİYONLAR modalı */}
+      {musKolModal && (() => {
+        const mkod = musKolModal;
+        const mad = Object.entries(musteriler).find(([,kd])=>kd===mkod)?.[0] || mkod;
+        const toggle = (kolId) => {
+          svK(kollar.map(x => {
+            if (x.id !== kolId) return x;
+            const mevcut = Array.isArray(x.vitrinMus) ? x.vitrinMus : [];
+            const yeni = mevcut.includes(mkod) ? mevcut.filter(c=>c!==mkod) : [...mevcut, mkod];
+            return { ...x, vitrinMus: yeni, vitrin: yeni.length>0 };
+          }));
+        };
+        return (
+          <div onClick={()=>setMusKolModal(null)} style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.7)", zIndex:200, display:"flex", alignItems:"center", justifyContent:"center", padding:20 }}>
+            <div onClick={e=>e.stopPropagation()} style={{ background:T.bg2, border:"1px solid "+T.border, borderRadius:14, maxWidth:460, width:"100%", maxHeight:"85vh", overflow:"auto", padding:"18px 20px" }}>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:4 }}>
+                <span style={{ fontSize:15, fontWeight:800, color:T.text }}>{mad}</span>
+                <button onClick={()=>setMusKolModal(null)} style={{ background:"transparent", border:"none", color:T.sub, fontSize:18, cursor:"pointer" }}>✕</button>
+              </div>
+              <div style={{ fontSize:10, color:T.sub, marginBottom:14 }}>Bu müşteri hangi koleksiyonları görsün?</div>
+              <div style={{ display:"flex", gap:6, marginBottom:12 }}>
+                <button onClick={()=>svK(kollar.map(x => ({ ...x, vitrinMus: [...new Set([...(x.vitrinMus||[]), mkod])], vitrin:true })))}
+                  style={{ ...GH, fontSize:9, padding:"5px 10px" }}>Tümünü Aç</button>
+                <button onClick={()=>svK(kollar.map(x => { const y=(x.vitrinMus||[]).filter(c=>c!==mkod); return { ...x, vitrinMus:y, vitrin:y.length>0 }; }))}
+                  style={{ ...GH, fontSize:9, padding:"5px 10px" }}>Tümünü Kapat</button>
+              </div>
+              {kollar.length===0 && <div style={{ fontSize:10, color:T.sub }}>Koleksiyon yok.</div>}
+              <div style={{ display:"flex", flexDirection:"column", gap:5 }}>
+                {kollar.map(k => {
+                  const acik = Array.isArray(k.vitrinMus) && k.vitrinMus.includes(mkod);
+                  const adet = modeller.filter(m => m.ki === k.id).length;
+                  return (
+                    <button key={k.id} onClick={()=>toggle(k.id)}
+                      style={{ background: acik?"rgba(106,191,105,0.12)":"rgba(255,255,255,0.03)", border:"1px solid "+(acik?"rgba(106,191,105,0.35)":T.border), borderRadius:8, padding:"9px 12px", cursor:"pointer", display:"flex", alignItems:"center", gap:8, textAlign:"left" }}>
+                      <span style={{ fontSize:13, color: acik?"#6abf69":T.dim }}>{acik?"✓":"○"}</span>
+                      <span style={{ fontSize:12, fontWeight:700, color: acik?T.text:T.dim, flex:1 }}>{k.ad}</span>
+                      <span style={{ fontSize:9, color:T.dim }}>{adet} model</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {vitrinGecmis && (
         <div onClick={()=>setVitrinGecmis(null)} style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.8)", zIndex:200, display:"flex", alignItems:"center", justifyContent:"center", padding:20, backdropFilter:"blur(4px)" }}>
           <div onClick={e=>e.stopPropagation()} style={{ background:T.card, borderRadius:16, maxWidth:600, width:"100%", maxHeight:"88vh", overflow:"auto", border:"1px solid "+T.border, position:"relative" }}>
