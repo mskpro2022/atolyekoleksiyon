@@ -1688,6 +1688,57 @@ function VitrinModu({ kod, onizleme }) {
     }
   })(); }, [kod]);
 
+  // ═══ OTOMATİK YENİLEME — ana sistemde model silinince/değişince vitrin de güncellensin ═══
+  // Sadece VERİYİ tazeler; müşterinin bulunduğu koleksiyon/klasör bozulmaz.
+  useEffect(() => {
+    if (durum !== "hazir" || !vitrinMusteri) return;
+    const tazele = async () => {
+      if (document.hidden) return; // sekme arkadaysa boşuna sorgu atma
+      const oncekiGlobalOnek = AKTIF_SIRKET_ONEK;
+      try {
+        AKTIF_SIRKET_ONEK = vitrinMusteri.onek;
+        const [k, m] = await Promise.all([
+          akilliKoleksiyonOku(vitrinMusteri.onek),
+          akilliModelOku(vitrinMusteri.onek)
+        ]);
+        const aktifKollar = (k || []).filter(kol =>
+          Array.isArray(kol.vitrinMus) && kol.vitrinMus.includes(vitrinMusteri.kod)
+        );
+        const aktifKolIdler = new Set(aktifKollar.map(kol => kol.id));
+        const guvenli = (m || [])
+          .filter(mod => aktifKolIdler.has(mod.ki))
+          .filter(mod => !(Array.isArray(mod.gizliMus) && mod.gizliMus.includes(vitrinMusteri.kod)))
+          .map(mod => {
+            const kaynakId = mod.kaynakKi || mod.ki;
+            const kaynakKolObj = (k || []).find(kk => kk.id === kaynakId);
+            return {
+              id: mod.id, ki: mod.ki, kaynakKi: kaynakId,
+              kaynakAd: kaynakKolObj ? kaynakKolObj.ad : "Diğer",
+              foto: mod.foto || "", kod: mod.kod || "", ad: mod.ad || "",
+              gram: mod.gram || "", refAyar: mod.refAyar || "14K", kategori: mod.kategori || "",
+              tasGram: mod.tasGram || 0, t: mod.t || 0,
+            };
+          });
+        setKollar(aktifKollar);
+        setModeller(guvenli);
+        // Açık olan koleksiyon artık erişilemiyorsa (kapatıldıysa) başa dön
+        setAktifKol(prev => {
+          if (!prev) return prev;
+          const hala = aktifKollar.find(x => x.id === prev.id);
+          return hala || aktifKollar[0] || null;
+        });
+      } catch (e) {
+        console.warn("Vitrin tazeleme atlandı:", e.message);
+      } finally {
+        AKTIF_SIRKET_ONEK = oncekiGlobalOnek;
+      }
+    };
+    const iv = setInterval(tazele, 60000);          // 60 saniyede bir
+    const gorunur = () => { if (!document.hidden) tazele(); };
+    document.addEventListener("visibilitychange", gorunur); // sekmeye dönünce hemen tazele
+    return () => { clearInterval(iv); document.removeEventListener("visibilitychange", gorunur); };
+  }, [durum, vitrinMusteri]);
+
   // Modelin seçili ayara göre gramını hesapla
   const ayarliGram = (m) => {
     const g = gramDonustur(Number(m.gram) || 0, m.refAyar || "14K", aktifAyar, Number(m.tasGram) || 0);
