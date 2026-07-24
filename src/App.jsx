@@ -3691,8 +3691,6 @@ function Atolye({ onSirketDegis }) {
             </div>
             <input value={arama} onChange={e=>setArama(e.target.value)} placeholder="Ad, kod veya etiket ara..." style={{ ...IS, marginBottom:8, padding:"6px 10px", fontSize:11 }} />
 
-            {/* Sıralama */}
-            <div style={{ display:"flex", gap:3, marginBottom:6, overflowX:"auto", paddingBottom:2, alignItems:"center" }}>
             {/* Kategori filtresi */}
             <div style={{ display:"flex", gap:3, marginBottom:6, overflowX:"auto", paddingBottom:2, alignItems:"center" }}>
               <span style={{ fontSize:7, color:T.dim, fontWeight:700, whiteSpace:"nowrap", marginRight:2 }}>KATEGORI:</span>
@@ -3702,6 +3700,61 @@ function Atolye({ onSirketDegis }) {
               ); })}
             </div>
 
+
+            {/* Sıralama */}
+            <div style={{ display:"flex", gap:3, marginBottom:6, overflowX:"auto", paddingBottom:2, alignItems:"center" }}>
+              <span style={{ fontSize:7, color:T.dim, fontWeight:700, whiteSpace:"nowrap", marginRight:2 }}>SIRALA:</span>
+              {[
+                { id:"varsayilan",    l:"Varsayılan" },
+                { id:"yeni_eskiye",   l:"Yeni → Eski" },
+                { id:"eski_yeniye",   l:"Eski → Yeni" },
+                { id:"kar_desc",      l:"Karlı önce" },
+                { id:"kar_asc",       l:"Az karlı önce" },
+                { id:"gram_asc",      l:"Az gram önce" },
+                { id:"gram_desc",     l:"Çok gram önce" },
+                { id:"kod",           l:"Koda göre" },
+                { id:"cok_satilan",   l:"Çok satılan" },
+              ].map(s => (
+                <button key={s.id} onClick={()=>setSirala(s.id)} style={{ background:sirala===s.id?T.btnBg:T.card, border:"1px solid", borderColor:sirala===s.id?T.btnBorder:T.border, borderRadius:5, padding:"3px 7px", color:sirala===s.id?T.gold:T.dim, fontSize:8, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap" }}>{s.l}</button>
+              ))}
+            </div>
+            <div style={{ display:"flex", gap:3, marginBottom:6, overflowX:"auto", paddingBottom:2 }}>
+              <button onClick={()=>setFiltre("all")} style={{ background:filtre==="all"?T.btnBg:T.card, border:"1px solid", borderColor:filtre==="all"?T.btnBorder:T.border, borderRadius:5, padding:"3px 7px", color:filtre==="all"?T.gold:T.dim, fontSize:8, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap" }}>Tumu</button>
+              {DURUMLAR.map(d => { const cnt=aktMod.filter(m=>(m.durum||"baslanmadi")===d.id).length; if(!cnt)return null; return <button key={d.id} onClick={()=>setFiltre(d.id)} style={{ background:filtre===d.id?"rgba(0,0,0,0.3)":T.card, border:"1px solid", borderColor:filtre===d.id?d.c:T.border, borderRadius:5, padding:"3px 7px", color:filtre===d.id?d.c:T.dim, fontSize:8, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap" }}>{d.l} ({cnt})</button>; })}
+            </div>
+            {tumEtiketler.length>0 && (
+              <div style={{ display:"flex", gap:3, marginBottom:10, overflowX:"auto", paddingBottom:2 }}>
+                <span style={{ fontSize:7, color:T.dim, fontWeight:700, whiteSpace:"nowrap", alignSelf:"center" }}>ETIKET:</span>
+                {etiketF && <button onClick={()=>setEtiketF("")} style={{ ...RD, padding:"2px 6px", fontSize:7 }}>Temizle</button>}
+                {tumEtiketler.map(e => <button key={e} onClick={()=>setEtiketF(e===etiketF?"":e)} style={{ background:etiketF===e?"rgba(167,139,250,0.15)":T.card, border:"1px solid", borderColor:etiketF===e?"#a78bfa":T.border, borderRadius:4, padding:"2px 6px", color:etiketF===e?"#a78bfa":"#998a6e", fontSize:7, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap" }}>#{e}</button>)}
+              </div>
+            )}
+
+            {/* TOPLU KONFİRMASYONA EKLE */}
+            {(etiketF || kategoriF || arama.trim()) && gorunen.length > 0 && (
+              <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:10, padding:"7px 12px", background:"rgba(var(--vurgu-rgb),0.05)", border:"1px solid rgba(var(--vurgu-rgb),0.15)", borderRadius:8 }}>
+                <span style={{ fontSize:9, color:"#998a6e" }}>
+                  <b style={{ color:GOLD }}>{gorunen.length}</b> model filtrelendi
+                  {etiketF && <span style={{ color:"#a78bfa" }}> · #{etiketF}</span>}
+                  {kategoriF && <span style={{ color:GOLD }}> · {kategoriF}</span>}
+                  {arama.trim() && <span style={{ color:"#5b9bd5" }}> · "{arama}"</span>}
+                </span>
+                <button onClick={() => {
+                  // Tüm filtrelenenleri konfirmasyona ekle
+                  const eklenecekler = gorunen.filter(m => !konfList.find(k=>k.id===m.id));
+                  if (eklenecekler.length === 0) return;
+                  setKonfList(prev => [...prev, ...eklenecekler]);
+                  setSayfa("konfirmasyon");
+                }} style={{ ...BG, fontSize:9, padding:"5px 12px", marginLeft:"auto", whiteSpace:"nowrap" }}>
+                  ✓ Tümünü Konfirmasyona Ekle ({gorunen.filter(m=>!konfList.find(k=>k.id===m.id)).length})
+                </button>
+                {gorunen.some(m => konfList.find(k=>k.id===m.id)) && (
+                  <span style={{ fontSize:8, color:"#6abf69" }}>
+                    ({gorunen.filter(m=>konfList.find(k=>k.id===m.id)).length} zaten eklendi)
+                  </span>
+                )}
+              </div>
+            )}
             {/* KAYNAK KOLEKSİYON KLASÖR KARTLARI — farklı koleksiyonlardan toplanan modeller için */}
             {(() => {
               const kaynakAdBul = (m) => {
@@ -3758,59 +3811,6 @@ function Atolye({ onSirketDegis }) {
               );
             })()}
 
-            {/* Sıralama */}
-            <span style={{ fontSize:7, color:T.dim, fontWeight:700, whiteSpace:"nowrap", marginRight:2 }}>SIRALA:</span>
-              {[
-                { id:"varsayilan",    l:"Varsayılan" },
-                { id:"yeni_eskiye",   l:"Yeni → Eski" },
-                { id:"eski_yeniye",   l:"Eski → Yeni" },
-                { id:"kar_desc",      l:"Karlı önce" },
-                { id:"kar_asc",       l:"Az karlı önce" },
-                { id:"gram_asc",      l:"Az gram önce" },
-                { id:"gram_desc",     l:"Çok gram önce" },
-                { id:"kod",           l:"Koda göre" },
-                { id:"cok_satilan",   l:"Çok satılan" },
-              ].map(s => (
-                <button key={s.id} onClick={()=>setSirala(s.id)} style={{ background:sirala===s.id?T.btnBg:T.card, border:"1px solid", borderColor:sirala===s.id?T.btnBorder:T.border, borderRadius:5, padding:"3px 7px", color:sirala===s.id?T.gold:T.dim, fontSize:8, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap" }}>{s.l}</button>
-              ))}
-            </div>
-            <div style={{ display:"flex", gap:3, marginBottom:6, overflowX:"auto", paddingBottom:2 }}>
-              <button onClick={()=>setFiltre("all")} style={{ background:filtre==="all"?T.btnBg:T.card, border:"1px solid", borderColor:filtre==="all"?T.btnBorder:T.border, borderRadius:5, padding:"3px 7px", color:filtre==="all"?T.gold:T.dim, fontSize:8, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap" }}>Tumu</button>
-              {DURUMLAR.map(d => { const cnt=aktMod.filter(m=>(m.durum||"baslanmadi")===d.id).length; if(!cnt)return null; return <button key={d.id} onClick={()=>setFiltre(d.id)} style={{ background:filtre===d.id?"rgba(0,0,0,0.3)":T.card, border:"1px solid", borderColor:filtre===d.id?d.c:T.border, borderRadius:5, padding:"3px 7px", color:filtre===d.id?d.c:T.dim, fontSize:8, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap" }}>{d.l} ({cnt})</button>; })}
-            </div>
-            {tumEtiketler.length>0 && (
-              <div style={{ display:"flex", gap:3, marginBottom:10, overflowX:"auto", paddingBottom:2 }}>
-                <span style={{ fontSize:7, color:T.dim, fontWeight:700, whiteSpace:"nowrap", alignSelf:"center" }}>ETIKET:</span>
-                {etiketF && <button onClick={()=>setEtiketF("")} style={{ ...RD, padding:"2px 6px", fontSize:7 }}>Temizle</button>}
-                {tumEtiketler.map(e => <button key={e} onClick={()=>setEtiketF(e===etiketF?"":e)} style={{ background:etiketF===e?"rgba(167,139,250,0.15)":T.card, border:"1px solid", borderColor:etiketF===e?"#a78bfa":T.border, borderRadius:4, padding:"2px 6px", color:etiketF===e?"#a78bfa":"#998a6e", fontSize:7, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap" }}>#{e}</button>)}
-              </div>
-            )}
-
-            {/* TOPLU KONFİRMASYONA EKLE */}
-            {(etiketF || kategoriF || arama.trim()) && gorunen.length > 0 && (
-              <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:10, padding:"7px 12px", background:"rgba(var(--vurgu-rgb),0.05)", border:"1px solid rgba(var(--vurgu-rgb),0.15)", borderRadius:8 }}>
-                <span style={{ fontSize:9, color:"#998a6e" }}>
-                  <b style={{ color:GOLD }}>{gorunen.length}</b> model filtrelendi
-                  {etiketF && <span style={{ color:"#a78bfa" }}> · #{etiketF}</span>}
-                  {kategoriF && <span style={{ color:GOLD }}> · {kategoriF}</span>}
-                  {arama.trim() && <span style={{ color:"#5b9bd5" }}> · "{arama}"</span>}
-                </span>
-                <button onClick={() => {
-                  // Tüm filtrelenenleri konfirmasyona ekle
-                  const eklenecekler = gorunen.filter(m => !konfList.find(k=>k.id===m.id));
-                  if (eklenecekler.length === 0) return;
-                  setKonfList(prev => [...prev, ...eklenecekler]);
-                  setSayfa("konfirmasyon");
-                }} style={{ ...BG, fontSize:9, padding:"5px 12px", marginLeft:"auto", whiteSpace:"nowrap" }}>
-                  ✓ Tümünü Konfirmasyona Ekle ({gorunen.filter(m=>!konfList.find(k=>k.id===m.id)).length})
-                </button>
-                {gorunen.some(m => konfList.find(k=>k.id===m.id)) && (
-                  <span style={{ fontSize:8, color:"#6abf69" }}>
-                    ({gorunen.filter(m=>konfList.find(k=>k.id===m.id)).length} zaten eklendi)
-                  </span>
-                )}
-              </div>
-            )}
             {gorunen.length===0 && <p style={{ color:"#665d4a", textAlign:"center", padding:"30px", fontSize:12 }}>Model bulunamadi</p>}
             {(() => {
               // Birden çok kaynak koleksiyon var ve hiçbiri seçilmemişse → klasör kartları gösteriliyor, grid gizle
