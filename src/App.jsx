@@ -3144,7 +3144,7 @@ function Atolye({ onSirketDegis }) {
     else if (sirala==="gram_asc") r=[...r].sort((a,b)=>(Number(a.gram)||0)-(Number(b.gram)||0));
     else if (sirala==="gram_desc") r=[...r].sort((a,b)=>(Number(b.gram)||0)-(Number(a.gram)||0));
     else if (sirala==="cok_satilan") r=[...r].sort((a,b)=>(b.satisSayisi||0)-(a.satisSayisi||0));
-    else r=[...r].sort((a,b)=>kodSirala(b,a)); // VARSAYILAN: en yüksek kod üstte (ALT185 > ALT184 > ALT183)
+    else r=[...r].sort((a,b)=>(b.t||0)-(a.t||0)); // VARSAYILAN: en son eklenen üstte
     return r;
   }, [aktMod, filtre, etiketF, kategoriF, onEkF, arama, sirala, altinKgUSD, madenCarpan, kollar]);
 
@@ -3800,8 +3800,9 @@ function Atolye({ onSirketDegis }) {
                 )}
               </div>
             )}
-            {/* KAYNAK KOLEKSİYON KLASÖR KARTLARI — farklı koleksiyonlardan toplanan modeller için */}
+            {/* KAYNAK KOLEKSİYON KLASÖR KARTLARI — KALDIRILDI: Modeller sayfası artık düz liste (tüm modeller) */}
             {(() => {
+              return null; // klasör kartları kapatıldı — tüm modeller tek ızgarada, en son eklenen üstte
               const kaynakAdBul = (m) => {
                 const kid = m.kaynakKi || m.ki;
                 return (kollar.find(k => k.id === kid) || {}).ad || "Diğer";
@@ -3858,11 +3859,7 @@ function Atolye({ onSirketDegis }) {
 
             {gorunen.length===0 && <p style={{ color:"#665d4a", textAlign:"center", padding:"30px", fontSize:12 }}>Model bulunamadi</p>}
             {(() => {
-              // Birden çok kaynak koleksiyon var ve hiçbiri seçilmemişse → klasör kartları gösteriliyor, grid gizle
-              const kaynakAdBul2 = (m) => { const kid = m.kaynakKi || m.ki; return (kollar.find(k => k.id === kid) || {}).ad || "Diğer"; };
-              const kaynakSayisi2 = new Set(aktMod.map(kaynakAdBul2)).size;
-              if (kaynakSayisi2 >= 2 && !onEkF) return null;
-
+              // Klasör kartları kaldırıldı — ızgara HER ZAMAN gösterilir (tüm modeller düz liste)
               const renderKart = (m,i) => {
                 const ik  = konfList.find(x=>x.id===m.id);
                 const dur = DURUMLAR.find(d=>d.id===m.durum)||DURUMLAR[0];
