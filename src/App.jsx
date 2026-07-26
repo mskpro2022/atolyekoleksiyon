@@ -251,7 +251,7 @@ function karKoruyanFiyat(m, aktifAyar, altinKgUSD, varsayilanMly) {
 }
 
 // ═══ ŞİRKET (MULTI-COMPANY) ═══
-// Aktif şirketin Supabase anahtar öneki. MSK = "" (mevcut veriler korunur), BSP = "bsp_".
+// Aktif şirketin Supabase anahtar öneki. MSK = "" (mevcut veriler korunur), BSP = "bsp2_".
 // Şirket bağımsız anahtarlar (önek almayan): şifre, ayarlar gibi global olanlar burada listelenir.
 let AKTIF_SIRKET_ONEK = (() => {
   try {
@@ -269,7 +269,7 @@ const SIRKET_BAGIMSIZ = ["atolye_sifre"];
 function sirketAnahtar(k) {
   if (!AKTIF_SIRKET_ONEK) return k;            // MSK → değişiklik yok
   if (SIRKET_BAGIMSIZ.includes(k)) return k;   // global anahtar
-  return AKTIF_SIRKET_ONEK + k;                // BSP → "bsp_" öneki
+  return AKTIF_SIRKET_ONEK + k;                // BSP → "bsp2_" öneki
 }
 
 async function ld(k, f) { try { const r = await dbLoad(sirketAnahtar(k), f); return r ?? f; } catch { return f; } }
@@ -650,8 +650,8 @@ function buildKonfHTML(siparis, altinKgUSD, mc, fiyatli) {
   ].join("\n");
 
   // Aktif şirkete göre marka (MSK / BSP) — PDF ayrı pencerede açıldığı için CSS değişkeni YOK, sabit renk
-  const _sirketKisa = AKTIF_SIRKET_ONEK === "bsp_" ? "BSP" : "MSK";
-  const _sirketTam  = AKTIF_SIRKET_ONEK === "bsp_" ? "BSP Jewelry Design" : "MSK Kuyumculuk";
+  const _sirketKisa = AKTIF_SIRKET_ONEK === "bsp2_" ? "BSP" : "MSK";
+  const _sirketTam  = AKTIF_SIRKET_ONEK === "bsp2_" ? "BSP Jewelry Design" : "MSK Kuyumculuk";
   const _logoRenk = "#1a1a1a";
 
   const logoSVG = '<svg viewBox="0 0 160 70" fill="none" xmlns="http://www.w3.org/2000/svg">'
@@ -1555,7 +1555,7 @@ function SirketSecimEkrani({ onSec }) {
       <div style={{ fontSize:12, color:"#665d4a", marginBottom:40 }}>Hangi şirketin kataloğunu açmak istersiniz?</div>
       <div style={{ display:"flex", gap:20, flexWrap:"wrap", justifyContent:"center", width:"100%", maxWidth:620 }}>
         {kart("msk", "💎", "MSK Jewelry", "Mevcut katalog, modeller, siparişler ve kasa", "var(--vurgu)", ()=>sec("", "MSK"))}
-        {kart("bsp", "✨", "BSP Jewelry Design", "Ayrı katalog — kendi modelleri ve siparişleri", "#a78bfa", ()=>sec("bsp_", "BSP"))}
+        {kart("bsp", "✨", "BSP Jewelry Design", "Ayrı katalog — kendi modelleri ve siparişleri", "#a78bfa", ()=>sec("bsp2_", "BSP"))}
       </div>
       <div style={{ fontSize:9, color:"#4a4336", marginTop:36 }}>İki şirketin verileri tamamen ayrıdır</div>
     </div>
@@ -1597,7 +1597,7 @@ function VitrinModu({ kod, onizleme }) {
       let musteriAd = null, musteriKod = null, onek = "", oncekiZiyaret = 0;
 
       // 1. Müşteri kodu mu? Her iki şirkette müşteri listesinde ara
-      for (const o of ["", "bsp_"]) {
+      for (const o of ["", "bsp2_"]) {
         const eski = AKTIF_SIRKET_ONEK;
         AKTIF_SIRKET_ONEK = o;
         const mus = await ld("v7u", {});
@@ -1609,7 +1609,7 @@ function VitrinModu({ kod, onizleme }) {
 
       // 2. Müşteri kodu değilse eski v7vitrin kodlarına bak (geriye dönük uyumluluk)
       if (!musteriKod) {
-        for (const o of ["", "bsp_"]) {
+        for (const o of ["", "bsp2_"]) {
           const eski = AKTIF_SIRKET_ONEK;
           AKTIF_SIRKET_ONEK = o;
           const kodlar = await ld("v7vitrin", []);
@@ -2228,7 +2228,7 @@ function Atolye({ onSirketDegis }) {
   GOLD = T.gold;
   DARK = T.bg2;
   // Aktif şirket — başlıkta ve ayarlarda gösterilir
-  const AKTIF_SIRKET = AKTIF_SIRKET_ONEK === "bsp_" ? "BSP Jewelry Design" : "MSK Jewelry";
+  const AKTIF_SIRKET = AKTIF_SIRKET_ONEK === "bsp2_" ? "BSP Jewelry Design" : "MSK Jewelry";
   // Stil sabitleri (IS/BG/GH/RD) modül seviyesinde sabit altın renkliydi — tema değişince
   // değişmiyorlardı. Burada temaya bağlı yeniden tanımlayarak modül seviyesini gölgeliyoruz.
   const IS = { width:"100%", background:T.card, border:"1px solid "+T.border, borderRadius:10, padding:"10px 14px", color:T.text, fontSize:13, outline:"none", fontFamily:"sans-serif", boxSizing:"border-box" };
@@ -2752,7 +2752,7 @@ function Atolye({ onSirketDegis }) {
   });
 
   const svM = useCallback(async d => {
-    console.log("💾 Model yazılıyor → şirket öneği: [" + AKTIF_SIRKET_ONEK + "] (" + (AKTIF_SIRKET_ONEK==="bsp_"?"BSP":AKTIF_SIRKET_ONEK===""?"MSK":AKTIF_SIRKET_ONEK) + "), " + d.length + " model");
+    console.log("💾 Model yazılıyor → şirket öneği: [" + AKTIF_SIRKET_ONEK + "] (" + (AKTIF_SIRKET_ONEK==="bsp2_"?"BSP":AKTIF_SIRKET_ONEK===""?"MSK":AKTIF_SIRKET_ONEK) + "), " + d.length + " model");
     // ═══ ÇAKIŞMA KORUMASI ═══
     // modeller tablosunda benzersizlik SADECE `id` üzerinde (onConflict:'id').
     // MSK (onek="") çıplak id kullanır: "x123". BSP gibi diğer şirketler altında yazılan
@@ -3413,7 +3413,7 @@ function Atolye({ onSirketDegis }) {
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:8, marginBottom:10 }}>
             <h1 style={{ margin:0, fontSize:"clamp(13px,2vw,18px)", fontWeight:700, color:GOLD, display:"flex", alignItems:"center", gap:8 }}>
               Atolye Koleksiyon Sistemi
-              <button onClick={()=>{ if (onSirketDegis) onSirketDegis(); }} title="Şirket değiştir" style={{ fontSize:9, fontWeight:800, padding:"3px 10px", borderRadius:20, background: AKTIF_SIRKET_ONEK==="bsp_" ? "rgba(167,139,250,0.15)" : "rgba(var(--vurgu-rgb),0.15)", border:"1px solid "+(AKTIF_SIRKET_ONEK==="bsp_" ? "rgba(167,139,250,0.4)" : "rgba(var(--vurgu-rgb),0.4)"), color: AKTIF_SIRKET_ONEK==="bsp_" ? "#a78bfa" : GOLD, whiteSpace:"nowrap", cursor:"pointer", display:"inline-flex", alignItems:"center", gap:4 }}>{AKTIF_SIRKET_ONEK==="bsp_" ? "✨ BSP" : "💎 MSK"} <span style={{ fontSize:8, opacity:0.7 }}>⇄</span></button>
+              <button onClick={()=>{ if (onSirketDegis) onSirketDegis(); }} title="Şirket değiştir" style={{ fontSize:9, fontWeight:800, padding:"3px 10px", borderRadius:20, background: AKTIF_SIRKET_ONEK==="bsp2_" ? "rgba(167,139,250,0.15)" : "rgba(var(--vurgu-rgb),0.15)", border:"1px solid "+(AKTIF_SIRKET_ONEK==="bsp2_" ? "rgba(167,139,250,0.4)" : "rgba(var(--vurgu-rgb),0.4)"), color: AKTIF_SIRKET_ONEK==="bsp2_" ? "#a78bfa" : GOLD, whiteSpace:"nowrap", cursor:"pointer", display:"inline-flex", alignItems:"center", gap:4 }}>{AKTIF_SIRKET_ONEK==="bsp2_" ? "✨ BSP" : "💎 MSK"} <span style={{ fontSize:8, opacity:0.7 }}>⇄</span></button>
             </h1>
             <div style={{ display:"flex", gap:3, flexWrap:"wrap" }}>
               {["koleksiyonlar","modeller","konfirmasyon","siparisler","iadeler","musteriler","vitrin","kasa","analiz","asistan","ayarlar"].map(n => {
