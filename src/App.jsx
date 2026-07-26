@@ -1845,28 +1845,57 @@ function VitrinModu({ kod, onizleme }) {
     if (vitrinMusteri && !onizleme) vitrinAktiviteKaydet(vitrinMusteri.onek, vitrinMusteri.kod, vitrinMusteri.ad, "koleksiyon", k.ad, null, null);
   };
 
-  const vGridStil = { };
-  const vGridClass = "vm-grid";
+  // ═══ İPHONE GALERİSİ TARZI — parmakla sütun sayısı (pinch-to-zoom) ═══
+  const [vitrinSutun, setVitrinSutun] = useState(() => {
+    try { const k = Number(localStorage.getItem("vitrin_sutun")); if (k >= 1 && k <= 6) return k; } catch {}
+    return (typeof window !== "undefined" && window.innerWidth <= 640) ? 4 : 5;
+  });
+  useEffect(() => { try { localStorage.setItem("vitrin_sutun", String(vitrinSutun)); } catch {} }, [vitrinSutun]);
+  const pinchRef = useRef({ d0: 0 });
+  const pinchBasla = (e) => {
+    if (e.touches && e.touches.length === 2) {
+      pinchRef.current.d0 = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+    }
+  };
+  const pinchHareket = (e) => {
+    if (e.touches && e.touches.length === 2 && pinchRef.current.d0) {
+      const d = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+      const fark = d - pinchRef.current.d0;
+      if (Math.abs(fark) > 45) {
+        // parmakları AÇMAK (fark>0) → AZ sütun (büyük foto), KAPATMAK → ÇOK sütun (küçük foto) — iOS gibi
+        setVitrinSutun(s => Math.min(6, Math.max(1, fark > 0 ? s - 1 : s + 1)));
+        pinchRef.current.d0 = d;
+      }
+    }
+  };
+  // Model ızgarası stili — sütun sayısı pinch ile değişir, gap sütuna göre otomatik
+  const modelGridStil = { display:"grid", gridTemplateColumns:`repeat(${vitrinSutun},1fr)`, gap: vitrinSutun >= 5 ? 6 : vitrinSutun === 4 ? 8 : vitrinSutun === 3 ? 10 : 14, touchAction:"pan-y" };
   // Tek model kartı — hem koleksiyon içi hem "Tüm Koleksiyonlar" görünümünde kullanılır
   const vKart = (m) => {
     const sec = secili.has(m.id);
     const g = ayarliGram(m);
     const yeni = yeniMi(m);
     const kolAdi = (kollar.find(k => k.id === m.ki) || {}).ad || "";
+    const kucuk = vitrinSutun >= 4;      // dar kart (4+ sütun)
+    const cokKucuk = vitrinSutun >= 5;   // çok dar kart (5-6 sütun)
+    const secBtnBoyut = cokKucuk ? 20 : kucuk ? 23 : 26;
+    const gramBoyut = cokKucuk ? 11 : kucuk ? 12 : 15;
+    const kodBoyut = cokKucuk ? 9 : kucuk ? 10 : 12;
     return (
     <div key={m.id} className="vm-card">
       <div onClick={()=>{ setDetayModel(m); if(vitrinMusteri && !onizleme) vitrinAktiviteKaydet(vitrinMusteri.onek, vitrinMusteri.kod, vitrinMusteri.ad, "model", kolAdi, m.kod, m.ad); }}
-        style={{ aspectRatio:"4/3", background:"#f7f7f8", borderRadius:12, position:"relative", overflow:"hidden", outline: sec?"2px solid var(--vurgu)":"none", outlineOffset:2 }}>
+        style={{ aspectRatio:"4/3", background:"#f7f7f8", borderRadius: kucuk?9:12, position:"relative", overflow:"hidden", outline: sec?"2px solid var(--vurgu)":"none", outlineOffset:2 }}>
         {m.foto
           ? <img className="vm-ph" src={m.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"contain", display:"block" }}/>
           : <div style={{ width:"100%", height:"100%", display:"flex", alignItems:"center", justifyContent:"center", color:"#d2d2d7", fontSize:26 }}>◇</div>}
-        {yeni && <span style={{ position:"absolute", top:10, left:10, background:"var(--vurgu)", color:"#fff", fontSize:12, padding:"5px 13px", borderRadius:980, fontWeight:700, letterSpacing:"0.05em", boxShadow:"0 2px 10px rgba(0,0,0,0.35)" }}>YENİ</span>}
+        {yeni && !cokKucuk && <span style={{ position:"absolute", top: kucuk?6:10, left: kucuk?6:10, background:"var(--vurgu)", color:"#fff", fontSize: kucuk?9:12, padding: kucuk?"3px 8px":"5px 13px", borderRadius:980, fontWeight:700, letterSpacing:"0.05em", boxShadow:"0 2px 10px rgba(0,0,0,0.35)" }}>YENİ</span>}
+        {yeni && cokKucuk && <span style={{ position:"absolute", top:5, left:5, width:8, height:8, borderRadius:"50%", background:"var(--vurgu)", boxShadow:"0 1px 4px rgba(0,0,0,0.4)" }}/>}
         <button onClick={(e)=>{ e.stopPropagation(); const ns=new Set(secili); sec?ns.delete(m.id):ns.add(m.id); setSecili(ns); }}
-          style={{ position:"absolute", top:9, right:9, width:26, height:26, borderRadius:"50%", background: sec?"var(--vurgu)":"rgba(255,255,255,0.92)", border: sec?"none":"1px solid rgba(0,0,0,0.08)", color: sec?"#fff":"#c7c7cc", fontSize:13, fontWeight:600, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", transition:"all .15s ease", boxShadow:"0 1px 3px rgba(0,0,0,0.12)" }}>✓</button>
+          style={{ position:"absolute", top:6, right:6, width:secBtnBoyut, height:secBtnBoyut, borderRadius:"50%", background: sec?"var(--vurgu)":"rgba(255,255,255,0.92)", border: sec?"none":"1px solid rgba(0,0,0,0.08)", color: sec?"#fff":"#c7c7cc", fontSize: cokKucuk?10:13, fontWeight:600, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", transition:"all .15s ease", boxShadow:"0 1px 3px rgba(0,0,0,0.12)" }}>✓</button>
       </div>
-      <div className="vm-meta" style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", marginTop:10, padding:"0 2px" }}>
-        <span className="vm-gram" style={{ letterSpacing:"-0.01em" }}>{g || "—"}<span style={{ fontSize:11, color:"#86868b", marginLeft:2 }}>g</span></span>
-        <span className="vm-kod">{m.kod}</span>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", marginTop: kucuk?6:10, padding:"0 2px", gap:4 }}>
+        <span style={{ fontSize:gramBoyut, color:"#f5f5f7", fontWeight:600, letterSpacing:"-0.01em", whiteSpace:"nowrap" }}>{g || "—"}<span style={{ fontSize: cokKucuk?8:11, color:"#86868b", marginLeft:1 }}>g</span></span>
+        <span style={{ fontSize:kodBoyut, color:"#c7c7cc", fontWeight:600, letterSpacing:"0.01em", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{m.kod}</span>
       </div>
     </div>
     );
@@ -1959,6 +1988,12 @@ function VitrinModu({ kod, onizleme }) {
           <option value="gramAzalan" style={{background:"#1c1c1e"}}>Gram: Yüksek → Düşük</option>
           <option value="gramArtan" style={{background:"#1c1c1e"}}>Gram: Düşük → Yüksek</option>
         </select>
+        {/* SÜTUN SAYISI — parmakla da (pinch) değişir, bu butonlar keşif/masaüstü için */}
+        <div style={{ display:"inline-flex", alignItems:"center", gap:2, background:"rgba(255,255,255,0.07)", borderRadius:9, padding:3, marginLeft:"auto" }}>
+          <button onClick={()=>setVitrinSutun(s=>Math.max(1,s-1))} title="Büyüt" style={{ width:30, height:30, border:"none", borderRadius:6, background: vitrinSutun>1?"transparent":"transparent", color:"#f5f5f7", fontSize:18, fontWeight:600, cursor:"pointer", opacity: vitrinSutun>1?1:0.3, lineHeight:1 }}>−</button>
+          <span style={{ fontSize:11, color:"#86868b", minWidth:14, textAlign:"center" }}>{vitrinSutun}</span>
+          <button onClick={()=>setVitrinSutun(s=>Math.min(6,s+1))} title="Küçült" style={{ width:30, height:30, border:"none", borderRadius:6, background:"transparent", color:"#f5f5f7", fontSize:16, fontWeight:600, cursor:"pointer", opacity: vitrinSutun<6?1:0.3, lineHeight:1 }}>▦</button>
+        </div>
       </div>
       )}
 
@@ -2058,7 +2093,7 @@ function VitrinModu({ kod, onizleme }) {
         <div className="vm-pad" style={{ padding:"0 28px 40px" }}>
           {koldaki.length === 0
             ? <div style={{ textAlign:"center", color:"#6e6e73", padding:"60px 0", fontSize:14 }}>Model bulunamadı</div>
-            : <div className={vGridClass} style={vGridStil}>{koldaki.map(vKart)}</div>}
+            : <div style={modelGridStil} onTouchStart={pinchBasla} onTouchMove={pinchHareket}>{koldaki.map(vKart)}</div>}
         </div>
       )}
 
@@ -2075,7 +2110,7 @@ function VitrinModu({ kod, onizleme }) {
                 <span style={{ fontSize:12, color:"#86868b" }}>{liste.length} model</span>
                 {yeniSay > 0 && <span style={{ fontSize:11, color:"#fff", background:"var(--vurgu)", padding:"3px 10px", borderRadius:980, fontWeight:700 }}>{yeniSay} yeni</span>}
               </div>
-              <div className={vGridClass} style={vGridStil}>{liste.map(vKart)}</div>
+              <div style={modelGridStil} onTouchStart={pinchBasla} onTouchMove={pinchHareket}>{liste.map(vKart)}</div>
             </div>
             );
           })}
