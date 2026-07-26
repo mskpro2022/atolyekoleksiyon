@@ -1846,6 +1846,7 @@ function VitrinModu({ kod, onizleme }) {
   };
 
   const vGridStil = { display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))", gap:16 };
+  const vGridClass = "vm-grid";
   // Tek model kartı — hem koleksiyon içi hem "Tüm Koleksiyonlar" görünümünde kullanılır
   const vKart = (m) => {
     const sec = secili.has(m.id);
@@ -1873,7 +1874,7 @@ function VitrinModu({ kod, onizleme }) {
 
   return (
     <div style={{ minHeight:"100vh", background:"#0a0a0a", color:"#f5f5f7", fontFamily:"-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif", WebkitFontSmoothing:"antialiased" }}>
-      <style>{"*{box-sizing:border-box}html,body,#root{margin:0!important;padding:0!important;width:100%!important;max-width:100%!important;min-height:100vh;background:#0a0a0a!important;text-align:left}body{overflow-x:hidden}.vm-card{cursor:pointer}.vm-ph{transition:transform .5s cubic-bezier(.2,.8,.2,1)}.vm-card:hover .vm-ph{transform:scale(1.04)}.vm-pill{transition:all .2s ease}.vm-sel{transition:opacity .18s ease}.vm-card:hover .vm-sel{opacity:1}"}</style>
+      <style>{"*{box-sizing:border-box}html,body,#root{margin:0!important;padding:0!important;width:100%!important;max-width:100%!important;min-height:100vh;background:#0a0a0a!important;text-align:left}body{overflow-x:hidden}.vm-card{cursor:pointer}.vm-ph{transition:transform .5s cubic-bezier(.2,.8,.2,1)}.vm-card:hover .vm-ph{transform:scale(1.04)}.vm-pill{transition:all .2s ease}.vm-sel{transition:opacity .18s ease}.vm-card:hover .vm-sel{opacity:1}@media(max-width:640px){.vm-grid{grid-template-columns:repeat(4,1fr)!important;gap:7px!important}.vm-kart-grid{grid-template-columns:repeat(3,1fr)!important;gap:9px!important}.vm-pad{padding-left:12px!important;padding-right:12px!important}}"}</style>
 
       {/* ÖNİZLEME BANDI — sahibi kendi bakıyor, kayıt tutulmuyor */}
       {onizleme && (
@@ -2001,7 +2002,7 @@ function VitrinModu({ kod, onizleme }) {
           )}
 
           {/* KOLEKSİYON KARTLARI */}
-          <div style={{ padding:"14px 28px 8px", display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(230px,1fr))", gap:14 }}>
+          <div className="vm-kart-grid vm-pad" style={{ padding:"14px 28px 8px", display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(230px,1fr))", gap:14 }}>
             {kollarSirali.map(k => {
               const kolModelleri = modeller.filter(m => m.ki === k.id);
               const kapaklar = kapakAl(k.id);
@@ -2054,16 +2055,16 @@ function VitrinModu({ kod, onizleme }) {
 
       {/* ═══ MODEL IZGARASI — koleksiyon içi (DÜZ liste) ═══ */}
       {aktifKol && (
-        <div style={{ padding:"0 28px 40px" }}>
+        <div className="vm-pad" style={{ padding:"0 28px 40px" }}>
           {koldaki.length === 0
             ? <div style={{ textAlign:"center", color:"#6e6e73", padding:"60px 0", fontSize:14 }}>Model bulunamadı</div>
-            : <div style={vGridStil}>{koldaki.map(vKart)}</div>}
+            : <div className={vGridClass} style={vGridStil}>{koldaki.map(vKart)}</div>}
         </div>
       )}
 
       {/* ═══ TÜM KOLEKSİYONLAR — koleksiyon bazlı gruplu liste ═══ */}
       {tumGorunum && (
-        <div style={{ padding:"0 28px 40px" }}>
+        <div className="vm-pad" style={{ padding:"0 28px 40px" }}>
           {tumGruplar.length === 0 && <div style={{ textAlign:"center", color:"#6e6e73", padding:"60px 0", fontSize:14 }}>Model bulunamadı</div>}
           {tumGruplar.map(({ kol, liste }) => {
             const yeniSay = liste.filter(m => yeniMi(m)).length;
@@ -2074,7 +2075,7 @@ function VitrinModu({ kod, onizleme }) {
                 <span style={{ fontSize:12, color:"#86868b" }}>{liste.length} model</span>
                 {yeniSay > 0 && <span style={{ fontSize:11, color:"#fff", background:"var(--vurgu)", padding:"3px 10px", borderRadius:980, fontWeight:700 }}>{yeniSay} yeni</span>}
               </div>
-              <div style={vGridStil}>{liste.map(vKart)}</div>
+              <div className={vGridClass} style={vGridStil}>{liste.map(vKart)}</div>
             </div>
             );
           })}
