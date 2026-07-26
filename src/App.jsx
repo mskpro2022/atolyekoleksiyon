@@ -1587,12 +1587,11 @@ function VitrinModu({ kod, onizleme }) {
   const [oncekiZiyaret, setOncekiZiyaret] = useState(0); // toptancının önceki ziyareti (yeni model tespiti)
   const [siralama, setSiralama] = useState("kodTers"); // kodTers (varsayılan: en yüksek kod üstte) | kod | yeni | gramArtan | gramAzalan
   const [vitrinMusteri, setVitrinMusteri] = useState(null); // { ad, kod, onek } — aktivite takibi için
-  // İPHONE GALERİSİ pinch-zoom hook'ları — TÜM erken return'lerden ÖNCE (React Hook kuralı)
+  // Vitrin sütun sayısı (büyüt/küçült) — erken return'lerden ÖNCE (React Hook kuralı)
   const [vitrinSutun, setVitrinSutun] = useState(() => {
     try { const k = Number(localStorage.getItem("vitrin_sutun")); if (k >= 1 && k <= 6) return k; } catch {}
     return (typeof window !== "undefined" && window.innerWidth <= 640) ? 4 : 5;
   });
-  const pinchRef = useRef({ d0: 0 });
   useEffect(() => { try { localStorage.setItem("vitrin_sutun", String(vitrinSutun)); } catch {} }, [vitrinSutun]);
   const VITRIN_AYARLAR = [
     { id: "10K", l: "10 Ayar" },
@@ -1852,26 +1851,8 @@ function VitrinModu({ kod, onizleme }) {
     if (vitrinMusteri && !onizleme) vitrinAktiviteKaydet(vitrinMusteri.onek, vitrinMusteri.kod, vitrinMusteri.ad, "koleksiyon", k.ad, null, null);
   };
 
-  // ═══ İPHONE GALERİSİ TARZI — parmakla sütun sayısı (pinch-to-zoom) ═══
-  // NOT: vitrinSutun/pinchRef hook'ları component başına taşındı (erken return'lerden ÖNCE olmalı — React #310)
-  const pinchBasla = (e) => {
-    if (e.touches && e.touches.length === 2) {
-      pinchRef.current.d0 = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
-    }
-  };
-  const pinchHareket = (e) => {
-    if (e.touches && e.touches.length === 2 && pinchRef.current.d0) {
-      const d = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
-      const fark = d - pinchRef.current.d0;
-      if (Math.abs(fark) > 45) {
-        // parmakları AÇMAK (fark>0) → AZ sütun (büyük foto), KAPATMAK → ÇOK sütun (küçük foto) — iOS gibi
-        setVitrinSutun(s => Math.min(6, Math.max(1, fark > 0 ? s - 1 : s + 1)));
-        pinchRef.current.d0 = d;
-      }
-    }
-  };
-  // Model ızgarası stili — sütun sayısı pinch ile değişir, gap sütuna göre otomatik
-  const modelGridStil = { display:"grid", gridTemplateColumns:`repeat(${vitrinSutun},1fr)`, gap: vitrinSutun >= 5 ? 6 : vitrinSutun === 4 ? 8 : vitrinSutun === 3 ? 10 : 14, touchAction:"pan-y" };
+  // Model ızgarası stili — sütun sayısı sağ alttaki büyüt/küçült kontrolüyle değişir
+  const modelGridStil = { display:"grid", gridTemplateColumns:`repeat(${vitrinSutun},1fr)`, gap: vitrinSutun >= 5 ? 6 : vitrinSutun === 4 ? 8 : vitrinSutun === 3 ? 10 : 14 };
   // Tek model kartı — hem koleksiyon içi hem "Tüm Koleksiyonlar" görünümünde kullanılır
   const vKart = (m) => {
     const sec = secili.has(m.id);
@@ -1990,12 +1971,6 @@ function VitrinModu({ kod, onizleme }) {
           <option value="gramAzalan" style={{background:"#1c1c1e"}}>Gram: Yüksek → Düşük</option>
           <option value="gramArtan" style={{background:"#1c1c1e"}}>Gram: Düşük → Yüksek</option>
         </select>
-        {/* SÜTUN SAYISI — parmakla da (pinch) değişir, bu butonlar keşif/masaüstü için */}
-        <div style={{ display:"inline-flex", alignItems:"center", gap:2, background:"rgba(255,255,255,0.07)", borderRadius:9, padding:3, marginLeft:"auto" }}>
-          <button onClick={()=>setVitrinSutun(s=>Math.max(1,s-1))} title="Büyüt" style={{ width:30, height:30, border:"none", borderRadius:6, background: vitrinSutun>1?"transparent":"transparent", color:"#f5f5f7", fontSize:18, fontWeight:600, cursor:"pointer", opacity: vitrinSutun>1?1:0.3, lineHeight:1 }}>−</button>
-          <span style={{ fontSize:11, color:"#86868b", minWidth:14, textAlign:"center" }}>{vitrinSutun}</span>
-          <button onClick={()=>setVitrinSutun(s=>Math.min(6,s+1))} title="Küçült" style={{ width:30, height:30, border:"none", borderRadius:6, background:"transparent", color:"#f5f5f7", fontSize:16, fontWeight:600, cursor:"pointer", opacity: vitrinSutun<6?1:0.3, lineHeight:1 }}>▦</button>
-        </div>
       </div>
       )}
 
@@ -2095,7 +2070,7 @@ function VitrinModu({ kod, onizleme }) {
         <div className="vm-pad" style={{ padding:"0 28px 40px" }}>
           {koldaki.length === 0
             ? <div style={{ textAlign:"center", color:"#6e6e73", padding:"60px 0", fontSize:14 }}>Model bulunamadı</div>
-            : <div style={modelGridStil} onTouchStart={pinchBasla} onTouchMove={pinchHareket}>{koldaki.map(vKart)}</div>}
+            : <div style={modelGridStil}>{koldaki.map(vKart)}</div>}
         </div>
       )}
 
@@ -2112,10 +2087,21 @@ function VitrinModu({ kod, onizleme }) {
                 <span style={{ fontSize:12, color:"#86868b" }}>{liste.length} model</span>
                 {yeniSay > 0 && <span style={{ fontSize:11, color:"#fff", background:"var(--vurgu)", padding:"3px 10px", borderRadius:980, fontWeight:700 }}>{yeniSay} yeni</span>}
               </div>
-              <div style={modelGridStil} onTouchStart={pinchBasla} onTouchMove={pinchHareket}>{liste.map(vKart)}</div>
+              <div style={modelGridStil}>{liste.map(vKart)}</div>
             </div>
             );
           })}
+        </div>
+      )}
+
+      {/* ═══ SAĞ ALT SABİT BÜYÜT/KÜÇÜLT — model gösterilen ekranlarda ═══ */}
+      {(aktifKol || tumGorunum) && (
+        <div style={{ position:"fixed", right:16, bottom:20, zIndex:50, display:"flex", flexDirection:"column", background:"rgba(28,28,30,0.92)", backdropFilter:"blur(12px)", WebkitBackdropFilter:"blur(12px)", borderRadius:16, boxShadow:"0 6px 24px rgba(0,0,0,0.5)", border:"1px solid rgba(255,255,255,0.12)", overflow:"hidden" }}>
+          <button onClick={()=>setVitrinSutun(s=>Math.max(1,s-1))} disabled={vitrinSutun<=1}
+            title="Büyüt" style={{ width:48, height:48, border:"none", background:"transparent", color: vitrinSutun<=1?"#48484a":"#f5f5f7", fontSize:26, fontWeight:300, cursor: vitrinSutun<=1?"default":"pointer", display:"flex", alignItems:"center", justifyContent:"center", lineHeight:1 }}>+</button>
+          <div style={{ height:1, background:"rgba(255,255,255,0.12)" }}/>
+          <button onClick={()=>setVitrinSutun(s=>Math.min(6,s+1))} disabled={vitrinSutun>=6}
+            title="Küçült" style={{ width:48, height:48, border:"none", background:"transparent", color: vitrinSutun>=6?"#48484a":"#f5f5f7", fontSize:26, fontWeight:300, cursor: vitrinSutun>=6?"default":"pointer", display:"flex", alignItems:"center", justifyContent:"center", lineHeight:1 }}>−</button>
         </div>
       )}
 
