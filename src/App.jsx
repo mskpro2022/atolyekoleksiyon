@@ -2753,6 +2753,19 @@ function Atolye({ onSirketDegis }) {
 
   const svM = useCallback(async d => {
     console.log("💾 Model yazılıyor → şirket öneği: [" + AKTIF_SIRKET_ONEK + "] (" + (AKTIF_SIRKET_ONEK==="bsp_"?"BSP":AKTIF_SIRKET_ONEK===""?"MSK":AKTIF_SIRKET_ONEK) + "), " + d.length + " model");
+    // ═══ ÇAKIŞMA KORUMASI ═══
+    // modeller tablosunda benzersizlik SADECE `id` üzerinde (onConflict:'id').
+    // MSK (onek="") çıplak id kullanır: "x123". BSP gibi diğer şirketler altında yazılan
+    // her modelin id'sini şirket önekiyle DAMGALA → "bsp_x123". Böylece BSP yazması
+    // MSK'nın satırını (aynı çıplak id) ASLA ezemez. MSK için (önek boş) hiçbir değişiklik yok.
+    if (AKTIF_SIRKET_ONEK) {
+      const on = AKTIF_SIRKET_ONEK;
+      d = d.map(m => {
+        if (!m || !m.id) return m;
+        const id = String(m.id);
+        return id.startsWith(on) ? m : { ...m, id: on + id };
+      });
+    }
     // DUPLICATE TEMİZLEME — aynı koleksiyonda aynı kod/ID varsa son eklenen kazanır
     // FARKLI KOLEKSİYONLARDA aynı kod NORMAL (kopyalama için)
     const idMap = new Map();
