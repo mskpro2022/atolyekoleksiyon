@@ -1587,6 +1587,13 @@ function VitrinModu({ kod, onizleme }) {
   const [oncekiZiyaret, setOncekiZiyaret] = useState(0); // toptancının önceki ziyareti (yeni model tespiti)
   const [siralama, setSiralama] = useState("kodTers"); // kodTers (varsayılan: en yüksek kod üstte) | kod | yeni | gramArtan | gramAzalan
   const [vitrinMusteri, setVitrinMusteri] = useState(null); // { ad, kod, onek } — aktivite takibi için
+  // İPHONE GALERİSİ pinch-zoom hook'ları — TÜM erken return'lerden ÖNCE (React Hook kuralı)
+  const [vitrinSutun, setVitrinSutun] = useState(() => {
+    try { const k = Number(localStorage.getItem("vitrin_sutun")); if (k >= 1 && k <= 6) return k; } catch {}
+    return (typeof window !== "undefined" && window.innerWidth <= 640) ? 4 : 5;
+  });
+  const pinchRef = useRef({ d0: 0 });
+  useEffect(() => { try { localStorage.setItem("vitrin_sutun", String(vitrinSutun)); } catch {} }, [vitrinSutun]);
   const VITRIN_AYARLAR = [
     { id: "10K", l: "10 Ayar" },
     { id: "14K", l: "14 Ayar" },
@@ -1846,12 +1853,7 @@ function VitrinModu({ kod, onizleme }) {
   };
 
   // ═══ İPHONE GALERİSİ TARZI — parmakla sütun sayısı (pinch-to-zoom) ═══
-  const [vitrinSutun, setVitrinSutun] = useState(() => {
-    try { const k = Number(localStorage.getItem("vitrin_sutun")); if (k >= 1 && k <= 6) return k; } catch {}
-    return (typeof window !== "undefined" && window.innerWidth <= 640) ? 4 : 5;
-  });
-  useEffect(() => { try { localStorage.setItem("vitrin_sutun", String(vitrinSutun)); } catch {} }, [vitrinSutun]);
-  const pinchRef = useRef({ d0: 0 });
+  // NOT: vitrinSutun/pinchRef hook'ları component başına taşındı (erken return'lerden ÖNCE olmalı — React #310)
   const pinchBasla = (e) => {
     if (e.touches && e.touches.length === 2) {
       pinchRef.current.d0 = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
@@ -2824,14 +2826,37 @@ function Atolye({ onSirketDegis }) {
       const d = fc ? JSON.parse(fc) : {};
       localStorage.setItem("atolye_full_cache_" + AKTIF_SIRKET_ONEK, JSON.stringify({...d, m:temiz, ts:Date.now()}));
     } catch {}
-    await guvenliKaydet("v7m", temiz);
+    // ═══ CHUNK VERİ YAZIMI KALDIRILDI — MODELLER ARTIK SADECE TABLODA ═══
+    // Eskiden guvenliKaydet("v7m") her kayıtta 391 ağır chunk yazıyordu (ölü yük, tablo zaten tutuyor).
+    // Kaldırdık. Ama iki şeyi TABLO BAZLI koruyoruz:
+    //  1) Çakışma birleştirme: başka cihaz araya kayıt yaptıysa (v7m_v değişmiş), onları koru (veri kaybı yok)
+    //  2) v7m_v versiyon damgası: polling (çapraz-cihaz senkron) bunu okur
+    let yazilacak = temiz;
+    try {
+      const sunucuV = await ld("v7m_v", 0);
+      const bilinenV = versiyonRef.current.v7m || 0;
+      if (sunucuV && bilinenV && sunucuV !== bilinenV) {
+        // Başka cihaz araya girmiş — tablodaki güncel listeyle birleştir
+        const tabloVeri = await akilliModelOku(AKTIF_SIRKET_ONEK);
+        if (Array.isArray(tabloVeri) && tabloVeri.length > 0) {
+          const benimIdler = new Set(temiz.map(x => x && x.id).filter(Boolean));
+          const digerCihaz = tabloVeri.filter(x => x && x.id && !benimIdler.has(x.id));
+          if (digerCihaz.length > 0) {
+            yazilacak = [...temiz, ...digerCihaz];
+            setModeller(yazilacak);
+            toastGoster("ok", "↻ Diğer cihazın " + digerCihaz.length + " kaydıyla birleştirildi");
+          }
+        }
+      }
+    } catch (e) { /* birleştirme başarısızsa yine de kaydet, veri kaybetme */ }
     sonKendiYazma.current = Date.now(); // Realtime kendi yazmamızı yok saysın
-    // ÇİFT YAZMA (Aşama 2) — tabloya arka planda sessizce SENKRON et (silinenler de temizlenir)
-    tabloModelleriSenkron(AKTIF_SIRKET_ONEK, temiz).then(r => {
+    // Tabloya SENKRON et (tek kaynak — silinenler temizlenir, boşaltma/toplu-silme koruması içinde)
+    tabloModelleriSenkron(AKTIF_SIRKET_ONEK, yazilacak).then(r => {
       sonKendiYazma.current = Date.now(); // senkron bitti, damgayı YENİLE (uzun sürdüyse)
-      if (r.yazilan !== temiz.length) console.warn("⚠ Tablo senkron: " + r.yazilan + "/" + temiz.length);
+      const v = Date.now(); sv("v7m_v", v); versiyonRef.current.v7m = v; // versiyon damgası — polling için (hafif, tek sayı)
+      if (r.yazilan !== yazilacak.length) console.warn("⚠ Tablo senkron: " + r.yazilan + "/" + yazilacak.length);
     }).catch(e => console.error("Tablo senkron (arka plan):", e.message));
-  }, [guvenliKaydet]);
+  }, []);
   const svS = useCallback(async d => {
     setSiparisler(d);
     await guvenliKaydet("v7s", d);
