@@ -553,7 +553,9 @@ function buildKatalogHTML(kol, modeller, sutun, hedefAyar, kollar, gruplu) {
     h += "</div><div class='ft'><span>" + kol.ad + "</span><small>" + pageNum + " / " + totalPages + "</small></div></div>";
   });
 
-  h += "<button class='np pb' onclick='window.print()'>Yazdir / PDF</button></body></html>";
+  h += "<button class='np pb' onclick='window.print()'>Yazdir / PDF</button>";
+  h += "<script>(function(){var mob=/iPhone|iPad|iPod|Android|Mobile/i.test(navigator.userAgent);if(mob)return;function go(){var i=[].slice.call(document.images),n=i.filter(function(x){return !x.complete}).length;if(!n){setTimeout(function(){window.print()},400);return;}i.forEach(function(x){if(!x.complete){x.addEventListener('load',c);x.addEventListener('error',c);}});function c(){if(--n<=0)setTimeout(function(){window.print()},400);}}if(document.readyState==='complete')go();else window.addEventListener('load',go);})();<\/script>";
+  h += "</body></html>";
   return h;
 }
 
@@ -1804,8 +1806,7 @@ function VitrinModu({ kod, onizleme }) {
     // (fiyat/kâr bilgisi zaten içermiyor — sadece kod + gram + ayar)
     const sahteKol = { ad: vitrinAd, on: "", id: aktifKol?.id || "" };
     const html = buildKatalogHTML(sahteKol, liste, sutun || 3, aktifAyar, kollar, true); // gruplu=true → koleksiyon başlıkları
-    const w = window.open("", "_blank");
-    if (w) { w.document.write(html); w.document.close(); setTimeout(() => w.print(), 700); }
+    downloadPDF(html, (vitrinAd || "katalog") + "-" + aktifAyar);
   };
 
   // Kart ekranında "+" ile seçilen KOLEKSİYONLARI, verilen sırayla tek PDF'te topla
@@ -1824,8 +1825,7 @@ function VitrinModu({ kod, onizleme }) {
     if (liste.length === 0) { alert("Seçili koleksiyonlarda model yok."); return; }
     const sahteKol = { ad: vitrinAd, on: "", id: "" };
     const html = buildKatalogHTML(sahteKol, liste, sutun || 3, aktifAyar, kollar, true); // gruplu=true (sıra korunur + başlıklar)
-    const w = window.open("", "_blank");
-    if (w) { w.document.write(html); w.document.close(); setTimeout(() => w.print(), 700); }
+    downloadPDF(html, (vitrinAd || "katalog") + "-" + aktifAyar);
   };
 
   // Kart ekranına dön
@@ -1888,8 +1888,8 @@ function VitrinModu({ kod, onizleme }) {
       <div style={{ padding:"26px 28px 6px" }}>
         {(aktifKol || tumGorunum) && (
           <button onClick={kartEkraninaDon}
-            style={{ display:"inline-flex", alignItems:"center", gap:8, background:"var(--vurgu)", border:"none", borderRadius:12, padding:"10px 18px", color:"#fff", fontSize:14, fontWeight:600, cursor:"pointer", boxShadow:"0 3px 12px rgba(var(--vurgu-rgb),0.3)", marginBottom:14 }}>
-            <span style={{ fontSize:18, lineHeight:1 }}>‹</span> Tüm Koleksiyonlar
+            style={{ display:"inline-flex", alignItems:"center", gap:8, background:"#f5f5f7", border:"none", borderRadius:980, padding:"12px 22px", color:"#1d1d1f", fontSize:15, fontWeight:700, cursor:"pointer", boxShadow:"0 4px 16px rgba(0,0,0,0.35)", marginBottom:16 }}>
+            <span style={{ fontSize:20, lineHeight:1, marginTop:-1 }}>‹</span> Tüm Koleksiyonlar
           </button>
         )}
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", flexWrap:"wrap", gap:14 }}>
