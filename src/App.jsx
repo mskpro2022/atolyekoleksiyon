@@ -2766,19 +2766,16 @@ function Atolye({ onSirketDegis }) {
         return id.startsWith(on) ? m : { ...m, id: on + id };
       });
     }
-    // DUPLICATE TEMİZLEME — aynı koleksiyonda aynı kod/ID varsa son eklenen kazanır
-    // FARKLI KOLEKSİYONLARDA aynı kod NORMAL (kopyalama için)
+    // DUPLICATE TEMİZLEME — SADECE aynı ID (gerçek çift kayıt). 
+    // NOT: Aynı koleksiyonda aynı KOD artık duplicate SAYILMAZ — farklı id'li ayrı modellerdir.
+    // (Eski ki|kod kuralı, aynı kodlu gerçek modelleri siliyordu → her kayıtta veri kaybı.)
     const idMap = new Map();
-    const kodMap = new Map(); // key: "koleksiyonId|kod"
     const temiz = [];
     for (let i = d.length - 1; i >= 0; i--) {
       const m = d[i];
       if (!m) continue;
-      const kodKey = m.kod ? (m.ki || "") + "|" + m.kod.trim().toUpperCase() : null;
       const idKey = m.id;
-      if (kodKey && kodMap.has(kodKey)) continue;
       if (idKey && idMap.has(idKey)) continue;
-      if (kodKey) kodMap.set(kodKey, true);
       if (idKey) idMap.set(idKey, true);
       temiz.unshift(m);
     }
