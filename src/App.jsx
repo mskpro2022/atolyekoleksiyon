@@ -1845,7 +1845,7 @@ function VitrinModu({ kod, onizleme }) {
     if (vitrinMusteri && !onizleme) vitrinAktiviteKaydet(vitrinMusteri.onek, vitrinMusteri.kod, vitrinMusteri.ad, "koleksiyon", k.ad, null, null);
   };
 
-  const vGridStil = { display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))", gap:16 };
+  const vGridStil = { };
   const vGridClass = "vm-grid";
   // Tek model kartı — hem koleksiyon içi hem "Tüm Koleksiyonlar" görünümünde kullanılır
   const vKart = (m) => {
@@ -1864,9 +1864,9 @@ function VitrinModu({ kod, onizleme }) {
         <button onClick={(e)=>{ e.stopPropagation(); const ns=new Set(secili); sec?ns.delete(m.id):ns.add(m.id); setSecili(ns); }}
           style={{ position:"absolute", top:9, right:9, width:26, height:26, borderRadius:"50%", background: sec?"var(--vurgu)":"rgba(255,255,255,0.92)", border: sec?"none":"1px solid rgba(0,0,0,0.08)", color: sec?"#fff":"#c7c7cc", fontSize:13, fontWeight:600, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", transition:"all .15s ease", boxShadow:"0 1px 3px rgba(0,0,0,0.12)" }}>✓</button>
       </div>
-      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", marginTop:10, padding:"0 2px" }}>
-        <span style={{ fontSize:14, color:"#f5f5f7", fontWeight:500, letterSpacing:"-0.01em" }}>{g || "—"}<span style={{ fontSize:11, color:"#86868b", marginLeft:2 }}>g</span></span>
-        <span style={{ fontSize:11, color:"#6e6e73", letterSpacing:"0.02em" }}>{m.kod}</span>
+      <div className="vm-meta" style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", marginTop:10, padding:"0 2px" }}>
+        <span className="vm-gram" style={{ letterSpacing:"-0.01em" }}>{g || "—"}<span style={{ fontSize:11, color:"#86868b", marginLeft:2 }}>g</span></span>
+        <span className="vm-kod">{m.kod}</span>
       </div>
     </div>
     );
@@ -1874,7 +1874,7 @@ function VitrinModu({ kod, onizleme }) {
 
   return (
     <div style={{ minHeight:"100vh", background:"#0a0a0a", color:"#f5f5f7", fontFamily:"-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif", WebkitFontSmoothing:"antialiased" }}>
-      <style>{"*{box-sizing:border-box}html,body,#root{margin:0!important;padding:0!important;width:100%!important;max-width:100%!important;min-height:100vh;background:#0a0a0a!important;text-align:left}body{overflow-x:hidden}.vm-card{cursor:pointer}.vm-ph{transition:transform .5s cubic-bezier(.2,.8,.2,1)}.vm-card:hover .vm-ph{transform:scale(1.04)}.vm-pill{transition:all .2s ease}.vm-sel{transition:opacity .18s ease}.vm-card:hover .vm-sel{opacity:1}@media(max-width:640px){.vm-grid{grid-template-columns:repeat(4,1fr)!important;gap:7px!important}.vm-kart-grid{grid-template-columns:repeat(3,1fr)!important;gap:9px!important}.vm-pad{padding-left:12px!important;padding-right:12px!important}}"}</style>
+      <style>{"*{box-sizing:border-box}html,body,#root{margin:0!important;padding:0!important;width:100%!important;max-width:100%!important;min-height:100vh;background:#0a0a0a!important;text-align:left}body{overflow-x:hidden}.vm-card{cursor:pointer}.vm-ph{transition:transform .5s cubic-bezier(.2,.8,.2,1)}.vm-card:hover .vm-ph{transform:scale(1.04)}.vm-pill{transition:all .2s ease}.vm-sel{transition:opacity .18s ease}.vm-card:hover .vm-sel{opacity:1}.vm-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px}.vm-kart-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px}.vm-kod{font-size:12px;color:#c7c7cc;font-weight:600;letter-spacing:.02em}.vm-gram{font-size:15px;color:#f5f5f7;font-weight:600}@media (max-width:640px){.vm-grid{grid-template-columns:repeat(4,1fr);gap:7px}.vm-kart-grid{grid-template-columns:repeat(3,1fr);gap:9px}.vm-pad{padding-left:12px!important;padding-right:12px!important}.vm-kod{font-size:11px}.vm-gram{font-size:13px}.vm-meta{flex-direction:column;align-items:flex-start!important;gap:1px}}"}</style>
 
       {/* ÖNİZLEME BANDI — sahibi kendi bakıyor, kayıt tutulmuyor */}
       {onizleme && (
@@ -2002,7 +2002,7 @@ function VitrinModu({ kod, onizleme }) {
           )}
 
           {/* KOLEKSİYON KARTLARI */}
-          <div className="vm-kart-grid vm-pad" style={{ padding:"14px 28px 8px", display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(230px,1fr))", gap:14 }}>
+          <div className="vm-kart-grid vm-pad" style={{ padding:"14px 28px 8px" }}>
             {kollarSirali.map(k => {
               const kolModelleri = modeller.filter(m => m.ki === k.id);
               const kapaklar = kapakAl(k.id);
