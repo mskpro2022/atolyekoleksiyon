@@ -1886,7 +1886,7 @@ function VitrinModu({ kod, onizleme }) {
 
   return (
     <div style={{ minHeight:"100vh", background:"#0a0a0a", color:"#f5f5f7", fontFamily:"-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif", WebkitFontSmoothing:"antialiased" }}>
-      <style>{"*{box-sizing:border-box}html,body,#root{margin:0!important;padding:0!important;width:100%!important;max-width:100%!important;min-height:100vh;background:#0a0a0a!important;text-align:left}body{overflow-x:hidden}.vm-card{cursor:pointer}.vm-ph{transition:transform .5s cubic-bezier(.2,.8,.2,1)}.vm-card:hover .vm-ph{transform:scale(1.04)}.vm-pill{transition:all .2s ease}.vm-sel{transition:opacity .18s ease}.vm-card:hover .vm-sel{opacity:1}.vm-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px}.vm-kart-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px}.vm-kod{font-size:12px;color:#c7c7cc;font-weight:600;letter-spacing:.02em}.vm-gram{font-size:15px;color:#f5f5f7;font-weight:600}@media (max-width:640px){.vm-grid{grid-template-columns:repeat(4,1fr);gap:7px}.vm-kart-grid{grid-template-columns:repeat(3,1fr);gap:9px}.vm-pad{padding-left:12px!important;padding-right:12px!important}.vm-kod{font-size:11px}.vm-gram{font-size:13px}.vm-meta{flex-direction:column;align-items:flex-start!important;gap:1px}}"}</style>
+      <style>{"*{box-sizing:border-box}html,body,#root{margin:0!important;padding:0!important;width:100%!important;max-width:100%!important;min-height:100vh;background:#0a0a0a!important;text-align:left}body{overflow-x:hidden}.vm-card{cursor:pointer}.vm-ph{transition:transform .5s cubic-bezier(.2,.8,.2,1)}.vm-card:hover .vm-ph{transform:scale(1.04)}.vm-pill{transition:all .2s ease}.vm-sel{transition:opacity .18s ease}.vm-card:hover .vm-sel{opacity:1}.vm-hscroll{overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}.vm-hscroll::-webkit-scrollbar{display:none}.vm-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px}.vm-kart-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px}.vm-kod{font-size:12px;color:#c7c7cc;font-weight:600;letter-spacing:.02em}.vm-gram{font-size:15px;color:#f5f5f7;font-weight:600}@media (max-width:640px){.vm-grid{grid-template-columns:repeat(4,1fr);gap:7px}.vm-kart-grid{grid-template-columns:repeat(3,1fr);gap:9px}.vm-pad{padding-left:14px!important;padding-right:14px!important}.vm-kod{font-size:11px}.vm-gram{font-size:13px}.vm-meta{flex-direction:column;align-items:flex-start!important;gap:1px}.vm-baslik{font-size:20px!important}.vm-aciklama{font-size:12px!important}.vm-filtre{gap:7px!important;padding-top:8px!important;padding-bottom:10px!important}}"}</style>
 
       {/* ÖNİZLEME BANDI — sahibi kendi bakıyor, kayıt tutulmuyor */}
       {onizleme && (
@@ -1898,43 +1898,41 @@ function VitrinModu({ kod, onizleme }) {
 
 
       {/* ═══ ÜST BAŞLIK ═══ */}
-      <div style={{ padding:"26px 28px 6px" }}>
+      <div className="vm-pad" style={{ padding:"26px 28px 6px" }}>
         {(aktifKol || tumGorunum) && (
           <button onClick={kartEkraninaDon}
-            style={{ display:"inline-flex", alignItems:"center", gap:8, background:"#f5f5f7", border:"none", borderRadius:980, padding:"12px 22px", color:"#1d1d1f", fontSize:15, fontWeight:700, cursor:"pointer", boxShadow:"0 4px 16px rgba(0,0,0,0.35)", marginBottom:16 }}>
-            <span style={{ fontSize:20, lineHeight:1, marginTop:-1 }}>‹</span> Tüm Koleksiyonlar
+            style={{ display:"inline-flex", alignItems:"center", gap:8, background:"#f5f5f7", border:"none", borderRadius:980, padding:"10px 20px", color:"#1d1d1f", fontSize:14, fontWeight:700, cursor:"pointer", boxShadow:"0 4px 16px rgba(0,0,0,0.35)", marginBottom:14 }}>
+            <span style={{ fontSize:19, lineHeight:1, marginTop:-1 }}>‹</span> Tüm Koleksiyonlar
           </button>
         )}
-        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", flexWrap:"wrap", gap:14 }}>
-          <div>
-            <div style={{ fontSize:24, fontWeight:600, color:"#f5f5f7", letterSpacing:"-0.02em" }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", flexWrap:"wrap", gap:12 }}>
+          <div style={{ flex:"1 1 auto", minWidth:0 }}>
+            <div className="vm-baslik" style={{ fontSize:24, fontWeight:600, color:"#f5f5f7", letterSpacing:"-0.02em" }}>
               {aktifKol ? aktifKol.ad : (tumGorunum ? "Tüm Koleksiyonlar" : vitrinAd)}
             </div>
-            <div style={{ fontSize:14, color:"#a1a1a6", marginTop:6 }}>
+            <div className="vm-aciklama" style={{ fontSize:14, color:"#a1a1a6", marginTop:5 }}>
               {(aktifKol || tumGorunum)
                 ? "👇 Beğendiğiniz modelleri seçin, size özel katalog hazırlayalım"
                 : "👇 Bir koleksiyona girin veya + ile seçip size özel katalog alın"}
             </div>
           </div>
-          <div style={{ display:"flex", gap:8 }}>
-            <button onClick={()=>katalogAl(3)} style={{ background:"#f5f5f7", color:"#1d1d1f", border:"none", borderRadius:980, padding:"10px 20px", fontSize:14, fontWeight:600, cursor:"pointer" }}>
-              Katalog Al{(!aktifKol && !tumGorunum && seciliKlasorler.length > 0) ? " ("+seciliKlasorler.length+")" : ""}
-            </button>
-          </div>
+          <button onClick={()=>katalogAl(3)} style={{ flexShrink:0, background:"#f5f5f7", color:"#1d1d1f", border:"none", borderRadius:980, padding:"10px 20px", fontSize:14, fontWeight:600, cursor:"pointer" }}>
+            Katalog Al{(!aktifKol && !tumGorunum && seciliKlasorler.length > 0) ? " ("+seciliKlasorler.length+")" : ""}
+          </button>
         </div>
       </div>
 
-      {/* ═══ KOLEKSİYON PILL BUTONLARI — sadece koleksiyon içindeyken (hızlı geçiş) ═══ */}
+      {/* ═══ KOLEKSİYON PILL BUTONLARI — tek satır yatay kaydırma (mobil dostu) ═══ */}
       {aktifKol && kollarSirali.length > 1 && (
-        <div style={{ padding:"12px 28px 8px", display:"flex", gap:10, flexWrap:"wrap" }}>
+        <div className="vm-hscroll vm-pad" style={{ padding:"12px 28px 8px", display:"flex", gap:9, flexWrap:"nowrap" }}>
           {kollarSirali.map(k => {
             const on = aktifKol.id === k.id;
             const yeniVar = modeller.filter(m => m.ki === k.id).some(m => yeniMi(m));
             return (
               <button key={k.id} onClick={()=>kolAc(k)}
-                className="vm-pill" style={{ position:"relative", fontSize:15, color: on?"#0a0a0a":"#f5f5f7", padding:"11px 22px", borderRadius:14, background: on?"#f5f5f7":"rgba(255,255,255,0.07)", border:"none", fontWeight: on?600:500, cursor:"pointer", whiteSpace:"nowrap" }}>
+                className="vm-pill" style={{ position:"relative", flexShrink:0, fontSize:14, color: on?"#0a0a0a":"#f5f5f7", padding:"9px 18px", borderRadius:12, background: on?"#f5f5f7":"rgba(255,255,255,0.07)", border:"none", fontWeight: on?600:500, cursor:"pointer", whiteSpace:"nowrap" }}>
                 {k.ad}
-                {yeniVar && <span style={{ position:"absolute", top:-6, right:-6, background:"var(--vurgu)", color:"#fff", fontSize:9, fontWeight:700, padding:"2px 7px", borderRadius:980, boxShadow:"0 2px 6px rgba(0,0,0,0.3)" }}>YENİ</span>}
+                {yeniVar && <span style={{ position:"absolute", top:-5, right:-5, background:"var(--vurgu)", color:"#fff", fontSize:8, fontWeight:700, padding:"2px 6px", borderRadius:980, boxShadow:"0 2px 6px rgba(0,0,0,0.3)" }}>YENİ</span>}
               </button>
             );
           })}
@@ -1943,7 +1941,7 @@ function VitrinModu({ kod, onizleme }) {
 
       {/* ═══ AYAR + ARAMA + SIRALAMA — koleksiyon içinde veya tüm koleksiyonlar görünümünde ═══ */}
       {(aktifKol || tumGorunum) && (
-      <div style={{ padding:"12px 28px 14px", display:"flex", alignItems:"center", gap:10, flexWrap:"wrap" }}>
+      <div className="vm-pad vm-filtre" style={{ padding:"12px 28px 14px", display:"flex", alignItems:"center", gap:10, flexWrap:"wrap" }}>
         <div style={{ display:"inline-flex", background:"rgba(255,255,255,0.07)", borderRadius:9, padding:3 }}>
           {VITRIN_AYARLAR.map(a => {
             const on = aktifAyar === a.id;
