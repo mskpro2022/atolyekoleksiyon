@@ -571,8 +571,8 @@ function buildKatalogHTML(kol, modeller, sutun, hedefAyar, kollar, gruplu) {
         if (n.tip === "foto") {
           if (n.foto) h += "<div class='dn' style='" + pos + "'><img src='" + n.foto + "'/></div>";
         } else {
-          const r = Math.min(0.35, Math.max(0.06, n.r || 0.16));
-          const zoom = Math.round((1/(2*r)) * 100);
+          const r = Math.min(0.2, Math.max(0.05, n.r || 0.12));
+          const zoom = Math.round((1/r) * 100);
           h += "<div class='dn' style='" + pos + ";background-image:url(" + m.foto + ");background-size:" + zoom + "% " + zoom + "%;background-position:" + ((n.cx||0.5)*100) + "% " + ((n.cy||0.5)*100) + "%'></div>";
         }
       });
@@ -1446,7 +1446,7 @@ function DetayNoktaEditor({ foto, noktalar, setNoktalar, T }) {
   };
 
   const yakinlikDegistir = (id, delta) => {
-    setNoktalar(noktalar.map(n => n.id===id ? { ...n, r: Math.min(0.35, Math.max(0.06, +(n.r+delta).toFixed(2))) } : n));
+    setNoktalar(noktalar.map(n => n.id===id ? { ...n, r: Math.min(0.2, Math.max(0.05, +(n.r+delta).toFixed(2))) } : n));
   };
 
   const fotoSec = async (id, file) => {
@@ -2457,8 +2457,8 @@ function VitrinModu({ kod, onizleme }) {
               {/* ═══ DETAY LENSLERİ — kırpma (aynı foto) veya ayrı yüklenen foto, tam noktada yüzer ═══ */}
               {Array.isArray(detayModel.detayNoktalari) && detayModel.detayNoktalari.filter(n => (n.tip!=="foto") || n.foto).map(n => {
                 const ayriFoto = n.tip === "foto";
-                const r = Math.min(0.35, Math.max(0.06, n.r || 0.16));
-                const zoom = Math.round((1/(2*r)) * 100); // % — kırpma modunda nokta-odaklı yakınlaştırma
+                const r = Math.min(0.2, Math.max(0.05, n.r || 0.12));
+                const zoom = Math.round((1/r) * 100); // % — kırpma modunda nokta-odaklı yakınlaştırma
                 return (
                   <button key={n.id} onClick={(e)=>{ e.stopPropagation(); setZumNokta(n); }} title={n.etiket}
                     style={{ position:"absolute", left:((n.cx||0.5)*100)+"%", top:((n.cy||0.5)*100)+"%", transform:"translate(-50%,-50%)", width:52, height:52, borderRadius:"50%", overflow:"hidden", border:"2.5px solid #fff", boxShadow:"0 3px 14px rgba(0,0,0,0.45)", cursor:"pointer", padding:0, background:"#f7f7f8",
@@ -2485,8 +2485,8 @@ function VitrinModu({ kod, onizleme }) {
                 </div>
               );
               if (!detayModel.foto) return null;
-              const r = Math.min(0.35, Math.max(0.06, zumNokta.r || 0.16));
-              const zoom = Math.round((1/(2*r*0.85)) * 100); // büyük ekranda biraz daha ferah kırpma
+              const r = Math.min(0.2, Math.max(0.05, zumNokta.r || 0.12));
+              const zoom = Math.round((1/(r*0.85)) * 100); // büyük ekranda biraz daha ferah kırpma
               return (
               <div onClick={()=>setZumNokta(null)} style={{ position:"absolute", inset:0, background:"#0a0a0a", zIndex:20, display:"flex", flexDirection:"column" }}>
                 <div style={{ flex:1, backgroundImage:`url(${detayModel.foto})`, backgroundSize:zoom+"% "+zoom+"%", backgroundPosition:((zumNokta.cx||0.5)*100)+"% "+((zumNokta.cy||0.5)*100)+"%", backgroundRepeat:"no-repeat" }}/>
@@ -4324,8 +4324,8 @@ function Atolye({ onSirketDegis }) {
                       {/* Detay noktaları — KÖŞELERDE, büyük (56px). Sağ üst köşe V butonunun altına kaydırıldı ki çakışmasın. */}
                       {m.foto && Array.isArray(m.detayNoktalari) && m.detayNoktalari.filter(n=>(n.tip!=="foto")||n.foto).slice(0,4).map((n,di) => {
                         const ayriFoto = n.tip === "foto";
-                        const r = Math.min(0.35, Math.max(0.06, n.r || 0.16));
-                        const zoom = Math.round((1/(2*r)) * 100);
+                        const r = Math.min(0.2, Math.max(0.05, n.r || 0.12));
+                        const zoom = Math.round((1/r) * 100);
                         const KOSE = [{ top:26, right:4 }, { bottom:4, right:4 }, { top:4, left:4 }, { bottom:4, left:4 }][di];
                         return (
                           <div key={n.id} title={n.etiket} onClick={e=>e.stopPropagation()}
@@ -8495,8 +8495,8 @@ ${buildContext()}`;
               {/* Detay noktaları — bu kutunun KENDİ en/boy oranına göre düzeltilmiş konum (editörün 4:3 kutusundan farklı) */}
               {fFoto && fDetayNoktalari.map(n => {
                 const ayriFoto = n.tip === "foto";
-                const r = Math.min(0.35, Math.max(0.06, n.r || 0.16));
-                const zoom = Math.round((1/(2*r)) * 100);
+                const r = Math.min(0.2, Math.max(0.05, n.r || 0.12));
+                const zoom = Math.round((1/r) * 100);
                 const pos = ustFotoKonum(n.cx||0.5, n.cy||0.5);
                 return (
                   <div key={n.id} title={n.etiket} onClick={e=>e.stopPropagation()}
