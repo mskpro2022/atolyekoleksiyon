@@ -3528,7 +3528,7 @@ function Atolye({ onSirketDegis }) {
     const f = e.target.files && e.target.files[0];
     e.target.value = ""; // SIFIRLA — aynı/yeni dosya tekrar seçilebilsin (yoksa onChange tetiklenmez)
     if (!f) return;
-    setKirpModal(await resizeImg(f)); // önce boyutlandır, sonra kırpma aracı aç
+    setFFoto(await resizeImg(f)); // direkt yüklenir — kırpmak istersen "✂️ Kırp" butonuyla sonradan aç
   };
   const handleKod  = v => {
     setFKod(v);
@@ -8532,6 +8532,7 @@ ${buildContext()}`;
           <div onClick={()=>fileRef.current&&fileRef.current.click()} style={{ width:"100%", height:120, borderRadius:10, overflow:"hidden", cursor:"pointer", background:fFoto?"transparent":"rgba(var(--vurgu-rgb),0.04)", border:"2px dashed "+(fFoto?"rgba(var(--vurgu-rgb),0.2)":"rgba(var(--vurgu-rgb),0.13)"), display:"flex", alignItems:"center", justifyContent:"center", position:"relative" }}>
             {fFoto ? <img src={fFoto} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }}/> : <div style={{ textAlign:"center", color:"#7a6f5a" }}><div style={{ fontSize:20 }}>+</div><div style={{ fontSize:9 }}>Fotograf yukleyin</div></div>}
             {fFoto && <button onClick={e=>{e.stopPropagation();setFFoto("");}} style={{ position:"absolute", top:4, right:4, background:"rgba(0,0,0,0.6)", border:"none", borderRadius:4, width:18, height:18, color:"#fff", fontSize:9, cursor:"pointer" }}>X</button>}
+            {fFoto && <div onClick={e=>{ e.stopPropagation(); setKirpModal(fFoto); }} style={{ position:"absolute", bottom:4, right:4, background:"rgba(0,0,0,0.6)", color:"#fff", fontSize:9, fontWeight:600, padding:"3px 8px", borderRadius:5, cursor:"pointer" }}>✂️ Kırp</div>}
           </div>
           {fFoto && (
             <AiIsimlendir foto={fFoto} onResult={(ad, kat) => { setFAd(ad); if (kat) setFKategori(kat); }} />
