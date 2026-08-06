@@ -433,7 +433,7 @@ function buildKatalogHTML(kol, modeller, sutun, hedefAyar, kollar, gruplu) {
     + ".ph{flex:1;min-height:0;position:relative;background:#f3f3f3;overflow:hidden}"
     + ".ph img{position:absolute;top:50%;left:50%;width:100%;height:100%;object-fit:contain;object-position:center;display:block;transform:translate(-50%,-50%)}"
     + ".ph .ni{position:absolute;top:0;left:0;width:100%;height:100%;background:#f3f3f3;display:flex;align-items:center;justify-content:center;color:#ddd;font-size:20px}"
-    + ".dn{position:absolute;width:42px;height:42px;border-radius:50%;border:3px solid #fff;box-shadow:0 3px 10px rgba(0,0,0,0.55);background-color:#fff;background-repeat:no-repeat;overflow:hidden;z-index:2}"
+    + ".dn{position:absolute;width:56px;height:56px;border-radius:50%;border:3px solid #fff;box-shadow:0 3px 12px rgba(0,0,0,0.55);background-color:#fff;background-repeat:no-repeat;overflow:hidden;z-index:2}"
     + ".dn img{width:100%;height:100%;object-fit:cover}"
     + ".dn-ico{display:flex;align-items:center;justify-content:center;font-size:20px;background:#1a1a1a}"
     + ".cd-bileklik .ph img{object-fit:cover;transform:none;top:0;left:0}"
@@ -469,7 +469,7 @@ function buildKatalogHTML(kol, modeller, sutun, hedefAyar, kollar, gruplu) {
     // konum bozulmaz), İÇERİK ise artık fotonun kendi piksel koordinatına göre doğru hesaplanıyor
     // (cx,cy editörde letterbox-düzeltmeli yakalanıyor — background-position bu yüzden her kutuda doğru).
     if (m.foto && Array.isArray(m.detayNoktalari) && m.detayNoktalari.length > 0) {
-      const KOSELER = [["top:6px;right:6px"],["bottom:6px;right:6px"],["top:6px;left:6px"],["bottom:6px;left:6px"]];
+      const KOSELER = [["top:8px;right:8px"],["bottom:8px;right:8px"],["top:8px;left:8px"],["bottom:8px;left:8px"]];
       m.detayNoktalari.slice(0,4).forEach((n, i) => {
         const pos = KOSELER[i][0];
         if (n.tip === "foto") {
@@ -573,7 +573,7 @@ function buildKatalogHTML(kol, modeller, sutun, hedefAyar, kollar, gruplu) {
   });
 
   h += "<button class='np pb' onclick='window.print()'>Yazdir / PDF</button>";
-  h += "<script>(function(){var mob=/iPhone|iPad|iPod|Android|Mobile/i.test(navigator.userAgent);if(mob)return;function go(){var i=[].slice.call(document.images),n=i.filter(function(x){return !x.complete}).length;if(!n){setTimeout(function(){window.print()},400);return;}i.forEach(function(x){if(!x.complete){x.addEventListener('load',c);x.addEventListener('error',c);}});function c(){if(--n<=0)setTimeout(function(){window.print()},400);}}if(document.readyState==='complete')go();else window.addEventListener('load',go);})();<\/script>";
+  h += "<script>(function(){var mob=/iPhone|iPad|iPod|Android|Mobile/i.test(navigator.userAgent);if(mob)return;function go(){var liste=[].slice.call(document.images);[].slice.call(document.querySelectorAll('.dn')).forEach(function(el){var bg=getComputedStyle(el).backgroundImage;var mm=bg&&bg.match(/url\\([\"']?([^\"')]+)[\"']?\\)/);if(mm&&mm[1]){var im=new Image();im.src=mm[1];liste.push(im);}});var n=liste.filter(function(x){return !x.complete}).length;if(!n){setTimeout(function(){window.print()},400);return;}liste.forEach(function(x){if(!x.complete){x.addEventListener('load',c);x.addEventListener('error',c);}});function c(){if(--n<=0)setTimeout(function(){window.print()},400);}}if(document.readyState==='complete')go();else window.addEventListener('load',go);})();<\/script>";
   h += "</body></html>";
   return h;
 }
