@@ -3182,7 +3182,7 @@ function Atolye({ onSirketDegis }) {
   };
 
   const saveModel = () => {
-    if (!fAd.trim()) return;
+    if (!fKod.trim()) return; // Model adı artık zorunlu değil — kod tek zorunlu alan
     // Taş listesinden toplam gram hesapla
     const toplamTasGram = fTaslar.reduce((acc, t) => {
       const gr = tasGramHesapla(t.sekil, t.tur, isNaN(Number(t.boyut)) ? t.boyut : Number(t.boyut), Number(t.adet)||1, ozelTaslar);
@@ -3194,7 +3194,7 @@ function Atolye({ onSirketDegis }) {
     const hesaplananTasGram = fTaslar.length > 0 && toplamTasGram > 0
       ? toplamTasGram
       : (Number(fTasGram)||0);
-    const obj = { ad: fAd.trim(), kod: fKod.trim().toUpperCase(), kategori: fKategori, gram: Number(fGram)||0, refAyar: fRefAyar, tasGram: hesaplananTasGram, taslar: fTaslar, tasBoy: fTasBoy.trim(), tasSekil: fTasSekil, tasTur: fTasTur, tasBoyut: fTasBoyut, tasAdet: Number(fTasAdet)||0, madenCarpan: Number(fMadenC)||0, iscilikDolar: Number(fIscilikDolar)||0, iscilikBirim: fIscilikBirim, iscilikAyarlar: fIscilikAyarlar, ekMaliyet: Number(fEkMaliyet)||0, ac: fAc.trim(), foto: fFoto, ki: fKolId, durum: fDurum, etiketler: fEtiketler, detayNoktalari: fDetayNoktalari };
+    const obj = { ad: fAd.trim() || fKod.trim().toUpperCase(), kod: fKod.trim().toUpperCase(), kategori: fKategori, gram: Number(fGram)||0, refAyar: fRefAyar, tasGram: hesaplananTasGram, taslar: fTaslar, tasBoy: fTasBoy.trim(), tasSekil: fTasSekil, tasTur: fTasTur, tasBoyut: fTasBoyut, tasAdet: Number(fTasAdet)||0, madenCarpan: Number(fMadenC)||0, iscilikDolar: Number(fIscilikDolar)||0, iscilikBirim: fIscilikBirim, iscilikAyarlar: fIscilikAyarlar, ekMaliyet: Number(fEkMaliyet)||0, ac: fAc.trim(), foto: fFoto, ki: fKolId, durum: fDurum, etiketler: fEtiketler, detayNoktalari: fDetayNoktalari };
     if (!obj.id) obj.olusturma = Date.now();
     // Aynı kodlu diğer modeller var mı kontrol et
     const FIYAT_ALANLARI = ["iscilikDolar","iscilikBirim","iscilikAyarlar","ekMaliyet","madenCarpan"];
@@ -3356,6 +3356,8 @@ function Atolye({ onSirketDegis }) {
     };
     if (sirala==="yeni_eskiye") r=[...r].sort((a,b)=>(b.t||0)-(a.t||0));
     else if (sirala==="eski_yeniye") r=[...r].sort((a,b)=>(a.t||0)-(b.t||0));
+    else if (sirala==="kod_yeni") r=[...r].sort((a,b)=>kodSirala(b,a)); // Koda göre en yeni — en yüksek kod üstte (ALT185 > ALT184)
+    else if (sirala==="kod_eski") r=[...r].sort((a,b)=>kodSirala(a,b)); // Koda göre en eski — en düşük kod üstte (ALT1 > ALT2)
     else if (sirala==="kar_desc" && altinKgUSD>0) r=[...r].sort((a,b)=>{ const ha=hesapla(a,a.refAyar,altinKgUSD,madenCarpan),hb=hesapla(b,b.refAyar,altinKgUSD,madenCarpan); return hb.karHas-ha.karHas; });
     else if (sirala==="kar_asc" && altinKgUSD>0) r=[...r].sort((a,b)=>{ const ha=hesapla(a,a.refAyar,altinKgUSD,madenCarpan),hb=hesapla(b,b.refAyar,altinKgUSD,madenCarpan); return ha.karHas-hb.karHas; });
     else if (sirala==="gram_asc") r=[...r].sort((a,b)=>(Number(a.gram)||0)-(Number(b.gram)||0));
@@ -3974,7 +3976,8 @@ function Atolye({ onSirketDegis }) {
                 { id:"kar_asc",       l:"Az karlı önce" },
                 { id:"gram_asc",      l:"Az gram önce" },
                 { id:"gram_desc",     l:"Çok gram önce" },
-                { id:"kod",           l:"Koda göre" },
+                { id:"kod_yeni",      l:"Koda göre en yeni" },
+                { id:"kod_eski",      l:"Koda göre en eski" },
                 { id:"cok_satilan",   l:"Çok satılan" },
               ].map(s => (
                 <button key={s.id} onClick={()=>setSirala(s.id)} style={{ background:sirala===s.id?T.btnBg:T.card, border:"1px solid", borderColor:sirala===s.id?T.btnBorder:T.border, borderRadius:5, padding:"3px 7px", color:sirala===s.id?T.gold:T.dim, fontSize:8, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap" }}>{s.l}</button>
@@ -8384,7 +8387,7 @@ ${buildContext()}`;
             ))}
           </div>
         </Fl>
-        <Fl label="Model Adi" req><input value={fAd} onChange={e=>setFAd(e.target.value)} placeholder="Pirlanta Tektas Yuzuk" style={IS}/></Fl>
+        {/* Model Adı kaldırıldı — kod artık tek zorunlu/görünen kimlik alanı. Eski modellerdeki isimler korunur (fAd arka planda yükleniyor). */}
         <Fl label="Uretim Durumu"><select value={fDurum} onChange={e=>setFDurum(e.target.value)} style={IS}>{DURUMLAR.map(d=><option key={d.id} value={d.id}>{d.l}</option>)}</select></Fl>
 
         <div style={{ display:"flex", gap:7 }}>
@@ -8598,7 +8601,7 @@ ${buildContext()}`;
           </div>
         )}
 
-        <button onClick={saveModel} disabled={!fAd.trim()} style={{ ...BG, width:"100%", marginTop:4, opacity:fAd.trim()?1:0.4 }}>{editM?"Kaydet":"Ekle"}</button>
+        <button onClick={saveModel} disabled={!fKod.trim()} style={{ ...BG, width:"100%", marginTop:4, opacity:fKod.trim()?1:0.4 }}>{editM?"Kaydet":"Ekle"}</button>
       </Modal>
 
       {/* SİLME ONAY */}
