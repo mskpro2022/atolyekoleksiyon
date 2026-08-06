@@ -299,6 +299,19 @@ function resizeImg(file) {
 }
 
 // Bir data-URL fotoğrafın (x,y,w,h) — 0..1 fraksiyon — bölgesini kırpıp aynı kalite standardıyla döndürür
+// Detay lensi için <img> stili — GERÇEK img elemanı + yüzde bazlı width/height/left/top.
+// (CSS background-position yerine bunu kullanıyoruz: matematik burada tam kontrolümüzde,
+// hangi tarayıcıda da aynı davranır.) zoom = görüntünün konteynere göre % büyüklüğü (örn 800 = 8x).
+function lensImgStil(cx, cy, zoom) {
+  const z = zoom + "%";
+  return {
+    position: "absolute",
+    width: z, height: z, maxWidth: "none", maxHeight: "none",
+    left: (50 - (cx||0.5) * zoom) + "%",
+    top: (50 - (cy||0.5) * zoom) + "%",
+  };
+}
+
 function cropFromDataURL(src, kirp) {
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -2461,10 +2474,8 @@ function VitrinModu({ kod, onizleme }) {
                 const zoom = Math.round((1/r) * 100); // % — kırpma modunda nokta-odaklı yakınlaştırma
                 return (
                   <button key={n.id} onClick={(e)=>{ e.stopPropagation(); setZumNokta(n); }} title={n.etiket}
-                    style={{ position:"absolute", left:((n.cx||0.5)*100)+"%", top:((n.cy||0.5)*100)+"%", transform:"translate(-50%,-50%)", width:52, height:52, borderRadius:"50%", overflow:"hidden", border:"2.5px solid #fff", boxShadow:"0 3px 14px rgba(0,0,0,0.45)", cursor:"pointer", padding:0, background:"#f7f7f8",
-                      ...(ayriFoto ? {} : { backgroundImage:`url(${detayModel.foto})`, backgroundSize:zoom+"% "+zoom+"%", backgroundPosition:((n.cx||0.5)*100)+"% "+((n.cy||0.5)*100)+"%", backgroundRepeat:"no-repeat" }),
-                      animation:"vmpulse 2.4s ease-in-out infinite" }}>
-                    {ayriFoto && <img src={n.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }}/>}
+                    style={{ position:"absolute", left:((n.cx||0.5)*100)+"%", top:((n.cy||0.5)*100)+"%", transform:"translate(-50%,-50%)", width:52, height:52, borderRadius:"50%", overflow:"hidden", border:"2.5px solid #fff", boxShadow:"0 3px 14px rgba(0,0,0,0.45)", cursor:"pointer", padding:0, background:"#f7f7f8", animation:"vmpulse 2.4s ease-in-out infinite" }}>
+                    {ayriFoto ? <img src={n.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }}/> : <img src={detayModel.foto} alt="" style={lensImgStil(n.cx, n.cy, zoom)}/>}
                   </button>
                 );
               })}
@@ -2489,7 +2500,9 @@ function VitrinModu({ kod, onizleme }) {
               const zoom = Math.round((1/(r*0.85)) * 100); // büyük ekranda biraz daha ferah kırpma
               return (
               <div onClick={()=>setZumNokta(null)} style={{ position:"absolute", inset:0, background:"#0a0a0a", zIndex:20, display:"flex", flexDirection:"column" }}>
-                <div style={{ flex:1, backgroundImage:`url(${detayModel.foto})`, backgroundSize:zoom+"% "+zoom+"%", backgroundPosition:((zumNokta.cx||0.5)*100)+"% "+((zumNokta.cy||0.5)*100)+"%", backgroundRepeat:"no-repeat" }}/>
+                <div style={{ flex:1, position:"relative", overflow:"hidden" }}>
+                  <img src={detayModel.foto} alt="" style={lensImgStil(zumNokta.cx, zumNokta.cy, zoom)}/>
+                </div>
                 <div style={{ padding:"14px 18px", display:"flex", justifyContent:"space-between", alignItems:"center", background:"#1c1c1e" }}>
                   <span style={{ fontSize:14, color:"#f5f5f7", fontWeight:600 }}>{zumNokta.etiket}</span>
                   <button onClick={()=>setZumNokta(null)} style={{ background:"rgba(255,255,255,0.12)", border:"none", borderRadius:8, padding:"7px 16px", color:"#fff", fontSize:12, fontWeight:600, cursor:"pointer" }}>Kapat</button>
@@ -4329,9 +4342,8 @@ function Atolye({ onSirketDegis }) {
                         const KOSE = [{ top:26, right:4 }, { bottom:4, right:4 }, { top:4, left:4 }, { bottom:4, left:4 }][di];
                         return (
                           <div key={n.id} title={n.etiket} onClick={e=>e.stopPropagation()}
-                            style={{ position:"absolute", ...KOSE, width:56, height:56, borderRadius:"50%", overflow:"hidden", border:"2.5px solid #fff", boxShadow:"0 3px 10px rgba(0,0,0,0.5)", background:"#f7f7f8", zIndex:3,
-                              ...(ayriFoto ? {} : { backgroundImage:`url(${m.foto})`, backgroundSize:zoom+"% "+zoom+"%", backgroundPosition:((n.cx||0.5)*100)+"% "+((n.cy||0.5)*100)+"%", backgroundRepeat:"no-repeat" }) }}>
-                            {ayriFoto && <img src={n.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }}/>}
+                            style={{ position:"absolute", ...KOSE, width:56, height:56, borderRadius:"50%", overflow:"hidden", border:"2.5px solid #fff", boxShadow:"0 3px 10px rgba(0,0,0,0.5)", background:"#f7f7f8", zIndex:3 }}>
+                            {ayriFoto ? <img src={n.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }}/> : <img src={m.foto} alt="" style={lensImgStil(n.cx, n.cy, zoom)}/>}
                           </div>
                         );
                       })}
@@ -8500,9 +8512,8 @@ ${buildContext()}`;
                 const pos = ustFotoKonum(n.cx||0.5, n.cy||0.5);
                 return (
                   <div key={n.id} title={n.etiket} onClick={e=>e.stopPropagation()}
-                    style={{ position:"absolute", left:pos.left, top:pos.top, transform:"translate(-50%,-50%)", width:44, height:44, borderRadius:"50%", overflow:"hidden", border:"2.5px solid #fff", boxShadow:"0 3px 10px rgba(0,0,0,0.4)", background:"#f7f7f8", zIndex:3,
-                      ...(ayriFoto ? {} : { backgroundImage:`url(${fFoto})`, backgroundSize:zoom+"% "+zoom+"%", backgroundPosition:((n.cx||0.5)*100)+"% "+((n.cy||0.5)*100)+"%", backgroundRepeat:"no-repeat" }) }}>
-                    {ayriFoto && n.foto && <img src={n.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }}/>}
+                    style={{ position:"absolute", left:pos.left, top:pos.top, transform:"translate(-50%,-50%)", width:44, height:44, borderRadius:"50%", overflow:"hidden", border:"2.5px solid #fff", boxShadow:"0 3px 10px rgba(0,0,0,0.4)", background:"#f7f7f8", zIndex:3 }}>
+                    {ayriFoto ? (n.foto && <img src={n.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }}/>) : <img src={fFoto} alt="" style={lensImgStil(n.cx, n.cy, zoom)}/>}
                   </div>
                 );
               })}
