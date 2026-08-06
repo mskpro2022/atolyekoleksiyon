@@ -433,7 +433,7 @@ function buildKatalogHTML(kol, modeller, sutun, hedefAyar, kollar, gruplu) {
     + ".ph{flex:1;min-height:0;position:relative;background:#f3f3f3;overflow:hidden}"
     + ".ph img{position:absolute;top:50%;left:50%;width:100%;height:100%;object-fit:contain;object-position:center;display:block;transform:translate(-50%,-50%)}"
     + ".ph .ni{position:absolute;top:0;left:0;width:100%;height:100%;background:#f3f3f3;display:flex;align-items:center;justify-content:center;color:#ddd;font-size:20px}"
-    + ".dn{position:absolute;width:42px;height:42px;border-radius:50%;border:3px solid #fff;box-shadow:0 3px 10px rgba(0,0,0,0.55);background-color:#fff;overflow:hidden;z-index:2}"
+    + ".dn{position:absolute;width:42px;height:42px;border-radius:50%;border:3px solid #fff;box-shadow:0 3px 10px rgba(0,0,0,0.55);background-color:#fff;background-repeat:no-repeat;overflow:hidden;z-index:2}"
     + ".dn img{width:100%;height:100%;object-fit:cover}"
     + ".dn-ico{display:flex;align-items:center;justify-content:center;font-size:20px;background:#1a1a1a}"
     + ".cd-bileklik .ph img{object-fit:cover;transform:none;top:0;left:0}"
@@ -465,17 +465,19 @@ function buildKatalogHTML(kol, modeller, sutun, hedefAyar, kollar, gruplu) {
     let h = "<div class='" + cls + "'>";
     h += "<div class='ph'>";
     h += m.foto ? "<img src='" + m.foto + "'/>" : "<div class='ni'>◇</div>";
-    // Detay noktaları — SABİT KÖŞELERDE, büyük. (Fotonun üstündeki tam konum kullanılmıyor:
-    // kartlarda foto "cover" ile kırpılıyor, editördeki "contain" referansıyla eşleşmiyor —
-    // nokta yanlış/boş yere düşebiliyordu. Köşe = her koşulda güvenilir ve net.)
+    // Detay noktaları — SABİT KÖŞEDE (badge'in kendisi köşede durur, foto ne şekilde kırpılırsa kırpılsın
+    // konum bozulmaz), İÇERİK ise artık fotonun kendi piksel koordinatına göre doğru hesaplanıyor
+    // (cx,cy editörde letterbox-düzeltmeli yakalanıyor — background-position bu yüzden her kutuda doğru).
     if (m.foto && Array.isArray(m.detayNoktalari) && m.detayNoktalari.length > 0) {
       const KOSELER = [["top:6px;right:6px"],["bottom:6px;right:6px"],["top:6px;left:6px"],["bottom:6px;left:6px"]];
       m.detayNoktalari.slice(0,4).forEach((n, i) => {
         const pos = KOSELER[i][0];
-        if (n.tip === "foto" && n.foto) {
-          h += "<div class='dn' style='" + pos + "'><img src='" + n.foto + "'/></div>";
-        } else if (n.tip !== "foto") {
-          h += "<div class='dn dn-ico' style='" + pos + "'>&#128269;</div>"; // 🔍 — kırpma önizlemesi print'te güvenilir hesaplanamıyor, ikon yeterli
+        if (n.tip === "foto") {
+          if (n.foto) h += "<div class='dn' style='" + pos + "'><img src='" + n.foto + "'/></div>";
+        } else {
+          const r = Math.min(0.35, Math.max(0.06, n.r || 0.16));
+          const zoom = Math.round((1/(2*r)) * 100);
+          h += "<div class='dn' style='" + pos + ";background-image:url(" + m.foto + ");background-size:" + zoom + "%;background-position:" + ((n.cx||0.5)*100) + "% " + ((n.cy||0.5)*100) + "%'></div>";
         }
       });
     }
@@ -1301,12 +1303,31 @@ function buildMusteriDetayHTML(musAd, musKod, siparisler) {
 // Ayrı foto yüklemeye GEREK YOK — seçilen dairesel bölge vitrinde otomatik yakınlaştırılıp gösterilir.
 function DetayNoktaEditor({ foto, noktalar, setNoktalar, T }) {
   const kutuRef = useRef(null);
+  const imgRef = useRef(null);
   const [aktifId, setAktifId] = useState(null);
 
   const ekle = (etiket) => {
     const yeni = { id: "d"+Date.now()+Math.random().toString(36).substr(2,4), etiket, tip:"kirp", cx:0.5, cy:0.5, r:0.16, foto:"" };
     setNoktalar([...noktalar, yeni]);
     setAktifId(yeni.id);
+  };
+
+  // Tıklama konumunu, kutunun boşluklu alanına DEĞİL, fotonun kendi piksel içeriğine göre hesapla.
+  // (object-fit:contain letterbox — kutu farklı en/boy oranındaysa üstte/altta veya yanlarda boşluk olur.
+  //  Bu düzeltme olmadan aynı yüzde, foto "cover" ile başka bir kutuda gösterilince yanlış yere denk gelir.)
+  const gercekKonum = (ev, kutu) => {
+    const r = kutu.getBoundingClientRect();
+    const img = imgRef.current;
+    const nw = img?.naturalWidth || 0, nh = img?.naturalHeight || 0;
+    if (!nw || !nh) { // foto henüz yüklenmediyse eski davranışa düş (nadiren)
+      return { cx: Math.min(1, Math.max(0, (ev.clientX - r.left) / r.width)), cy: Math.min(1, Math.max(0, (ev.clientY - r.top) / r.height)) };
+    }
+    const olcek = Math.min(r.width / nw, r.height / nh); // contain ölçeği
+    const gW = nw * olcek, gH = nh * olcek;
+    const ofX = (r.width - gW) / 2, ofY = (r.height - gH) / 2; // letterbox boşluğu
+    const cx = Math.min(1, Math.max(0, ((ev.clientX - r.left) - ofX) / gW));
+    const cy = Math.min(1, Math.max(0, ((ev.clientY - r.top) - ofY) / gH));
+    return { cx, cy };
   };
 
   const surukleBasla = (e, id) => {
@@ -1317,9 +1338,7 @@ function DetayNoktaEditor({ foto, noktalar, setNoktalar, T }) {
     const kutu = kutuRef.current;
     const hareket = (ev) => {
       if (!kutu) return;
-      const r = kutu.getBoundingClientRect();
-      const cx = Math.min(1, Math.max(0, (ev.clientX - r.left) / r.width));
-      const cy = Math.min(1, Math.max(0, (ev.clientY - r.top) / r.height));
+      const { cx, cy } = gercekKonum(ev, kutu);
       setNoktalar(prev => prev.map(n => n.id===id ? { ...n, cx, cy } : n));
     };
     const birak = () => {
@@ -1340,17 +1359,30 @@ function DetayNoktaEditor({ foto, noktalar, setNoktalar, T }) {
     setNoktalar(noktalar.map(n => n.id===id ? { ...n, foto:b64 } : n));
   };
 
+  const [, setYuklendi] = useState(0); // foto naturalWidth hazır olunca yeniden çiz (marker konumu doğru hesaplansın)
+  // Gerçek foto-fraksiyonunu (cx,cy) editör kutusunun EKRAN yüzdesine çevir (letterbox düzeltmeli) — sadece GÖRÜNÜM için
+  const kutuYuzdesi = (cx, cy) => {
+    const kutu = kutuRef.current, img = imgRef.current;
+    if (!kutu || !img || !img.naturalWidth) return { left:(cx*100)+"%", top:(cy*100)+"%" };
+    const r = kutu.getBoundingClientRect();
+    const olcek = Math.min(r.width / img.naturalWidth, r.height / img.naturalHeight);
+    const gW = img.naturalWidth * olcek, gH = img.naturalHeight * olcek;
+    const ofX = (r.width - gW) / 2, ofY = (r.height - gH) / 2;
+    return { left: ((ofX + cx*gW) / r.width * 100) + "%", top: ((ofY + cy*gH) / r.height * 100) + "%" };
+  };
+
   return (
     <div>
       <div ref={kutuRef} style={{ position:"relative", width:"100%", aspectRatio:"4/3", background:"#f7f7f8", borderRadius:9, overflow:"hidden", marginBottom:9, touchAction:"none" }}>
-        <img src={foto} alt="" style={{ width:"100%", height:"100%", objectFit:"contain", pointerEvents:"none", userSelect:"none" }} draggable={false}/>
+        <img ref={imgRef} src={foto} alt="" onLoad={()=>setYuklendi(v=>v+1)} style={{ width:"100%", height:"100%", objectFit:"contain", pointerEvents:"none", userSelect:"none" }} draggable={false}/>
         {noktalar.map(n => {
           const boyutPx = 46;
           const on = aktifId === n.id;
           const gosterFoto = n.tip === "foto" && n.foto;
+          const pos = kutuYuzdesi(n.cx, n.cy);
           return (
             <div key={n.id} onPointerDown={(e)=>surukleBasla(e, n.id)} onClick={()=>setAktifId(n.id)}
-              style={{ position:"absolute", left:(n.cx*100)+"%", top:(n.cy*100)+"%", transform:"translate(-50%,-50%)", width:boyutPx, height:boyutPx, borderRadius:"50%", overflow:"hidden", border: on?"3px solid var(--vurgu)":"2px solid rgba(255,255,255,0.9)", boxShadow:"0 2px 10px rgba(0,0,0,0.45)", background: gosterFoto?"#f7f7f8":"rgba(0,0,0,0.12)", cursor:"grab", display:"flex", alignItems:"center", justifyContent:"center", zIndex: on?3:2, touchAction:"none" }}>
+              style={{ position:"absolute", left:pos.left, top:pos.top, transform:"translate(-50%,-50%)", width:boyutPx, height:boyutPx, borderRadius:"50%", overflow:"hidden", border: on?"3px solid var(--vurgu)":"2px solid rgba(255,255,255,0.9)", boxShadow:"0 2px 10px rgba(0,0,0,0.45)", background: gosterFoto?"#f7f7f8":"rgba(0,0,0,0.12)", cursor:"grab", display:"flex", alignItems:"center", justifyContent:"center", zIndex: on?3:2, touchAction:"none" }}>
               {gosterFoto
                 ? <img src={n.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"cover", pointerEvents:"none" }}/>
                 : <span style={{ fontSize:9, color:"#fff", fontWeight:800, textShadow:"0 1px 3px rgba(0,0,0,0.7)", pointerEvents:"none" }}>{(n.etiket||"?").slice(0,1)}</span>}
@@ -4178,13 +4210,16 @@ function Atolye({ onSirketDegis }) {
                   <div key={m.id} style={{ background:ik?"rgba(var(--vurgu-rgb),0.07)":"rgba(var(--vurgu-rgb),0.02)", border:"1px solid", borderColor:ik?"rgba(var(--vurgu-rgb),0.28)":"rgba(var(--vurgu-rgb),0.07)", borderRadius:11, overflow:"hidden", animation:"cardin .3s ease "+(i*.03)+"s both" }}>
                     <div className="model-foto-wrap" style={{ position:"relative", height:180, background:"rgba(0,0,0,0.25)", overflow:"hidden" }}>
                       {m.foto ? <img onClick={()=>openEM(m)} src={m.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"cover", objectPosition:"center center", display:"block", cursor:"pointer" }}/> : <div onClick={()=>openEM(m)} style={{ width:"100%", height:"100%", display:"flex", alignItems:"center", justifyContent:"center", color:"rgba(var(--vurgu-rgb),0.1)", fontSize:24, cursor:"pointer" }}>-</div>}
-                      {/* Detay noktaları — SABİT: sağ kenarda alt alta (köşeler zaten dolu: V/satış/gizle/uyarı rozetleri var) */}
+                      {/* Detay noktaları — SABİT: sağ kenarda alt alta (köşeler zaten dolu: V/satış/gizle/uyarı rozetleri var). İçerik: fotonun kendi koordinatına göre doğru yakınlaştırma. */}
                       {m.foto && Array.isArray(m.detayNoktalari) && m.detayNoktalari.filter(n=>(n.tip!=="foto")||n.foto).slice(0,5).map((n,di) => {
                         const ayriFoto = n.tip === "foto";
+                        const r = Math.min(0.35, Math.max(0.06, n.r || 0.16));
+                        const zoom = Math.round((1/(2*r)) * 100);
                         return (
                           <div key={n.id} title={n.etiket} onClick={e=>e.stopPropagation()}
-                            style={{ position:"absolute", top:30+di*24, right:4, width:20, height:20, borderRadius:"50%", overflow:"hidden", border:"1.5px solid #fff", boxShadow:"0 2px 6px rgba(0,0,0,0.4)", background:"#1a1a1a", zIndex:3, display:"flex", alignItems:"center", justifyContent:"center", fontSize:10 }}>
-                            {ayriFoto ? <img src={n.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }}/> : "🔍"}
+                            style={{ position:"absolute", top:30+di*24, right:4, width:20, height:20, borderRadius:"50%", overflow:"hidden", border:"1.5px solid #fff", boxShadow:"0 2px 6px rgba(0,0,0,0.4)", background:"#f7f7f8", zIndex:3,
+                              ...(ayriFoto ? {} : { backgroundImage:`url(${m.foto})`, backgroundSize:zoom+"%", backgroundPosition:((n.cx||0.5)*100)+"% "+((n.cy||0.5)*100)+"%", backgroundRepeat:"no-repeat" }) }}>
+                            {ayriFoto && <img src={n.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }}/>}
                           </div>
                         );
                       })}
