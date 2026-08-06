@@ -433,6 +433,8 @@ function buildKatalogHTML(kol, modeller, sutun, hedefAyar, kollar, gruplu) {
     + ".ph{flex:1;min-height:0;position:relative;background:#f3f3f3;overflow:hidden}"
     + ".ph img{position:absolute;top:50%;left:50%;width:100%;height:100%;object-fit:contain;object-position:center;display:block;transform:translate(-50%,-50%)}"
     + ".ph .ni{position:absolute;top:0;left:0;width:100%;height:100%;background:#f3f3f3;display:flex;align-items:center;justify-content:center;color:#ddd;font-size:20px}"
+    + ".dn{position:absolute;width:15px;height:15px;border-radius:50%;border:1.3px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,0.4);background-color:#f3f3f3;background-repeat:no-repeat;overflow:hidden;transform:translate(-50%,-50%);z-index:2}"
+    + ".dn img{width:100%;height:100%;object-fit:cover}"
     + ".cd-bileklik .ph img{object-fit:cover;transform:none;top:0;left:0}"
     + ".cd-kolye-3 .ph img,.cd-kolye-4 .ph img{width:105%;height:105%;object-fit:contain}"
     + ".inf{padding:6px 9px 7px 10px;flex-shrink:0;background:#fff;border-top:1px solid #f0f0f0;border-left:3px solid #1a1a1a}"
@@ -462,6 +464,18 @@ function buildKatalogHTML(kol, modeller, sutun, hedefAyar, kollar, gruplu) {
     let h = "<div class='" + cls + "'>";
     h += "<div class='ph'>";
     h += m.foto ? "<img src='" + m.foto + "'/>" : "<div class='ni'>◇</div>";
+    // Detay noktaları — kırpma (aynı foto zoom) veya ayrı yüklenen foto, katalogda küçük yuvarlak işaret
+    if (m.foto && Array.isArray(m.detayNoktalari)) {
+      m.detayNoktalari.forEach(n => {
+        if (n.tip === "foto") {
+          if (n.foto) h += "<div class='dn' style='left:" + ((n.cx||0.5)*100) + "%;top:" + ((n.cy||0.5)*100) + "%'><img src='" + n.foto + "'/></div>";
+        } else {
+          const r = Math.min(0.35, Math.max(0.06, n.r || 0.16));
+          const zoom = Math.round((1/(2*r)) * 100);
+          h += "<div class='dn' style='left:" + ((n.cx||0.5)*100) + "%;top:" + ((n.cy||0.5)*100) + "%;background-image:url(" + m.foto + ");background-size:" + zoom + "%;background-position:" + ((n.cx||0.5)*100) + "% " + ((n.cy||0.5)*100) + "%'></div>";
+        }
+      });
+    }
     h += "</div><div class='inf'><div class='r1'>";
     h += "<span class='kod'>" + (m.kod || "—") + "</span>";
     h += "<span class='gram'>" + gosterGram + "gr · " + gosterAyar + "</span>";
