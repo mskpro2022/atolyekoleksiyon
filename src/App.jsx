@@ -1280,48 +1280,50 @@ function buildMusteriDetayHTML(musAd, musKod, siparisler) {
 }
 
 // ═══ AI İSİMLENDİRME ═══
-// Bileklik detay noktası editörü — fotoya tıkla, seçili noktayı oraya taşı
-function DetayNoktaEditor({ foto, noktalar, setNoktalar, T }) {
-  const [secili, setSecili] = useState(null); // seçili nokta id'si
-  const kutuRef = useRef(null);
+// Detay noktası editörü — her nokta KENDİ fotoğrafını taşır (yandan görünüm, kilit detayı vs.)
+// Ana fotonun köşesinde küçük yuvarlak "balon" olarak sürekli görünür (referans: mücevher sitelerindeki side-view inset)
+function DetayNoktaEditor({ noktalar, setNoktalar, T }) {
   const ekle = (etiket) => {
-    const yeni = { id: "d" + Date.now() + Math.random().toString(36).substr(2,4), etiket, x: etiket === "Kilit Detayı" ? 0.15 : 0.85, y: 0.5 };
-    setNoktalar([...noktalar, yeni]);
-    setSecili(yeni.id);
+    const kullanilan = new Set(noktalar.map(n=>n.konum));
+    const konum = ["sag-ust","sag-alt","sol-ust","sol-alt"].find(k=>!kullanilan.has(k)) || "sag-ust";
+    setNoktalar([...noktalar, { id: "d"+Date.now()+Math.random().toString(36).substr(2,4), etiket, foto:"", konum }]);
   };
-  const fotoyaTikla = (e) => {
-    if (!secili || !kutuRef.current) return;
-    const r = kutuRef.current.getBoundingClientRect();
-    const x = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
-    const y = Math.min(1, Math.max(0, (e.clientY - r.top) / r.height));
-    setNoktalar(noktalar.map(n => n.id === secili ? { ...n, x, y } : n));
+  const fotoSec = async (id, file) => {
+    if (!file) return;
+    const b64 = await resizeImg(file);
+    setNoktalar(noktalar.map(n => n.id===id ? { ...n, foto:b64 } : n));
   };
+  const KONUMLAR = [{id:"sag-ust",l:"↗ Sağ üst"},{id:"sag-alt",l:"↘ Sağ alt"},{id:"sol-ust",l:"↖ Sol üst"},{id:"sol-alt",l:"↙ Sol alt"}];
   return (
     <div>
-      <div ref={kutuRef} onClick={fotoyaTikla}
-        style={{ position:"relative", width:"100%", aspectRatio:"4/3", background:"#f7f7f8", borderRadius:9, overflow:"hidden", cursor: secili?"crosshair":"default", marginBottom:9 }}>
-        <img src={foto} alt="" style={{ width:"100%", height:"100%", objectFit:"contain", pointerEvents:"none" }}/>
-        {noktalar.map(n => (
-          <div key={n.id} onClick={(e)=>{ e.stopPropagation(); setSecili(n.id); }}
-            style={{ position:"absolute", left:(n.x*100)+"%", top:(n.y*100)+"%", transform:"translate(-50%,-50%)", width: secili===n.id?26:20, height: secili===n.id?26:20, borderRadius:"50%", background: secili===n.id?"var(--vurgu)":"rgba(255,255,255,0.9)", border: secili===n.id?"2px solid #fff":"1.5px solid var(--vurgu)", boxShadow:"0 2px 8px rgba(0,0,0,0.35)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:10, cursor:"pointer", zIndex:2 }}>
-            🔍
-          </div>
-        ))}
-      </div>
-      <div style={{ display:"flex", gap:6, marginBottom:9, flexWrap:"wrap" }}>
+      <div style={{ display:"flex", gap:6, marginBottom:10, flexWrap:"wrap" }}>
+        {!noktalar.some(n=>n.etiket==="Yandan Görünüm") && <button onClick={()=>ekle("Yandan Görünüm")} style={{ background:"rgba(var(--vurgu-rgb),0.12)", border:"1px solid rgba(var(--vurgu-rgb),0.3)", borderRadius:7, padding:"5px 11px", color:"var(--vurgu)", fontSize:9, fontWeight:700, cursor:"pointer" }}>+ Yandan Görünüm</button>}
         {!noktalar.some(n=>n.etiket==="Kilit Detayı") && <button onClick={()=>ekle("Kilit Detayı")} style={{ background:"rgba(var(--vurgu-rgb),0.12)", border:"1px solid rgba(var(--vurgu-rgb),0.3)", borderRadius:7, padding:"5px 11px", color:"var(--vurgu)", fontSize:9, fontWeight:700, cursor:"pointer" }}>+ Kilit Detayı</button>}
         {!noktalar.some(n=>n.etiket==="Zincir Detayı") && <button onClick={()=>ekle("Zincir Detayı")} style={{ background:"rgba(var(--vurgu-rgb),0.12)", border:"1px solid rgba(var(--vurgu-rgb),0.3)", borderRadius:7, padding:"5px 11px", color:"var(--vurgu)", fontSize:9, fontWeight:700, cursor:"pointer" }}>+ Zincir Detayı</button>}
         <button onClick={()=>ekle("Detay")} style={{ background:"rgba(255,255,255,0.06)", border:"1px solid rgba(255,255,255,0.15)", borderRadius:7, padding:"5px 11px", color:"#a1a1a6", fontSize:9, fontWeight:700, cursor:"pointer" }}>+ Diğer</button>
       </div>
       {noktalar.length > 0 && (
-        <div style={{ display:"flex", flexDirection:"column", gap:5 }}>
+        <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
           {noktalar.map(n => (
-            <div key={n.id} onClick={()=>setSecili(n.id)} style={{ display:"flex", alignItems:"center", gap:7, background: secili===n.id?"rgba(var(--vurgu-rgb),0.1)":"transparent", borderRadius:7, padding:"4px 7px", cursor:"pointer" }}>
-              <span style={{ fontSize:11 }}>🔍</span>
-              <input value={n.etiket} onChange={e=>setNoktalar(noktalar.map(x=>x.id===n.id?{...x,etiket:e.target.value}:x))} onClick={e=>e.stopPropagation()}
-                style={{ flex:1, background:"transparent", border:"none", color:T.text, fontSize:10, outline:"none" }}/>
-              <button onClick={(e)=>{ e.stopPropagation(); setNoktalar(noktalar.filter(x=>x.id!==n.id)); if(secili===n.id) setSecili(null); }}
-                style={{ background:"none", border:"none", color:"#e85a4f", fontSize:12, cursor:"pointer", padding:"2px 5px" }}>✕</button>
+            <div key={n.id} style={{ display:"flex", gap:10, alignItems:"flex-start", background:"rgba(255,255,255,0.04)", borderRadius:10, padding:9 }}>
+              <label style={{ width:56, height:56, borderRadius:8, background:"#f7f7f8", flexShrink:0, cursor:"pointer", overflow:"hidden", display:"flex", alignItems:"center", justifyContent:"center", border: n.foto?"none":"1.5px dashed rgba(255,255,255,0.25)" }}>
+                {n.foto ? <img src={n.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }}/> : <span style={{ fontSize:18, color:"#998a6e" }}>📷</span>}
+                <input type="file" accept="image/*" onChange={e=>fotoSec(n.id, e.target.files?.[0])} style={{ display:"none" }}/>
+              </label>
+              <div style={{ flex:1, minWidth:0 }}>
+                <div style={{ display:"flex", gap:6, marginBottom:6 }}>
+                  <input value={n.etiket} onChange={e=>setNoktalar(noktalar.map(x=>x.id===n.id?{...x,etiket:e.target.value}:x))}
+                    style={{ flex:1, background:"rgba(255,255,255,0.06)", border:"none", borderRadius:6, padding:"5px 8px", color:T.text, fontSize:10, outline:"none" }}/>
+                  <button onClick={()=>setNoktalar(noktalar.filter(x=>x.id!==n.id))} style={{ background:"none", border:"none", color:"#e85a4f", fontSize:13, cursor:"pointer", padding:"2px 5px" }}>✕</button>
+                </div>
+                <div style={{ display:"flex", gap:4, flexWrap:"wrap" }}>
+                  {KONUMLAR.map(k => (
+                    <button key={k.id} onClick={()=>setNoktalar(noktalar.map(x=>x.id===n.id?{...x,konum:k.id}:x))}
+                      style={{ background: n.konum===k.id?"var(--vurgu)":"rgba(255,255,255,0.06)", border:"none", borderRadius:5, padding:"3px 8px", color: n.konum===k.id?"#fff":"#998a6e", fontSize:8, fontWeight:600, cursor:"pointer" }}>{k.l}</button>
+                  ))}
+                </div>
+                {!n.foto && <div style={{ fontSize:8, color:"#e85a4f", marginTop:4 }}>Fotoğrafa tıklayıp yükleyin</div>}
+              </div>
             </div>
           ))}
         </div>
@@ -2253,21 +2255,24 @@ function VitrinModu({ kod, onizleme }) {
             <button onClick={()=>setDetayModel(null)} style={{ position:"absolute", top:14, right:14, zIndex:5, width:30, height:30, borderRadius:"50%", background:"rgba(120,120,128,0.5)", border:"none", color:"#fff", fontSize:15, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}>✕</button>
             <div style={{ aspectRatio:"4/3", background:"#f7f7f8", display:"flex", alignItems:"center", justifyContent:"center", overflow:"hidden", position:"relative" }}>
               {detayModel.foto ? <img src={detayModel.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"contain" }}/> : <div style={{ fontSize:50, color:"#d2d2d7" }}>◇</div>}
-              {/* ═══ BİLEKLİK DETAY BALONCUKLARI — kilit/zincir yakın çekim ═══ */}
-              {Array.isArray(detayModel.detayNoktalari) && detayModel.detayNoktalari.map(n => (
-                <button key={n.id} onClick={(e)=>{ e.stopPropagation(); setZumNokta(n); }}
-                  title={n.etiket}
-                  style={{ position:"absolute", top:(n.y*100)+"%", left: n.x<0.5 ? 14 : "auto", right: n.x>=0.5 ? 14 : "auto", transform:"translateY(-50%)", width:40, height:40, borderRadius:"50%", background:"rgba(28,28,30,0.85)", backdropFilter:"blur(8px)", border:"1.5px solid rgba(255,255,255,0.35)", color:"#fff", fontSize:16, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", boxShadow:"0 3px 12px rgba(0,0,0,0.4)", animation:"vmpulse 2.2s ease-in-out infinite" }}>
-                  🔍
-                </button>
-              ))}
+              {/* ═══ DETAY FOTO BALONLARI — sürekli görünür köşe inset (yandan görünüm, kilit vs.) ═══ */}
+              {Array.isArray(detayModel.detayNoktalari) && detayModel.detayNoktalari.filter(n=>n.foto).map(n => {
+                const ust = (n.konum||"sag-ust").includes("ust");
+                const sag = (n.konum||"sag-ust").includes("sag");
+                return (
+                  <button key={n.id} onClick={(e)=>{ e.stopPropagation(); setZumNokta(n); }} title={n.etiket}
+                    style={{ position:"absolute", top: ust?10:"auto", bottom: ust?"auto":10, right: sag?10:"auto", left: sag?"auto":10, width:56, height:56, borderRadius:"50%", overflow:"hidden", border:"2.5px solid #fff", boxShadow:"0 3px 14px rgba(0,0,0,0.45)", cursor:"pointer", padding:0, background:"#f7f7f8" }}>
+                    <img src={n.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }}/>
+                  </button>
+                );
+              })}
             </div>
 
-            {/* ═══ DETAY ZOOM — baloncuğa tıklanınca o bölgeye yakınlaşmış görünüm ═══ */}
-            {zumNokta && detayModel.foto && (
+            {/* ═══ DETAY FOTO BÜYÜTME — balona tıklanınca o fotoğrafı tam ekran göster ═══ */}
+            {zumNokta && zumNokta.foto && (
               <div onClick={()=>setZumNokta(null)} style={{ position:"absolute", inset:0, background:"#0a0a0a", zIndex:20, display:"flex", flexDirection:"column" }}>
-                <div style={{ flex:1, position:"relative", overflow:"hidden" }}>
-                  <img src={detayModel.foto} alt="" style={{ position:"absolute", width:"260%", height:"260%", objectFit:"contain", left:(50 - zumNokta.x*260)+"%", top:(50 - zumNokta.y*260)+"%" }}/>
+                <div style={{ flex:1, display:"flex", alignItems:"center", justifyContent:"center", overflow:"hidden" }}>
+                  <img src={zumNokta.foto} alt="" style={{ maxWidth:"100%", maxHeight:"100%", objectFit:"contain" }}/>
                 </div>
                 <div style={{ padding:"14px 18px", display:"flex", justifyContent:"space-between", alignItems:"center", background:"#1c1c1e" }}>
                   <span style={{ fontSize:14, color:"#f5f5f7", fontWeight:600 }}>{zumNokta.etiket}</span>
@@ -2587,6 +2592,7 @@ function Atolye({ onSirketDegis }) {
   const [fDurum,       setFDurum]      = useState("baslanmadi");
   const [fEtiketler,   setFEtiketler]  = useState([]);
   const [fDetayNoktalari, setFDetayNoktalari] = useState([]); // bileklik: [{id,etiket,x,y}] — kilit/zincir yakın çekim noktaları
+  const [fDetayAcik, setFDetayAcik] = useState(false); // detay noktası editörü açık mı (opsiyonel, her üründe)
   const [fYeniEtiket,  setFYeniEtiket] = useState("");
   const fileRef = useRef(null);
 
@@ -3150,7 +3156,7 @@ function Atolye({ onSirketDegis }) {
   }, [kollar]);
 
   const rkf = () => { setFkAd(""); setFkAc(""); setFkOn(""); };
-  const rmf = () => { setFAd(""); setFKod(""); setFGram(""); setFRefAyar("14K"); setFTasGram(""); setFTasBoy(""); setFTaslar([]); setFTasSekil("ROUND"); setFTasTur("N"); setFTasBoyut(""); setFTasAdet(""); setFTasOzelIsim(""); setFMadenC(""); setFIscilikDolar(""); setFIscilikBirim("dolar"); setFIscilikAyarlar({}); setFEkMaliyet(""); setFKategori("yuzuk"); setFSetKodu(""); setFAc(""); setFFoto(""); setFKolId(""); setFDurum("baslanmadi"); setFEtiketler([]); setFYeniEtiket(""); setFDetayNoktalari([]); };
+  const rmf = () => { setFAd(""); setFKod(""); setFGram(""); setFRefAyar("14K"); setFTasGram(""); setFTasBoy(""); setFTaslar([]); setFTasSekil("ROUND"); setFTasTur("N"); setFTasBoyut(""); setFTasAdet(""); setFTasOzelIsim(""); setFMadenC(""); setFIscilikDolar(""); setFIscilikBirim("dolar"); setFIscilikAyarlar({}); setFEkMaliyet(""); setFKategori("yuzuk"); setFSetKodu(""); setFAc(""); setFFoto(""); setFKolId(""); setFDurum("baslanmadi"); setFEtiketler([]); setFYeniEtiket(""); setFDetayNoktalari([]); setFDetayAcik(false); };
 
   const saveKol = () => {
     if (!fkAd.trim()) return;
@@ -3188,12 +3194,25 @@ function Atolye({ onSirketDegis }) {
     const hesaplananTasGram = fTaslar.length > 0 && toplamTasGram > 0
       ? toplamTasGram
       : (Number(fTasGram)||0);
-    const obj = { ad: fAd.trim(), kod: fKod.trim().toUpperCase(), kategori: fKategori, gram: Number(fGram)||0, refAyar: fRefAyar, tasGram: hesaplananTasGram, taslar: fTaslar, tasBoy: fTasBoy.trim(), tasSekil: fTasSekil, tasTur: fTasTur, tasBoyut: fTasBoyut, tasAdet: Number(fTasAdet)||0, madenCarpan: Number(fMadenC)||0, iscilikDolar: Number(fIscilikDolar)||0, iscilikBirim: fIscilikBirim, iscilikAyarlar: fIscilikAyarlar, ekMaliyet: Number(fEkMaliyet)||0, ac: fAc.trim(), foto: fFoto, ki: fKolId, durum: fDurum, etiketler: fEtiketler, detayNoktalari: fKategori==="bileklik" ? fDetayNoktalari : [] };
+    const obj = { ad: fAd.trim(), kod: fKod.trim().toUpperCase(), kategori: fKategori, gram: Number(fGram)||0, refAyar: fRefAyar, tasGram: hesaplananTasGram, taslar: fTaslar, tasBoy: fTasBoy.trim(), tasSekil: fTasSekil, tasTur: fTasTur, tasBoyut: fTasBoyut, tasAdet: Number(fTasAdet)||0, madenCarpan: Number(fMadenC)||0, iscilikDolar: Number(fIscilikDolar)||0, iscilikBirim: fIscilikBirim, iscilikAyarlar: fIscilikAyarlar, ekMaliyet: Number(fEkMaliyet)||0, ac: fAc.trim(), foto: fFoto, ki: fKolId, durum: fDurum, etiketler: fEtiketler, detayNoktalari: fDetayNoktalari };
     if (!obj.id) obj.olusturma = Date.now();
     // Aynı kodlu diğer modeller var mı kontrol et
     const FIYAT_ALANLARI = ["iscilikDolar","iscilikBirim","iscilikAyarlar","ekMaliyet","madenCarpan"];
     const syncObj = Object.fromEntries(Object.entries(obj).filter(([k]) => !FIYAT_ALANLARI.includes(k)));
     const ayniKodlular = modeller.filter(m => m.kod === obj.kod && (!editM || m.id !== editM.id));
+
+    const detayFotolariYukle = async (modelId, noktalar) => {
+      if (!Array.isArray(noktalar) || noktalar.length === 0) return noktalar || [];
+      const sonuc = [];
+      for (const n of noktalar) {
+        let foto = n.foto;
+        if (foto && foto.startsWith("data:")) {
+          foto = await fotoYukleStorage(foto, modelId + "-d-" + n.id, AKTIF_SIRKET_ONEK);
+        }
+        sonuc.push({ ...n, foto });
+      }
+      return sonuc;
+    };
 
     const kaydet = async (onayliSync) => {
       if (editM) {
@@ -3202,7 +3221,8 @@ function Atolye({ onSirketDegis }) {
         if (fotoURL && fotoURL.startsWith("data:")) {
           fotoURL = await fotoYukleStorage(fotoURL, editM.id, AKTIF_SIRKET_ONEK);
         }
-        const objURLli = { ...obj, foto: fotoURL };
+        const detayYuklu = await detayFotolariYukle(editM.id, obj.detayNoktalari);
+        const objURLli = { ...obj, foto: fotoURL, detayNoktalari: detayYuklu };
         const syncURLli = { ...syncObj, foto: fotoURL };
         const yeniListe = modeller.map(m => {
           if (m.id === editM.id) return { ...m, ...objURLli };
@@ -3218,7 +3238,8 @@ function Atolye({ onSirketDegis }) {
         if (fotoURL && fotoURL.startsWith("data:")) {
           fotoURL = await fotoYukleStorage(fotoURL, yeniId, AKTIF_SIRKET_ONEK);
         }
-        const yeniModel = { id: yeniId, ...obj, foto: fotoURL, t: Date.now() };
+        const detayYuklu = await detayFotolariYukle(yeniId, obj.detayNoktalari);
+        const yeniModel = { id: yeniId, ...obj, foto: fotoURL, detayNoktalari: detayYuklu, t: Date.now() };
         if (onayliSync && ayniKodlular.length > 0) {
           svM([...modeller.map(m => m.kod === obj.kod ? { ...m, ...syncObj, foto: fotoURL } : m), yeniModel]);
         } else {
@@ -8252,12 +8273,24 @@ ${buildContext()}`;
           </div>
         )}
 
-        {/* ═══ BİLEKLİK DETAY NOKTALARI — kilit / zincir yakın çekim ═══ */}
-        {fKategori === "bileklik" && fFoto && (
-          <div style={{ background:"rgba(var(--vurgu-rgb),0.05)", border:"1px solid rgba(var(--vurgu-rgb),0.15)", borderRadius:12, padding:"12px 13px", marginBottom:10 }}>
-            <div style={{ fontSize:10, fontWeight:700, color:T.sub, marginBottom:3, letterSpacing:"0.05em", textTransform:"uppercase" }}>🔍 Detay Noktaları (Kilit / Zincir)</div>
-            <div style={{ fontSize:9, color:"#998a6e", marginBottom:9 }}>Fotoya tıklayın — seçili nokta oraya taşınır. Vitrinde müşteri bu noktalara yakınlaşabilir.</div>
-            <DetayNoktaEditor foto={fFoto} noktalar={fDetayNoktalari} setNoktalar={setFDetayNoktalari} T={T}/>
+        {/* ═══ DETAY FOTOĞRAFLARI — her üründe opsiyonel, sadece istediğinde aç ═══ */}
+        {fFoto && (
+          <div style={{ marginBottom:10 }}>
+            {!fDetayAcik && fDetayNoktalari.length === 0 && (
+              <button onClick={()=>setFDetayAcik(true)} style={{ background:"rgba(255,255,255,0.05)", border:"1px dashed rgba(255,255,255,0.2)", borderRadius:10, padding:"8px 12px", color:"#998a6e", fontSize:10, fontWeight:600, cursor:"pointer", width:"100%", textAlign:"left" }}>
+                🔍 Detay fotoğrafı ekle (yandan görünüm, kilit, zincir vs. — opsiyonel)
+              </button>
+            )}
+            {(fDetayAcik || fDetayNoktalari.length > 0) && (
+              <div style={{ background:"rgba(var(--vurgu-rgb),0.05)", border:"1px solid rgba(var(--vurgu-rgb),0.15)", borderRadius:12, padding:"12px 13px" }}>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:3 }}>
+                  <div style={{ fontSize:10, fontWeight:700, color:T.sub, letterSpacing:"0.05em", textTransform:"uppercase" }}>🔍 Detay Fotoğrafları</div>
+                  {fDetayNoktalari.length === 0 && <button onClick={()=>setFDetayAcik(false)} style={{ background:"none", border:"none", color:"#665d4a", fontSize:9, cursor:"pointer" }}>Kapat</button>}
+                </div>
+                <div style={{ fontSize:9, color:"#998a6e", marginBottom:9 }}>Her detay için ayrı foto yükleyin (ör. yandan çekim). Vitrinde ana fotonun köşesinde küçük balon olarak görünür.</div>
+                <DetayNoktaEditor noktalar={fDetayNoktalari} setNoktalar={setFDetayNoktalari} T={T}/>
+              </div>
+            )}
           </div>
         )}
 
