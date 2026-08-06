@@ -298,6 +298,102 @@ function resizeImg(file) {
   });
 }
 
+// Bir data-URL fotoğrafın (x,y,w,h) — 0..1 fraksiyon — bölgesini kırpıp aynı kalite standardıyla döndürür
+function cropFromDataURL(src, kirp) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const sx = Math.round(kirp.x * img.naturalWidth);
+      const sy = Math.round(kirp.y * img.naturalHeight);
+      const sw = Math.max(1, Math.round(kirp.w * img.naturalWidth));
+      const sh = Math.max(1, Math.round(kirp.h * img.naturalHeight));
+      let w = sw, h = sh;
+      if (w > 2000) { h = Math.round(h * 2000 / w); w = 2000; }
+      if (h > 2000) { w = Math.round(w * 2000 / h); h = 2000; }
+      const c = document.createElement("canvas");
+      c.width = w; c.height = h;
+      const ctx = c.getContext("2d");
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = "high";
+      ctx.drawImage(img, sx, sy, sw, sh, 0, 0, w, h);
+      resolve(c.toDataURL("image/jpeg", 0.94));
+    };
+    img.onerror = reject;
+    img.src = src;
+  });
+}
+
+// ═══ FOTO KIRPMA ARACI — sürükle/boyutlandır, kırp ═══
+function FotoKirpModal({ src, onConfirm, onCancel }) {
+  const kutuRef = useRef(null);
+  const [oran, setOran] = useState(4/3);
+  const [kirp, setKirp] = useState({ x:0.05, y:0.05, w:0.9, h:0.9 });
+  const [isliyor, setIsliyor] = useState(false);
+
+  const suruklemeBasla = (e, tip) => {
+    e.preventDefault(); e.stopPropagation();
+    const el = e.currentTarget;
+    try { el.setPointerCapture(e.pointerId); } catch {}
+    const kutu = kutuRef.current;
+    const basKirp = { ...kirp };
+    const r0 = kutu.getBoundingClientRect();
+    const basX = (e.clientX - r0.left) / r0.width, basY = (e.clientY - r0.top) / r0.height;
+    const hareket = (ev) => {
+      const r = kutu.getBoundingClientRect();
+      const dx = (ev.clientX - r.left) / r.width - basX;
+      const dy = (ev.clientY - r.top) / r.height - basY;
+      setKirp(prev => {
+        let { x, y, w, h } = basKirp;
+        const MIN = 0.08;
+        if (tip === "move") {
+          x = Math.min(1-w, Math.max(0, basKirp.x + dx));
+          y = Math.min(1-h, Math.max(0, basKirp.y + dy));
+        } else if (tip === "se") { w = Math.min(1-x, Math.max(MIN, basKirp.w + dx)); h = Math.min(1-y, Math.max(MIN, basKirp.h + dy)); }
+        else if (tip === "sw") { const nw = Math.min(basKirp.x+basKirp.w, Math.max(MIN, basKirp.w - dx)); x = basKirp.x + basKirp.w - nw; w = nw; h = Math.min(1-y, Math.max(MIN, basKirp.h + dy)); }
+        else if (tip === "ne") { w = Math.min(1-x, Math.max(MIN, basKirp.w + dx)); const nh = Math.min(basKirp.y+basKirp.h, Math.max(MIN, basKirp.h - dy)); y = basKirp.y + basKirp.h - nh; h = nh; }
+        else if (tip === "nw") { const nw = Math.min(basKirp.x+basKirp.w, Math.max(MIN, basKirp.w - dx)); x = basKirp.x + basKirp.w - nw; w = nw; const nh = Math.min(basKirp.y+basKirp.h, Math.max(MIN, basKirp.h - dy)); y = basKirp.y + basKirp.h - nh; h = nh; }
+        return { x, y, w, h };
+      });
+    };
+    const birak = () => { el.removeEventListener("pointermove", hareket); el.removeEventListener("pointerup", birak); };
+    el.addEventListener("pointermove", hareket);
+    el.addEventListener("pointerup", birak);
+  };
+
+  const onaylaKirp = async () => {
+    setIsliyor(true);
+    try { onConfirm(await cropFromDataURL(src, kirp)); } finally { setIsliyor(false); }
+  };
+
+  return (
+    <div onClick={onCancel} style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.82)", zIndex:200, display:"flex", alignItems:"center", justifyContent:"center", padding:20 }}>
+      <div onClick={e=>e.stopPropagation()} style={{ background:"#1c1c1e", borderRadius:16, maxWidth:560, width:"100%", padding:20 }}>
+        <div style={{ fontSize:15, fontWeight:600, color:"#f5f5f7", marginBottom:12 }}>Fotoğrafı Kırp</div>
+        <div ref={kutuRef} style={{ position:"relative", width:"100%", maxHeight:"60vh", background:"#000", borderRadius:10, overflow:"hidden", touchAction:"none" }}>
+          <img src={src} alt="" onLoad={e=>setOran((e.target.naturalWidth||4)/(e.target.naturalHeight||3))} style={{ width:"100%", display:"block", userSelect:"none" }} draggable={false}/>
+          {/* Karartma — kırpma alanı DIŞI */}
+          <div style={{ position:"absolute", inset:0, background:"rgba(0,0,0,0.55)", clipPath:`polygon(0 0,100% 0,100% 100%,0 100%,0 ${kirp.y*100}%,${kirp.x*100}% ${kirp.y*100}%,${kirp.x*100}% ${(kirp.y+kirp.h)*100}%,${(kirp.x+kirp.w)*100}% ${(kirp.y+kirp.h)*100}%,${(kirp.x+kirp.w)*100}% ${kirp.y*100}%,0 ${kirp.y*100}%)`, pointerEvents:"none" }}/>
+          {/* Kırpma çerçevesi — sürükle taşı */}
+          <div onPointerDown={e=>suruklemeBasla(e,"move")}
+            style={{ position:"absolute", left:(kirp.x*100)+"%", top:(kirp.y*100)+"%", width:(kirp.w*100)+"%", height:(kirp.h*100)+"%", border:"2px solid #fff", boxShadow:"0 0 0 1px rgba(0,0,0,0.4)", cursor:"move" }}>
+            {[["nw",-7,-7],["ne","calc(100% - 7px)",-7],["sw",-7,"calc(100% - 7px)"],["se","calc(100% - 7px)","calc(100% - 7px)"]].map(([tip,l,t]) => (
+              <div key={tip} onPointerDown={e=>suruklemeBasla(e,tip)}
+                style={{ position:"absolute", left:l, top:t, width:14, height:14, borderRadius:"50%", background:"#fff", border:"2px solid var(--vurgu)", cursor:tip+"-resize" }}/>
+            ))}
+          </div>
+        </div>
+        <div style={{ fontSize:10, color:"#86868b", margin:"10px 0 16px" }}>Köşelerden boyutlandırın, içinden sürükleyerek taşıyın.</div>
+        <div style={{ display:"flex", gap:8 }}>
+          <button onClick={onCancel} style={{ flex:1, background:"rgba(255,255,255,0.08)", border:"none", borderRadius:10, padding:"12px", color:"#f5f5f7", fontSize:13, fontWeight:600, cursor:"pointer" }}>Vazgeç</button>
+          <button onClick={onaylaKirp} disabled={isliyor} style={{ flex:2, background: isliyor?"rgba(255,255,255,0.15)":"var(--vurgu)", border:"none", borderRadius:10, padding:"12px", color:"#fff", fontSize:13, fontWeight:600, cursor: isliyor?"default":"pointer" }}>
+            {isliyor ? "İşleniyor..." : "✂️ Kırp ve Kullan"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // PDF — blob download (popup yok)
 // ═══ ÜRETİM TAKİP YARDIMCILARI ═══
 
@@ -2709,6 +2805,21 @@ function Atolye({ onSirketDegis }) {
   const [fSetKodu,     setFSetKodu]    = useState(""); // set kodu - aynı sete ait modelleri eşler
   const [fAc,          setFAc]         = useState("");
   const [fFoto,        setFFoto]       = useState("");
+  const [kirpModal,    setKirpModal]   = useState(null); // foto kırpma aracı — data-URL tutuyor, null=kapalı
+  // Büyük foto önizlemesi (220px) editördeki 4:3 kutudan FARKLI bir en/boy oranında —
+  // bu yüzden nokta konumunu bu kutunun KENDİ letterbox'ına göre ayrıca düzeltmek gerekiyor.
+  const ustFotoKutuRef = useRef(null);
+  const ustFotoImgRef  = useRef(null);
+  const [, setUstFotoYuklendi] = useState(0);
+  const ustFotoKonum = (cx, cy) => {
+    const kutu = ustFotoKutuRef.current, img = ustFotoImgRef.current;
+    if (!kutu || !img || !img.naturalWidth) return { left:(cx*100)+"%", top:(cy*100)+"%" };
+    const r = kutu.getBoundingClientRect();
+    const olcek = Math.min(r.width / img.naturalWidth, r.height / img.naturalHeight);
+    const gW = img.naturalWidth * olcek, gH = img.naturalHeight * olcek;
+    const ofX = (r.width - gW) / 2, ofY = (r.height - gH) / 2;
+    return { left: ((ofX + cx*gW) / r.width * 100) + "%", top: ((ofY + cy*gH) / r.height * 100) + "%" };
+  };
   const [fKolId,       setFKolId]      = useState("");
   const [fDurum,       setFDurum]      = useState("baslanmadi");
   const [fEtiketler,   setFEtiketler]  = useState([]);
@@ -3417,7 +3528,7 @@ function Atolye({ onSirketDegis }) {
     const f = e.target.files && e.target.files[0];
     e.target.value = ""; // SIFIRLA — aynı/yeni dosya tekrar seçilebilsin (yoksa onChange tetiklenmez)
     if (!f) return;
-    setFFoto(await resizeImg(f));
+    setKirpModal(await resizeImg(f)); // önce boyutlandır, sonra kırpma aracı aç
   };
   const handleKod  = v => {
     setFKod(v);
@@ -8367,27 +8478,38 @@ ${buildContext()}`;
         <button onClick={saveKol} disabled={!fkAd.trim()} style={{ ...BG, width:"100%", opacity:fkAd.trim()?1:0.4 }}>{editK?"Kaydet":"Olustur"}</button>
       </Modal>
 
+      {/* FOTO KIRPMA ARACI */}
+      {kirpModal && (
+        <FotoKirpModal src={kirpModal}
+          onCancel={()=>setKirpModal(null)}
+          onConfirm={(sonuc)=>{ setFFoto(sonuc); setKirpModal(null); }}/>
+      )}
+
       {/* MODEL MODAL */}
       <Modal open={showMM} onClose={()=>{setShowMM(false);setEditM(null);}} title={editM?"Modeli Duzenle":"Yeni Model"}>
         {/* DÜZENLEMEDE: büyük foto (tıklayınca değiştir) + 3 ayar gram tablosu */}
         {editM && (
           <div style={{ marginBottom:12 }}>
-            <div onClick={()=>fileRef.current&&fileRef.current.click()} style={{ height:220, borderRadius:12, overflow:"hidden", background:"#f3f3f3", display:"flex", alignItems:"center", justifyContent:"center", marginBottom:8, cursor:"pointer", position:"relative" }}>
-              {fFoto ? <img src={fFoto} alt="" style={{ width:"100%", height:"100%", objectFit:"contain" }}/> : <div style={{ fontSize:40, color:"#ccc" }}>◇</div>}
-              {/* Detay noktaları — tam konumda (bu kutu "contain" ile gösterildiği için editörle birebir eşleşiyor) */}
+            <div ref={ustFotoKutuRef} onClick={()=>fileRef.current&&fileRef.current.click()} style={{ height:220, borderRadius:12, overflow:"hidden", background:"#f3f3f3", display:"flex", alignItems:"center", justifyContent:"center", marginBottom:8, cursor:"pointer", position:"relative" }}>
+              {fFoto ? <img ref={ustFotoImgRef} src={fFoto} alt="" onLoad={()=>setUstFotoYuklendi(v=>v+1)} style={{ width:"100%", height:"100%", objectFit:"contain" }}/> : <div style={{ fontSize:40, color:"#ccc" }}>◇</div>}
+              {/* Detay noktaları — bu kutunun KENDİ en/boy oranına göre düzeltilmiş konum (editörün 4:3 kutusundan farklı) */}
               {fFoto && fDetayNoktalari.map(n => {
                 const ayriFoto = n.tip === "foto";
                 const r = Math.min(0.35, Math.max(0.06, n.r || 0.16));
                 const zoom = Math.round((1/(2*r)) * 100);
+                const pos = ustFotoKonum(n.cx||0.5, n.cy||0.5);
                 return (
                   <div key={n.id} title={n.etiket} onClick={e=>e.stopPropagation()}
-                    style={{ position:"absolute", left:((n.cx||0.5)*100)+"%", top:((n.cy||0.5)*100)+"%", transform:"translate(-50%,-50%)", width:44, height:44, borderRadius:"50%", overflow:"hidden", border:"2.5px solid #fff", boxShadow:"0 3px 10px rgba(0,0,0,0.4)", background:"#f7f7f8", zIndex:3,
+                    style={{ position:"absolute", left:pos.left, top:pos.top, transform:"translate(-50%,-50%)", width:44, height:44, borderRadius:"50%", overflow:"hidden", border:"2.5px solid #fff", boxShadow:"0 3px 10px rgba(0,0,0,0.4)", background:"#f7f7f8", zIndex:3,
                       ...(ayriFoto ? {} : { backgroundImage:`url(${fFoto})`, backgroundSize:zoom+"%", backgroundPosition:((n.cx||0.5)*100)+"% "+((n.cy||0.5)*100)+"%", backgroundRepeat:"no-repeat" }) }}>
                     {ayriFoto && n.foto && <img src={n.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }}/>}
                   </div>
                 );
               })}
-              <div style={{ position:"absolute", bottom:8, right:8, background:"rgba(0,0,0,0.6)", color:"#fff", fontSize:10, fontWeight:600, padding:"5px 11px", borderRadius:7, display:"flex", alignItems:"center", gap:5 }}>📷 Fotoğrafı değiştir</div>
+              <div style={{ position:"absolute", bottom:8, right:8, display:"flex", gap:6 }}>
+                {fFoto && <div onClick={e=>{ e.stopPropagation(); setKirpModal(fFoto); }} style={{ background:"rgba(0,0,0,0.6)", color:"#fff", fontSize:10, fontWeight:600, padding:"5px 11px", borderRadius:7, display:"flex", alignItems:"center", gap:5, cursor:"pointer" }}>✂️ Kırp</div>}
+                <div style={{ background:"rgba(0,0,0,0.6)", color:"#fff", fontSize:10, fontWeight:600, padding:"5px 11px", borderRadius:7, display:"flex", alignItems:"center", gap:5 }}>📷 Fotoğrafı değiştir</div>
+              </div>
             </div>
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8 }}>
               {["10K","14K","18K"].map(a => {
