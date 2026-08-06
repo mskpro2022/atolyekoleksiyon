@@ -4210,14 +4210,15 @@ function Atolye({ onSirketDegis }) {
                   <div key={m.id} style={{ background:ik?"rgba(var(--vurgu-rgb),0.07)":"rgba(var(--vurgu-rgb),0.02)", border:"1px solid", borderColor:ik?"rgba(var(--vurgu-rgb),0.28)":"rgba(var(--vurgu-rgb),0.07)", borderRadius:11, overflow:"hidden", animation:"cardin .3s ease "+(i*.03)+"s both" }}>
                     <div className="model-foto-wrap" style={{ position:"relative", height:180, background:"rgba(0,0,0,0.25)", overflow:"hidden" }}>
                       {m.foto ? <img onClick={()=>openEM(m)} src={m.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"cover", objectPosition:"center center", display:"block", cursor:"pointer" }}/> : <div onClick={()=>openEM(m)} style={{ width:"100%", height:"100%", display:"flex", alignItems:"center", justifyContent:"center", color:"rgba(var(--vurgu-rgb),0.1)", fontSize:24, cursor:"pointer" }}>-</div>}
-                      {/* Detay noktaları — SABİT: sağ kenarda alt alta (köşeler zaten dolu: V/satış/gizle/uyarı rozetleri var). İçerik: fotonun kendi koordinatına göre doğru yakınlaştırma. */}
-                      {m.foto && Array.isArray(m.detayNoktalari) && m.detayNoktalari.filter(n=>(n.tip!=="foto")||n.foto).slice(0,5).map((n,di) => {
+                      {/* Detay noktaları — KÖŞELERDE, büyük (56px). Sağ üst köşe V butonunun altına kaydırıldı ki çakışmasın. */}
+                      {m.foto && Array.isArray(m.detayNoktalari) && m.detayNoktalari.filter(n=>(n.tip!=="foto")||n.foto).slice(0,4).map((n,di) => {
                         const ayriFoto = n.tip === "foto";
                         const r = Math.min(0.35, Math.max(0.06, n.r || 0.16));
                         const zoom = Math.round((1/(2*r)) * 100);
+                        const KOSE = [{ top:26, right:4 }, { bottom:4, right:4 }, { top:4, left:4 }, { bottom:4, left:4 }][di];
                         return (
                           <div key={n.id} title={n.etiket} onClick={e=>e.stopPropagation()}
-                            style={{ position:"absolute", top:30+di*24, right:4, width:20, height:20, borderRadius:"50%", overflow:"hidden", border:"1.5px solid #fff", boxShadow:"0 2px 6px rgba(0,0,0,0.4)", background:"#f7f7f8", zIndex:3,
+                            style={{ position:"absolute", ...KOSE, width:56, height:56, borderRadius:"50%", overflow:"hidden", border:"2.5px solid #fff", boxShadow:"0 3px 10px rgba(0,0,0,0.5)", background:"#f7f7f8", zIndex:3,
                               ...(ayriFoto ? {} : { backgroundImage:`url(${m.foto})`, backgroundSize:zoom+"%", backgroundPosition:((n.cx||0.5)*100)+"% "+((n.cy||0.5)*100)+"%", backgroundRepeat:"no-repeat" }) }}>
                             {ayriFoto && <img src={n.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }}/>}
                           </div>
@@ -8373,6 +8374,19 @@ ${buildContext()}`;
           <div style={{ marginBottom:12 }}>
             <div onClick={()=>fileRef.current&&fileRef.current.click()} style={{ height:220, borderRadius:12, overflow:"hidden", background:"#f3f3f3", display:"flex", alignItems:"center", justifyContent:"center", marginBottom:8, cursor:"pointer", position:"relative" }}>
               {fFoto ? <img src={fFoto} alt="" style={{ width:"100%", height:"100%", objectFit:"contain" }}/> : <div style={{ fontSize:40, color:"#ccc" }}>◇</div>}
+              {/* Detay noktaları — tam konumda (bu kutu "contain" ile gösterildiği için editörle birebir eşleşiyor) */}
+              {fFoto && fDetayNoktalari.map(n => {
+                const ayriFoto = n.tip === "foto";
+                const r = Math.min(0.35, Math.max(0.06, n.r || 0.16));
+                const zoom = Math.round((1/(2*r)) * 100);
+                return (
+                  <div key={n.id} title={n.etiket} onClick={e=>e.stopPropagation()}
+                    style={{ position:"absolute", left:((n.cx||0.5)*100)+"%", top:((n.cy||0.5)*100)+"%", transform:"translate(-50%,-50%)", width:44, height:44, borderRadius:"50%", overflow:"hidden", border:"2.5px solid #fff", boxShadow:"0 3px 10px rgba(0,0,0,0.4)", background:"#f7f7f8", zIndex:3,
+                      ...(ayriFoto ? {} : { backgroundImage:`url(${fFoto})`, backgroundSize:zoom+"%", backgroundPosition:((n.cx||0.5)*100)+"% "+((n.cy||0.5)*100)+"%", backgroundRepeat:"no-repeat" }) }}>
+                    {ayriFoto && n.foto && <img src={n.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }}/>}
+                  </div>
+                );
+              })}
               <div style={{ position:"absolute", bottom:8, right:8, background:"rgba(0,0,0,0.6)", color:"#fff", fontSize:10, fontWeight:600, padding:"5px 11px", borderRadius:7, display:"flex", alignItems:"center", gap:5 }}>📷 Fotoğrafı değiştir</div>
             </div>
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8 }}>
