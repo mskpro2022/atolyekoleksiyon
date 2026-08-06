@@ -542,7 +542,7 @@ function buildKatalogHTML(kol, modeller, sutun, hedefAyar, kollar, gruplu) {
     + ".ph{flex:1;min-height:0;position:relative;background:#f3f3f3;overflow:hidden}"
     + ".ph img{position:absolute;top:50%;left:50%;width:100%;height:100%;object-fit:contain;object-position:center;display:block;transform:translate(-50%,-50%)}"
     + ".ph .ni{position:absolute;top:0;left:0;width:100%;height:100%;background:#f3f3f3;display:flex;align-items:center;justify-content:center;color:#ddd;font-size:20px}"
-    + ".dn{position:absolute;width:56px;height:56px;border-radius:50%;border:3px solid #fff;box-shadow:0 3px 12px rgba(0,0,0,0.55);background-color:#fff;background-repeat:no-repeat;overflow:hidden;z-index:2}"
+    + ".dn{position:absolute;width:56px;height:56px;border-radius:50%;border:3px solid #fff;box-shadow:0 3px 12px rgba(0,0,0,0.55);background-color:#fff;overflow:hidden;z-index:2}"
     + ".dn img{width:100%;height:100%;object-fit:cover}"
     + ".dn-ico{display:flex;align-items:center;justify-content:center;font-size:20px;background:#1a1a1a}"
     + ".cd-bileklik .ph img{object-fit:cover;transform:none;top:0;left:0}"
@@ -586,7 +586,9 @@ function buildKatalogHTML(kol, modeller, sutun, hedefAyar, kollar, gruplu) {
         } else {
           const r = Math.min(0.2, Math.max(0.05, n.r || 0.12));
           const zoom = Math.round((1/r) * 100);
-          h += "<div class='dn' style='" + pos + ";background-image:url(" + m.foto + ");background-size:" + zoom + "% " + zoom + "%;background-position:" + ((n.cx||0.5)*100) + "% " + ((n.cy||0.5)*100) + "%'></div>";
+          const cx = n.cx||0.5, cy = n.cy||0.5;
+          const left = (50 - cx*zoom), top = (50 - cy*zoom);
+          h += "<div class='dn' style='" + pos + "'><img src='" + m.foto + "' style='position:absolute;max-width:none;max-height:none;object-fit:fill;width:" + zoom + "%;height:" + zoom + "%;left:" + left + "%;top:" + top + "%'/></div>";
         }
       });
     }
