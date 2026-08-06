@@ -1,4 +1,4 @@
-import { dbLoad, dbSave, fotoYukleStorage, yedekKaydet, yedekListesi, yedekGetir, bugunYedekVarMi, tabloModelleriSenkron, tabloSiparisleriSenkron, tabloMusterileriYaz, akilliModelOku, akilliSiparisOku, akilliMusteriOku, islemKaydet, islemGecmisiGetir, realtimeBaslat, tabloKoleksiyonlariYaz, tabloKasaYaz, akilliKoleksiyonOku, akilliKasaOku, tabloKoleksiyonlariOku, tabloKasaOku, saglikDenetimi, ekranSunucuFarki, toptanciKaydet, toptancilariGetir, toptanciSil, vitrinAktiviteKaydet, vitrinGecmisiGetir, vitrinEnCokBakilan, vitrinOzetGetir, vitrinAnaliz } from "./supabase.js";
+import { dbLoad, dbSave, fotoYukleStorage, yedekKaydet, yedekListesi, yedekGetir, bugunYedekVarMi, tabloModelleriSenkron, tabloSiparisleriSenkron, tabloSiparisleriToplu, tabloMusterileriYaz, akilliModelOku, akilliSiparisOku, akilliMusteriOku, islemKaydet, islemGecmisiGetir, realtimeBaslat, tabloKoleksiyonlariYaz, tabloKasaYaz, akilliKoleksiyonOku, akilliKasaOku, tabloKoleksiyonlariOku, tabloKasaOku, saglikDenetimi, ekranSunucuFarki, toptanciKaydet, toptancilariGetir, toptanciSil, vitrinAktiviteKaydet, vitrinGecmisiGetir, vitrinEnCokBakilan, vitrinOzetGetir, vitrinAnaliz } from "./supabase.js";
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 
 const uid = () => "x" + Date.now() + Math.random().toString(36).substr(2, 5);
@@ -1280,6 +1280,56 @@ function buildMusteriDetayHTML(musAd, musKod, siparisler) {
 }
 
 // ═══ AI İSİMLENDİRME ═══
+// Bileklik detay noktası editörü — fotoya tıkla, seçili noktayı oraya taşı
+function DetayNoktaEditor({ foto, noktalar, setNoktalar, T }) {
+  const [secili, setSecili] = useState(null); // seçili nokta id'si
+  const kutuRef = useRef(null);
+  const ekle = (etiket) => {
+    const yeni = { id: "d" + Date.now() + Math.random().toString(36).substr(2,4), etiket, x: etiket === "Kilit Detayı" ? 0.15 : 0.85, y: 0.5 };
+    setNoktalar([...noktalar, yeni]);
+    setSecili(yeni.id);
+  };
+  const fotoyaTikla = (e) => {
+    if (!secili || !kutuRef.current) return;
+    const r = kutuRef.current.getBoundingClientRect();
+    const x = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
+    const y = Math.min(1, Math.max(0, (e.clientY - r.top) / r.height));
+    setNoktalar(noktalar.map(n => n.id === secili ? { ...n, x, y } : n));
+  };
+  return (
+    <div>
+      <div ref={kutuRef} onClick={fotoyaTikla}
+        style={{ position:"relative", width:"100%", aspectRatio:"4/3", background:"#f7f7f8", borderRadius:9, overflow:"hidden", cursor: secili?"crosshair":"default", marginBottom:9 }}>
+        <img src={foto} alt="" style={{ width:"100%", height:"100%", objectFit:"contain", pointerEvents:"none" }}/>
+        {noktalar.map(n => (
+          <div key={n.id} onClick={(e)=>{ e.stopPropagation(); setSecili(n.id); }}
+            style={{ position:"absolute", left:(n.x*100)+"%", top:(n.y*100)+"%", transform:"translate(-50%,-50%)", width: secili===n.id?26:20, height: secili===n.id?26:20, borderRadius:"50%", background: secili===n.id?"var(--vurgu)":"rgba(255,255,255,0.9)", border: secili===n.id?"2px solid #fff":"1.5px solid var(--vurgu)", boxShadow:"0 2px 8px rgba(0,0,0,0.35)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:10, cursor:"pointer", zIndex:2 }}>
+            🔍
+          </div>
+        ))}
+      </div>
+      <div style={{ display:"flex", gap:6, marginBottom:9, flexWrap:"wrap" }}>
+        {!noktalar.some(n=>n.etiket==="Kilit Detayı") && <button onClick={()=>ekle("Kilit Detayı")} style={{ background:"rgba(var(--vurgu-rgb),0.12)", border:"1px solid rgba(var(--vurgu-rgb),0.3)", borderRadius:7, padding:"5px 11px", color:"var(--vurgu)", fontSize:9, fontWeight:700, cursor:"pointer" }}>+ Kilit Detayı</button>}
+        {!noktalar.some(n=>n.etiket==="Zincir Detayı") && <button onClick={()=>ekle("Zincir Detayı")} style={{ background:"rgba(var(--vurgu-rgb),0.12)", border:"1px solid rgba(var(--vurgu-rgb),0.3)", borderRadius:7, padding:"5px 11px", color:"var(--vurgu)", fontSize:9, fontWeight:700, cursor:"pointer" }}>+ Zincir Detayı</button>}
+        <button onClick={()=>ekle("Detay")} style={{ background:"rgba(255,255,255,0.06)", border:"1px solid rgba(255,255,255,0.15)", borderRadius:7, padding:"5px 11px", color:"#a1a1a6", fontSize:9, fontWeight:700, cursor:"pointer" }}>+ Diğer</button>
+      </div>
+      {noktalar.length > 0 && (
+        <div style={{ display:"flex", flexDirection:"column", gap:5 }}>
+          {noktalar.map(n => (
+            <div key={n.id} onClick={()=>setSecili(n.id)} style={{ display:"flex", alignItems:"center", gap:7, background: secili===n.id?"rgba(var(--vurgu-rgb),0.1)":"transparent", borderRadius:7, padding:"4px 7px", cursor:"pointer" }}>
+              <span style={{ fontSize:11 }}>🔍</span>
+              <input value={n.etiket} onChange={e=>setNoktalar(noktalar.map(x=>x.id===n.id?{...x,etiket:e.target.value}:x))} onClick={e=>e.stopPropagation()}
+                style={{ flex:1, background:"transparent", border:"none", color:T.text, fontSize:10, outline:"none" }}/>
+              <button onClick={(e)=>{ e.stopPropagation(); setNoktalar(noktalar.filter(x=>x.id!==n.id)); if(secili===n.id) setSecili(null); }}
+                style={{ background:"none", border:"none", color:"#e85a4f", fontSize:12, cursor:"pointer", padding:"2px 5px" }}>✕</button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function AiIsimlendir({ foto, onResult }) {
   const [yukleniyor, setYukleniyor] = useState(false);
   const [oneri, setOneri] = useState(null);
@@ -1576,14 +1626,17 @@ function VitrinModu({ kod, onizleme }) {
   const [secili, setSecili] = useState(new Set());
   const [seciliKlasorler, setSeciliKlasorler] = useState([]); // katalog için sıralı KOLEKSİYON id'leri [1.,2.,3.]
   const [tumGorunum, setTumGorunum] = useState(false); // "Tüm Koleksiyonları Gör" ekranı açık mı
+  // Müşteri kendi siparişini verebilsin (şu an SADECE BSP) — kod hazır, aktifOnek koşuluyla açık/kapalı
+  const [siparisModal, setSiparisModal] = useState(false);
+  const [siparisAdetler, setSiparisAdetler] = useState({}); // { modelId: adet }
+  const [siparisNot, setSiparisNot] = useState("");
+  const [siparisGonderiliyor, setSiparisGonderiliyor] = useState(false);
+  const [siparisBasarili, setSiparisBasarili] = useState(false);
   const [arama, setArama] = useState("");
   const [aktifAyar, setAktifAyar] = useState("14K"); // üstten seçilen ayar — gramlar buna göre
   const [detayModel, setDetayModel] = useState(null); // büyük foto/detay modal
   const [gramFiltre, setGramFiltre] = useState({ min: "", max: "" }); // gram aralığı filtresi
   const [aktifOnek, setAktifOnek] = useState(""); // vitrin hangi şirkete ait
-  const [kayitAd, setKayitAd] = useState(""); // toptancı kayıt: isim
-  const [kayitTel, setKayitTel] = useState(""); // toptancı kayıt: telefon
-  const [kayitDurum, setKayitDurum] = useState(null); // null | "gonderiliyor" | "basarili" | "hata:..."
   const [oncekiZiyaret, setOncekiZiyaret] = useState(0); // toptancının önceki ziyareti (yeni model tespiti)
   const [siralama, setSiralama] = useState("kodTers"); // kodTers (varsayılan: en yüksek kod üstte) | kod | yeni | gramArtan | gramAzalan
   const [vitrinMusteri, setVitrinMusteri] = useState(null); // { ad, kod, onek } — aktivite takibi için
@@ -1593,6 +1646,8 @@ function VitrinModu({ kod, onizleme }) {
     return (typeof window !== "undefined" && window.innerWidth <= 640) ? 4 : 5;
   });
   useEffect(() => { try { localStorage.setItem("vitrin_sutun", String(vitrinSutun)); } catch {} }, [vitrinSutun]);
+  const [zumNokta, setZumNokta] = useState(null); // detay noktası yakınlaştırma (bileklik kilit/zincir)
+  useEffect(() => { setZumNokta(null); }, [detayModel?.id]); // farklı model açılınca zoom sıfırlansın
   const VITRIN_AYARLAR = [
     { id: "10K", l: "10 Ayar" },
     { id: "14K", l: "14 Ayar" },
@@ -1837,6 +1892,42 @@ function VitrinModu({ kod, onizleme }) {
   // Kart ekranına dön
   const kartEkraninaDon = () => { setAktifKol(null); setTumGorunum(false); setArama(""); setGramFiltre({ min:"", max:"" }); };
 
+  // ═══ MÜŞTERİ SİPARİŞ GÖNDERİMİ (şu an sadece BSP) ═══
+  // GÜVENLİ YAZMA: tabloSiparisleriToplu SADECE upsert yapar (ekler/günceller), asla silmez.
+  // tabloSiparisleriSenkron (tam senkron, listede olmayanı SİLER) BİLEREK kullanılmıyor —
+  // vitrin diğer siparişlerin listesini bilmiyor, senkron kullanılsaydı hepsini silerdi.
+  const siparisGonder = async () => {
+    if (!vitrinMusteri || seciliModeller.length === 0) return;
+    setSiparisGonderiliyor(true);
+    try {
+      const kalemler = seciliModeller.map(m => ({
+        ...m,
+        adet: Math.max(1, Number(siparisAdetler[m.id]) || 1),
+        secilenAyar: aktifAyar,
+      }));
+      const yeniSiparis = {
+        id: uid(),
+        musteri: vitrinMusteri.ad || vitrinMusteri.kod,
+        musKod: vitrinMusteri.kod,
+        tarih: Date.now(),
+        teslimTarihi: "",
+        aciklama: siparisNot.trim(),
+        kaynak: "vitrin", // ana sistemde "🛍️ Vitrinden" rozetiyle ayırt edilir
+        kalemler,
+      };
+      await tabloSiparisleriToplu(vitrinMusteri.onek, [yeniSiparis]);
+      if (!onizleme) { try { vitrinAktiviteKaydet(vitrinMusteri.onek, vitrinMusteri.kod, vitrinMusteri.ad, "siparis", null, null, null); } catch {} }
+      setSiparisBasarili(true);
+      setSecili(new Set());
+      setSiparisAdetler({});
+      setSiparisNot("");
+    } catch (e) {
+      alert("Sipariş gönderilemedi: " + e.message + "\nLütfen tekrar deneyin.");
+    } finally {
+      setSiparisGonderiliyor(false);
+    }
+  };
+
   // "Katalog Al" — kart ekranındaysa seçili koleksiyonlar, içerideyse görünen/seçilen modeller
   const katalogAl = (sutun) => {
     if (!aktifKol && !tumGorunum) {
@@ -1873,6 +1964,9 @@ function VitrinModu({ kod, onizleme }) {
           : <div style={{ width:"100%", height:"100%", display:"flex", alignItems:"center", justifyContent:"center", color:"#d2d2d7", fontSize:26 }}>◇</div>}
         {yeni && !cokKucuk && <span style={{ position:"absolute", top: kucuk?6:10, left: kucuk?6:10, background:"var(--vurgu)", color:"#fff", fontSize: kucuk?9:12, padding: kucuk?"3px 8px":"5px 13px", borderRadius:980, fontWeight:700, letterSpacing:"0.05em", boxShadow:"0 2px 10px rgba(0,0,0,0.35)" }}>YENİ</span>}
         {yeni && cokKucuk && <span style={{ position:"absolute", top:5, left:5, width:8, height:8, borderRadius:"50%", background:"var(--vurgu)", boxShadow:"0 1px 4px rgba(0,0,0,0.4)" }}/>}
+        {Array.isArray(m.detayNoktalari) && m.detayNoktalari.length > 0 && !cokKucuk && (
+          <span style={{ position:"absolute", bottom:8, left:8, background:"rgba(28,28,30,0.75)", backdropFilter:"blur(6px)", color:"#fff", fontSize: kucuk?9:10, width: kucuk?20:22, height: kucuk?20:22, borderRadius:"50%", display:"flex", alignItems:"center", justifyContent:"center" }}>🔍</span>
+        )}
         <button onClick={(e)=>{ e.stopPropagation(); const ns=new Set(secili); sec?ns.delete(m.id):ns.add(m.id); setSecili(ns); }}
           style={{ position:"absolute", top:6, right:6, width:secBtnBoyut, height:secBtnBoyut, borderRadius:"50%", background: sec?"var(--vurgu)":"rgba(255,255,255,0.92)", border: sec?"none":"1px solid rgba(0,0,0,0.08)", color: sec?"#fff":"#c7c7cc", fontSize: cokKucuk?10:13, fontWeight:600, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", transition:"all .15s ease", boxShadow:"0 1px 3px rgba(0,0,0,0.12)" }}>✓</button>
       </div>
@@ -1886,7 +1980,7 @@ function VitrinModu({ kod, onizleme }) {
 
   return (
     <div style={{ minHeight:"100vh", background:"#0a0a0a", color:"#f5f5f7", fontFamily:"-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif", WebkitFontSmoothing:"antialiased" }}>
-      <style>{"*{box-sizing:border-box}html,body,#root{margin:0!important;padding:0!important;width:100%!important;max-width:100%!important;min-height:100vh;background:#0a0a0a!important;text-align:left}body{overflow-x:hidden}.vm-card{cursor:pointer}.vm-ph{transition:transform .5s cubic-bezier(.2,.8,.2,1)}.vm-card:hover .vm-ph{transform:scale(1.04)}.vm-pill{transition:all .2s ease}.vm-sel{transition:opacity .18s ease}.vm-card:hover .vm-sel{opacity:1}.vm-hscroll{overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}.vm-hscroll::-webkit-scrollbar{display:none}.vm-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px}.vm-kart-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px}.vm-kod{font-size:12px;color:#c7c7cc;font-weight:600;letter-spacing:.02em}.vm-gram{font-size:15px;color:#f5f5f7;font-weight:600}@media (max-width:640px){.vm-grid{grid-template-columns:repeat(4,1fr);gap:7px}.vm-kart-grid{grid-template-columns:repeat(3,1fr);gap:9px}.vm-pad{padding-left:14px!important;padding-right:14px!important}.vm-kod{font-size:11px}.vm-gram{font-size:13px}.vm-meta{flex-direction:column;align-items:flex-start!important;gap:1px}.vm-baslik{font-size:20px!important}.vm-aciklama{font-size:12px!important}.vm-filtre{gap:7px!important;padding-top:8px!important;padding-bottom:10px!important}}"}</style>
+      <style>{"*{box-sizing:border-box}html,body,#root{margin:0!important;padding:0!important;width:100%!important;max-width:100%!important;min-height:100vh;background:#0a0a0a!important;text-align:left}body{overflow-x:hidden}.vm-card{cursor:pointer}.vm-ph{transition:transform .5s cubic-bezier(.2,.8,.2,1)}.vm-card:hover .vm-ph{transform:scale(1.04)}.vm-pill{transition:all .2s ease}.vm-sel{transition:opacity .18s ease}.vm-card:hover .vm-sel{opacity:1}.vm-hscroll{overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}.vm-hscroll::-webkit-scrollbar{display:none}.vm-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px}.vm-kart-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px}.vm-kod{font-size:12px;color:#c7c7cc;font-weight:600;letter-spacing:.02em}.vm-gram{font-size:15px;color:#f5f5f7;font-weight:600}@media (max-width:640px){.vm-grid{grid-template-columns:repeat(4,1fr);gap:7px}.vm-kart-grid{grid-template-columns:repeat(3,1fr);gap:9px}.vm-pad{padding-left:14px!important;padding-right:14px!important}.vm-kod{font-size:11px}.vm-gram{font-size:13px}.vm-meta{flex-direction:column;align-items:flex-start!important;gap:1px}.vm-baslik{font-size:20px!important}.vm-aciklama{font-size:12px!important}.vm-filtre{gap:7px!important;padding-top:8px!important;padding-bottom:10px!important}}@keyframes vmpulse{0%,100%{box-shadow:0 3px 12px rgba(0,0,0,0.4),0 0 0 0 rgba(255,255,255,0.25)}50%{box-shadow:0 3px 12px rgba(0,0,0,0.4),0 0 0 6px rgba(255,255,255,0)}}"}</style>
 
       {/* ÖNİZLEME BANDI — sahibi kendi bakıyor, kayıt tutulmuyor */}
       {onizleme && (
@@ -2056,7 +2150,10 @@ function VitrinModu({ kod, onizleme }) {
       {(aktifKol || tumGorunum) && secili.size > 0 && (
         <div style={{ margin:"0 28px 16px", background:"rgba(var(--vurgu-rgb),0.12)", borderRadius:11, padding:"11px 16px", display:"flex", alignItems:"center", justifyContent:"space-between", gap:12, flexWrap:"wrap" }}>
           <span style={{ fontSize:13, color:"var(--vurgu)", fontWeight:500 }}>{secili.size} model seçildi</span>
-          <div style={{ display:"flex", gap:8 }}>
+          <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+            {aktifOnek === "bsp2_" && (
+              <button onClick={()=>setSiparisModal(true)} style={{ background:"#f5f5f7", border:"none", borderRadius:8, padding:"7px 16px", color:"#1d1d1f", fontSize:12, fontWeight:700, cursor:"pointer" }}>🛍️ Sipariş Ver</button>
+            )}
             <button onClick={()=>vitrinPDF(3)} style={{ background:"var(--vurgu)", border:"none", borderRadius:8, padding:"7px 16px", color:"#fff", fontSize:12, fontWeight:500, cursor:"pointer" }}>Seçilenlerden PDF</button>
             <button onClick={()=>setSecili(new Set())} style={{ background:"transparent", border:"none", color:"#86868b", fontSize:12, fontWeight:500, cursor:"pointer", padding:"7px 10px" }}>Temizle</button>
           </div>
@@ -2103,47 +2200,81 @@ function VitrinModu({ kod, onizleme }) {
         </div>
       )}
 
-      {/* KAYIT */}
-      <div style={{ padding:"0 28px 50px" }}>
-        <div style={{ background:"rgba(255,255,255,0.04)", borderRadius:14, padding:"22px 24px" }}>
-          <div style={{ fontSize:16, fontWeight:500, color:"#f5f5f7", marginBottom:4 }}>Yeni modellerden haberdar olun</div>
-          <div style={{ fontSize:13, color:"#86868b", marginBottom:16 }}>Kaydolun, yeni modeller eklendiğinde bildirelim.</div>
-          {kayitDurum === "basarili" ? (
-            <div style={{ display:"flex", alignItems:"center", gap:10, color:"var(--vurgu)", fontSize:14, fontWeight:500 }}>
-              <span style={{ width:22, height:22, borderRadius:"50%", background:"var(--vurgu)", color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontSize:12 }}>✓</span>
-              Kaydınız alındı
-            </div>
-          ) : (
-            <div style={{ display:"flex", gap:9, flexWrap:"wrap" }}>
-              <input value={kayitAd} onChange={e=>{setKayitAd(e.target.value); setKayitDurum(null);}} placeholder="Adınız"
-                style={{ flex:"1 1 160px", background:"rgba(255,255,255,0.07)", border:"none", borderRadius:9, padding:"11px 14px", color:"#f5f5f7", fontSize:14, outline:"none" }}/>
-              <input value={kayitTel} onChange={e=>{setKayitTel(e.target.value); setKayitDurum(null);}} placeholder="Telefon" type="tel"
-                style={{ flex:"1 1 160px", background:"rgba(255,255,255,0.07)", border:"none", borderRadius:9, padding:"11px 14px", color:"#f5f5f7", fontSize:14, outline:"none" }}/>
-              <button disabled={kayitDurum==="gonderiliyor"} onClick={async()=>{
-                if (!kayitAd.trim()) { setKayitDurum("hata:İsim girin"); return; }
-                if (kayitTel.replace(/\D/g,"").length < 10) { setKayitDurum("hata:Geçerli telefon girin"); return; }
-                setKayitDurum("gonderiliyor");
-                const r = await toptanciKaydet(aktifOnek, kayitAd, kayitTel, kod);
-                setKayitDurum(r.ok ? "basarili" : "hata:" + (r.hata || "Kayıt başarısız"));
-              }} style={{ background:"var(--vurgu)", border:"none", borderRadius:9, padding:"11px 24px", color:"#fff", fontSize:14, fontWeight:500, cursor:"pointer", opacity: kayitDurum==="gonderiliyor"?0.5:1 }}>
-                {kayitDurum==="gonderiliyor" ? "..." : "Kaydol"}
-              </button>
-              {kayitDurum && kayitDurum.startsWith("hata:") && (
-                <div style={{ flexBasis:"100%", fontSize:12, color:"#ff453a" }}>{kayitDurum.slice(5)}</div>
-              )}
-            </div>
-          )}
+
+      {/* ═══ SİPARİŞ MODALI — müşteri kendi siparişini oluşturur (BSP) ═══ */}
+      {siparisModal && (
+        <div onClick={()=>{ if(!siparisGonderiliyor){ setSiparisModal(false); setSiparisBasarili(false); } }} style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.75)", zIndex:110, display:"flex", alignItems:"center", justifyContent:"center", padding:20, backdropFilter:"blur(20px)" }}>
+          <div onClick={e=>e.stopPropagation()} style={{ background:"#1c1c1e", borderRadius:18, maxWidth:520, width:"100%", maxHeight:"88vh", overflow:"auto" }}>
+            {siparisBasarili ? (
+              <div style={{ padding:"40px 28px", textAlign:"center" }}>
+                <div style={{ fontSize:44, marginBottom:14 }}>✓</div>
+                <div style={{ fontSize:18, fontWeight:600, color:"#f5f5f7", marginBottom:8 }}>Siparişiniz alındı</div>
+                <div style={{ fontSize:14, color:"#a1a1a6", marginBottom:24 }}>En kısa sürede size dönüş yapılacaktır.</div>
+                <button onClick={()=>{ setSiparisModal(false); setSiparisBasarili(false); }} style={{ background:"#f5f5f7", border:"none", borderRadius:11, padding:"12px 28px", color:"#1d1d1f", fontSize:14, fontWeight:600, cursor:"pointer" }}>Tamam</button>
+              </div>
+            ) : (
+              <div style={{ padding:"22px 24px 24px" }}>
+                <div style={{ fontSize:18, fontWeight:600, color:"#f5f5f7", marginBottom:4 }}>Sipariş Ver</div>
+                <div style={{ fontSize:13, color:"#86868b", marginBottom:18 }}>{seciliModeller.length} model — {aktifAyar.replace("K"," Ayar")}</div>
+                <div style={{ display:"flex", flexDirection:"column", gap:10, maxHeight:280, overflow:"auto", marginBottom:16 }}>
+                  {seciliModeller.map(m => (
+                    <div key={m.id} style={{ display:"flex", alignItems:"center", gap:12, background:"rgba(255,255,255,0.05)", borderRadius:11, padding:"9px 12px" }}>
+                      <div style={{ width:44, height:44, borderRadius:8, overflow:"hidden", background:"#f7f7f8", flexShrink:0 }}>
+                        {m.foto ? <img src={m.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"contain" }}/> : null}
+                      </div>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{ fontSize:13, color:"#f5f5f7", fontWeight:500, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{m.kod}</div>
+                        <div style={{ fontSize:11, color:"#86868b" }}>{ayarliGram(m)} g</div>
+                      </div>
+                      <div style={{ display:"flex", alignItems:"center", gap:6, flexShrink:0 }}>
+                        <button onClick={()=>setSiparisAdetler(p=>({...p,[m.id]:Math.max(1,(Number(p[m.id])||1)-1)}))} style={{ width:26, height:26, borderRadius:7, border:"none", background:"rgba(255,255,255,0.1)", color:"#f5f5f7", fontSize:15, cursor:"pointer" }}>−</button>
+                        <span style={{ fontSize:13, color:"#f5f5f7", fontWeight:600, minWidth:16, textAlign:"center" }}>{Number(siparisAdetler[m.id])||1}</span>
+                        <button onClick={()=>setSiparisAdetler(p=>({...p,[m.id]:Math.max(1,(Number(p[m.id])||1)+1)}))} style={{ width:26, height:26, borderRadius:7, border:"none", background:"rgba(255,255,255,0.1)", color:"#f5f5f7", fontSize:15, cursor:"pointer" }}>+</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <textarea value={siparisNot} onChange={e=>setSiparisNot(e.target.value)} placeholder="Not eklemek isterseniz (opsiyonel)..."
+                  style={{ width:"100%", minHeight:64, background:"rgba(255,255,255,0.07)", border:"none", borderRadius:11, padding:"11px 13px", color:"#f5f5f7", fontSize:13, outline:"none", resize:"vertical", fontFamily:"inherit", marginBottom:16 }}/>
+                <button disabled={siparisGonderiliyor} onClick={siparisGonder}
+                  style={{ width:"100%", background: siparisGonderiliyor?"rgba(255,255,255,0.15)":"var(--vurgu)", border:"none", borderRadius:11, padding:"14px", color:"#fff", fontSize:15, fontWeight:600, cursor: siparisGonderiliyor?"default":"pointer" }}>
+                  {siparisGonderiliyor ? "Gönderiliyor..." : "Siparişi Gönder"}
+                </button>
+              </div>
+            )}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* DETAY */}
       {detayModel && (
         <div onClick={()=>setDetayModel(null)} style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.7)", zIndex:100, display:"flex", alignItems:"center", justifyContent:"center", padding:20, backdropFilter:"blur(20px)" }}>
           <div onClick={e=>e.stopPropagation()} style={{ background:"#1c1c1e", borderRadius:18, maxWidth:560, width:"100%", maxHeight:"90vh", overflow:"auto", position:"relative" }}>
             <button onClick={()=>setDetayModel(null)} style={{ position:"absolute", top:14, right:14, zIndex:5, width:30, height:30, borderRadius:"50%", background:"rgba(120,120,128,0.5)", border:"none", color:"#fff", fontSize:15, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}>✕</button>
-            <div style={{ aspectRatio:"4/3", background:"#f7f7f8", display:"flex", alignItems:"center", justifyContent:"center", overflow:"hidden" }}>
+            <div style={{ aspectRatio:"4/3", background:"#f7f7f8", display:"flex", alignItems:"center", justifyContent:"center", overflow:"hidden", position:"relative" }}>
               {detayModel.foto ? <img src={detayModel.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"contain" }}/> : <div style={{ fontSize:50, color:"#d2d2d7" }}>◇</div>}
+              {/* ═══ BİLEKLİK DETAY BALONCUKLARI — kilit/zincir yakın çekim ═══ */}
+              {Array.isArray(detayModel.detayNoktalari) && detayModel.detayNoktalari.map(n => (
+                <button key={n.id} onClick={(e)=>{ e.stopPropagation(); setZumNokta(n); }}
+                  title={n.etiket}
+                  style={{ position:"absolute", top:(n.y*100)+"%", left: n.x<0.5 ? 14 : "auto", right: n.x>=0.5 ? 14 : "auto", transform:"translateY(-50%)", width:40, height:40, borderRadius:"50%", background:"rgba(28,28,30,0.85)", backdropFilter:"blur(8px)", border:"1.5px solid rgba(255,255,255,0.35)", color:"#fff", fontSize:16, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", boxShadow:"0 3px 12px rgba(0,0,0,0.4)", animation:"vmpulse 2.2s ease-in-out infinite" }}>
+                  🔍
+                </button>
+              ))}
             </div>
+
+            {/* ═══ DETAY ZOOM — baloncuğa tıklanınca o bölgeye yakınlaşmış görünüm ═══ */}
+            {zumNokta && detayModel.foto && (
+              <div onClick={()=>setZumNokta(null)} style={{ position:"absolute", inset:0, background:"#0a0a0a", zIndex:20, display:"flex", flexDirection:"column" }}>
+                <div style={{ flex:1, position:"relative", overflow:"hidden" }}>
+                  <img src={detayModel.foto} alt="" style={{ position:"absolute", width:"260%", height:"260%", objectFit:"contain", left:(50 - zumNokta.x*260)+"%", top:(50 - zumNokta.y*260)+"%" }}/>
+                </div>
+                <div style={{ padding:"14px 18px", display:"flex", justifyContent:"space-between", alignItems:"center", background:"#1c1c1e" }}>
+                  <span style={{ fontSize:14, color:"#f5f5f7", fontWeight:600 }}>{zumNokta.etiket}</span>
+                  <button onClick={()=>setZumNokta(null)} style={{ background:"rgba(255,255,255,0.12)", border:"none", borderRadius:8, padding:"7px 16px", color:"#fff", fontSize:12, fontWeight:600, cursor:"pointer" }}>Kapat</button>
+                </div>
+              </div>
+            )}
             <div style={{ padding:"22px 24px 24px" }}>
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", marginBottom:20 }}>
                 <span style={{ fontSize:20, fontWeight:500, color:"#f5f5f7", letterSpacing:"-0.02em" }}>{detayModel.ad}</span>
@@ -2162,6 +2293,28 @@ function VitrinModu({ kod, onizleme }) {
                   );
                 })}
               </div>
+              {/* ═══ TAŞ BİLGİSİ — SADECE BSP VİTRİNİNDE (MSK'da gizli) ═══ */}
+              {aktifOnek === "bsp2_" && (Number(detayModel.tasGram) > 0 || (detayModel.taslar && detayModel.taslar.length > 0)) && (
+                <div style={{ marginTop:16, background:"rgba(255,255,255,0.05)", borderRadius:11, padding:"14px 16px" }}>
+                  <div style={{ fontSize:11, color:"#86868b", fontWeight:600, letterSpacing:"0.04em", textTransform:"uppercase", marginBottom:12 }}>Taş Bilgisi</div>
+                  {Number(detayModel.tasGram) > 0 && (
+                    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", marginBottom: (detayModel.taslar && detayModel.taslar.length) ? 12 : 0, paddingBottom: (detayModel.taslar && detayModel.taslar.length) ? 12 : 0, borderBottom: (detayModel.taslar && detayModel.taslar.length) ? "0.5px solid rgba(255,255,255,0.08)" : "none" }}>
+                      <span style={{ fontSize:13, color:"#a1a1a6" }}>Taş ağırlığı</span>
+                      <span style={{ fontSize:15, color:"#f5f5f7", fontWeight:600 }}>{Number(detayModel.tasGram).toFixed(2)} <span style={{ fontSize:11, color:"#86868b" }}>g</span></span>
+                    </div>
+                  )}
+                  {detayModel.taslar && detayModel.taslar.length > 0 && (
+                    <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+                      {detayModel.taslar.map((t, i) => (
+                        <div key={i} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", fontSize:13 }}>
+                          <span style={{ color:"#f5f5f7" }}>{t.sekil || "Taş"}{t.boyut ? " · " + t.boyut : ""}</span>
+                          <span style={{ color:"#86868b" }}>{t.adet || 1} adet</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
               <button onClick={()=>{ const ns=new Set(secili); secili.has(detayModel.id)?ns.delete(detayModel.id):ns.add(detayModel.id); setSecili(ns); }}
                 style={{ width:"100%", marginTop:18, background: secili.has(detayModel.id)?"rgba(255,255,255,0.1)":"var(--vurgu)", border:"none", borderRadius:11, padding:"13px", color:"#fff", fontSize:14, fontWeight:500, cursor:"pointer" }}>
                 {secili.has(detayModel.id) ? "Seçimden çıkar" : "Seç"}
@@ -2433,6 +2586,7 @@ function Atolye({ onSirketDegis }) {
   const [fKolId,       setFKolId]      = useState("");
   const [fDurum,       setFDurum]      = useState("baslanmadi");
   const [fEtiketler,   setFEtiketler]  = useState([]);
+  const [fDetayNoktalari, setFDetayNoktalari] = useState([]); // bileklik: [{id,etiket,x,y}] — kilit/zincir yakın çekim noktaları
   const [fYeniEtiket,  setFYeniEtiket] = useState("");
   const fileRef = useRef(null);
 
@@ -2996,7 +3150,7 @@ function Atolye({ onSirketDegis }) {
   }, [kollar]);
 
   const rkf = () => { setFkAd(""); setFkAc(""); setFkOn(""); };
-  const rmf = () => { setFAd(""); setFKod(""); setFGram(""); setFRefAyar("14K"); setFTasGram(""); setFTasBoy(""); setFTaslar([]); setFTasSekil("ROUND"); setFTasTur("N"); setFTasBoyut(""); setFTasAdet(""); setFTasOzelIsim(""); setFMadenC(""); setFIscilikDolar(""); setFIscilikBirim("dolar"); setFIscilikAyarlar({}); setFEkMaliyet(""); setFKategori("yuzuk"); setFSetKodu(""); setFAc(""); setFFoto(""); setFKolId(""); setFDurum("baslanmadi"); setFEtiketler([]); setFYeniEtiket(""); };
+  const rmf = () => { setFAd(""); setFKod(""); setFGram(""); setFRefAyar("14K"); setFTasGram(""); setFTasBoy(""); setFTaslar([]); setFTasSekil("ROUND"); setFTasTur("N"); setFTasBoyut(""); setFTasAdet(""); setFTasOzelIsim(""); setFMadenC(""); setFIscilikDolar(""); setFIscilikBirim("dolar"); setFIscilikAyarlar({}); setFEkMaliyet(""); setFKategori("yuzuk"); setFSetKodu(""); setFAc(""); setFFoto(""); setFKolId(""); setFDurum("baslanmadi"); setFEtiketler([]); setFYeniEtiket(""); setFDetayNoktalari([]); };
 
   const saveKol = () => {
     if (!fkAd.trim()) return;
@@ -3034,7 +3188,7 @@ function Atolye({ onSirketDegis }) {
     const hesaplananTasGram = fTaslar.length > 0 && toplamTasGram > 0
       ? toplamTasGram
       : (Number(fTasGram)||0);
-    const obj = { ad: fAd.trim(), kod: fKod.trim().toUpperCase(), kategori: fKategori, gram: Number(fGram)||0, refAyar: fRefAyar, tasGram: hesaplananTasGram, taslar: fTaslar, tasBoy: fTasBoy.trim(), tasSekil: fTasSekil, tasTur: fTasTur, tasBoyut: fTasBoyut, tasAdet: Number(fTasAdet)||0, madenCarpan: Number(fMadenC)||0, iscilikDolar: Number(fIscilikDolar)||0, iscilikBirim: fIscilikBirim, iscilikAyarlar: fIscilikAyarlar, ekMaliyet: Number(fEkMaliyet)||0, ac: fAc.trim(), foto: fFoto, ki: fKolId, durum: fDurum, etiketler: fEtiketler };
+    const obj = { ad: fAd.trim(), kod: fKod.trim().toUpperCase(), kategori: fKategori, gram: Number(fGram)||0, refAyar: fRefAyar, tasGram: hesaplananTasGram, taslar: fTaslar, tasBoy: fTasBoy.trim(), tasSekil: fTasSekil, tasTur: fTasTur, tasBoyut: fTasBoyut, tasAdet: Number(fTasAdet)||0, madenCarpan: Number(fMadenC)||0, iscilikDolar: Number(fIscilikDolar)||0, iscilikBirim: fIscilikBirim, iscilikAyarlar: fIscilikAyarlar, ekMaliyet: Number(fEkMaliyet)||0, ac: fAc.trim(), foto: fFoto, ki: fKolId, durum: fDurum, etiketler: fEtiketler, detayNoktalari: fKategori==="bileklik" ? fDetayNoktalari : [] };
     if (!obj.id) obj.olusturma = Date.now();
     // Aynı kodlu diğer modeller var mı kontrol et
     const FIYAT_ALANLARI = ["iscilikDolar","iscilikBirim","iscilikAyarlar","ekMaliyet","madenCarpan"];
@@ -3113,7 +3267,7 @@ function Atolye({ onSirketDegis }) {
     setFTasGram(String(m.tasGram||"")); setFTasBoy(m.tasBoy||""); setFTaslar(m.taslar||[]); setFTasSekil(m.tasSekil||"ROUND"); setFTasTur(m.tasTur||"N"); setFTasBoyut(m.tasBoyut||""); setFTasAdet(String(m.tasAdet||"")); setFMadenC(String(m.madenCarpan||""));
     setFIscilikDolar(String(m.iscilikDolar||"")); setFIscilikBirim(m.iscilikBirim||"dolar"); setFIscilikAyarlar(m.iscilikAyarlar||{}); setFEkMaliyet(String(m.ekMaliyet||""));
     setFAc(m.ac||""); setFFoto(m.foto||""); setFKolId(m.ki||""); setFDurum(m.durum||"baslanmadi");
-    setFKategori(m.kategori||"yuzuk"); setFEtiketler(m.etiketler||[]); setEditM(m); setShowMM(true);
+    setFKategori(m.kategori||"yuzuk"); setFEtiketler(m.etiketler||[]); setFDetayNoktalari(m.detayNoktalari||[]); setEditM(m); setShowMM(true);
   };
 
   const handleFoto = async e => {
@@ -4371,6 +4525,7 @@ function Atolye({ onSirketDegis }) {
                         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:5 }}>
                           <div style={{ display:"flex", alignItems:"center", gap:8 }}>
                             <span style={{ fontSize:13, fontWeight:800, color:GOLD }}>{s.musKod||s.musteri||"Isimsiz"}</span>
+                            {s.kaynak === "vitrin" && <span style={{ fontSize:9, fontWeight:800, color:"#fff", background:"linear-gradient(135deg,#a78bfa,#8b6fe8)", padding:"2px 8px", borderRadius:980 }}>🛍️ Vitrinden</span>}
                             <span style={{ fontSize:9, color:"#7a6f5a" }}>{new Date(s.tarih).toLocaleDateString("tr-TR")}</span>
                             <span style={{ fontSize:9, color:"#998a6e" }}>{toplamKalem} kalem</span>
                             <span style={{ fontSize:9, color:"#5b9bd5", fontWeight:700 }}>{fN((s.kalemler||[]).reduce((acc,k)=>{const hc=hesapla(k,k.secilenAyar||k.refAyar,s.altinKgUSD,s.mc);const du=((s.kalemHurda)||{})[k.id]||0;const ia=((s.kalemIade)||{})[k.id]||0;const ta=((s.kalemTamir)||{})[k.id]||0;const net=Math.max(0,(k.adet||1)-du-ia-ta);return acc+hc.mamulGram*net;},0),2)} gr</span>
@@ -6647,6 +6802,27 @@ ${buildContext()}`;
             <div style={{ background:T.card, border:"1px solid "+T.border, borderRadius:14, padding:"15px 16px" }}>
               <div style={{ fontSize:10, fontWeight:700, color:T.sub, marginBottom:10, letterSpacing:"0.05em", textTransform:"uppercase" }}>Özel Taş Boyutları</div>
               <div style={{ fontSize:9, color:"#665d4a", marginBottom:10 }}>Tabloda olmayan taş boyutlarını buraya ekleyin. Model formunda otomatik kullanılır.</div>
+              {AKTIF_SIRKET_ONEK && (
+                <button onClick={async()=>{
+                  if (!window.confirm("MSK'daki tüm ayarlar (özel taşlar, kategoriler, etiketler, notlar, varsayılanlar) bu şirkete KOPYALANACAK.\n\nBu şirketteki mevcut ayarların üzerine yazılır. Devam edilsin mi?")) return;
+                  try {
+                    const mskAy = await dbLoad("v7ay", {});
+                    if (!mskAy || !Object.keys(mskAy).length) { alert("MSK ayarları bulunamadı."); return; }
+                    await sv("v7ay", mskAy);
+                    if (mskAy.ozelTaslar) setOzelTaslar(mskAy.ozelTaslar);
+                    if (mskAy.kategoriler) setAyarKategoriler(mskAy.kategoriler);
+                    if (mskAy.etiketler) setAyarEtiketler(mskAy.etiketler);
+                    if (mskAy.kayitliNotlar) setKayitliNotlar(mskAy.kayitliNotlar);
+                    if (mskAy.varsAltinKg) setAyarVarsAltinKg(mskAy.varsAltinKg);
+                    if (mskAy.varsMc) setAyarVarsMc(mskAy.varsMc);
+                    if (mskAy.varsIscilik) setAyarVarsIscilik(mskAy.varsIscilik);
+                    if (mskAy.varsIscilikBirim) setAyarVarsIscilikBirim(mskAy.varsIscilikBirim);
+                    alert("Kopyalandı ✓\nÖzel taş: " + (mskAy.ozelTaslar?.length||0) + "\nKategori: " + (mskAy.kategoriler?.length||0) + "\nNot: " + (mskAy.kayitliNotlar?.length||0));
+                  } catch(e) { alert("Hata: " + e.message); }
+                }} style={{ width:"100%", background:"rgba(var(--vurgu-rgb),0.12)", border:"1px solid rgba(var(--vurgu-rgb),0.35)", borderRadius:10, padding:"11px 14px", color:"var(--vurgu)", fontSize:12, fontWeight:700, cursor:"pointer", marginBottom:12 }}>
+                  📥 MSK ayar/taşlarını bu şirkete kopyala
+                </button>
+              )}
               {ozelTaslar.length === 0 && (
                 <button onClick={()=>{
                   const taslar = [{"sekil": "SEDEF", "boyut": "16mm", "gramPerAdet": 1}, {"sekil": "ONYX", "boyut": "16mm", "gramPerAdet": 2}, {"sekil": "OCTAGON", "boyut": "8x6", "gramPerAdet": 0.86}, {"sekil": "OCTAGON RENKLI", "boyut": "8x6", "gramPerAdet": 0.3}, {"sekil": "ONYX", "boyut": "10MM", "gramPerAdet": 1.97}, {"sekil": "KARE", "boyut": "2.5X2.5 RENKLI", "gramPerAdet": 0.021}, {"sekil": "KALP", "boyut": "7X7 OPAL", "gramPerAdet": 0.15}, {"sekil": "ROUND", "boyut": "7.5", "gramPerAdet": 0.305}, {"sekil": "MARKİZ", "boyut": "10X5", "gramPerAdet": 0.6}, {"sekil": "MARKİZ", "boyut": "10X10 RENKLI", "gramPerAdet": 0.3}, {"sekil": "KALP", "boyut": "10X10", "gramPerAdet": 1.26}, {"sekil": "KALP", "boyut": "10X10 RENKLI", "gramPerAdet": 1}, {"sekil": "OCTAGON", "boyut": "7X7", "gramPerAdet": 1.26}, {"sekil": "OCTAGON", "boyut": "7X7 RENKLI", "gramPerAdet": 0.55}, {"sekil": "OCTAGON", "boyut": "7X5", "gramPerAdet": 0.35}, {"sekil": "OCTAGON", "boyut": "7X5 RENKLI", "gramPerAdet": 0.2}, {"sekil": "KALP", "boyut": "7X7", "gramPerAdet": 1}, {"sekil": "KALP", "boyut": "7X7 RENKLI", "gramPerAdet": 0.45}, {"sekil": "BRIOLETTE", "boyut": "12X12", "gramPerAdet": 1.35}, {"sekil": "BRIOLETTE", "boyut": "16X12", "gramPerAdet": 2.85}, {"sekil": "ROUND", "boyut": "7MM", "gramPerAdet": 0.69}, {"sekil": "ROUND", "boyut": "7MM RENKLI", "gramPerAdet": 0.3}, {"sekil": "TRAPEZ", "boyut": "1.5X1.25X1.00", "gramPerAdet": 0.0079}, {"sekil": "OVAL", "boyut": "10X2 RENKLI", "gramPerAdet": 0.33}, {"sekil": "CABOCHON MALAHIT", "boyut": "10X10", "gramPerAdet": 1}, {"sekil": "YAY 3M SARNEL", "boyut": "0.5", "gramPerAdet": 0.3}, {"sekil": "ŞEKER TAŞ", "boyut": "5MM", "gramPerAdet": 0.5}, {"sekil": "TITANYUM YAY", "boyut": "60X60", "gramPerAdet": 1}, {"sekil": "OVAL", "boyut": "9X7", "gramPerAdet": 0.3}, {"sekil": "OPAL", "boyut": "10X8", "gramPerAdet": 0.3}];
@@ -8076,6 +8252,15 @@ ${buildContext()}`;
           </div>
         )}
 
+        {/* ═══ BİLEKLİK DETAY NOKTALARI — kilit / zincir yakın çekim ═══ */}
+        {fKategori === "bileklik" && fFoto && (
+          <div style={{ background:"rgba(var(--vurgu-rgb),0.05)", border:"1px solid rgba(var(--vurgu-rgb),0.15)", borderRadius:12, padding:"12px 13px", marginBottom:10 }}>
+            <div style={{ fontSize:10, fontWeight:700, color:T.sub, marginBottom:3, letterSpacing:"0.05em", textTransform:"uppercase" }}>🔍 Detay Noktaları (Kilit / Zincir)</div>
+            <div style={{ fontSize:9, color:"#998a6e", marginBottom:9 }}>Fotoya tıklayın — seçili nokta oraya taşınır. Vitrinde müşteri bu noktalara yakınlaşabilir.</div>
+            <DetayNoktaEditor foto={fFoto} noktalar={fDetayNoktalari} setNoktalar={setFDetayNoktalari} T={T}/>
+          </div>
+        )}
+
         <div style={{ display:"flex", gap:7 }}>
           <div style={{ flex:1 }}>
             <Fl label="Urun Kodu" req>
@@ -8099,7 +8284,7 @@ ${buildContext()}`;
                 setFTasGram(String(m.tasGram||"")); setFTasBoy(m.tasBoy||""); setFIscilikDolar(String(m.iscilikDolar||""));
                 setFEkMaliyet(String(m.ekMaliyet||"")); setFMadenC(String(m.madenCarpan||""));
                 setFKategori(m.kategori||"yuzuk"); setFKolId(m.ki||""); setFDurum(m.durum||"baslanmadi");
-                setFEtiketler(m.etiketler||[]); setFFoto(m.foto||"");
+                setFEtiketler(m.etiketler||[]); setFFoto(m.foto||""); setFDetayNoktalari(m.detayNoktalari||[]);
               }} style={{ background:"rgba(232,90,79,0.15)", border:"1px solid rgba(232,90,79,0.3)", borderRadius:6, padding:"4px 12px", color:"#e85a4f", fontSize:9, fontWeight:700, cursor:"pointer" }}>✏ Mevcut modeli düzenle</button>
             </div>
             <div style={{ fontSize:8, color:"#998a6e", marginBottom:4 }}>Veya versiyon olarak kaydet:</div>
