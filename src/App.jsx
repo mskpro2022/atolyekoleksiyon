@@ -4234,10 +4234,6 @@ function Atolye({ onSirketDegis }) {
                 <button key={s.id} onClick={()=>setSirala(s.id)} style={{ background:sirala===s.id?T.btnBg:T.card, border:"1px solid", borderColor:sirala===s.id?T.btnBorder:T.border, borderRadius:5, padding:"3px 7px", color:sirala===s.id?T.gold:T.dim, fontSize:8, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap" }}>{s.l}</button>
               ))}
             </div>
-            <div style={{ display:"flex", gap:3, marginBottom:6, overflowX:"auto", paddingBottom:2 }}>
-              <button onClick={()=>setFiltre("all")} style={{ background:filtre==="all"?T.btnBg:T.card, border:"1px solid", borderColor:filtre==="all"?T.btnBorder:T.border, borderRadius:5, padding:"3px 7px", color:filtre==="all"?T.gold:T.dim, fontSize:8, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap" }}>Tumu</button>
-              {DURUMLAR.map(d => { const cnt=aktMod.filter(m=>(m.durum||"baslanmadi")===d.id).length; if(!cnt)return null; return <button key={d.id} onClick={()=>setFiltre(d.id)} style={{ background:filtre===d.id?"rgba(0,0,0,0.3)":T.card, border:"1px solid", borderColor:filtre===d.id?d.c:T.border, borderRadius:5, padding:"3px 7px", color:filtre===d.id?d.c:T.dim, fontSize:8, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap" }}>{d.l} ({cnt})</button>; })}
-            </div>
             {tumEtiketler.length>0 && (
               <div style={{ display:"flex", gap:3, marginBottom:10, overflowX:"auto", paddingBottom:2 }}>
                 <span style={{ fontSize:7, color:T.dim, fontWeight:700, whiteSpace:"nowrap", alignSelf:"center" }}>ETIKET:</span>
