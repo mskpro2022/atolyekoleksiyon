@@ -2672,7 +2672,7 @@ function Atolye({ onSirketDegis }) {
     hamAltin: [],
     hazirUrun: [],
     serbest: [],
-    musteriModelFiyat: {}, // { "MusteriAd": { "MODEL-KOD": { iscilikDolar, iscilikBirim } } }
+    musteriModelFiyat: {}, // { "MusteriAd": { "MODEL-ID": { iscilikDolar, iscilikBirim } } } — ID bazlı: aynı kod farklı renk/taş varyantı olabileceği için kod DEĞİL, benzersiz model id kullanılır
   });
   const [kasaSayfa, setKasaSayfa] = useState("ozet");
   // Asistan
@@ -2705,7 +2705,7 @@ function Atolye({ onSirketDegis }) {
   const [sayfa,     setSayfa]     = useState("koleksiyonlar");
   const [aktifKol,  setAktifKol]  = useState(null);
   const [filtre,    setFiltre]    = useState("all");
-  const [sirala,    setSirala]    = useState("varsayilan");
+  const [sirala,    setSirala]    = useState("kod_yeni"); // varsayılan: koda göre en yeni
   const [etiketF,    setEtiketF]    = useState("");
   const [kategoriF,  setKategoriF]  = useState("");
   const [onEkF,      setOnEkF]      = useState(""); // kod ön eki filtresi (ALT, KDN, FER...)
@@ -3444,8 +3444,12 @@ function Atolye({ onSirketDegis }) {
     const obj = { ad: fAd.trim() || fKod.trim().toUpperCase(), kod: fKod.trim().toUpperCase(), kategori: fKategori, gram: Number(fGram)||0, refAyar: fRefAyar, tasGram: hesaplananTasGram, taslar: fTaslar, tasBoy: fTasBoy.trim(), tasSekil: fTasSekil, tasTur: fTasTur, tasBoyut: fTasBoyut, tasAdet: Number(fTasAdet)||0, madenCarpan: Number(fMadenC)||0, iscilikDolar: Number(fIscilikDolar)||0, iscilikBirim: fIscilikBirim, iscilikAyarlar: fIscilikAyarlar, ekMaliyet: Number(fEkMaliyet)||0, ac: fAc.trim(), foto: fFoto, ki: fKolId, durum: fDurum, etiketler: fEtiketler, detayNoktalari: fDetayNoktalari };
     if (!obj.id) obj.olusturma = Date.now();
     // Aynı kodlu diğer modeller var mı kontrol et
-    const FIYAT_ALANLARI = ["iscilikDolar","iscilikBirim","iscilikAyarlar","ekMaliyet","madenCarpan"];
-    const syncObj = Object.fromEntries(Object.entries(obj).filter(([k]) => !FIYAT_ALANLARI.includes(k)));
+    // NOT: aynı kod farklı TAŞ RENGİ/TÜRÜ ile kullanılabiliyor (ör. ALT160-B yeşil turmalin, ALT160-B mavi topaz).
+    // Bu yüzden foto ve taş bilgisi ASLA senkronlanmaz — sadece fiyat VE görsel/fiziksel farklılık taşıyan
+    // alanlar hariç tutulur. Senkron sadece gerçekten paylaşılan şeyler için: ad, gram, kategori, açıklama, durum, etiketler.
+    const SENKRON_DISI = ["iscilikDolar","iscilikBirim","iscilikAyarlar","ekMaliyet","madenCarpan",
+      "foto","taslar","tasGram","tasBoy","tasSekil","tasTur","tasBoyut","tasAdet","tasOzelIsim","detayNoktalari"];
+    const syncObj = Object.fromEntries(Object.entries(obj).filter(([k]) => !SENKRON_DISI.includes(k)));
     const ayniKodlular = modeller.filter(m => m.kod === obj.kod && (!editM || m.id !== editM.id));
 
     const detayFotolariYukle = async (modelId, noktalar) => {
@@ -3471,10 +3475,9 @@ function Atolye({ onSirketDegis }) {
         }
         const detayYuklu = await detayFotolariYukle(editM.id, obj.detayNoktalari);
         const objURLli = { ...obj, foto: fotoURL, detayNoktalari: detayYuklu };
-        const syncURLli = { ...syncObj, foto: fotoURL };
         const yeniListe = modeller.map(m => {
           if (m.id === editM.id) return { ...m, ...objURLli };
-          if (onayliSync && m.kod === obj.kod) return { ...m, ...syncURLli };
+          if (onayliSync && m.kod === obj.kod) return { ...m, ...syncObj };
           return m;
         });
         svM(yeniListe);
@@ -3489,7 +3492,7 @@ function Atolye({ onSirketDegis }) {
         const detayYuklu = await detayFotolariYukle(yeniId, obj.detayNoktalari);
         const yeniModel = { id: yeniId, ...obj, foto: fotoURL, detayNoktalari: detayYuklu, t: Date.now() };
         if (onayliSync && ayniKodlular.length > 0) {
-          svM([...modeller.map(m => m.kod === obj.kod ? { ...m, ...syncObj, foto: fotoURL } : m), yeniModel]);
+          svM([...modeller.map(m => m.kod === obj.kod ? { ...m, ...syncObj } : m), yeniModel]);
         } else {
           svM([...modeller, yeniModel]);
         }
@@ -3503,7 +3506,7 @@ function Atolye({ onSirketDegis }) {
         const kol = kollar.find(k => k.id === m.ki);
         return (kol?.ad || "?") + " - " + (m.ad || m.kod);
       }).join(", ");
-      const onay = window.confirm(obj.kod + " kodu " + ayniKodlular.length + " farkli koleksiyonda daha var: " + kolAdlari + "\n\nFiyat haric tum bilgiler guncellenecek. Onayliyor musunuz?");
+      const onay = window.confirm(obj.kod + " kodu " + ayniKodlular.length + " farkli koleksiyonda daha var: " + kolAdlari + "\n\nSadece ad/gram/kategori/aciklama gibi ORTAK bilgiler guncellenecek. Foto ve tas bilgisi HER modelde kendi kalir (farkli renk/tas olabilir). Onayliyor musunuz?");
       kaydet(onay);
     } else {
       kaydet(false);
@@ -3638,7 +3641,7 @@ function Atolye({ onSirketDegis }) {
       const boylar = konfBoylar[m.id] || [];
       const genelBoyAktif = konfGenelBoy.aktif && konfGenelBoy.deger;
       // Fiyat override — konfFiyatlar > müşteri hafızası > model varsayılanı
-      const musHafiza = konfMus ? (kasa.musteriModelFiyat||{})[konfMus]?.[m.kod] : null;
+      const musHafiza = konfMus ? (kasa.musteriModelFiyat||{})[konfMus]?.[m.id] : null;
       const fiyatOvr = konfFiyatlar[m.id];
       const aktifIscilik = fiyatOvr?.iscilikDolar ?? musHafiza?.iscilikDolar ?? m.iscilikDolar;
       const aktifBirim   = fiyatOvr?.iscilikBirim ?? musHafiza?.iscilikBirim ?? m.iscilikBirim ?? "dolar";
@@ -3689,7 +3692,7 @@ function Atolye({ onSirketDegis }) {
       const yeniFiyatHafiza = { ...(kasa.musteriModelFiyat||{}), [musAd]: { ...((kasa.musteriModelFiyat||{})[musAd]||{}) } };
       konfList.forEach(m => {
         if (konfFiyatlar[m.id]) {
-          yeniFiyatHafiza[musAd][m.kod] = { iscilikDolar: konfFiyatlar[m.id].iscilikDolar, iscilikBirim: konfFiyatlar[m.id].iscilikBirim };
+          yeniFiyatHafiza[musAd][m.id] = { iscilikDolar: konfFiyatlar[m.id].iscilikDolar, iscilikBirim: konfFiyatlar[m.id].iscilikBirim };
         }
       });
       svKasa({ ...kasa, musteriModelFiyat: yeniFiyatHafiza });
@@ -4119,7 +4122,7 @@ function Atolye({ onSirketDegis }) {
                 const km = modeller.filter(m => m.ki===kol.id);
                 const ft = km.filter(m => m.foto).slice(0,4);
                 return (
-                  <div key={kol.id} onClick={() => { setAktifKol(kol); setSayfa("modeller"); setFiltre("all"); setEtiketF(""); setArama(""); setSirala("varsayilan"); }}
+                  <div key={kol.id} onClick={() => { setAktifKol(kol); setSayfa("modeller"); setFiltre("all"); setEtiketF(""); setArama(""); setSirala("kod_yeni"); }}
                     style={{ background:"rgba(255,255,255,0.06)", backdropFilter:"blur(10px)", border:"1px solid rgba(255,255,255,0.08)", borderRadius:20, overflow:"hidden", cursor:"pointer", transition:"all .3s ease", animation:"cardin .4s ease "+(i*.05)+"s both", boxShadow:"0 2px 16px rgba(0,0,0,0.15)" }}
                     onMouseOver={e => { e.currentTarget.style.boxShadow="0 8px 32px rgba(0,0,0,0.25)"; e.currentTarget.style.transform="translateY(-4px)"; e.currentTarget.style.borderColor="rgba(255,255,255,0.15)"; }}
                     onMouseOut={e  => { e.currentTarget.style.boxShadow="0 2px 16px rgba(0,0,0,0.15)"; e.currentTarget.style.transform="none"; e.currentTarget.style.borderColor="rgba(255,255,255,0.08)"; }}>
@@ -4537,7 +4540,7 @@ function Atolye({ onSirketDegis }) {
                     const not     = konfNot[m.id]||"";
                     const renk    = konfRenkler[m.id]||"Sari";
                     // Fiyat override — konfFiyatlar > müşteri hafızası > model varsayılanı
-                    const musHafiza = konfMus ? (kasa.musteriModelFiyat||{})[konfMus]?.[m.kod] : null;
+                    const musHafiza = konfMus ? (kasa.musteriModelFiyat||{})[konfMus]?.[m.id] : null;
                     const fiyatOverride = konfFiyatlar[m.id];
                     const aktifIscilik = fiyatOverride?.iscilikDolar ?? musHafiza?.iscilikDolar ?? m.iscilikDolar;
                     const aktifBirim   = fiyatOverride?.iscilikBirim ?? musHafiza?.iscilikBirim ?? m.iscilikBirim ?? "dolar";
@@ -4649,7 +4652,7 @@ function Atolye({ onSirketDegis }) {
                           <div style={{ display:"flex", gap:3 }}>
                             {konfMus && (fiyatDegisti || hafizaVarMi) && (
                               <button onClick={()=>{
-                                const yeniKasa = { ...kasa, musteriModelFiyat: { ...(kasa.musteriModelFiyat||{}), [konfMus]: { ...((kasa.musteriModelFiyat||{})[konfMus]||{}), [m.kod]: { iscilikDolar:aktifIscilik, iscilikBirim:aktifBirim } } } };
+                                const yeniKasa = { ...kasa, musteriModelFiyat: { ...(kasa.musteriModelFiyat||{}), [konfMus]: { ...((kasa.musteriModelFiyat||{})[konfMus]||{}), [m.id]: { iscilikDolar:aktifIscilik, iscilikBirim:aktifBirim } } } };
                                 svKasa(yeniKasa);
                               }} style={{ fontSize:7, background:"rgba(106,191,105,0.1)", border:"1px solid rgba(106,191,105,0.2)", borderRadius:4, padding:"2px 5px", color:"#6abf69", cursor:"pointer", whiteSpace:"nowrap" }}>💾 Kaydet</button>
                             )}
