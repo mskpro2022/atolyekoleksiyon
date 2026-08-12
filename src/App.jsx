@@ -3452,12 +3452,17 @@ function Atolye({ onSirketDegis }) {
     const obj = { ad: fAd.trim() || fKod.trim().toUpperCase(), kod: fKod.trim().toUpperCase(), kategori: fKategori, gram: Number(fGram)||0, refAyar: fRefAyar, tasGram: hesaplananTasGram, taslar: fTaslar, tasBoy: fTasBoy.trim(), tasSekil: fTasSekil, tasTur: fTasTur, tasBoyut: fTasBoyut, tasAdet: Number(fTasAdet)||0, madenCarpan: Number(fMadenC)||0, iscilikDolar: Number(fIscilikDolar)||0, iscilikBirim: fIscilikBirim, iscilikAyarlar: fIscilikAyarlar, ekMaliyet: Number(fEkMaliyet)||0, ac: fAc.trim(), foto: fFoto, ki: fKolId, durum: fDurum, etiketler: fEtiketler, detayNoktalari: fDetayNoktalari };
     if (!obj.id) obj.olusturma = Date.now();
     // Aynı kodlu diğer modeller var mı kontrol et
-    // NOT: aynı kod farklı TAŞ RENGİ/TÜRÜ ile kullanılabiliyor (ör. ALT160-B yeşil turmalin, ALT160-B mavi topaz).
-    // Bu yüzden foto ve taş bilgisi ASLA senkronlanmaz — sadece fiyat VE görsel/fiziksel farklılık taşıyan
-    // alanlar hariç tutulur. Senkron sadece gerçekten paylaşılan şeyler için: ad, gram, kategori, açıklama, durum, etiketler.
+    // NOT: aynı kod İKİ FARKLI SEBEPLE oluşabilir:
+    //  1) AYNI KOLEKSİYON içinde — farklı taş rengi/türü varyantı (ör. ALT160-B yeşil vs mavi) YA DA kaza kopyası.
+    //     Foto/taş/fiyat kesinlikle senkronlanmaz, sadece ad/gram/kategori/açıklama gibi paylaşılan alanlar senkronlanır.
+    //  2) FARKLI KOLEKSİYON içinde — "Kopyala" ile çapraz listelenmiş AYNI FİZİKSEL ürün (ör. hem "ALT" hem
+    //     müşteriye özel "MARKALAR" koleksiyonunda). Bu durumda fiyat DAHİL her şey senkronlanır — çünkü gerçekte
+    //     tek bir ürün, sadece iki kataloğa da düşsün diye kopyalanmış; fiyatın ikisinde de aynı kalması gerekir.
     const SENKRON_DISI = ["iscilikDolar","iscilikBirim","iscilikAyarlar","ekMaliyet","madenCarpan",
       "foto","taslar","tasGram","tasBoy","tasSekil","tasTur","tasBoyut","tasAdet","tasOzelIsim","detayNoktalari"];
-    const syncObj = Object.fromEntries(Object.entries(obj).filter(([k]) => !SENKRON_DISI.includes(k)));
+    const syncObj = Object.fromEntries(Object.entries(obj).filter(([k]) => !SENKRON_DISI.includes(k))); // aynı koleksiyon — kısıtlı
+    const capraFotoHaric = ["id","ki","kaynakKi","t","olusturma"]; // çapraz koleksiyon — hemen hemen her şey (kendi konum bilgisi hariç)
+    const capraSyncObj = Object.fromEntries(Object.entries(obj).filter(([k]) => !capraFotoHaric.includes(k))); // foto URL'si aşağıda ayrıca eklenir
     const ayniKodlular = modeller.filter(m => m.kod === obj.kod && (!editM || m.id !== editM.id));
 
     const detayFotolariYukle = async (modelId, noktalar) => {
@@ -3483,9 +3488,13 @@ function Atolye({ onSirketDegis }) {
         }
         const detayYuklu = await detayFotolariYukle(editM.id, obj.detayNoktalari);
         const objURLli = { ...obj, foto: fotoURL, detayNoktalari: detayYuklu };
+        const capraObjURLli = { ...capraSyncObj, foto: fotoURL }; // çapraz koleksiyon: foto da dahil, gerçek URL ile
         const yeniListe = modeller.map(m => {
           if (m.id === editM.id) return { ...m, ...objURLli };
-          if (onayliSync && m.kod === obj.kod) return { ...m, ...syncObj };
+          if (onayliSync && m.kod === obj.kod) {
+            const capraz = m.ki !== editM.ki; // farklı koleksiyon → aynı ürünün çapraz kopyası, tam senkron
+            return { ...m, ...(capraz ? capraObjURLli : syncObj) };
+          }
           return m;
         });
         svM(yeniListe);
@@ -3499,8 +3508,9 @@ function Atolye({ onSirketDegis }) {
         }
         const detayYuklu = await detayFotolariYukle(yeniId, obj.detayNoktalari);
         const yeniModel = { id: yeniId, ...obj, foto: fotoURL, detayNoktalari: detayYuklu, t: Date.now() };
+        const capraObjURLliYeni = { ...capraSyncObj, foto: fotoURL };
         if (onayliSync && ayniKodlular.length > 0) {
-          svM([...modeller.map(m => m.kod === obj.kod ? { ...m, ...syncObj } : m), yeniModel]);
+          svM([...modeller.map(m => m.kod === obj.kod ? { ...m, ...((m.ki !== obj.ki) ? capraObjURLliYeni : syncObj) } : m), yeniModel]);
         } else {
           svM([...modeller, yeniModel]);
         }
@@ -3510,11 +3520,20 @@ function Atolye({ onSirketDegis }) {
     };
 
     if (ayniKodlular.length > 0) {
-      const kolAdlari = ayniKodlular.map(m => {
-        const kol = kollar.find(k => k.id === m.ki);
-        return (kol?.ad || "?") + " - " + (m.ad || m.kod);
-      }).join(", ");
-      const onay = window.confirm(obj.kod + " kodu " + ayniKodlular.length + " farkli koleksiyonda daha var: " + kolAdlari + "\n\nSadece ad/gram/kategori/aciklama gibi ORTAK bilgiler guncellenecek. Foto ve tas bilgisi HER modelde kendi kalir (farkli renk/tas olabilir). Onayliyor musunuz?");
+      const kendiKi = editM ? editM.ki : obj.ki;
+      const caprazlar = ayniKodlular.filter(m => m.ki !== kendiKi);
+      const ayniKolonlar = ayniKodlular.filter(m => m.ki === kendiKi);
+      let mesaj = obj.kod + " kodu " + ayniKodlular.length + " farkli yerde daha var:\n";
+      if (caprazlar.length > 0) {
+        const isimler = caprazlar.map(m => { const kol = kollar.find(k => k.id === m.ki); return (kol?.ad || "?") + " - " + (m.ad || m.kod); }).join(", ");
+        mesaj += "\n📦 Farkli koleksiyon (" + isimler + "): AYNI ÜRÜN kabul edilir, FİYAT DAHİL her şey oraya da yazılır.";
+      }
+      if (ayniKolonlar.length > 0) {
+        const isimler = ayniKolonlar.map(m => m.ad || m.kod).join(", ");
+        mesaj += "\n🎨 Ayni koleksiyon (" + isimler + "): farkli renk/taş varyanti kabul edilir, sadece ad/gram/kategori gibi ortak bilgiler guncellenir — foto/taş/fiyat dokunulmaz.";
+      }
+      mesaj += "\n\nOnayliyor musunuz?";
+      const onay = window.confirm(mesaj);
       kaydet(onay);
     } else {
       kaydet(false);
