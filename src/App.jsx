@@ -1004,8 +1004,12 @@ const TAS_GRAM = {
   },
 };
 
-function tasGramHesapla(sekil, tur, boyut, adet, ozelTaslar) {
+function tasGramHesapla(sekil, tur, boyut, adet, ozelTaslar, override) {
   const key = sekil === "ROUND" ? "ROUND_" + tur : sekil;
+  // Kullanıcının Ayarlar'dan güncellediği değer varsa ÖNCE onu kullan (yerleşik tabloyu ezer)
+  const ovrTablo = override && override[key];
+  const ovrDeger = ovrTablo && (ovrTablo[boyut] ?? ovrTablo[String(boyut)]);
+  if (ovrDeger) return ovrDeger * adet;
   const tablo = TAS_GRAM[key];
   const gramPerAdet = tablo && (tablo[boyut] || tablo[String(boyut)]);
   if (gramPerAdet) return gramPerAdet * adet;
@@ -2741,6 +2745,7 @@ function Atolye({ onSirketDegis }) {
   const [islemGecmisi, setIslemGecmisi] = useState([]); // işlem geçmişi
   const [saglikUyari, setSaglikUyari] = useState(null); // okuma tutarsızlık uyarısı
   const [saglikRapor, setSaglikRapor] = useState(null); // detaylı sağlık raporu
+  const [kopyaRapor, setKopyaRapor] = useState(null); // kopya model tarama sonucu
   const [toptancilar, setToptancilar] = useState([]); // kayıtlı toptancılar
   const [ayarYeniKategori, setAyarYeniKategori] = useState("");
   const [ayarVarsAltinKg, setAyarVarsAltinKg] = useState("");
@@ -2749,6 +2754,8 @@ function Atolye({ onSirketDegis }) {
   const [ayarVarsIscilikBirim, setAyarVarsIscilikBirim] = useState("dolar");
   // Özel taş state
   const [ozelTaslar, setOzelTaslar] = useState([]); // [{sekil, boyut, gramPerAdet}]
+  const [tasGramOverride, setTasGramOverride] = useState({}); // { "ROUND_N": {1: gramPerAdet, ...}, "ROUND_H": {...} } — yerleşik tabloyu ezer
+  const [roundGramAcik, setRoundGramAcik] = useState(false);
   const [ozelTasSekil, setOzelTasSekil] = useState("ROUND");
   const [ozelTasBoyut, setOzelTasBoyut] = useState("");
   const [ozelTasGram, setOzelTasGram] = useState("");
@@ -2885,6 +2892,7 @@ function Atolye({ onSirketDegis }) {
       if (ay?.varsAltinKg) setAyarVarsAltinKg(ay.varsAltinKg);
       if (ay?.kayitliNotlar?.length) setKayitliNotlar(ay.kayitliNotlar);
       if (ay?.ozelTaslar?.length) setOzelTaslar(ay.ozelTaslar);
+      if (ay?.tasGramOverride && Object.keys(ay.tasGramOverride).length) setTasGramOverride(ay.tasGramOverride);
       if (ay?.varsMc) setAyarVarsMc(ay.varsMc);
       if (ay?.varsIscilik) setAyarVarsIscilik(ay.varsIscilik);
       if (ay?.varsIscilikBirim) setAyarVarsIscilikBirim(ay.varsIscilikBirim);
@@ -3432,8 +3440,8 @@ function Atolye({ onSirketDegis }) {
     if (!fKod.trim()) return; // Model adı artık zorunlu değil — kod tek zorunlu alan
     // Taş listesinden toplam gram hesapla
     const toplamTasGram = fTaslar.reduce((acc, t) => {
-      const gr = tasGramHesapla(t.sekil, t.tur, isNaN(Number(t.boyut)) ? t.boyut : Number(t.boyut), Number(t.adet)||1, ozelTaslar);
-      const hesap = tasGramHesapla(t.sekil, t.tur, isNaN(Number(t.boyut)) ? t.boyut : Number(t.boyut), Number(t.adet)||1, ozelTaslar);
+      const gr = tasGramHesapla(t.sekil, t.tur, isNaN(Number(t.boyut)) ? t.boyut : Number(t.boyut), Number(t.adet)||1, ozelTaslar, tasGramOverride);
+      const hesap = tasGramHesapla(t.sekil, t.tur, isNaN(Number(t.boyut)) ? t.boyut : Number(t.boyut), Number(t.adet)||1, ozelTaslar, tasGramOverride);
       // Tabloda varsa hesaplanan, yoksa satıra girilen manuel gram
       return acc + (hesap > 0 ? hesap : (Number(t.gram)||0));
     }, 0);
@@ -4515,10 +4523,10 @@ function Atolye({ onSirketDegis }) {
                     {kayitliNotlar.map((n,ni) => (
                       <div key={ni} style={{ display:"flex", alignItems:"center", gap:1 }}>
                         <button onClick={()=>konfList.forEach(m=>{ const mevc=konfNot[m.id]||""; konfNotSec(m.id, mevc?mevc+", "+n:n); })} style={{ background:"rgba(91,155,213,0.08)", border:"1px solid rgba(91,155,213,0.15)", borderRadius:5, padding:"2px 7px", color:"#5b9bd5", fontSize:8, cursor:"pointer", whiteSpace:"nowrap" }}>+{n}</button>
-                        <button onClick={()=>{ const yeni=kayitliNotlar.filter((_,i)=>i!==ni); setKayitliNotlar(yeni); sv("v7ay",{kategoriler:ayarKategoriler,etiketler:ayarEtiketler,varsAltinKg:ayarVarsAltinKg,varsMc:ayarVarsMc,varsIscilik:ayarVarsIscilik,varsIscilikBirim:ayarVarsIscilikBirim,kayitliNotlar:yeni,ozelTaslar}); }} style={{ background:"none", border:"none", color:"#554d3a", fontSize:9, cursor:"pointer", padding:"0 2px" }}>×</button>
+                        <button onClick={()=>{ const yeni=kayitliNotlar.filter((_,i)=>i!==ni); setKayitliNotlar(yeni); sv("v7ay",{kategoriler:ayarKategoriler,etiketler:ayarEtiketler,varsAltinKg:ayarVarsAltinKg,varsMc:ayarVarsMc,varsIscilik:ayarVarsIscilik,varsIscilikBirim:ayarVarsIscilikBirim,kayitliNotlar:yeni,ozelTaslar,tasGramOverride}); }} style={{ background:"none", border:"none", color:"#554d3a", fontSize:9, cursor:"pointer", padding:"0 2px" }}>×</button>
                       </div>
                     ))}
-                    <input value={yeniNotSablon} onChange={e=>setYeniNotSablon(e.target.value)} onKeyDown={e=>{ if(e.key==="Enter"&&yeniNotSablon.trim()){ const yeni=[...kayitliNotlar,yeniNotSablon.trim()]; setKayitliNotlar(yeni); setYeniNotSablon(""); sv("v7ay",{kategoriler:ayarKategoriler,etiketler:ayarEtiketler,varsAltinKg:ayarVarsAltinKg,varsMc:ayarVarsMc,varsIscilik:ayarVarsIscilik,varsIscilikBirim:ayarVarsIscilikBirim,kayitliNotlar:yeni,ozelTaslar}); }}} placeholder="+ Yeni not, Enter ile kaydet" style={{ ...IS, width:150, padding:"2px 6px", fontSize:9 }}/>
+                    <input value={yeniNotSablon} onChange={e=>setYeniNotSablon(e.target.value)} onKeyDown={e=>{ if(e.key==="Enter"&&yeniNotSablon.trim()){ const yeni=[...kayitliNotlar,yeniNotSablon.trim()]; setKayitliNotlar(yeni); setYeniNotSablon(""); sv("v7ay",{kategoriler:ayarKategoriler,etiketler:ayarEtiketler,varsAltinKg:ayarVarsAltinKg,varsMc:ayarVarsMc,varsIscilik:ayarVarsIscilik,varsIscilikBirim:ayarVarsIscilikBirim,kayitliNotlar:yeni,ozelTaslar,tasGramOverride}); }}} placeholder="+ Yeni not, Enter ile kaydet" style={{ ...IS, width:150, padding:"2px 6px", fontSize:9 }}/>
                   </div>
                 </div>
                 {/* Ana tablo */}
@@ -6866,6 +6874,56 @@ ${buildContext()}`;
             {/* ŞİFRE DEĞİŞTİR */}
             <SifreDegistir />
 
+            {/* KOPYA MODEL BULUCU */}
+            <div style={{ background:T.card, border:"1px solid "+T.border, borderRadius:14, padding:"15px 16px" }}>
+              <div style={{ fontSize:10, fontWeight:700, color:T.sub, marginBottom:10, letterSpacing:"0.05em", textTransform:"uppercase" }}>🧬 Kopya Model Bulucu</div>
+              <div style={{ fontSize:9, color:"#665d4a", marginBottom:12 }}>Aynı koleksiyonda, aynı kodu taşıyan ve BİREBİR AYNI fotoğrafı kullanan modelleri bulur (gerçek kopya işareti — farklı renk/taş varyantı bu şekilde yakalanmaz). Hiçbir şeyi otomatik silmez, sadece listeler.</div>
+              <button onClick={()=>{ setKopyaRapor(true); }} style={{ ...BG, fontSize:11, padding:"7px 14px", marginBottom:12 }}>🧬 Kopyaları Tara</button>
+              {kopyaRapor && (() => {
+                const gruplar = {};
+                modeller.forEach(m => {
+                  const key = (m.ki||"") + "|" + (m.kod||"").trim().toUpperCase();
+                  if (!key.trim()) return;
+                  (gruplar[key] = gruplar[key]||[]).push(m);
+                });
+                const supheli = Object.values(gruplar).filter(g => {
+                  if (g.length < 2) return false;
+                  const fotolar = new Set(g.map(m => m.foto||""));
+                  return fotolar.size === 1 && g[0].foto;
+                });
+                if (supheli.length === 0) return (
+                  <div style={{ display:"flex", alignItems:"center", gap:8, padding:"8px 10px", borderRadius:8, background:"rgba(106,191,105,0.1)", border:"1px solid rgba(106,191,105,0.3)" }}>
+                    <span style={{ fontSize:14 }}>✅</span>
+                    <span style={{ fontSize:11, fontWeight:700, color:"#6abf69" }}>Kopya bulunamadı</span>
+                  </div>
+                );
+                return (
+                  <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+                    <div style={{ fontSize:10, color:"#e85a4f", fontWeight:700 }}>{supheli.length} grup, {supheli.reduce((s,g)=>s+g.length-1,0)} fazla kayıt bulundu</div>
+                    {supheli.map((grup, gi) => {
+                      const kol = kollar.find(k => k.id === grup[0].ki);
+                      return (
+                        <div key={gi} style={{ background:"rgba(232,90,79,0.05)", border:"1px solid rgba(232,90,79,0.15)", borderRadius:10, padding:"10px 11px" }}>
+                          <div style={{ fontSize:10, fontWeight:700, color:GOLD, marginBottom:8 }}>{grup[0].kod} — {kol?.ad || "?"}</div>
+                          <div style={{ display:"flex", flexWrap:"wrap", gap:8 }}>
+                            {grup.map(m => (
+                              <div key={m.id} style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:4, background:"rgba(255,255,255,0.03)", borderRadius:8, padding:6, width:76 }}>
+                                <div style={{ width:56, height:56, borderRadius:6, overflow:"hidden", background:"#1a1a1a" }}>
+                                  {m.foto && <img src={m.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }}/>}
+                                </div>
+                                <div style={{ fontSize:7, color:"#998a6e", textAlign:"center" }}>{m.gram}gr · {m.iscilikDolar}{m.iscilikBirim==="milyem"?"mly":"$"}</div>
+                                <button onClick={()=>setDelOnay({ type:"mod", id:m.id })} style={{ background:"rgba(232,90,79,0.12)", border:"none", borderRadius:5, padding:"3px 8px", color:"#e85a4f", fontSize:8, fontWeight:700, cursor:"pointer", width:"100%" }}>Sil</button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+            </div>
+
             {/* SİSTEM DURUMU */}
             <div style={{ background:T.card, border:"1px solid "+T.border, borderRadius:14, padding:"15px 16px" }}>
               <div style={{ fontSize:10, fontWeight:700, color:T.sub, marginBottom:10, letterSpacing:"0.05em", textTransform:"uppercase" }}>Sistem Durumu</div>
@@ -7022,7 +7080,7 @@ ${buildContext()}`;
                 </Fl></div>
               </div>
               <button onClick={() => {
-                const yeniAy = { kategoriler:ayarKategoriler, etiketler:ayarEtiketler, varsAltinKg:ayarVarsAltinKg, varsMc:ayarVarsMc, varsIscilik:ayarVarsIscilik, varsIscilikBirim:ayarVarsIscilikBirim, kayitliNotlar, ozelTaslar };
+                const yeniAy = { kategoriler:ayarKategoriler, etiketler:ayarEtiketler, varsAltinKg:ayarVarsAltinKg, varsMc:ayarVarsMc, varsIscilik:ayarVarsIscilik, varsIscilikBirim:ayarVarsIscilikBirim, kayitliNotlar, ozelTaslar, tasGramOverride };
                 sv("v7ay", yeniAy);
                 if (ayarVarsAltinKg) setAltinKg(ayarVarsAltinKg);
                 if (ayarVarsMc) setMc(ayarVarsMc);
@@ -7063,7 +7121,7 @@ ${buildContext()}`;
                       <button onClick={() => {
                         const yeni = ayarKategoriler.filter(x => x!==k);
                         setAyarKategoriler(yeni);
-                        sv("v7ay", { kategoriler:yeni, etiketler:ayarEtiketler, varsAltinKg:ayarVarsAltinKg, varsMc:ayarVarsMc, varsIscilik:ayarVarsIscilik, varsIscilikBirim:ayarVarsIscilikBirim, kayitliNotlar, ozelTaslar });
+                        sv("v7ay", { kategoriler:yeni, etiketler:ayarEtiketler, varsAltinKg:ayarVarsAltinKg, varsMc:ayarVarsMc, varsIscilik:ayarVarsIscilik, varsIscilikBirim:ayarVarsIscilikBirim, kayitliNotlar, ozelTaslar, tasGramOverride });
                       }} style={{ background:"none", border:"none", color:"#e85a4f", cursor:"pointer", fontSize:10, padding:0, lineHeight:1 }}>×</button>
                     )}
                   </span>
@@ -7077,9 +7135,59 @@ ${buildContext()}`;
                   const yeni = [...ayarKategoriler, k];
                   setAyarKategoriler(yeni);
                   setAyarYeniKategori("");
-                  sv("v7ay", { kategoriler:yeni, etiketler:ayarEtiketler, varsAltinKg:ayarVarsAltinKg, varsMc:ayarVarsMc, varsIscilik:ayarVarsIscilik, varsIscilikBirim:ayarVarsIscilikBirim, kayitliNotlar, ozelTaslar });
+                  sv("v7ay", { kategoriler:yeni, etiketler:ayarEtiketler, varsAltinKg:ayarVarsAltinKg, varsMc:ayarVarsMc, varsIscilik:ayarVarsIscilik, varsIscilikBirim:ayarVarsIscilikBirim, kayitliNotlar, ozelTaslar, tasGramOverride });
                 }} style={{ ...GH, padding:"6px 12px", fontSize:10 }}>+ Ekle</button>
               </div>
+            </div>
+
+            {/* ROUND TAŞ GRAMAJLARI — yerleşik tabloyu ezen düzenlenebilir değerler */}
+            <div style={{ background:T.card, border:"1px solid "+T.border, borderRadius:14, padding:"15px 16px" }}>
+              {!roundGramAcik ? (
+                <button onClick={()=>setRoundGramAcik(true)} style={{ background:"none", border:"none", padding:0, cursor:"pointer", width:"100%", textAlign:"left" }}>
+                  <div style={{ fontSize:10, fontWeight:700, color:T.sub, marginBottom:4, letterSpacing:"0.05em", textTransform:"uppercase" }}>💎 Round Taş Gramajları</div>
+                  <div style={{ fontSize:9, color:"#665d4a" }}>1 gramdaki taş adedi değiştiyse buradan güncelleyin {Object.keys(tasGramOverride).length>0 && <span style={{ color:"#6abf69" }}>· {Object.values(tasGramOverride).reduce((s,o)=>s+Object.keys(o).length,0)} boyut güncellendi</span>}</div>
+                </button>
+              ) : (
+                <div>
+                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:4 }}>
+                    <div style={{ fontSize:10, fontWeight:700, color:T.sub, letterSpacing:"0.05em", textTransform:"uppercase" }}>💎 Round Taş Gramajları</div>
+                    <button onClick={()=>setRoundGramAcik(false)} style={{ background:"none", border:"none", color:"#665d4a", fontSize:9, cursor:"pointer" }}>Kapat</button>
+                  </div>
+                  <div style={{ fontSize:9, color:"#665d4a", marginBottom:12 }}>1 gramda kaç adet taş var — değiştirmek istediğiniz boyutu güncelleyin, boş bırakırsanız yerleşik değer kullanılır.</div>
+                  {["ROUND_N","ROUND_H"].map(key => (
+                    <div key={key} style={{ marginBottom:14 }}>
+                      <div style={{ fontSize:9, fontWeight:700, color:GOLD, marginBottom:7 }}>{key==="ROUND_N"?"NORMAL":"HEAVY"}</div>
+                      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(78px,1fr))", gap:6 }}>
+                        {Object.keys(TAS_GRAM[key]).map(Number).sort((a,b)=>a-b).map(boyut => {
+                          const ovr = tasGramOverride[key]?.[boyut];
+                          const varsayilanAdet = Math.round(1/TAS_GRAM[key][boyut]);
+                          const guncelAdet = ovr ? Math.round(1/ovr) : varsayilanAdet;
+                          const degisti = !!ovr;
+                          return (
+                            <div key={boyut} style={{ background: degisti?"rgba(106,191,105,0.08)":"rgba(255,255,255,0.03)", border:"1px solid "+(degisti?"rgba(106,191,105,0.25)":T.border), borderRadius:8, padding:"5px 7px" }}>
+                              <div style={{ fontSize:8, color:"#998a6e", marginBottom:3 }}>{boyut} mm</div>
+                              <input type="number" defaultValue={guncelAdet} placeholder={String(varsayilanAdet)}
+                                onBlur={e=>{
+                                  const v = Number(e.target.value);
+                                  const yeni = { ...tasGramOverride };
+                                  if (!v || v === varsayilanAdet) {
+                                    // varsayılana eşit veya boşsa override'ı kaldır
+                                    if (yeni[key]) { const k2={...yeni[key]}; delete k2[boyut]; yeni[key]=k2; if(!Object.keys(k2).length) delete yeni[key]; }
+                                  } else {
+                                    yeni[key] = { ...(yeni[key]||{}), [boyut]: 1/v };
+                                  }
+                                  setTasGramOverride(yeni);
+                                  sv("v7ay",{kategoriler:ayarKategoriler,etiketler:ayarEtiketler,varsAltinKg:ayarVarsAltinKg,varsMc:ayarVarsMc,varsIscilik:ayarVarsIscilik,varsIscilikBirim:ayarVarsIscilikBirim,kayitliNotlar,ozelTaslar,tasGramOverride:yeni});
+                                }}
+                                style={{ width:"100%", background:"transparent", border:"none", color: degisti?"#6abf69":T.text, fontSize:12, fontWeight:700, outline:"none", padding:0 }}/>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* ÖZEL TAŞ YÖNETİMİ */}
@@ -7094,6 +7202,7 @@ ${buildContext()}`;
                     if (!mskAy || !Object.keys(mskAy).length) { alert("MSK ayarları bulunamadı."); return; }
                     await sv("v7ay", mskAy);
                     if (mskAy.ozelTaslar) setOzelTaslar(mskAy.ozelTaslar);
+                    if (mskAy.tasGramOverride) setTasGramOverride(mskAy.tasGramOverride);
                     if (mskAy.kategoriler) setAyarKategoriler(mskAy.kategoriler);
                     if (mskAy.etiketler) setAyarEtiketler(mskAy.etiketler);
                     if (mskAy.kayitliNotlar) setKayitliNotlar(mskAy.kayitliNotlar);
@@ -7111,7 +7220,7 @@ ${buildContext()}`;
                 <button onClick={()=>{
                   const taslar = [{"sekil": "SEDEF", "boyut": "16mm", "gramPerAdet": 1}, {"sekil": "ONYX", "boyut": "16mm", "gramPerAdet": 2}, {"sekil": "OCTAGON", "boyut": "8x6", "gramPerAdet": 0.86}, {"sekil": "OCTAGON RENKLI", "boyut": "8x6", "gramPerAdet": 0.3}, {"sekil": "ONYX", "boyut": "10MM", "gramPerAdet": 1.97}, {"sekil": "KARE", "boyut": "2.5X2.5 RENKLI", "gramPerAdet": 0.021}, {"sekil": "KALP", "boyut": "7X7 OPAL", "gramPerAdet": 0.15}, {"sekil": "ROUND", "boyut": "7.5", "gramPerAdet": 0.305}, {"sekil": "MARKİZ", "boyut": "10X5", "gramPerAdet": 0.6}, {"sekil": "MARKİZ", "boyut": "10X10 RENKLI", "gramPerAdet": 0.3}, {"sekil": "KALP", "boyut": "10X10", "gramPerAdet": 1.26}, {"sekil": "KALP", "boyut": "10X10 RENKLI", "gramPerAdet": 1}, {"sekil": "OCTAGON", "boyut": "7X7", "gramPerAdet": 1.26}, {"sekil": "OCTAGON", "boyut": "7X7 RENKLI", "gramPerAdet": 0.55}, {"sekil": "OCTAGON", "boyut": "7X5", "gramPerAdet": 0.35}, {"sekil": "OCTAGON", "boyut": "7X5 RENKLI", "gramPerAdet": 0.2}, {"sekil": "KALP", "boyut": "7X7", "gramPerAdet": 1}, {"sekil": "KALP", "boyut": "7X7 RENKLI", "gramPerAdet": 0.45}, {"sekil": "BRIOLETTE", "boyut": "12X12", "gramPerAdet": 1.35}, {"sekil": "BRIOLETTE", "boyut": "16X12", "gramPerAdet": 2.85}, {"sekil": "ROUND", "boyut": "7MM", "gramPerAdet": 0.69}, {"sekil": "ROUND", "boyut": "7MM RENKLI", "gramPerAdet": 0.3}, {"sekil": "TRAPEZ", "boyut": "1.5X1.25X1.00", "gramPerAdet": 0.0079}, {"sekil": "OVAL", "boyut": "10X2 RENKLI", "gramPerAdet": 0.33}, {"sekil": "CABOCHON MALAHIT", "boyut": "10X10", "gramPerAdet": 1}, {"sekil": "YAY 3M SARNEL", "boyut": "0.5", "gramPerAdet": 0.3}, {"sekil": "ŞEKER TAŞ", "boyut": "5MM", "gramPerAdet": 0.5}, {"sekil": "TITANYUM YAY", "boyut": "60X60", "gramPerAdet": 1}, {"sekil": "OVAL", "boyut": "9X7", "gramPerAdet": 0.3}, {"sekil": "OPAL", "boyut": "10X8", "gramPerAdet": 0.3}];
                   setOzelTaslar(taslar);
-                  sv("v7ay",{kategoriler:ayarKategoriler,etiketler:ayarEtiketler,varsAltinKg:ayarVarsAltinKg,varsMc:ayarVarsMc,varsIscilik:ayarVarsIscilik,varsIscilikBirim:ayarVarsIscilikBirim,kayitliNotlar,ozelTaslar:taslar});
+                  sv("v7ay",{kategoriler:ayarKategoriler,etiketler:ayarEtiketler,varsAltinKg:ayarVarsAltinKg,varsMc:ayarVarsMc,varsIscilik:ayarVarsIscilik,varsIscilikBirim:ayarVarsIscilikBirim,kayitliNotlar,ozelTaslar:taslar,tasGramOverride});
                   alert("30 taş yüklendi!");
                 }} style={{ background:"rgba(91,155,213,0.15)", border:"1px solid rgba(91,155,213,0.3)", borderRadius:8, padding:"6px 14px", color:"#5b9bd5", fontSize:10, fontWeight:700, cursor:"pointer", marginBottom:10 }}>
                   ⬆ Yedekten 30 Taşı Yükle
@@ -7142,7 +7251,7 @@ ${buildContext()}`;
                           if (!window.confirm(t.sekil+" "+t.boyut+" silinsin mi?")) return;
                           const yeni = ozelTaslar.filter((_,j)=>j!==i);
                           setOzelTaslar(yeni);
-                          sv("v7ay",{kategoriler:ayarKategoriler,etiketler:ayarEtiketler,varsAltinKg:ayarVarsAltinKg,varsMc:ayarVarsMc,varsIscilik:ayarVarsIscilik,varsIscilikBirim:ayarVarsIscilikBirim,kayitliNotlar,ozelTaslar:yeni});
+                          sv("v7ay",{kategoriler:ayarKategoriler,etiketler:ayarEtiketler,varsAltinKg:ayarVarsAltinKg,varsMc:ayarVarsMc,varsIscilik:ayarVarsIscilik,varsIscilikBirim:ayarVarsIscilikBirim,kayitliNotlar,ozelTaslar:yeni,tasGramOverride});
                         }} style={{ background:"rgba(232,90,79,0.1)", border:"none", borderRadius:4, padding:"2px 7px", color:"#e85a4f", fontSize:9, cursor:"pointer" }}>×</button>
                       </div>
                     ))}
@@ -7189,7 +7298,7 @@ ${buildContext()}`;
                   const yeni = [...ozelTaslar.filter(t=>!(t.sekil===yeniTas.sekil&&t.boyut===yeniTas.boyut)), yeniTas];
                   setOzelTaslar(yeni);
                   setOzelTasBoyut(""); setOzelTasGram(""); if(ozelTasSekil==="DİĞER") setOzelTasOzelIsim("");
-                  sv("v7ay",{kategoriler:ayarKategoriler,etiketler:ayarEtiketler,varsAltinKg:ayarVarsAltinKg,varsMc:ayarVarsMc,varsIscilik:ayarVarsIscilik,varsIscilikBirim:ayarVarsIscilikBirim,kayitliNotlar,ozelTaslar:yeni});
+                  sv("v7ay",{kategoriler:ayarKategoriler,etiketler:ayarEtiketler,varsAltinKg:ayarVarsAltinKg,varsMc:ayarVarsMc,varsIscilik:ayarVarsIscilik,varsIscilikBirim:ayarVarsIscilikBirim,kayitliNotlar,ozelTaslar:yeni,tasGramOverride});
                 }} style={{ ...BG, padding:"8px 14px", fontSize:10, alignSelf:"flex-end" }}>{ozelTaslar.some(t => t.sekil===(ozelTasSekil==="DİĞER"?(ozelTasOzelIsim||"").trim().toUpperCase():ozelTasSekil) && t.boyut===ozelTasBoyut.trim()) && ozelTasBoyut.trim() ? "✏️ Güncelle" : "+ Ekle"}</button>
               </div>
 
@@ -8044,6 +8153,7 @@ ${buildContext()}`;
               if (d.ayarlar) {
                 await sv("v7ay", d.ayarlar);
                 if (d.ayarlar.ozelTaslar?.length) setOzelTaslar(d.ayarlar.ozelTaslar);
+                if (d.ayarlar.tasGramOverride && Object.keys(d.ayarlar.tasGramOverride).length) setTasGramOverride(d.ayarlar.tasGramOverride);
                 if (d.ayarlar.kategoriler?.length) setAyarKategoriler(d.ayarlar.kategoriler);
                 if (d.ayarlar.etiketler?.length) setAyarEtiketler(d.ayarlar.etiketler);
                 if (d.ayarlar.kayitliNotlar?.length) setKayitliNotlar(d.ayarlar.kayitliNotlar);
@@ -8684,8 +8794,8 @@ ${buildContext()}`;
 
           {/* Mevcut taş listesi */}
           {fTaslar.map((t, i) => {
-            const gr = tasGramHesapla(t.sekil, t.tur, isNaN(Number(t.boyut))?t.boyut:Number(t.boyut), Number(t.adet)||1, ozelTaslar);
-            const grHesap = tasGramHesapla(t.sekil, t.tur, isNaN(Number(t.boyut))?t.boyut:Number(t.boyut), Number(t.adet)||1, ozelTaslar);
+            const gr = tasGramHesapla(t.sekil, t.tur, isNaN(Number(t.boyut))?t.boyut:Number(t.boyut), Number(t.adet)||1, ozelTaslar, tasGramOverride);
+            const grHesap = tasGramHesapla(t.sekil, t.tur, isNaN(Number(t.boyut))?t.boyut:Number(t.boyut), Number(t.adet)||1, ozelTaslar, tasGramOverride);
             return (
               <div key={i} style={{ marginBottom:5, padding:"5px 8px", background:"rgba(91,155,213,0.08)", borderRadius:6 }}>
                 <div style={{ display:"flex", alignItems:"center", gap:6 }}>
@@ -8724,7 +8834,7 @@ ${buildContext()}`;
           })}
             {fTaslar.length > 0 && (() => {
               const topTas = fTaslar.reduce((acc,t) => {
-                const gr = tasGramHesapla(t.sekil,t.tur,isNaN(Number(t.boyut))?t.boyut:Number(t.boyut),Number(t.adet)||1, ozelTaslar);
+                const gr = tasGramHesapla(t.sekil,t.tur,isNaN(Number(t.boyut))?t.boyut:Number(t.boyut),Number(t.adet)||1, ozelTaslar, tasGramOverride);
                 return acc+(gr>0?gr:(Number(t.gram)||0));
               }, 0);
               const gosterilen = topTas > 0 ? topTas : (Number(fTasGram)||0);
@@ -8779,7 +8889,7 @@ ${buildContext()}`;
               }} disabled={!fTasBoyut || !fTasAdet} style={{ ...GH, padding:"7px 12px", fontSize:11, opacity:(!fTasBoyut||!fTasAdet)?0.4:1, flexShrink:0 }}>+ Ekle</button>
             </div>
             {fTasBoyut && fTasAdet && (() => {
-              const gr = tasGramHesapla(fTasSekil, fTasTur, isNaN(Number(fTasBoyut))?fTasBoyut:Number(fTasBoyut), Number(fTasAdet)||1, ozelTaslar);
+              const gr = tasGramHesapla(fTasSekil, fTasTur, isNaN(Number(fTasBoyut))?fTasBoyut:Number(fTasBoyut), Number(fTasAdet)||1, ozelTaslar, tasGramOverride);
               return gr > 0
                 ? <div style={{ fontSize:9, color:"#5b9bd5" }}>✓ {fTasAdet} × {fTasBoyut}{fTasSekil==="ROUND"?"mm":""} = {gr.toFixed(4)} gr</div>
                 : <div style={{ fontSize:9, color:"#e8833a" }}>Tabloda yok — taş satırında manuel gram girin</div>;
@@ -8837,7 +8947,7 @@ ${buildContext()}`;
         </div>
 
         {altinKgUSD>0 && Number(fGram)>0 && (
-          <OnizlemeBox m={{ gram:Number(fGram), refAyar:fRefAyar, tasGram: (() => { const tl = fTaslar.reduce((acc,t)=>{const gr=tasGramHesapla(t.sekil,t.tur,isNaN(Number(t.boyut))?t.boyut:Number(t.boyut),Number(t.adet)||1,ozelTaslar);return acc+(gr>0?gr:(Number(t.gram)||0));},0); return (fTaslar.length>0&&tl>0)?tl:(Number(fTasGram)||0); })(), madenCarpan:Number(fMadenC)||0, iscilikDolar:Number(fIscilikDolar)||0, iscilikBirim:fIscilikBirim, ekMaliyet:Number(fEkMaliyet)||0 }} altinKgUSD={altinKgUSD} mc={madenCarpan} />
+          <OnizlemeBox m={{ gram:Number(fGram), refAyar:fRefAyar, tasGram: (() => { const tl = fTaslar.reduce((acc,t)=>{const gr=tasGramHesapla(t.sekil,t.tur,isNaN(Number(t.boyut))?t.boyut:Number(t.boyut),Number(t.adet)||1,ozelTaslar,tasGramOverride);return acc+(gr>0?gr:(Number(t.gram)||0));},0); return (fTaslar.length>0&&tl>0)?tl:(Number(fTasGram)||0); })(), madenCarpan:Number(fMadenC)||0, iscilikDolar:Number(fIscilikDolar)||0, iscilikBirim:fIscilikBirim, ekMaliyet:Number(fEkMaliyet)||0 }} altinKgUSD={altinKgUSD} mc={madenCarpan} />
         )}
 
         <div style={{ background:"rgba(167,139,250,0.03)", border:"1px solid rgba(167,139,250,0.1)", borderRadius:10, padding:"10px 12px", marginBottom:10 }}>
