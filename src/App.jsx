@@ -1550,6 +1550,20 @@ function DetayNoktaEditor({ foto, noktalar, setNoktalar, T }) {
   );
 }
 
+// Ayarlar sayfası bölümleri için açılır/kapanır kutu — içeriğe dokunmadan sarmalar
+function Akordiyon({ baslik, ikon, T, children }) {
+  const [acik, setAcik] = useState(false);
+  return (
+    <div>
+      <button onClick={()=>setAcik(a=>!a)} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", width:"100%", background:"transparent", border:"none", padding:"9px 3px", cursor:"pointer" }}>
+        <span style={{ fontSize:11, fontWeight:700, color:T?.text||"#e8dcc8", letterSpacing:"0.02em" }}>{ikon?ikon+"  ":""}{baslik}</span>
+        <span style={{ fontSize:11, color:T?.sub||"#998a6e", transform: acik?"rotate(180deg)":"none", transition:"transform .2s ease" }}>▾</span>
+      </button>
+      {acik && <div style={{ marginTop:4 }}>{children}</div>}
+    </div>
+  );
+}
+
 function AiIsimlendir({ foto, onResult }) {
   const [yukleniyor, setYukleniyor] = useState(false);
   const [oneri, setOneri] = useState(null);
@@ -6780,6 +6794,7 @@ ${buildContext()}`;
             <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(320px, 1fr))", gap:12, alignItems:"start" }}>
 
             {/* TEMA SEÇİCİ */}
+            <Akordiyon baslik="🎨 Tema & Vurgu Rengi" T={T}>
             <div style={{ background:T.card, border:"1px solid "+T.border, borderRadius:14, padding:"15px 16px" }}>
               <div style={{ fontSize:10, fontWeight:700, color:T.sub, marginBottom:10, letterSpacing:"0.05em", textTransform:"uppercase" }}>Tema</div>
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
@@ -6826,8 +6841,10 @@ ${buildContext()}`;
                 <div style={{ fontSize:8, color:T.dim, marginTop:10 }}>Vurgu rengi tüm butonları, başlıkları ve seçimleri etkiler. Charcoal zemin sabit kalır.</div>
               </div>
             </div>
+            </Akordiyon>
 
             {/* ARAYÜZ RENKLERİ — TAM ÖZELLEŞTİRME */}
+            <Akordiyon baslik="🖌️ Arayüz Renkleri" T={T}>
             <div style={{ background:T.card, border:"1px solid "+T.border, borderRadius:14, padding:"15px 16px" }}>
               <div style={{ fontSize:10, fontWeight:700, color:T.sub, marginBottom:10, letterSpacing:"0.05em", textTransform:"uppercase" }}>Arayüz Renkleri</div>
               <div style={{ fontSize:8, color:T.dim, marginBottom:14 }}>Tüm arayüz renklerini tek tek ayarlayın. Her rengin yanındaki ↺ ile o rengi, alttaki buton ile hepsini varsayılana döndürebilirsiniz.</div>
@@ -6889,11 +6906,15 @@ ${buildContext()}`;
               <button onClick={()=>{ setYaziRenkleri({}); try{localStorage.removeItem("atolye_yazi_renk")}catch{} }}
                 style={{ ...RD, fontSize:9, padding:"6px 16px", marginTop:4 }}>Tüm Renkleri Sıfırla</button>
             </div>
+            </Akordiyon>
 
             {/* ŞİFRE DEĞİŞTİR */}
+            <Akordiyon baslik="🔒 Şifre Değiştir" T={T}>
             <SifreDegistir />
+            </Akordiyon>
 
             {/* KOPYA MODEL BULUCU */}
+            <Akordiyon baslik="🧬 Kopya Model Bulucu" T={T}>
             <div style={{ background:T.card, border:"1px solid "+T.border, borderRadius:14, padding:"15px 16px" }}>
               <div style={{ fontSize:10, fontWeight:700, color:T.sub, marginBottom:10, letterSpacing:"0.05em", textTransform:"uppercase" }}>🧬 Kopya Model Bulucu</div>
               <div style={{ fontSize:9, color:"#665d4a", marginBottom:12 }}>Aynı koleksiyonda, aynı kodu taşıyan ve BİREBİR AYNI fotoğrafı kullanan modelleri bulur (gerçek kopya işareti — farklı renk/taş varyantı bu şekilde yakalanmaz). Hiçbir şeyi otomatik silmez, sadece listeler.</div>
@@ -6942,8 +6963,10 @@ ${buildContext()}`;
                 );
               })()}
             </div>
+            </Akordiyon>
 
             {/* SİSTEM DURUMU */}
+            <Akordiyon baslik="🩺 Sistem Durumu" T={T}>
             <div style={{ background:T.card, border:"1px solid "+T.border, borderRadius:14, padding:"15px 16px" }}>
               <div style={{ fontSize:10, fontWeight:700, color:T.sub, marginBottom:10, letterSpacing:"0.05em", textTransform:"uppercase" }}>Sistem Durumu</div>
               <div style={{ fontSize:9, color:"#665d4a", marginBottom:12 }}>Tablo ve chunk verilerinin tutarlılığını kontrol eder. Bir sorun varsa buradan görürsünüz.</div>
@@ -6976,8 +6999,10 @@ ${buildContext()}`;
                 </div>
               )}
             </div>
+            </Akordiyon>
 
             {/* İŞLEM GEÇMİŞİ */}
+            <Akordiyon baslik="📜 İşlem Geçmişi" T={T}>
             <div style={{ background:T.card, border:"1px solid "+T.border, borderRadius:14, padding:"15px 16px" }}>
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
                 <div style={{ fontSize:10, fontWeight:700, color:T.sub, marginBottom:10, letterSpacing:"0.05em", textTransform:"uppercase" }}>İşlem Geçmişi</div>
@@ -7001,8 +7026,10 @@ ${buildContext()}`;
                 })}
               </div>}
             </div>
+            </Akordiyon>
 
             {/* OTOMATİK YEDEKLER */}
+            <Akordiyon baslik="💾 Otomatik Yedekler" T={T}>
             <div style={{ background:T.card, border:"1px solid "+T.border, borderRadius:14, padding:"15px 16px" }}>
               <div style={{ fontSize:10, fontWeight:700, color:T.sub, marginBottom:10, letterSpacing:"0.05em", textTransform:"uppercase" }}>Otomatik Yedekler</div>
               <div style={{ fontSize:9, color:"#665d4a", marginBottom:12 }}>Sistem her gün otomatik yedek alır (son 7 gün saklanır). Buradan geçmiş bir yedeğe dönebilirsiniz. Foto'lar Storage'da olduğu için yedekler hafiftir.</div>
@@ -7045,8 +7072,10 @@ ${buildContext()}`;
                 ))}
               </div>}
             </div>
+            </Akordiyon>
 
             {/* AKTİF ŞİRKET */}
+            <Akordiyon baslik="🏢 Aktif Şirket" T={T}>
             <div style={{ background:T.card, border:"1px solid "+T.border, borderRadius:14, padding:"15px 16px" }}>
               <div style={{ fontSize:10, fontWeight:700, color:T.sub, marginBottom:10, letterSpacing:"0.05em", textTransform:"uppercase" }}>Aktif Şirket</div>
               <div style={{ fontSize:14, fontWeight:800, color:GOLD, marginBottom:4 }}>{AKTIF_SIRKET}</div>
@@ -7054,16 +7083,20 @@ ${buildContext()}`;
               <button onClick={()=>{ if (onSirketDegis) onSirketDegis(); }}
                 style={{ background:"rgba(167,139,250,0.12)", border:"1px solid rgba(167,139,250,0.25)", borderRadius:7, padding:"7px 14px", color:"#a78bfa", fontSize:10, fontWeight:700, cursor:"pointer" }}>Şirket Değiştir →</button>
             </div>
+            </Akordiyon>
 
             {/* DİĞER SİSTEM — PERSONEL */}
+            <Akordiyon baslik="👥 Personel Sistemi" T={T}>
             <div style={{ background:T.card, border:"1px solid "+T.border, borderRadius:14, padding:"15px 16px" }}>
               <div style={{ fontSize:10, fontWeight:700, color:"#5b9bd5", marginBottom:8 }}>👥 PERSONEL SİSTEMİ</div>
               <div style={{ fontSize:9, color:"#665d4a", marginBottom:10 }}>Personel, bordro, mesai, avans, izin ve gider takibi için diğer sisteme geçiş yapın.</div>
               <button onClick={()=>{ window.open("https://personeltakip-pearl.vercel.app/", "_blank"); }}
                 style={{ background:"rgba(91,155,213,0.12)", border:"1px solid rgba(91,155,213,0.25)", borderRadius:7, padding:"7px 14px", color:"#5b9bd5", fontSize:10, fontWeight:700, cursor:"pointer" }}>Personel Sistemini Aç →</button>
             </div>
+            </Akordiyon>
 
             {/* OTURUMU KAPAT */}
+            <Akordiyon baslik="🚪 Oturumu Kapat" T={T}>
             <div style={{ background:T.card, border:"1px solid "+T.border, borderRadius:14, padding:"15px 16px" }}>
               <div style={{ fontSize:10, fontWeight:700, color:T.sub, marginBottom:10, letterSpacing:"0.05em", textTransform:"uppercase" }}>Oturum</div>
               <div style={{ fontSize:9, color:"#665d4a", marginBottom:10 }}>"Beni hatırla" ile açık oturumu kapatır, bir dahaki açılışta tekrar şifre sorulur.</div>
@@ -7073,8 +7106,10 @@ ${buildContext()}`;
                 window.location.reload();
               }} style={{ background:"rgba(232,90,79,0.12)", border:"1px solid rgba(232,90,79,0.25)", borderRadius:7, padding:"7px 14px", color:"#e85a4f", fontSize:10, fontWeight:700, cursor:"pointer" }}>Oturumu Kapat</button>
             </div>
+            </Akordiyon>
 
             {/* VARSAYILAN DEGERLER */}
+            <Akordiyon baslik="💰 Varsayılan Değerler" T={T}>
             <div style={{ background:T.card, border:"1px solid "+T.border, borderRadius:14, padding:"15px 16px" }}>
               <div style={{ fontSize:10, fontWeight:700, color:GOLD, marginBottom:12 }}>💰 VARSAYILAN DEGERLER</div>
               <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginBottom:8 }}>
@@ -7106,8 +7141,10 @@ ${buildContext()}`;
                 alert("Ayarlar kaydedildi!");
               }} style={{ ...BG, fontSize:10, padding:"6px 16px" }}>Kaydet ve Uygula</button>
             </div>
+            </Akordiyon>
 
             {/* ETİKET YÖNETİMİ */}
+            <Akordiyon baslik="🏷️ Etiket Yönetimi" T={T}>
             <div style={{ background:T.card, border:"1px solid "+T.border, borderRadius:14, padding:"15px 16px" }}>
               <div style={{ fontSize:10, fontWeight:700, color:T.sub, marginBottom:10, letterSpacing:"0.05em", textTransform:"uppercase" }}>Etiket Yönetimi</div>
               <div style={{ fontSize:9, color:"#665d4a", marginBottom:8 }}>Modellerde kullanilan tum etiketler:</div>
@@ -7128,8 +7165,10 @@ ${buildContext()}`;
                 Yeni etiketler model eklerken/düzenlerken oluşturulur. Buradan mevcut etiketleri tüm modellerden kaldırabilirsiniz.
               </div>
             </div>
+            </Akordiyon>
 
             {/* KATEGORİ YÖNETİMİ */}
+            <Akordiyon baslik="📂 Kategori Yönetimi" T={T}>
             <div style={{ background:T.card, border:"1px solid "+T.border, borderRadius:14, padding:"15px 16px" }}>
               <div style={{ fontSize:10, fontWeight:700, color:"#5b9bd5", marginBottom:10 }}>📂 KATEGORİ YÖNETİMİ</div>
               <div style={{ display:"flex", gap:5, flexWrap:"wrap", marginBottom:10 }}>
@@ -7158,8 +7197,10 @@ ${buildContext()}`;
                 }} style={{ ...GH, padding:"6px 12px", fontSize:10 }}>+ Ekle</button>
               </div>
             </div>
+            </Akordiyon>
 
             {/* ROUND TAŞ GRAMAJLARI — yerleşik tabloyu ezen düzenlenebilir değerler */}
+            <Akordiyon baslik="💎 Round Taş Gramajları" T={T}>
             <div style={{ background:T.card, border:"1px solid "+T.border, borderRadius:14, padding:"15px 16px" }}>
               {!roundGramAcik ? (
                 <button onClick={()=>setRoundGramAcik(true)} style={{ background:"none", border:"none", padding:0, cursor:"pointer", width:"100%", textAlign:"left" }}>
@@ -7208,8 +7249,10 @@ ${buildContext()}`;
                 </div>
               )}
             </div>
+            </Akordiyon>
 
             {/* ÖZEL TAŞ YÖNETİMİ */}
+            <Akordiyon baslik="💎 Özel Taş Boyutları" T={T}>
             <div style={{ background:T.card, border:"1px solid "+T.border, borderRadius:14, padding:"15px 16px" }}>
               <div style={{ fontSize:10, fontWeight:700, color:T.sub, marginBottom:10, letterSpacing:"0.05em", textTransform:"uppercase" }}>Özel Taş Boyutları</div>
               <div style={{ fontSize:9, color:"#665d4a", marginBottom:10 }}>Tabloda olmayan taş boyutlarını buraya ekleyin. Model formunda otomatik kullanılır.</div>
@@ -7327,8 +7370,10 @@ ${buildContext()}`;
                 </div>
               )}
             </div>
+            </Akordiyon>
 
             {/* KOD YÖNETİMİ */}
+            <Akordiyon baslik="🔑 Koleksiyon Kod Önekleri" T={T}>
             <div style={{ background:"rgba(106,191,105,0.04)", border:"1px solid rgba(106,191,105,0.1)", borderRadius:12, padding:"14px 16px" }}>
               <div style={{ fontSize:10, fontWeight:700, color:"#6abf69", marginBottom:10 }}>🔑 KOLEKSIYON KOD ONEKLERİ</div>
               <div style={{ fontSize:9, color:"#665d4a", marginBottom:10 }}>Mevcut koleksiyonlar ve kod onekleri:</div>
@@ -7347,6 +7392,7 @@ ${buildContext()}`;
                 );
               })}
             </div>
+            </Akordiyon>
             </div>
           </div>
         )}
