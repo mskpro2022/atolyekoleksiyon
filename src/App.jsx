@@ -4389,7 +4389,11 @@ function Atolye({ onSirketDegis }) {
                           </div>
                         );
                       })}
-                      {Array.isArray(m.gizliMus) && m.gizliMus.length>0 && <div title={m.gizliMus.length+" müşteriden gizli"} style={{ position:"absolute", bottom:4, left:4, background:"rgba(232,90,79,0.85)", color:"#fff", padding:"1px 5px", borderRadius:3, fontSize:7, fontWeight:800 }}>🚫 {m.gizliMus.length}</div>}
+                      {Array.isArray(m.gizliMus) && m.gizliMus.length>0 && (() => {
+                        const adlar = m.gizliMus.map(kod => Object.entries(musteriler).find(([,k])=>k===kod)?.[0] || kod);
+                        const gosterilen = adlar.length<=2 ? adlar.join(", ") : adlar[0]+" +"+(adlar.length-1);
+                        return <div title={"Gizli: "+adlar.join(", ")} style={{ position:"absolute", bottom:4, left:4, right:26, background:"rgba(232,90,79,0.85)", color:"#fff", padding:"2px 6px", borderRadius:4, fontSize:7, fontWeight:800, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>🚫 {gosterilen}</div>;
+                      })()}
                       <button onClick={()=>togKonf(m)} style={{ position:"absolute", top:4, right:4, width:20, height:20, borderRadius:5, background:ik?"rgba(var(--vurgu-rgb),0.9)":"rgba(0,0,0,0.55)", border:"2px solid rgba(var(--vurgu-rgb),0.45)", color:ik?DARK:"transparent", fontSize:9, fontWeight:800, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}>V</button>
                       {seciliModeller.has(m.id) && <div style={{ position:"absolute", inset:0, background:"rgba(91,155,213,0.15)", border:"2px solid rgba(91,155,213,0.5)", pointerEvents:"none" }}/>}
                       {h&&h.karUyari&&!h.gumusMu && <div style={{ position:"absolute", bottom:3, left:3, background:"rgba(232,90,79,0.88)", color:"#fff", padding:"1px 5px", borderRadius:3, fontSize:6, fontWeight:800 }}>⚠ {fN(h.karMly,3)} mly/gr</div>}
@@ -7740,7 +7744,7 @@ ${buildContext()}`;
                       })}
                     </div>
                     {Array.isArray(m.gizliMus) && m.gizliMus.length>0 && (
-                      <div style={{ fontSize:9, color:"#e85a4f", marginTop:7, fontWeight:600 }}>{m.gizliMus.length} müşteriden gizli</div>
+                      <div style={{ fontSize:9, color:"#e85a4f", marginTop:7, fontWeight:600 }}>Gizli: {m.gizliMus.map(kod => Object.entries(musteriler).find(([,k])=>k===kod)?.[0] || kod).join(", ")}</div>
                     )}
                   </div>
 
@@ -9055,7 +9059,7 @@ ${buildContext()}`;
               })}
             </div>
             {Array.isArray(editM.gizliMus) && editM.gizliMus.length>0 && (
-              <div style={{ fontSize:9, color:"#e85a4f", marginTop:7, fontWeight:600 }}>{editM.gizliMus.length} müşteriden gizli</div>
+              <div style={{ fontSize:9, color:"#e85a4f", marginTop:7, fontWeight:600 }}>Gizli: {editM.gizliMus.map(kod => Object.entries(musteriler).find(([,k])=>k===kod)?.[0] || kod).join(", ")}</div>
             )}
           </div>
         )}
