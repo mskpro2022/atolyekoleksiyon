@@ -1881,7 +1881,7 @@ function VitrinModu({ kod, onizleme }) {
   });
   useEffect(() => { try { localStorage.setItem("vitrin_sutun", String(vitrinSutun)); } catch {} }, [vitrinSutun]);
   const [vitrinIsik, setVitrinIsik] = useState(() => {
-    try { return localStorage.getItem("vitrin_isik") || "gece"; } catch { return "gece"; }
+    try { return localStorage.getItem("vitrin_isik") || "gunduz"; } catch { return "gunduz"; }
   });
   useEffect(() => { try { localStorage.setItem("vitrin_isik", vitrinIsik); } catch {} }, [vitrinIsik]);
   const [zumNokta, setZumNokta] = useState(null); // detay noktası yakınlaştırma (bileklik kilit/zincir)
@@ -2239,7 +2239,7 @@ function VitrinModu({ kod, onizleme }) {
       <div className="vm-pad" style={{ padding:"26px 28px 6px" }}>
         {(aktifKol || tumGorunum) && (
           <button onClick={kartEkraninaDon}
-            style={{ display:"inline-flex", alignItems:"center", gap:8, background:"var(--vt1)", border:"none", borderRadius:980, padding:"10px 20px", color:"var(--vb)", fontSize:14, fontWeight:700, cursor:"pointer", boxShadow:"0 4px 16px rgba(0,0,0,0.35)", marginBottom:14 }}>
+            style={{ display:"inline-flex", alignItems:"center", gap:8, background:"var(--vcard)", border:"none", borderRadius:980, padding:"10px 20px", color:"var(--vt1)", fontSize:14, fontWeight:700, cursor:"pointer", boxShadow:"0 4px 16px rgba(0,0,0,0.35)", marginBottom:14 }}>
             <span style={{ fontSize:19, lineHeight:1, marginTop:-1 }}>‹</span> Tüm Koleksiyonlar
           </button>
         )}
@@ -2254,7 +2254,7 @@ function VitrinModu({ kod, onizleme }) {
                 : "👇 Bir koleksiyona girin veya + ile seçip size özel katalog alın"}
             </div>
           </div>
-          <button onClick={()=>katalogAl(3)} style={{ flexShrink:0, background:"var(--vt1)", color:"var(--vb)", border:"none", borderRadius:980, padding:"10px 20px", fontSize:14, fontWeight:600, cursor:"pointer" }}>
+          <button onClick={()=>katalogAl(3)} style={{ flexShrink:0, background:"var(--vcard)", color:"var(--vt1)", border:"none", borderRadius:980, padding:"10px 20px", fontSize:14, fontWeight:600, cursor:"pointer" }}>
             Katalog Al{(!aktifKol && !tumGorunum && seciliKlasorler.length > 0) ? " ("+seciliKlasorler.length+")" : ""}
           </button>
           <button onClick={()=>setVitrinIsik(gunduz?"gece":"gunduz")} title={gunduz?"Gece moduna geç":"Gündüz moduna geç"}
@@ -2289,7 +2289,7 @@ function VitrinModu({ kod, onizleme }) {
             const on = aktifAyar === a.id;
             return (
               <button key={a.id} className="vm-pill" onClick={()=>setAktifAyar(a.id)}
-                style={{ padding:"6px 18px", fontSize:13, color: on?"var(--vb)":"var(--vt2)", background: on?"var(--vt1)":"transparent", border:"none", borderRadius:6, fontWeight: on?500:400, cursor:"pointer" }}>
+                style={{ padding:"6px 18px", fontSize:13, color: on?"var(--vt1)":"var(--vt2)", background: on?"var(--vcard)":"transparent", border:"none", borderRadius:6, fontWeight: on?500:400, cursor:"pointer" }}>
                 {a.id.replace("K","")}K
               </button>
             );
@@ -2400,7 +2400,7 @@ function VitrinModu({ kod, onizleme }) {
           <span style={{ fontSize:13, color:"var(--vurgu)", fontWeight:500 }}>{secili.size} model seçildi</span>
           <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
             {aktifOnek === "bsp2_" && (
-              <button onClick={()=>setSiparisModal(true)} style={{ background:"var(--vt1)", border:"none", borderRadius:8, padding:"7px 16px", color:"var(--vb)", fontSize:12, fontWeight:700, cursor:"pointer" }}>🛍️ Sipariş Ver</button>
+              <button onClick={()=>setSiparisModal(true)} style={{ background:"var(--vcard)", border:"none", borderRadius:8, padding:"7px 16px", color:"var(--vt1)", fontSize:12, fontWeight:700, cursor:"pointer" }}>🛍️ Sipariş Ver</button>
             )}
             <button onClick={()=>vitrinPDF(3)} style={{ background:"var(--vurgu)", border:"none", borderRadius:8, padding:"7px 16px", color:"#fff", fontSize:12, fontWeight:500, cursor:"pointer" }}>Seçilenlerden PDF</button>
             <button onClick={()=>setSecili(new Set())} style={{ background:"transparent", border:"none", color:"var(--vt2)", fontSize:12, fontWeight:500, cursor:"pointer", padding:"7px 10px" }}>Temizle</button>
@@ -2458,7 +2458,7 @@ function VitrinModu({ kod, onizleme }) {
                 <div style={{ fontSize:44, marginBottom:14 }}>✓</div>
                 <div style={{ fontSize:18, fontWeight:600, color:"var(--vt1)", marginBottom:8 }}>Siparişiniz alındı</div>
                 <div style={{ fontSize:14, color:"var(--vt2)", marginBottom:24 }}>En kısa sürede size dönüş yapılacaktır.</div>
-                <button onClick={()=>{ setSiparisModal(false); setSiparisBasarili(false); }} style={{ background:"var(--vt1)", border:"none", borderRadius:11, padding:"12px 28px", color:"var(--vb)", fontSize:14, fontWeight:600, cursor:"pointer" }}>Tamam</button>
+                <button onClick={()=>{ setSiparisModal(false); setSiparisBasarili(false); }} style={{ background:"var(--vcard)", border:"none", borderRadius:11, padding:"12px 28px", color:"var(--vt1)", fontSize:14, fontWeight:600, cursor:"pointer" }}>Tamam</button>
               </div>
             ) : (
               <div style={{ padding:"22px 24px 24px" }}>
@@ -2690,6 +2690,7 @@ function Atolye({ onSirketDegis }) {
   const [iadeModal,  setIadeModal] = useState(null); // {sipId, kalemId, kalemAd, maxAdet, mevcAdet, iadeTuru, mevcNeden}
   const [cizelgeModal, setCizelgeModal] = useState(null); // sipId — zaman çizelgesi modal'ı
   const [musteriler, setMusteriler] = useState({}); // { "Ahmet": "MUS-001", ... }
+  const [musteriTel, setMusteriTel] = useState({}); // { "Ahmet": "5551234567" } — WhatsApp bildirimi için, ayrı/bağımsız kayıt
   const [loaded,    setLoaded]    = useState(false);
   const [toast, setToast] = useState(null); // {tip:"ok"|"hata", msg:"..."}
   const toastGoster = useCallback((tip, msg) => {
@@ -3374,6 +3375,10 @@ function Atolye({ onSirketDegis }) {
     await versiyonDamgala("v7u", d);
     tabloMusterileriYaz(AKTIF_SIRKET_ONEK, d).catch(e => console.error("Müşteri tablo (arka plan):", e.message));
   }, [versiyonDamgala]);
+
+  // Müşteri telefon numaraları — WhatsApp bildirimi için, ayrı/bağımsız kayıt (musteriler ad→kod yapısına dokunmaz)
+  const svMusTel = useCallback(async d => { setMusteriTel(d); await sv("v7mtel", d); }, []);
+  useEffect(() => { ld("v7mtel", {}).then(d => { if (d && Object.keys(d).length) setMusteriTel(d); }); }, []);
 
   // ═══ OTOMATİK GÜNLÜK YEDEKLEME ═══
   // Yedek verisini topla (foto artık Storage'da olduğu için hafif)
@@ -5229,6 +5234,11 @@ function Atolye({ onSirketDegis }) {
                     <input value={editMusteri.yeniKod||""} onChange={e=>setEditMusteri(p=>({...p,yeniKod:e.target.value.toUpperCase()}))}
                       placeholder="MUS-001" style={{ ...IS, width:110, padding:"6px 10px", fontSize:12 }}/>
                   </div>
+                  <div>
+                    <div style={{ fontSize:8, color:"#998a6e", marginBottom:3 }}>Telefon (WhatsApp, opsiyonel)</div>
+                    <input value={editMusteri.yeniTel||""} onChange={e=>setEditMusteri(p=>({...p,yeniTel:e.target.value.replace(/[^0-9]/g,"")}))}
+                      placeholder="5551234567" style={{ ...IS, width:130, padding:"6px 10px", fontSize:12 }}/>
+                  </div>
                   <div style={{ display:"flex", gap:6, alignSelf:"flex-end" }}>
                     <button onClick={()=>{
                       const ad = editMusteri.yeniAd.trim();
@@ -5244,6 +5254,7 @@ function Atolye({ onSirketDegis }) {
                       }
                       const yeni = { ...musteriler, [ad]: kod };
                       svMus(yeni);
+                      if (editMusteri.yeniTel?.trim()) svMusTel({ ...musteriTel, [ad]: editMusteri.yeniTel.trim() });
                       setEditMusteri(null);
                     }} style={{ ...BG, padding:"6px 14px", fontSize:11 }}>Kaydet</button>
                     <button onClick={()=>setEditMusteri(null)} style={{ ...GH, padding:"6px 10px", fontSize:11 }}>İptal</button>
@@ -5295,9 +5306,35 @@ function Atolye({ onSirketDegis }) {
                       <div style={{ fontSize:8, color:"#7a6f5a", marginTop:2 }}>
                         {musSiparisler.length} siparis · {fN(topGram,1)} gr · son: {sonTarih?new Date(sonTarih).toLocaleDateString("tr-TR"):"—"}
                       </div>
+                      <div style={{ fontSize:8, marginTop:3 }}>
+                        {musteriTel[ad] ? (
+                          <span style={{ color:"#6abf69" }}>📱 {musteriTel[ad]} <button onClick={()=>{ const yeni=prompt("Telefon numarasını düzenle (başında 0 olmadan, örn 5551234567):", musteriTel[ad]); if(yeni!==null){ const t={...musteriTel}; if(yeni.trim()) t[ad]=yeni.replace(/[^0-9]/g,""); else delete t[ad]; svMusTel(t);} }} style={{ background:"none", border:"none", color:"#665d4a", cursor:"pointer", textDecoration:"underline", fontSize:8, padding:0, marginLeft:4 }}>düzenle</button></span>
+                        ) : (
+                          <button onClick={()=>{ const yeni=prompt("Telefon numarası (başında 0 olmadan, örn 5551234567):"); if(yeni?.trim()) svMusTel({...musteriTel,[ad]:yeni.replace(/[^0-9]/g,"")}); }} style={{ background:"none", border:"none", color:"#665d4a", cursor:"pointer", textDecoration:"underline", fontSize:8, padding:0 }}>+ Telefon ekle (WhatsApp için)</button>
+                        )}
+                      </div>
                     </div>
                     {/* Butonlar */}
                     <div style={{ display:"flex", gap:5, flexShrink:0 }}>
+                      {(() => {
+                        // Bu müşterinin görebildiği koleksiyonlardaki, son 7 günde eklenen model sayısı
+                        const YEDI_GUN = 7*24*60*60*1000;
+                        const simdi = Date.now();
+                        const gorduguKollar = kollar.filter(k => Array.isArray(k.vitrinMus) && k.vitrinMus.includes(kod));
+                        const yeniSayi = modeller.filter(m => gorduguKollar.some(k=>k.id===m.ki) && m.t && (simdi-m.t)<YEDI_GUN).length;
+                        if (!musteriTel[ad]) return null;
+                        return (
+                          <button onClick={()=>{
+                            const url = window.location.origin + "?vitrin=" + kod;
+                            const mesaj = yeniSayi>0
+                              ? `Merhaba ${ad}, koleksiyonunuza ${yeniSayi} yeni model eklendi! 🛍️ Görmek için: ${url}`
+                              : `Merhaba ${ad}, size özel katalogumuzu inceleyebilirsiniz: ${url}`;
+                            window.open("https://wa.me/90"+musteriTel[ad]+"?text="+encodeURIComponent(mesaj), "_blank");
+                          }} style={{ background: yeniSayi>0?"rgba(37,211,102,0.15)":"rgba(106,191,105,0.1)", border:"1px solid "+(yeniSayi>0?"rgba(37,211,102,0.4)":"rgba(106,191,105,0.25)"), borderRadius:5, padding:"5px 10px", color:"#25D366", fontSize:9, fontWeight:700, cursor:"pointer" }}>
+                            📱 Bildir{yeniSayi>0?" ("+yeniSayi+" yeni)":""}
+                          </button>
+                        );
+                      })()}
                       <button onClick={()=>{ const url = window.location.origin + "?vitrin=" + kod; navigator.clipboard?.writeText(url); toastGoster("ok","🛍 Vitrin linki kopyalandı"); }} style={{ background:"rgba(106,191,105,0.1)", border:"1px solid rgba(106,191,105,0.25)", borderRadius:5, padding:"5px 10px", color:"#6abf69", fontSize:9, fontWeight:700, cursor:"pointer" }}>🛍 Link</button>
                       <button onClick={async()=>{
                         setVitrinGecmis({ musteriAd:ad, kod, kayitlar:null, encok:null });
