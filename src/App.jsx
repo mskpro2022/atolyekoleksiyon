@@ -1880,6 +1880,10 @@ function VitrinModu({ kod, onizleme }) {
     return (typeof window !== "undefined" && window.innerWidth <= 640) ? 4 : 5;
   });
   useEffect(() => { try { localStorage.setItem("vitrin_sutun", String(vitrinSutun)); } catch {} }, [vitrinSutun]);
+  const [vitrinIsik, setVitrinIsik] = useState(() => {
+    try { return localStorage.getItem("vitrin_isik") || "gece"; } catch { return "gece"; }
+  });
+  useEffect(() => { try { localStorage.setItem("vitrin_isik", vitrinIsik); } catch {} }, [vitrinIsik]);
   const [zumNokta, setZumNokta] = useState(null); // detay noktası yakınlaştırma (bileklik kilit/zincir)
   useEffect(() => { setZumNokta(null); }, [detayModel?.id]); // farklı model açılınca zoom sıfırlansın
   const VITRIN_AYARLAR = [
@@ -2212,10 +2216,6 @@ function VitrinModu({ kod, onizleme }) {
     );
   };
 
-  const [vitrinIsik, setVitrinIsik] = useState(() => {
-    try { return localStorage.getItem("vitrin_isik") || "gece"; } catch { return "gece"; }
-  });
-  useEffect(() => { try { localStorage.setItem("vitrin_isik", vitrinIsik); } catch {} }, [vitrinIsik]);
   const gunduz = vitrinIsik === "gunduz";
   // Gece (mevcut charcoal) / Gündüz (kırık beyaz) — CSS değişkenleri, tüm vitrin bunları kullanır
   const vRenkler = gunduz
