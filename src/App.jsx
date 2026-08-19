@@ -2051,9 +2051,10 @@ function VitrinModu({ kod, onizleme }) {
     </div>;
   }
 
-  // Model "yeni" mi? Toptancının önceki ziyaretinden sonra eklendiyse yeni.
-  // İlk ziyaret ise (öncekiZiyaret=0) hiçbiri yeni sayılmaz (her şey yeni olurdu).
-  const yeniMi = (m) => oncekiZiyaret > 0 && m.t && m.t > oncekiZiyaret;
+  // Model "yeni" mi? Eklenmesinden bu yana 7 gün geçmediyse yeni sayılır (müşterinin ne zaman
+  // baktığından bağımsız — sabit bir pencere). Ziyaret takibi (oncekiZiyaret) ayrı, analiz/geçmiş için hâlâ tutuluyor.
+  const YENI_PENCERE_MS = 7*24*60*60*1000;
+  const yeniMi = (m) => m.t && (Date.now() - m.t) < YENI_PENCERE_MS;
 
   // ═══ KOLEKSİYON SIRASI — son model eklenen en üstte, hiç model eklenmemişler en altta ═══
   const kolSonZaman = (kid) => Math.max(0, ...modeller.filter(m => m.ki === kid).map(m => m.t || 0));
@@ -2272,7 +2273,7 @@ function VitrinModu({ kod, onizleme }) {
             const yeniVar = modeller.filter(m => m.ki === k.id).some(m => yeniMi(m));
             return (
               <button key={k.id} onClick={()=>kolAc(k)}
-                className="vm-pill" style={{ position:"relative", flexShrink:0, fontSize:14, color: on?"#0a0a0a":"var(--vt1)", padding:"9px 18px", borderRadius:12, background: on?"var(--vt1)":"rgba(var(--voverlay-rgb),0.07)", border:"none", fontWeight: on?600:500, cursor:"pointer", whiteSpace:"nowrap" }}>
+                className="vm-pill" style={{ position:"relative", flexShrink:0, fontSize:14, color:"var(--vt1)", padding:"9px 18px", borderRadius:12, background: on?"var(--vcard)":"rgba(var(--voverlay-rgb),0.07)", border: on?"1px solid rgba(var(--voverlay-rgb),0.15)":"none", fontWeight: on?600:500, cursor:"pointer", whiteSpace:"nowrap" }}>
                 {k.ad}
                 {yeniVar && <span style={{ position:"absolute", top:-5, right:-5, background:"var(--vurgu)", color:"#fff", fontSize:8, fontWeight:700, padding:"2px 6px", borderRadius:980, boxShadow:"0 2px 6px rgba(0,0,0,0.3)" }}>YENİ</span>}
               </button>
@@ -2716,6 +2717,19 @@ function Atolye({ onSirketDegis }) {
   }); // { "MizanAdı": "SistemAdı" }
   const [ajanGecmis, setAjanGecmis] = useState([]); // [{rol:"user"|"assistant", icerik:"..."}]
   const [ajanYukleniyor, setAjanYukleniyor] = useState(false);
+  const [ajanModel, setAjanModel] = useState(() => { try { return localStorage.getItem("ajan_model")||"claude"; } catch { return "claude"; } }); // "claude" | "gpt"
+  useEffect(() => { try { localStorage.setItem("ajan_model", ajanModel); } catch {} }, [ajanModel]);
+
+  // ═══ GÜMÜŞ — TASARIM MOTORU (function-calling, sadece OKUMA + TASLAK, hiçbir yazma yetkisi yok) ═══
+  const [tasarimKategori, setTasarimKategori] = useState("yuzuk");
+  const [tasarimSecili, setTasarimSecili] = useState(""); // seçili model kodu
+  const [tasarimIstek, setTasarimIstek] = useState("");
+  const [tasarimYukleniyor, setTasarimYukleniyor] = useState(false);
+  const [tasarimLog, setTasarimLog] = useState([]); // [{rol, icerik}] — sohbet/araç geçmişi (ekranda gösterilir)
+  const [tasarimTaslaklar, setTasarimTaslaklar] = useState([]); // [{id, ad, aciklama, uretimNotu, kaynakKod, kategori, tasSekil, tasTur, tasBoyut, tahminiGram, geriBildirim}]
+  const [tasarimGecmisGB, setTasarimGecmisGB] = useState({}); // { taslakOzet: "begendim"|"vasat"|"cop" } — kalıcı zevk hafızası
+  useEffect(() => { ld("v7tasarimgb", {}).then(d => { if (d && Object.keys(d).length) setTasarimGecmisGB(d); }); }, []);
+  const gbKaydet = (yeni) => { setTasarimGecmisGB(yeni); sv("v7tasarimgb", yeni); };
   const [kasaModal, setKasaModal] = useState(null);
   const [kasaKilitli, setKasaKilitli] = useState(true);
   const [kasaSifreGirdi, setKasaSifreGirdi] = useState("");
@@ -3946,7 +3960,7 @@ function Atolye({ onSirketDegis }) {
               <button onClick={()=>{ if (onSirketDegis) onSirketDegis(); }} title="Şirket değiştir" style={{ fontSize:9, fontWeight:800, padding:"3px 10px", borderRadius:20, background: AKTIF_SIRKET_ONEK==="bsp2_" ? "rgba(167,139,250,0.15)" : "rgba(var(--vurgu-rgb),0.15)", border:"1px solid "+(AKTIF_SIRKET_ONEK==="bsp2_" ? "rgba(167,139,250,0.4)" : "rgba(var(--vurgu-rgb),0.4)"), color: AKTIF_SIRKET_ONEK==="bsp2_" ? "#a78bfa" : GOLD, whiteSpace:"nowrap", cursor:"pointer", display:"inline-flex", alignItems:"center", gap:4 }}>{AKTIF_SIRKET_ONEK==="bsp2_" ? "✨ BSP" : "💎 MSK"} <span style={{ fontSize:8, opacity:0.7 }}>⇄</span></button>
             </h1>
             <div style={{ display:"flex", gap:3, flexWrap:"wrap" }}>
-              {["koleksiyonlar","modeller","konfirmasyon","siparisler","iadeler","musteriler","vitrin","kasa","analiz","asistan","ayarlar"].map(n => {
+              {["koleksiyonlar","modeller","konfirmasyon","siparisler","iadeler","musteriler","vitrin","kasa","analiz","asistan","tasarim","ayarlar"].map(n => {
                 let badgeSayi = 0;
                 if (n === "iadeler") {
                   siparisler.forEach(s => {
@@ -3957,7 +3971,7 @@ function Atolye({ onSirketDegis }) {
                 return (
                 <button key={n} onClick={() => { setSayfa(n); if (n==="koleksiyonlar") setAktifKol(null); if (n!=="kasa") setKasaKilitli(true); if (n!=="asistan") setAjanSoru(""); }}
                   style={{ ...GH, color:sayfa===n?T.gold:T.sub, background:sayfa===n?T.btnBg:"transparent", borderColor:sayfa===n?T.btnBorder:T.border, fontSize:9, padding:"5px 9px", position:"relative" }}>
-                  {{"koleksiyonlar":"Koleksiyonlar","modeller":"Modeller","konfirmasyon":"Konfirmasyon","siparisler":"Siparişler","iadeler":"İadeler","musteriler":"Müşteriler","vitrin":"🛍 Vitrin","kasa":"Kasa","analiz":"Keşfet","asistan":"🤖 Asistan","ayarlar":"Ayarlar"}[n]||n.charAt(0).toUpperCase()+n.slice(1)}
+                  {{"koleksiyonlar":"Koleksiyonlar","modeller":"Modeller","konfirmasyon":"Konfirmasyon","siparisler":"Siparişler","iadeler":"İadeler","musteriler":"Müşteriler","vitrin":"🛍 Vitrin","kasa":"Kasa","analiz":"Keşfet","asistan":"🤖 Asistan","tasarim":"✨ Gümüş","ayarlar":"Ayarlar"}[n]||n.charAt(0).toUpperCase()+n.slice(1)}
                   {n==="konfirmasyon" && konfList.length>0 && <span style={{ position:"absolute", top:-4, right:-4, background:GOLD, color:DARK, width:13, height:13, borderRadius:7, fontSize:7, fontWeight:800, display:"flex", alignItems:"center", justifyContent:"center" }}>{konfList.length}</span>}
                   {n==="iadeler" && badgeSayi>0 && <span style={{ position:"absolute", top:-4, right:-4, background:"#a78bfa", color:"#fff", width:13, height:13, borderRadius:7, fontSize:7, fontWeight:800, display:"flex", alignItems:"center", justifyContent:"center" }}>{badgeSayi}</span>}
                 </button>
@@ -3979,6 +3993,11 @@ function Atolye({ onSirketDegis }) {
             {altinKgUSD > 0 && <span style={{ fontSize:8, color:"#6abf69", fontWeight:700 }}>1 has gr = {fUSD(altinKgUSD/1000)}</span>}
             <span style={{ fontSize:7, color:"#e85a4f", fontWeight:600 }}>Min karlılık: {MIN_MLY} mly/gr</span>
             <div style={{ marginLeft:"auto", display:"flex", gap:5, flexWrap:"wrap" }}>
+              {/* CHATGPT — kendi hesabınla yeni sekmede açılır, şifre/API anahtarı gerekmez */}
+              <button onClick={()=>window.open("https://chat.openai.com","_blank")}
+                style={{ background:"rgba(16,163,127,0.1)", border:"1px solid rgba(16,163,127,0.3)", borderRadius:8, padding:"6px 12px", color:"#10a37f", fontSize:9, fontWeight:700, cursor:"pointer" }}>
+                💬 ChatGPT
+              </button>
               {/* PC'YE İNDİR */}
               <button onClick={async () => {
                 setDriveYukleniyor("yedek");
@@ -6726,16 +6745,30 @@ function Atolye({ onSirketDegis }) {
 ATÖLYE VERİSİ:
 ${buildContext()}`;
               const mesajlar = yeniGecmis.map(m=>({ role:m.rol==="user"?"user":"assistant", content:m.icerik }));
-              const res = await fetch("/api/chat", {
-                method:"POST", headers:{"Content-Type":"application/json"},
-                body: JSON.stringify({ model:"claude-sonnet-4-20250514", max_tokens:1000, system:sistem, messages:mesajlar })
-              });
-              const data = await res.json();
-              const cevap = data.content?.[0]?.text
-                || data.error?.message
-                || (data.error ? JSON.stringify(data.error) : null)
-                || data.raw
-                || "Yanıt alınamadı.";
+              let cevap;
+              if (ajanModel === "gpt") {
+                // ChatGPT (OpenAI) — ayrı sunucu fonksiyonu üzerinden (api/chat-gpt.js), anahtar sunucuda kalır
+                const res = await fetch("/api/chat-gpt", {
+                  method:"POST", headers:{"Content-Type":"application/json"},
+                  body: JSON.stringify({ model:"gpt-4o", max_tokens:1000, system:sistem, messages:mesajlar })
+                });
+                const data = await res.json();
+                cevap = data.choices?.[0]?.message?.content
+                  || data.error?.message
+                  || (data.error ? JSON.stringify(data.error) : null)
+                  || "Yanıt alınamadı.";
+              } else {
+                const res = await fetch("/api/chat", {
+                  method:"POST", headers:{"Content-Type":"application/json"},
+                  body: JSON.stringify({ model:"claude-sonnet-4-20250514", max_tokens:1000, system:sistem, messages:mesajlar })
+                });
+                const data = await res.json();
+                cevap = data.content?.[0]?.text
+                  || data.error?.message
+                  || (data.error ? JSON.stringify(data.error) : null)
+                  || data.raw
+                  || "Yanıt alınamadı.";
+              }
               setAjanGecmis(prev=>[...prev, { rol:"assistant", icerik:cevap }]);
             } catch(e) {
               setAjanGecmis(prev=>[...prev, { rol:"assistant", icerik:"Hata: "+e.message }]);
@@ -6752,7 +6785,13 @@ ${buildContext()}`;
 
           return (
             <div style={{ animation:"fadein .3s", maxWidth:860 }}>
-              <h2 style={{ margin:"0 0 16px", fontSize:14, fontWeight:700, color:T.text }}>🤖 Atölye Asistanı</h2>
+              <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:16 }}>
+                <h2 style={{ margin:0, fontSize:14, fontWeight:700, color:T.text }}>🤖 Atölye Asistanı</h2>
+                <div style={{ display:"inline-flex", background:"rgba(0,0,0,0.2)", borderRadius:8, padding:3, border:"1px solid rgba(255,255,255,0.06)" }}>
+                  <button onClick={()=>setAjanModel("claude")} style={{ background: ajanModel==="claude"?"rgba(var(--vurgu-rgb),0.18)":"transparent", border:"none", borderRadius:5, padding:"5px 12px", color: ajanModel==="claude"?GOLD:T.sub, fontSize:9, fontWeight:700, cursor:"pointer" }}>Claude</button>
+                  <button onClick={()=>setAjanModel("gpt")} style={{ background: ajanModel==="gpt"?"rgba(var(--vurgu-rgb),0.18)":"transparent", border:"none", borderRadius:5, padding:"5px 12px", color: ajanModel==="gpt"?GOLD:T.sub, fontSize:9, fontWeight:700, cursor:"pointer" }}>ChatGPT</button>
+                </div>
+              </div>
 
               {/* ── DURUM ÖZETI ── */}
               <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:8, marginBottom:16 }}>
@@ -6838,6 +6877,202 @@ ${buildContext()}`;
               <div style={{ marginTop:10, fontSize:8, color:"#665d4a", textAlign:"center" }}>
                 {rhinoMizan ? `📊 Mizan yüklü (${rhinoMizan.tarih}) — ajan bu veriyi kullanıyor` : "Mizan yüklemek için: Kasa → Muhasebe"}
               </div>
+            </div>
+          );
+        })()}
+
+        {/* GÜMÜŞ — TASARIM MOTORU */}
+        {sayfa==="tasarim" && (() => {
+          const TASARIM_TOOLS = [
+            { type:"function", function:{ name:"model_getir", description:"Belirtilen koddaki modelin tüm detaylarını getirir (gram, taş bilgisi, ayar, açıklama, etiketler).",
+              parameters:{ type:"object", properties:{ kod:{type:"string",description:"Model kodu, örn ALT160-B"} }, required:["kod"] } } },
+            { type:"function", function:{ name:"benzer_modelleri_bul", description:"Verilen koda göre aynı kategori ve yakın gram/taş özelliklerine sahip modelleri bulur — kopya/çok benzer tasarım tespiti için.",
+              parameters:{ type:"object", properties:{ kod:{type:"string"}, gram_toleransi_yuzde:{type:"number",description:"Varsayılan 20"} }, required:["kod"] } } },
+            { type:"function", function:{ name:"koleksiyon_ozet_getir", description:"Belirtilen kategorideki tüm modellerin taş şekli/türü dağılımını özetler — eksik/doygun tasarım alanlarını görmek için.",
+              parameters:{ type:"object", properties:{ kategori:{type:"string"} }, required:["kategori"] } } },
+            { type:"function", function:{ name:"taslak_olustur", description:"Yeni bir tasarım fikrini TASLAK olarak kaydeder. Asla otomatik koleksiyona eklenmez — atölye sahibi onaylamadan hiçbir ürün kaydı oluşmaz.",
+              parameters:{ type:"object", properties:{
+                ad:{type:"string"}, aciklama:{type:"string",description:"Tasarımın görsel/estetik açıklaması"},
+                uretimNotu:{type:"string",description:"Üretim tekniği notu (döküm, taş dizimi, kaplama vs.)"},
+                kaynakKod:{type:"string"}, kategori:{type:"string"}, tasSekil:{type:"string"}, tasTur:{type:"string"}, tasBoyut:{type:"string"},
+                tahminiGram:{type:"number"} }, required:["ad","aciklama"] } } },
+          ];
+
+          const tasarimAraclariCalistir = (name, args) => {
+            if (name === "model_getir") {
+              const m = modeller.find(x => (x.kod||"").toUpperCase() === (args.kod||"").toUpperCase());
+              if (!m) return { hata:"Model bulunamadı: "+args.kod };
+              return { kod:m.kod, ad:m.ad, kategori:m.kategori, gram:m.gram, refAyar:m.refAyar, tasGram:m.tasGram, tasBoy:m.tasBoy, tasSekil:m.tasSekil, tasTur:m.tasTur, tasBoyut:m.tasBoyut, tasAdet:m.tasAdet, ac:m.ac, etiketler:m.etiketler };
+            }
+            if (name === "benzer_modelleri_bul") {
+              const kaynak = modeller.find(x => (x.kod||"").toUpperCase() === (args.kod||"").toUpperCase());
+              if (!kaynak) return { hata:"Kaynak model bulunamadı" };
+              const tol = (args.gram_toleransi_yuzde || 20) / 100;
+              const benzer = modeller.filter(m => m.kod!==kaynak.kod && m.kategori===kaynak.kategori && Math.abs((m.gram||0)-(kaynak.gram||0)) <= (kaynak.gram||0)*tol)
+                .slice(0,15).map(m => ({ kod:m.kod, ad:m.ad, gram:m.gram, tasSekil:m.tasSekil, tasTur:m.tasTur }));
+              return { kaynak:kaynak.kod, benzerSayisi:benzer.length, benzerler:benzer };
+            }
+            if (name === "koleksiyon_ozet_getir") {
+              const filtreli = modeller.filter(m => (m.kategori||"") === args.kategori);
+              const dagilim = {};
+              filtreli.forEach(m => { const k = (m.tasSekil||"—")+"/"+(m.tasTur||"—"); dagilim[k] = (dagilim[k]||0)+1; });
+              return { kategori:args.kategori, toplamModel:filtreli.length, tasDagilimi:dagilim };
+            }
+            if (name === "taslak_olustur") {
+              const yeni = { id:"t"+Date.now()+Math.random().toString(36).substr(2,4), ...args, geriBildirim:null };
+              setTasarimTaslaklar(prev => [...prev, yeni]);
+              return { basarili:true, taslakId:yeni.id, mesaj:"Taslak oluşturuldu, atölye sahibinin onayını bekliyor." };
+            }
+            return { hata:"Bilinmeyen araç: "+name };
+          };
+
+          const tasarimCalistir = async (kullaniciMesaji) => {
+            if (tasarimYukleniyor || !kullaniciMesaji?.trim()) return;
+            setTasarimYukleniyor(true);
+            const gbOzet = Object.entries(tasarimGecmisGB).slice(-20).map(([k,v])=>"- "+k+": "+v).join("\n") || "(henüz geri bildirim yok)";
+            const sistem = `Sen "Gümüş", MSK/BSP Kuyumculuk atölyesinin Tasarım Motorusun. Görevin mevcut kataloğu analiz edip yeni tasarım TASLAKLARI önermek.
+
+KURALLAR:
+- taslak_olustur ile önerdiğin her tasarım sadece bir TASLAKTIR — asla otomatik koleksiyona eklenmez, atölye sahibi elle onaylamadan hiçbir ürün kaydı oluşmaz veya değişmez.
+- Modeli incelemek için model_getir, benzerlik/kopya riski için benzer_modelleri_bul, koleksiyon boşluklarını görmek için koleksiyon_ozet_getir araçlarını kullan.
+- "N varyasyon üret" istendiğinde TAM OLARAK N kez taslak_olustur çağır — her biri farklı bir tasarım parametresi (motif, taş dizilimi, yüzey işlemi) taşımalı, birbirinin kopyası olmamalı.
+- Tasarım terminolojisi: Greek (Yunan motifi), Monaco, Rolex kayış, florantin (mat çizgili doku), mat-parlak kombinasyonu, taş ölçüsü/dizilimi.
+- Türkçe, kısa ve üretime dönük konuş — atölye ustası gibi düşün, pazarlama dili kullanma.
+
+GEÇMİŞ GERİ BİLDİRİM (atölye sahibinin zevkini yansıtır, öneri üretirken dikkate al):
+${gbOzet}`;
+            let mesajlar = [...tasarimLog.filter(m=>m.rol==="user"||m.rol==="assistant").map(m=>({role:m.rol,content:m.icerik})), { role:"user", content:kullaniciMesaji }];
+            setTasarimLog(prev => [...prev, { rol:"user", icerik:kullaniciMesaji }]);
+            try {
+              let tur = 0;
+              while (tur < 6) {
+                tur++;
+                const res = await fetch("/api/chat-gpt", { method:"POST", headers:{"Content-Type":"application/json"},
+                  body: JSON.stringify({ model:"gpt-4o", max_tokens:1500, system:sistem, messages:mesajlar, tools:TASARIM_TOOLS }) });
+                const data = await res.json();
+                if (data.error) { setTasarimLog(prev=>[...prev,{rol:"assistant",icerik:"Hata: "+(data.error.message||JSON.stringify(data.error))}]); break; }
+                const msg = data.choices?.[0]?.message;
+                if (!msg) { setTasarimLog(prev=>[...prev,{rol:"assistant",icerik:"Yanıt alınamadı."}]); break; }
+                mesajlar.push(msg);
+                if (msg.tool_calls?.length) {
+                  setTasarimLog(prev=>[...prev, ...msg.tool_calls.map(tc=>({rol:"arac", icerik:"🔧 "+tc.function.name+"("+tc.function.arguments+")"}))]);
+                  for (const tc of msg.tool_calls) {
+                    let args = {}; try { args = JSON.parse(tc.function.arguments||"{}"); } catch {}
+                    const sonuc = tasarimAraclariCalistir(tc.function.name, args);
+                    mesajlar.push({ role:"tool", tool_call_id:tc.id, content: JSON.stringify(sonuc) });
+                  }
+                  continue;
+                }
+                if (msg.content) setTasarimLog(prev=>[...prev,{rol:"assistant",icerik:msg.content}]);
+                break;
+              }
+            } catch(e) {
+              setTasarimLog(prev=>[...prev,{rol:"assistant",icerik:"Hata: "+e.message}]);
+            }
+            setTasarimYukleniyor(false);
+          };
+
+          const kategoriListe = [...new Set(modeller.map(m=>m.kategori).filter(Boolean))];
+          const filtreliModeller = modeller.filter(m => m.kategori === tasarimKategori);
+          const seciliM = modeller.find(m => m.kod === tasarimSecili);
+
+          const formaAktar = (t) => {
+            rmf(); setFKolId(""); setEditM(null); setShowMM(true);
+            setFAd(t.ad||""); setFAc((t.aciklama||"")+(t.uretimNotu?"\n\nÜretim notu: "+t.uretimNotu:"")+(t.kaynakKod?"\n\nKaynak model: "+t.kaynakKod:""));
+            setFKategori(t.kategori||tasarimKategori);
+            if (t.tasSekil) setFTasSekil(t.tasSekil);
+            if (t.tasTur) setFTasTur(t.tasTur);
+            if (t.tasBoyut) setFTasBoyut(String(t.tasBoyut));
+          };
+
+          const gbVer = (t, deger) => {
+            const anahtar = t.ad+" (kaynak:"+(t.kaynakKod||"—")+")";
+            gbKaydet({ ...tasarimGecmisGB, [anahtar]: deger });
+            setTasarimTaslaklar(prev => prev.map(x => x.id===t.id ? {...x, geriBildirim:deger} : x));
+          };
+
+          return (
+            <div style={{ animation:"fadein .3s", maxWidth:960 }}>
+              <h2 style={{ margin:"0 0 4px", fontSize:14, fontWeight:700, color:T.text }}>✨ Gümüş — Tasarım Motoru</h2>
+              <div style={{ fontSize:10, color:T.sub, marginBottom:16 }}>Kataloğu okur, taslak önerir. Hiçbir ürün kaydını sizin onayınız olmadan değiştirmez veya eklemez.</div>
+
+              {/* MODEL SEÇİCİ */}
+              <div style={{ background:T.card, border:"1px solid "+T.border, borderRadius:14, padding:"14px 16px", marginBottom:14 }}>
+                <div style={{ display:"flex", gap:8, marginBottom:10, flexWrap:"wrap" }}>
+                  <select value={tasarimKategori} onChange={e=>{ setTasarimKategori(e.target.value); setTasarimSecili(""); }} style={{ ...IS, width:160 }}>
+                    {kategoriListe.map(k => <option key={k} value={k}>{k}</option>)}
+                  </select>
+                  <select value={tasarimSecili} onChange={e=>setTasarimSecili(e.target.value)} style={{ ...IS, flex:1, minWidth:180 }}>
+                    <option value="">-- Model seç --</option>
+                    {filtreliModeller.map(m => <option key={m.id} value={m.kod}>{m.kod} — {m.ad} ({m.gram}gr)</option>)}
+                  </select>
+                </div>
+                {seciliM && (
+                  <div style={{ display:"flex", gap:12, alignItems:"center", background:"rgba(0,0,0,0.15)", borderRadius:10, padding:10, marginBottom:10 }}>
+                    <div style={{ width:56, height:56, borderRadius:8, overflow:"hidden", background:"#f7f7f8", flexShrink:0 }}>
+                      {seciliM.foto && <img src={seciliM.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }}/>}
+                    </div>
+                    <div style={{ fontSize:10, color:T.sub }}>
+                      <div style={{ color:T.text, fontWeight:700, marginBottom:2 }}>{seciliM.kod} — {seciliM.ad}</div>
+                      {seciliM.gram}gr · {seciliM.refAyar} · {seciliM.tasSekil||"—"} {seciliM.tasTur||""} {seciliM.tasBoyut||""}
+                    </div>
+                  </div>
+                )}
+                <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+                  <button disabled={!tasarimSecili||tasarimYukleniyor} onClick={()=>tasarimCalistir(tasarimSecili+" kodlu modelden 6 yeni varyasyon üret. Her biri farklı bir tasarım parametresiyle (motif, taş dizilimi, yüzey işlemi) ayrışsın.")}
+                    style={{ ...BG, fontSize:10, padding:"7px 14px", opacity:(!tasarimSecili||tasarimYukleniyor)?0.4:1 }}>✨ 6 Varyasyon Üret</button>
+                  <button disabled={!tasarimSecili||tasarimYukleniyor} onClick={()=>tasarimCalistir(tasarimSecili+" koduna çok benzeyen/kopya riski taşıyan modelleri bul ve listele.")}
+                    style={{ ...GH, fontSize:10, padding:"7px 14px", opacity:(!tasarimSecili||tasarimYukleniyor)?0.4:1 }}>🔍 Benzer Modelleri Bul</button>
+                  <button disabled={tasarimYukleniyor} onClick={()=>tasarimCalistir(tasarimKategori+" kategorisindeki koleksiyonu analiz et, hangi taş şekli/motif kombinasyonlarının eksik veya doygun olduğunu söyle.")}
+                    style={{ ...GH, fontSize:10, padding:"7px 14px", opacity:tasarimYukleniyor?0.4:1 }}>📊 Koleksiyon Boşluklarını Analiz Et</button>
+                </div>
+              </div>
+
+              {/* SERBEST İSTEK */}
+              <div style={{ display:"flex", gap:8, marginBottom:14 }}>
+                <input value={tasarimIstek} onChange={e=>setTasarimIstek(e.target.value)} onKeyDown={e=>{ if(e.key==="Enter" && tasarimIstek.trim()){ tasarimCalistir(tasarimIstek); setTasarimIstek(""); } }}
+                  placeholder='Örn: "ALT160-B modelinden Rolex kayış motifiyle 3 varyasyon üret"' style={{ ...IS, flex:1 }}/>
+                <button disabled={tasarimYukleniyor||!tasarimIstek.trim()} onClick={()=>{ tasarimCalistir(tasarimIstek); setTasarimIstek(""); }}
+                  style={{ ...BG, fontSize:11, padding:"8px 16px", opacity:(tasarimYukleniyor||!tasarimIstek.trim())?0.4:1 }}>Gönder</button>
+              </div>
+
+              {/* LOG / SOHBET */}
+              {tasarimLog.length > 0 && (
+                <div style={{ background:"rgba(0,0,0,0.15)", border:"1px solid rgba(255,255,255,0.05)", borderRadius:12, padding:"14px 16px", marginBottom:16, maxHeight:340, overflowY:"auto" }}>
+                  {tasarimLog.map((m,i) => (
+                    <div key={i} style={{ marginBottom:12 }}>
+                      <div style={{ fontSize:8, color:"#665d4a", marginBottom:3 }}>{m.rol==="user"?"Siz":m.rol==="arac"?"⚙️ Araç":"Gümüş"}</div>
+                      <div style={{ fontSize:11, color: m.rol==="arac"?"#665d4a":T.text, fontStyle: m.rol==="arac"?"italic":"normal", whiteSpace:"pre-wrap", lineHeight:1.5 }}>{m.icerik}</div>
+                    </div>
+                  ))}
+                  {tasarimYukleniyor && <div style={{ fontSize:10, color:"#665d4a" }}>Gümüş düşünüyor...</div>}
+                </div>
+              )}
+
+              {/* TASLAKLAR */}
+              {tasarimTaslaklar.length > 0 && (
+                <div>
+                  <div style={{ fontSize:10, fontWeight:700, color:T.sub, marginBottom:10, textTransform:"uppercase", letterSpacing:"0.05em" }}>📋 Tasarım Taslakları ({tasarimTaslaklar.length})</div>
+                  <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))", gap:10 }}>
+                    {tasarimTaslaklar.map(t => (
+                      <div key={t.id} style={{ background:T.card, border:"1px solid "+(t.geriBildirim==="begendim"?"rgba(106,191,105,0.4)":t.geriBildirim==="cop"?"rgba(232,90,79,0.4)":T.border), borderRadius:12, padding:"12px 14px" }}>
+                        <div style={{ fontSize:12, fontWeight:700, color:GOLD, marginBottom:4 }}>{t.ad}</div>
+                        <div style={{ fontSize:10, color:T.text, marginBottom:6, lineHeight:1.5 }}>{t.aciklama}</div>
+                        {t.uretimNotu && <div style={{ fontSize:9, color:T.sub, marginBottom:6, fontStyle:"italic" }}>🔧 {t.uretimNotu}</div>}
+                        <div style={{ fontSize:8, color:"#665d4a", marginBottom:10 }}>
+                          {t.kaynakKod && "Kaynak: "+t.kaynakKod+" · "}{t.kategori} {t.tasSekil?"· "+t.tasSekil:""} {t.tasTur||""} {t.tasBoyut||""} {t.tahminiGram?"· ~"+t.tahminiGram+"gr":""}
+                        </div>
+                        <div style={{ display:"flex", gap:5 }}>
+                          <button onClick={()=>gbVer(t,"begendim")} style={{ flex:1, background: t.geriBildirim==="begendim"?"rgba(106,191,105,0.2)":"rgba(255,255,255,0.05)", border:"none", borderRadius:6, padding:"5px", color:"#6abf69", fontSize:13, cursor:"pointer" }}>👍</button>
+                          <button onClick={()=>gbVer(t,"vasat")} style={{ flex:1, background: t.geriBildirim==="vasat"?"rgba(255,255,255,0.12)":"rgba(255,255,255,0.05)", border:"none", borderRadius:6, padding:"5px", color:T.sub, fontSize:13, cursor:"pointer" }}>😐</button>
+                          <button onClick={()=>gbVer(t,"cop")} style={{ flex:1, background: t.geriBildirim==="cop"?"rgba(232,90,79,0.2)":"rgba(255,255,255,0.05)", border:"none", borderRadius:6, padding:"5px", color:"#e85a4f", fontSize:13, cursor:"pointer" }}>🗑️</button>
+                        </div>
+                        <button onClick={()=>formaAktar(t)} style={{ width:"100%", marginTop:6, background:"rgba(var(--vurgu-rgb,201,168,76),0.1)", border:"1px solid rgba(var(--vurgu-rgb,201,168,76),0.25)", borderRadius:6, padding:"6px", color:GOLD, fontSize:9, fontWeight:700, cursor:"pointer" }}>📋 Forma Aktar (siz onaylayıp kaydedersiniz)</button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           );
         })()}
