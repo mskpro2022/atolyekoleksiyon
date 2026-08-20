@@ -4317,7 +4317,7 @@ function Atolye({ onSirketDegis }) {
               <div style={{ display:"flex", gap:3, marginBottom:10, overflowX:"auto", paddingBottom:2 }}>
                 <span style={{ fontSize:7, color:T.dim, fontWeight:700, whiteSpace:"nowrap", alignSelf:"center" }}>ETIKET:</span>
                 {etiketF && <button onClick={()=>setEtiketF("")} style={{ ...RD, padding:"2px 6px", fontSize:7 }}>Temizle</button>}
-                {tumEtiketler.map(e => <button key={e} onClick={()=>setEtiketF(e===etiketF?"":e)} style={{ background:etiketF===e?"rgba(167,139,250,0.15)":T.card, border:"1px solid", borderColor:etiketF===e?"#a78bfa":T.border, borderRadius:4, padding:"2px 6px", color:etiketF===e?"#a78bfa":"#998a6e", fontSize:7, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap" }}>#{e}</button>)}
+                {tumEtiketler.map(e => <button key={e} onClick={()=>setEtiketF(e===etiketF?"":e)} style={{ background:etiketF===e?"rgba(167,139,250,0.15)":T.card, border:"1px solid", borderColor:etiketF===e?"#a78bfa":T.border, borderRadius:4, padding:"2px 6px", color:etiketF===e?"#a78bfa":T.dim, fontSize:7, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap" }}>#{e}</button>)}
               </div>
             )}
 
@@ -4439,7 +4439,7 @@ function Atolye({ onSirketDegis }) {
                     </div>
                     <div style={{ padding:"6px 8px" }}>
                       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:2 }}>
-                        <span style={{ background:"rgba(0,0,0,0.35)", color:dur.c, padding:"1px 5px", borderRadius:3, fontSize:7, fontWeight:700 }}>{dur.l}</span>
+                        <span style={{ background:T.header, border:"1px solid "+T.border, color:dur.c, padding:"1px 5px", borderRadius:3, fontSize:7, fontWeight:700 }}>{dur.l}</span>
                         {m.kategori && <span style={{ background:"rgba(var(--vurgu-rgb),0.12)", color:GOLD, padding:"1px 5px", borderRadius:3, fontSize:7, fontWeight:600 }}>{(KATEGORILER.find(k=>k.id===m.kategori)||{l:m.kategori}).l}</span>}
                         {m.kod && m.kod.match(/[-_](R|B|Y|V?\d+)$/i) && <span style={{ background:"rgba(91,155,213,0.12)", color:"#5b9bd5", padding:"1px 5px", borderRadius:3, fontSize:7, fontWeight:700 }}>VERSİYON</span>}
                         {m.kod && <span style={{ fontSize:7, color:GOLD, fontWeight:700 }}>{m.kod}</span>}
@@ -4449,8 +4449,8 @@ function Atolye({ onSirketDegis }) {
                       </div>
                       <div style={{ fontSize:10, fontWeight:700, color:"var(--goldtext)", marginBottom:2 }}>{m.ad}</div>
                       <div style={{ display:"flex", gap:3, flexWrap:"wrap", marginBottom:2 }}>
-                        {m.gram>0 && <span style={{ fontSize:6, color:"#998a6e", background:"rgba(var(--vurgu-rgb),0.07)", padding:"1px 3px", borderRadius:2, fontWeight:600 }}>{m.gram}gr</span>}
-                        {m.refAyar && <span style={{ fontSize:6, color:"#998a6e", background:"rgba(var(--vurgu-rgb),0.07)", padding:"1px 3px", borderRadius:2, fontWeight:600 }}>{m.refAyar}</span>}
+                        {m.gram>0 && <span style={{ fontSize:6, color:T.sub, background:"rgba(var(--vurgu-rgb),0.07)", padding:"1px 3px", borderRadius:2, fontWeight:600 }}>{m.gram}gr</span>}
+                        {m.refAyar && <span style={{ fontSize:6, color:T.sub, background:"rgba(var(--vurgu-rgb),0.07)", padding:"1px 3px", borderRadius:2, fontWeight:600 }}>{m.refAyar}</span>}
                         {m.tasGram>0 && <span style={{ fontSize:6, color:"#5b9bd5", background:"rgba(91,155,213,0.08)", padding:"1px 3px", borderRadius:2, fontWeight:600 }}>
                           {m.taslar?.length>0 ? m.taslar.map(t=>t.sekil+" "+t.boyut+"×"+t.adet).join(" + ")+" = "+fN(m.tasGram,4)+"gr" : (m.tasSekil&&m.tasBoyut&&m.tasAdet ? m.tasSekil+" "+m.tasBoyut+"mm ×"+m.tasAdet+" = "+fN(m.tasGram,4)+"gr" : "Tas:"+fN(m.tasGram,4)+"gr")}
                         </span>}
@@ -4458,13 +4458,13 @@ function Atolye({ onSirketDegis }) {
                         {(m.etiketler||[]).slice(0,2).map(e => <span key={e} style={{ fontSize:6, color:"#a78bfa", background:"rgba(167,139,250,0.08)", padding:"1px 3px", borderRadius:2, fontWeight:600 }}>#{e}</span>)}
                       </div>
                       {h && (
-                        <div style={{ background:"rgba(0,0,0,0.2)", borderRadius:6, padding:"4px 6px", marginTop:2 }}>
-                          <div style={{ display:"flex", justifyContent:"space-between", fontSize:7, color:"#7a6f5a", marginBottom:1 }}>
+                        <div style={{ background:T.header, border:"1px solid "+T.border, borderRadius:6, padding:"4px 6px", marginTop:2 }}>
+                          <div style={{ display:"flex", justifyContent:"space-between", fontSize:7, color:T.sub, marginBottom:1 }}>
                             <span>Tas: {fN(h.tasHas,4)} has</span>
                             <span>Isc: {fN(h.iscilikHas,4)} has</span>
                           </div>
                           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline" }}>
-                            <span style={{ fontSize:7, color:"#998a6e" }}>{h.gumusMu ? "925 Gümüş" : "Mal: "+fN(h.topMaliyetHas,4)+" has"}</span>
+                            <span style={{ fontSize:7, color:T.sub }}>{h.gumusMu ? "925 Gümüş" : "Mal: "+fN(h.topMaliyetHas,4)+" has"}</span>
                             <span style={{ fontSize:10, fontWeight:800, color:h.gumusMu?"#c0c0c0":(h.karUyari?"#e85a4f":"#6abf69") }}>{h.gumusMu ? "$"+fN(h.gumusIscilikGr,2)+"/gr" : (h.mamulGram>0 ? fN(h.karMly||h.karHas/h.mamulGram,3)+" mly/gr" : fN(h.karHas,4)+" has")}</span>
                           </div>
                           <div style={{ display:"flex", justifyContent:"flex-end", marginTop:1 }}>
