@@ -1632,15 +1632,16 @@ function AiIsimlendir({ foto, onResult }) {
   );
 }
 
-function Modal({ open, onClose, title, children, wide }) {
+function Modal({ open, onClose, title, children, wide, T }) {
   if (!open) return null;
+  const t = T || { bg2:"#15130f", card:"linear-gradient(170deg,#1c1a15,#15130f)", border:"rgba(var(--vurgu-rgb),0.14)", text:"#e8dcc8", sub:"#998a6e", dim:"#665d4a" };
   const maxW = wide ? "min(1100px,96vw)" : "min(580px,94vw)";
   return (
     <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.72)", backdropFilter: "blur(8px)" }}>
-      <div onClick={e => e.stopPropagation()} style={{ background: "linear-gradient(170deg,#1c1a15,#15130f)", border: "1px solid rgba(var(--vurgu-rgb),0.14)", borderRadius: 18, padding: "22px 26px", width: maxW, maxHeight: "92vh", overflowY: "auto" }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: t.card, backgroundColor: t.bg2, border: "1px solid "+t.border, borderRadius: 18, padding: "22px 26px", width: maxW, maxHeight: "92vh", overflowY: "auto" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
-          <h2 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: "#e8dcc8" }}>{title}</h2>
-          <button onClick={onClose} style={{ background: "rgba(var(--vurgu-rgb),0.08)", border: "none", color: "#998a6e", width: 30, height: 30, borderRadius: 8, cursor: "pointer" }}>X</button>
+          <h2 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: t.text }}>{title}</h2>
+          <button onClick={onClose} style={{ background: "rgba(var(--vurgu-rgb),0.08)", border: "none", color: t.sub, width: 30, height: 30, borderRadius: 8, cursor: "pointer" }}>X</button>
         </div>
         {children}
       </div>
@@ -1648,14 +1649,15 @@ function Modal({ open, onClose, title, children, wide }) {
   );
 }
 
-function Fl({ label, req, children, hint }) {
+function Fl({ label, req, children, hint, T }) {
+  const t = T || { sub:"#8a7d64", dim:"#665d4a" };
   return (
     <div style={{ marginBottom: 11 }}>
-      <label style={{ display: "block", fontSize: 9, fontWeight: 700, color: "#8a7d64", marginBottom: 4, letterSpacing: ".06em", textTransform: "uppercase" }}>
+      <label style={{ display: "block", fontSize: 9, fontWeight: 700, color: t.sub, marginBottom: 4, letterSpacing: ".06em", textTransform: "uppercase" }}>
         {label}{req && <span style={{ color: GOLD }}> *</span>}
       </label>
       {children}
-      {hint && <div style={{ fontSize: 8, color: "#665d4a", marginTop: 3 }}>{hint}</div>}
+      {hint && <div style={{ fontSize: 8, color: t.dim, marginTop: 3 }}>{hint}</div>}
     </div>
   );
 }
@@ -7403,23 +7405,23 @@ ${gbOzet}`;
             <div style={{ background:T.card, border:"1px solid "+T.border, borderRadius:14, padding:"15px 16px" }}>
               <div style={{ fontSize:10, fontWeight:700, color:GOLD, marginBottom:12 }}>💰 VARSAYILAN DEGERLER</div>
               <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginBottom:8 }}>
-                <div style={{ flex:1 }}><Fl label="Altin $/kg">
+                <div style={{ flex:1 }}><Fl label="Altin $/kg" T={T}>
                   <input type="number" value={ayarVarsAltinKg} onChange={e=>setAyarVarsAltinKg(e.target.value)} placeholder="152000" style={IS}/>
                 </Fl></div>
-                <div style={{ flex:1 }}><Fl label="Uretim mly/gr">
+                <div style={{ flex:1 }}><Fl label="Uretim mly/gr" T={T}>
                   <input type="number" value={ayarVarsMc} onChange={e=>setAyarVarsMc(e.target.value)} placeholder="0.030" style={IS}/>
                 </Fl></div>
               </div>
               <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginBottom:10 }}>
                 <div style={{ flex:"0 0 130px" }}>
-                  <Fl label="Iscilik birimi">
+                  <Fl label="Iscilik birimi" T={T}>
                     <select value={ayarVarsIscilikBirim} onChange={e=>setAyarVarsIscilikBirim(e.target.value)} style={{ ...IS, padding:"8px 6px" }}>
                       <option value="dolar">$ / gr</option>
                       <option value="milyem">milyem / gr</option>
                     </select>
                   </Fl>
                 </div>
-                <div style={{ flex:1 }}><Fl label="Iscilik tutari">
+                <div style={{ flex:1 }}><Fl label="Iscilik tutari" T={T}>
                   <input type="number" value={ayarVarsIscilik} onChange={e=>setAyarVarsIscilik(e.target.value)} placeholder="2.75" style={IS}/>
                 </Fl></div>
               </div>
@@ -7690,7 +7692,7 @@ ${gbOzet}`;
 
       {/* TOPLU KOPYALA MODAL */}
       {topluKopyalaModal && (
-        <Modal open={topluKopyalaModal} onClose={()=>{ setTopluKopyalaModal(false); setTopluHedefKolId(""); }} title={"Toplu Kopyala ("+seciliModeller.size+" model)"}>
+        <Modal open={topluKopyalaModal} onClose={()=>{ setTopluKopyalaModal(false); setTopluHedefKolId(""); }} title={"Toplu Kopyala ("+seciliModeller.size+" model)"} T={T}>
           <div style={{ fontSize:9, color:"#998a6e", marginBottom:10 }}>
             Seçilen modeller hedef koleksiyona <b>aynı kodlarla</b> kopyalanacak.
           </div>
@@ -7708,7 +7710,7 @@ ${gbOzet}`;
             })}
           </div>
           {/* Hedef koleksiyon */}
-          <Fl label="Hedef Koleksiyon">
+          <Fl label="Hedef Koleksiyon" T={T}>
             <select
               value={topluHedefKolId}
               onChange={e=>setTopluHedefKolId(e.target.value)}
@@ -8048,7 +8050,7 @@ ${gbOzet}`;
 
       {/* KOPYALA MODAL */}
       {kopyalaModal && (
-        <Modal open={!!kopyalaModal} onClose={()=>setKopyalaModal(null)} title="Modeli Kopyala">
+        <Modal open={!!kopyalaModal} onClose={()=>setKopyalaModal(null)} title="Modeli Kopyala" T={T}>
           {/* Kaynak model bilgisi */}
           <div style={{ display:"flex", gap:10, alignItems:"center", marginBottom:14, padding:"8px 10px", background:"rgba(var(--vurgu-rgb),0.05)", borderRadius:8 }}>
             {kopyalaModal.model.foto && <div className="model-foto-wrap" style={{ width:64, height:64, borderRadius:6, overflow:"hidden" }}><img src={kopyalaModal.model.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"cover", objectPosition:"center center", display:"block" }}/></div>}
@@ -8060,7 +8062,7 @@ ${gbOzet}`;
           </div>
 
           {/* Hedef koleksiyon seç */}
-          <Fl label="Hangi koleksiyona kopyalansın?">
+          <Fl label="Hangi koleksiyona kopyalansın?" T={T}>
             <select value={kopyalaModal.hedefKolId} onChange={e=>setKopyalaModal(p=>({...p,hedefKolId:e.target.value}))}
               style={{ ...IS, padding:"8px 10px" }}>
               <option value="">-- Koleksiyon seçin --</option>
@@ -8126,12 +8128,12 @@ ${gbOzet}`;
 
       {/* HURDA MODAL */}
       {hurdaModal && (
-        <Modal open={!!hurdaModal} onClose={()=>setHurdaModal(null)} title="Hurda Kaydı">
+        <Modal open={!!hurdaModal} onClose={()=>setHurdaModal(null)} title="Hurda Kaydı" T={T}>
           <div style={{ fontSize:11, fontWeight:700, color:"var(--goldtext)", marginBottom:12 }}>
             {hurdaModal.kalemAd}
           </div>
           {/* Hurda adedi */}
-          <Fl label={"Hurda Adedi (max "+hurdaModal.maxAdet+")"}>
+          <Fl label={"Hurda Adedi (max "+hurdaModal.maxAdet+")"} T={T}>
             <div style={{ display:"flex", gap:8, alignItems:"center" }}>
               {Array.from({length:hurdaModal.maxAdet+1},(_,i)=>i).map(n => (
                 <button key={n} onClick={()=>setHurdaModal(p=>({...p,mevcAdet:n}))}
@@ -8142,7 +8144,7 @@ ${gbOzet}`;
             </div>
           </Fl>
           {/* Hazır neden şablonları */}
-          <Fl label="Hurda Nedeni">
+          <Fl label="Hurda Nedeni" T={T}>
             <div style={{ display:"flex", gap:5, flexWrap:"wrap", marginBottom:8 }}>
               {HURDA_NEDENLER.map(n => (
                 <button key={n} onClick={()=>setHurdaModal(p=>({...p,mevcNeden:n}))}
@@ -8180,7 +8182,7 @@ ${gbOzet}`;
 
       {/* YEDEK MODAL */}
       {/* KATALOG SIRALAMA ÖNİZLEME */}
-      <Modal open={katalogSiralaModal} onClose={()=>setKatalogSiralaModal(false)} title={"Katalog — " + (katalogKol?.ad||"")} wide>
+      <Modal open={katalogSiralaModal} onClose={()=>setKatalogSiralaModal(false)} title={"Katalog — " + (katalogKol?.ad||"")} wide T={T}>
         {/* AYAR SEÇİCİ */}
         <div style={{ display:"flex", gap:6, marginBottom:10, alignItems:"center", flexWrap:"wrap" }}>
           <span style={{ fontSize:9, color:T.sub, fontWeight:700 }}>Ayar:</span>
@@ -8461,7 +8463,7 @@ ${gbOzet}`;
         </button>
       </Modal>
 
-      <Modal open={showYedek} onClose={()=>setShowYedek(false)} title="Geri Yukle">
+      <Modal open={showYedek} onClose={()=>setShowYedek(false)} title="Geri Yukle" T={T}>
         <div style={{ fontSize:10, color:"#998a6e", marginBottom:10 }}>
           PC'ye indirdiğiniz JSON dosyasını seçin (kopyala-yapıştır gerekmez!).
         </div>
@@ -8560,7 +8562,7 @@ ${gbOzet}`;
         const tamamlandi = ["tamam","teslim"].includes(sonGec.durum);
         const sonrakiDurum = DURUMLAR[DURUMLAR.findIndex(d=>d.id===sonGec.durum)+1];
         return (
-          <Modal open={!!cizelgeModal} onClose={()=>setCizelgeModal(null)} title={"⏱ Üretim Takibi — " + (s.musteri||"")} wide>
+          <Modal open={!!cizelgeModal} onClose={()=>setCizelgeModal(null)} title={"⏱ Üretim Takibi — " + (s.musteri||"")} wide T={T}>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14, padding:"8px 12px", background:"rgba(91,155,213,0.08)", borderRadius:8 }}>
               <div>
                 <div style={{ fontSize:11, color:"#5b9bd5", fontWeight:700 }}>Sipariş: {s.musteri}</div>
@@ -8674,12 +8676,12 @@ ${gbOzet}`;
 
       {/* İADE MODAL — kalem bazlı (hurda mantığında) */}
       {iadeModal && (
-        <Modal open={!!iadeModal} onClose={()=>setIadeModal(null)} title="İade Kaydı">
+        <Modal open={!!iadeModal} onClose={()=>setIadeModal(null)} title="İade Kaydı" T={T}>
           <div style={{ fontSize:11, color:"#a78bfa", fontWeight:700, marginBottom:10, padding:"6px 10px", background:"rgba(167,139,250,0.08)", borderRadius:6 }}>
             {iadeModal.kalemKod && <span style={{ color:GOLD, marginRight:6 }}>{iadeModal.kalemKod}</span>}{iadeModal.kalemAd}
           </div>
           
-          <Fl label="İade Türü">
+          <Fl label="İade Türü" T={T}>
             <div style={{ display:"flex", gap:6 }}>
               <button onClick={()=>setIadeModal(p=>({...p, iadeTuru:"para"}))} style={{
                 flex:1, padding:"7px", border:"1px solid "+(iadeModal.iadeTuru==="para"?"#a78bfa":"rgba(255,255,255,0.1)"),
@@ -8694,7 +8696,7 @@ ${gbOzet}`;
             </div>
           </Fl>
 
-          <Fl label={"İade Adedi (max "+iadeModal.maxAdet+")"}>
+          <Fl label={"İade Adedi (max "+iadeModal.maxAdet+")"} T={T}>
             <div style={{ display:"flex", gap:4, flexWrap:"wrap" }}>
               {Array.from({length:iadeModal.maxAdet+1},(_,i)=>i).map(n => (
                 <button key={n} onClick={()=>setIadeModal(p=>({...p,mevcAdet:n}))}
@@ -8705,7 +8707,7 @@ ${gbOzet}`;
             </div>
           </Fl>
 
-          <Fl label="İade Nedeni (opsiyonel)">
+          <Fl label="İade Nedeni (opsiyonel)" T={T}>
             <textarea value={iadeModal.mevcNeden||""} onChange={e=>setIadeModal(p=>({...p, mevcNeden:e.target.value}))}
               placeholder="Örnek: Müşteri taşı beğenmedi, boyut uymadı, vb."
               style={{ ...IS, padding:"7px 10px", fontSize:11, minHeight:50, resize:"vertical" }}/>
@@ -8739,12 +8741,12 @@ ${gbOzet}`;
 
       {/* TAMİR MODAL */}
       {tamirModal && (
-        <Modal open={!!tamirModal} onClose={()=>setTamirModal(null)} title="Tamir Kaydı">
+        <Modal open={!!tamirModal} onClose={()=>setTamirModal(null)} title="Tamir Kaydı" T={T}>
           <div style={{ fontSize:11, color:"#5b9bd5", fontWeight:700, marginBottom:10, padding:"6px 10px", background:"rgba(91,155,213,0.08)", borderRadius:6 }}>
             {tamirModal.kalemKod && <span style={{ color:GOLD, marginRight:6 }}>{tamirModal.kalemKod}</span>}{tamirModal.kalemAd}
           </div>
 
-          <Fl label={"Tamir Adedi (max "+tamirModal.maxAdet+")"}>
+          <Fl label={"Tamir Adedi (max "+tamirModal.maxAdet+")"} T={T}>
             <div style={{ display:"flex", gap:4, flexWrap:"wrap" }}>
               {Array.from({length:tamirModal.maxAdet+1},(_,i)=>i).map(n => (
                 <button key={n} onClick={()=>setTamirModal(p=>({...p,mevcAdet:n}))}
@@ -8755,7 +8757,7 @@ ${gbOzet}`;
             </div>
           </Fl>
 
-          <Fl label="Tamir Açıklaması (opsiyonel)">
+          <Fl label="Tamir Açıklaması (opsiyonel)" T={T}>
             <textarea value={tamirModal.mevcNeden||""} onChange={e=>setTamirModal(p=>({...p, mevcNeden:e.target.value}))}
               placeholder="Örnek: Taş düştü, kopça gevşek, boyut değişikliği vb."
               style={{ ...IS, padding:"7px 10px", fontSize:11, minHeight:50, resize:"vertical" }}/>
@@ -8785,13 +8787,13 @@ ${gbOzet}`;
       )}
 
       {/* MANUEL TARİH DÜZENLEME MODAL */}
-      <Modal open={!!manuelTarihModal} onClose={()=>setManuelTarihModal(null)} title="Aşama Tarihini Düzenle">
+      <Modal open={!!manuelTarihModal} onClose={()=>setManuelTarihModal(null)} title="Aşama Tarihini Düzenle" T={T}>
         {manuelTarihModal && (
           <>
             <div style={{ fontSize:11, color:"#998a6e", marginBottom:14, padding:"8px 10px", background:"rgba(91,155,213,0.05)", borderRadius:8 }}>
               <b style={{ color:"#5b9bd5" }}>{manuelTarihModal.durumL}</b> aşamasının başlangıç tarihini değiştirebilirsiniz. Geçmişte unuttuğunuz siparişler için kullanın.
             </div>
-            <Fl label="Tarih ve Saat">
+            <Fl label="Tarih ve Saat" T={T}>
               <input type="datetime-local" value={manuelTarihModal.tarih}
                 onChange={e=>setManuelTarihModal(p=>({...p, tarih:e.target.value}))}
                 style={{ ...IS, padding:"8px 10px", fontSize:13 }}/>
@@ -8823,7 +8825,7 @@ ${gbOzet}`;
       </Modal>
 
       {/* KOLEKSİYONLARI HİZALA MODAL */}
-      <Modal open={hizalaModal} onClose={()=>setHizalaModal(false)} title="Koleksiyonları Hizala" wide>
+      <Modal open={hizalaModal} onClose={()=>setHizalaModal(false)} title="Koleksiyonları Hizala" wide T={T}>
         <div style={{ fontSize:10, color:"#998a6e", marginBottom:10 }}>
           Koleksiyonların ana sayfada hangi sırayla görüneceğini belirleyin.
         </div>
@@ -8949,10 +8951,10 @@ ${gbOzet}`;
         <button onClick={()=>setHizalaModal(false)} style={{ ...BG, width:"100%", marginTop:12 }}>Tamam</button>
       </Modal>
 
-      <Modal open={showKM} onClose={()=>{setShowKM(false);setEditK(null);}} title={editK?"Koleksiyonu Duzenle":"Yeni Koleksiyon"}>
-        <Fl label="Koleksiyon Adi" req><input value={fkAd} onChange={e=>setFkAd(e.target.value)} placeholder="2025 Nisan Serisi" style={IS}/></Fl>
-        <Fl label="Kod Oneki" hint={(fkOn||"XX")+"-001 girilince otomatik eslesir"}><input value={fkOn} onChange={e=>setFkOn(e.target.value.toUpperCase())} placeholder="NS" style={IS}/></Fl>
-        <Fl label="Aciklama"><textarea value={fkAc} onChange={e=>setFkAc(e.target.value)} rows={2} style={{ ...IS, resize:"vertical" }}/></Fl>
+      <Modal open={showKM} onClose={()=>{setShowKM(false);setEditK(null);}} title={editK?"Koleksiyonu Duzenle":"Yeni Koleksiyon"} T={T}>
+        <Fl label="Koleksiyon Adi" req T={T}><input value={fkAd} onChange={e=>setFkAd(e.target.value)} placeholder="2025 Nisan Serisi" style={IS}/></Fl>
+        <Fl label="Kod Oneki" hint={(fkOn||"XX")+"-001 girilince otomatik eslesir"} T={T}><input value={fkOn} onChange={e=>setFkOn(e.target.value.toUpperCase())} placeholder="NS" style={IS}/></Fl>
+        <Fl label="Aciklama" T={T}><textarea value={fkAc} onChange={e=>setFkAc(e.target.value)} rows={2} style={{ ...IS, resize:"vertical" }}/></Fl>
         <button onClick={saveKol} disabled={!fkAd.trim()} style={{ ...BG, width:"100%", opacity:fkAd.trim()?1:0.4 }}>{editK?"Kaydet":"Olustur"}</button>
       </Modal>
 
@@ -8964,7 +8966,7 @@ ${gbOzet}`;
       )}
 
       {/* MODEL MODAL */}
-      <Modal open={showMM} onClose={()=>{setShowMM(false);setEditM(null);}} title={editM?"Modeli Duzenle":"Yeni Model"}>
+      <Modal open={showMM} onClose={()=>{setShowMM(false);setEditM(null);}} title={editM?"Modeli Duzenle":"Yeni Model"} T={T}>
         {/* DÜZENLEMEDE: büyük foto (tıklayınca değiştir) + 3 ayar gram tablosu */}
         {editM && (
           <div style={{ marginBottom:12 }}>
@@ -9048,11 +9050,11 @@ ${gbOzet}`;
 
         <div style={{ display:"flex", gap:7 }}>
           <div style={{ flex:1 }}>
-            <Fl label="Urun Kodu" req>
+            <Fl label="Urun Kodu" req T={T}>
               <input value={fKod} onChange={e=>handleKod(e.target.value)} placeholder="NS-001" style={{ ...IS, borderColor: kodKontrol?.tip==="tekrar" ? "rgba(232,90,79,0.4)" : "rgba(var(--vurgu-rgb),0.12)" }}/>
             </Fl>
           </div>
-          <div style={{ flex:1 }}><Fl label="Koleksiyon"><select value={fKolId} onChange={e=>setFKolId(e.target.value)} style={IS}><option value="">-- Sec --</option>{kollar.map(k=><option key={k.id} value={k.id}>{k.on?"["+k.on+"] ":""}{k.ad}</option>)}</select></Fl></div>
+          <div style={{ flex:1 }}><Fl label="Koleksiyon" T={T}><select value={fKolId} onChange={e=>setFKolId(e.target.value)} style={IS}><option value="">-- Sec --</option>{kollar.map(k=><option key={k.id} value={k.id}>{k.on?"["+k.on+"] ":""}{k.ad}</option>)}</select></Fl></div>
         </div>
 
         {/* Kod uyarısı */}
@@ -9129,7 +9131,7 @@ ${gbOzet}`;
 
         {fKod&&kodToKol(fKod)&&<div style={{ fontSize:8, color:"#6abf69", fontWeight:600, marginTop:-6, marginBottom:6 }}>{"Otomatik: "+kodToKol(fKod).ad}</div>}
 
-        <Fl label="Kategori" req>
+        <Fl label="Kategori" req T={T}>
           <div style={{ display:"flex", gap:5, flexWrap:"wrap" }}>
             {ayarKategoriler.map(k => (
               <button key={k} onClick={() => setFKategori(k)} style={{ background: fKategori===k ? "rgba(var(--vurgu-rgb),0.2)" : "rgba(var(--vurgu-rgb),0.04)", border: "1px solid", borderColor: fKategori===k ? "rgba(var(--vurgu-rgb),0.4)" : "rgba(var(--vurgu-rgb),0.1)", borderRadius: 7, padding: "5px 10px", color: fKategori===k ? GOLD : "#998a6e", fontSize: 11, fontWeight: fKategori===k ? 700 : 400, cursor: "pointer" }}>{k.charAt(0).toUpperCase()+k.slice(1)}</button>
@@ -9137,11 +9139,11 @@ ${gbOzet}`;
           </div>
         </Fl>
         {/* Model Adı kaldırıldı — kod artık tek zorunlu/görünen kimlik alanı. Eski modellerdeki isimler korunur (fAd arka planda yükleniyor). */}
-        <Fl label="Uretim Durumu"><select value={fDurum} onChange={e=>setFDurum(e.target.value)} style={IS}>{DURUMLAR.map(d=><option key={d.id} value={d.id}>{d.l}</option>)}</select></Fl>
+        <Fl label="Uretim Durumu" T={T}><select value={fDurum} onChange={e=>setFDurum(e.target.value)} style={IS}>{DURUMLAR.map(d=><option key={d.id} value={d.id}>{d.l}</option>)}</select></Fl>
 
         <div style={{ display:"flex", gap:7 }}>
-          <div style={{ flex:1 }}><Fl label="Gram (Ref Ayarda)"><input type="number" value={fGram} onChange={e=>setFGram(e.target.value)} placeholder="0.00" style={IS}/></Fl></div>
-          <div style={{ flex:1 }}><Fl label="Ref Ayar"><select value={fRefAyar} onChange={e=>setFRefAyar(e.target.value)} style={IS}>{AYARLAR.map(a=><option key={a.id} value={a.id}>{a.l}</option>)}</select></Fl></div>
+          <div style={{ flex:1 }}><Fl label="Gram (Ref Ayarda)" T={T}><input type="number" value={fGram} onChange={e=>setFGram(e.target.value)} placeholder="0.00" style={IS}/></Fl></div>
+          <div style={{ flex:1 }}><Fl label="Ref Ayar" T={T}><select value={fRefAyar} onChange={e=>setFRefAyar(e.target.value)} style={IS}>{AYARLAR.map(a=><option key={a.id} value={a.id}>{a.l}</option>)}</select></Fl></div>
         </div>
 
         <div style={{ background:"rgba(91,155,213,0.04)", border:"1px solid rgba(91,155,213,0.1)", borderRadius:10, padding:"10px 12px", marginBottom:10 }}>
@@ -9253,7 +9255,7 @@ ${gbOzet}`;
 
           {/* Manuel gram — tablo dışı */}
           <div style={{ marginTop:8, borderTop:"1px solid rgba(91,155,213,0.08)", paddingTop:8 }}>
-            <Fl label="Manuel Toplam Tas Gram (tablo disiysa)">
+            <Fl label="Manuel Toplam Tas Gram (tablo disiysa)" T={T}>
               <input type="number" value={fTasGram} onChange={e=>setFTasGram(e.target.value)} placeholder="0.00" style={IS}/>
             </Fl>
           </div>
@@ -9262,14 +9264,14 @@ ${gbOzet}`;
         <div style={{ background:"rgba(232,90,79,0.04)", border:"1px solid rgba(232,90,79,0.1)", borderRadius:10, padding:"10px 12px", marginBottom:10 }}>
           <div style={{ fontSize:9, fontWeight:700, color:"#e85a4f", marginBottom:8 }}>MALIYET</div>
           <div style={{ display:"flex", gap:7 }}>
-            <div style={{ flex:1 }}><Fl label={"Uretim mly/gr (varsayilan: "+madenCarpan+")"}><input type="number" value={fMadenC} onChange={e=>setFMadenC(e.target.value)} placeholder={String(madenCarpan)} style={IS}/></Fl></div>
-            <div style={{ flex:1 }}><Fl label="Ek Maliyet ($) - Rodaj, kalem"><input type="number" value={fEkMaliyet} onChange={e=>setFEkMaliyet(e.target.value)} placeholder="0" style={IS}/></Fl></div>
+            <div style={{ flex:1 }}><Fl label={"Uretim mly/gr (varsayilan: "+madenCarpan+")"} T={T}><input type="number" value={fMadenC} onChange={e=>setFMadenC(e.target.value)} placeholder={String(madenCarpan)} style={IS}/></Fl></div>
+            <div style={{ flex:1 }}><Fl label="Ek Maliyet ($) - Rodaj, kalem" T={T}><input type="number" value={fEkMaliyet} onChange={e=>setFEkMaliyet(e.target.value)} placeholder="0" style={IS}/></Fl></div>
           </div>
         </div>
 
         <div style={{ background:"rgba(232,131,58,0.04)", border:"1px solid rgba(232,131,58,0.1)", borderRadius:10, padding:"10px 12px", marginBottom:10 }}>
           <div style={{ fontSize:9, fontWeight:700, color:"#e8833a", marginBottom:8 }}>ISCILIK</div>
-          <Fl label="Iscilik birim ve tutar (varsayilan)" hint={fGram&&fIscilikDolar ? (fIscilikBirim==="milyem" ? fN(Number(fGram))+" x "+fN(Number(fIscilikDolar),3)+" mly = "+fN(Number(fGram)*Number(fIscilikDolar),3)+" has" : fN(Number(fGram))+" x "+fUSD(Number(fIscilikDolar))+" = "+fUSD(Number(fGram)*Number(fIscilikDolar))) : ""}>
+          <Fl label="Iscilik birim ve tutar (varsayilan)" hint={fGram&&fIscilikDolar ? (fIscilikBirim==="milyem" ? fN(Number(fGram))+" x "+fN(Number(fIscilikDolar),3)+" mly = "+fN(Number(fGram)*Number(fIscilikDolar),3)+" has" : fN(Number(fGram))+" x "+fUSD(Number(fIscilikDolar))+" = "+fUSD(Number(fGram)*Number(fIscilikDolar))) : ""} T={T}>
             <div style={{ display:"flex", gap:6 }}>
               <select value={fIscilikBirim} onChange={e=>setFIscilikBirim(e.target.value)} style={{ ...IS, width:130, padding:"8px 6px", fontSize:11, flexShrink:0 }}>
                 <option value="dolar">$ / gr</option>
@@ -9320,7 +9322,7 @@ ${gbOzet}`;
           </div>
         </div>
 
-        <Fl label="Aciklama"><textarea value={fAc} onChange={e=>setFAc(e.target.value)} placeholder="Detaylar..." rows={2} style={{ ...IS, resize:"vertical" }}/></Fl>
+        <Fl label="Aciklama" T={T}><textarea value={fAc} onChange={e=>setFAc(e.target.value)} placeholder="Detaylar..." rows={2} style={{ ...IS, resize:"vertical" }}/></Fl>
 
         {/* MÜŞTERİ GİZLEME — sadece mevcut modeli düzenlerken */}
         {editM && Object.keys(musteriler).length > 0 && (
@@ -9354,7 +9356,7 @@ ${gbOzet}`;
       </Modal>
 
       {/* SİLME ONAY */}
-      <Modal open={!!delOnay} onClose={()=>setDelOnay(null)} title="Silme Onayi">
+      <Modal open={!!delOnay} onClose={()=>setDelOnay(null)} title="Silme Onayi" T={T}>
         <p style={{ color:"#998a6e", fontSize:13, marginBottom:18 }}>Bu ogeyi silmek istediginize emin misiniz?</p>
         <div style={{ display:"flex", gap:10 }}>
           <button onClick={()=>setDelOnay(null)} style={{ ...GH, flex:1 }}>Iptal</button>
