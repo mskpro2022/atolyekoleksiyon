@@ -1887,6 +1887,7 @@ function VitrinModu({ kod, onizleme }) {
   });
   useEffect(() => { try { localStorage.setItem("vitrin_isik", vitrinIsik); } catch {} }, [vitrinIsik]);
   const [zumNokta, setZumNokta] = useState(null); // detay noktası yakınlaştırma (bileklik kilit/zincir)
+  const dokunmaBasX = useRef(null); // detay ekranında sağa/sola kaydırma takibi
   useEffect(() => { setZumNokta(null); }, [detayModel?.id]); // farklı model açılınca zoom sıfırlansın
   const VITRIN_AYARLAR = [
     { id: "10K", l: "10 Ayar" },
@@ -2095,6 +2096,17 @@ function VitrinModu({ kod, onizleme }) {
     ? tumGruplar.reduce((acc, g) => acc.concat(g.liste.map(m => ({ ...m, kaynakAd: g.kol.ad }))), [])
     : modeller.filter(m => m.ki === aktifKol?.id && filtreGec(m)).sort(modelSirala)
         .map(m => ({ ...m, kaynakAd: aktifKol?.ad || "" })); // eski kaynak klasörü gruplaması devre dışı
+
+  // Detay ekranında sağ/sol ile bir sonraki/önceki modele geçiş — o an görünen (koldaki) sıraya göre
+  const detayKomsu = (yon) => {
+    if (!detayModel) return;
+    const idx = koldaki.findIndex(m => m.id === detayModel.id);
+    if (idx === -1) return;
+    const yeniIdx = idx + yon;
+    if (yeniIdx < 0 || yeniIdx >= koldaki.length) return;
+    setDetayModel(koldaki[yeniIdx]);
+    setZumNokta(null); // farklı modele geçince açık kalan yakınlaştırmayı kapat
+  };
   // Elle seçilen modeller — koleksiyon sırasına göre dizilir (PDF'te gruplu çıksın)
   const seciliModeller = kollarSirali.reduce((acc, k) => acc.concat(
     modeller.filter(m => m.ki === k.id && secili.has(m.id)).sort(modelSirala).map(m => ({ ...m, kaynakAd: k.ad }))
@@ -2498,10 +2510,24 @@ function VitrinModu({ kod, onizleme }) {
       )}
 
       {/* DETAY */}
-      {detayModel && (
+      {detayModel && (() => {
+        const dIdx = koldaki.findIndex(m => m.id === detayModel.id);
+        const dToplam = koldaki.length;
+        return (
         <div onClick={()=>setDetayModel(null)} style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.7)", zIndex:100, display:"flex", alignItems:"center", justifyContent:"center", padding:20, backdropFilter:"blur(20px)" }}>
-          <div onClick={e=>e.stopPropagation()} style={{ background:"var(--vcard)", borderRadius:18, maxWidth:560, width:"100%", maxHeight:"90vh", overflow:"auto", position:"relative" }}>
+          <div onClick={e=>e.stopPropagation()}
+            onTouchStart={e=>{ dokunmaBasX.current = e.touches[0].clientX; }}
+            onTouchEnd={e=>{
+              if (dokunmaBasX.current === null) return;
+              const fark = e.changedTouches[0].clientX - dokunmaBasX.current;
+              if (Math.abs(fark) > 55) detayKomsu(fark > 0 ? -1 : 1); // sağa kaydır = önceki, sola kaydır = sonraki
+              dokunmaBasX.current = null;
+            }}
+            style={{ background:"var(--vcard)", borderRadius:18, maxWidth:560, width:"100%", maxHeight:"90vh", overflow:"auto", position:"relative", touchAction:"pan-y" }}>
             <button onClick={()=>setDetayModel(null)} style={{ position:"absolute", top:14, right:14, zIndex:5, width:30, height:30, borderRadius:"50%", background:"rgba(120,120,128,0.5)", border:"none", color:"#fff", fontSize:15, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}>✕</button>
+            {dIdx > 0 && <button onClick={()=>detayKomsu(-1)} title="Önceki" style={{ position:"absolute", top:"38%", left:10, zIndex:5, width:36, height:36, borderRadius:"50%", background:"rgba(120,120,128,0.5)", border:"none", color:"#fff", fontSize:18, fontWeight:700, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}>‹</button>}
+            {dIdx < dToplam-1 && <button onClick={()=>detayKomsu(1)} title="Sonraki" style={{ position:"absolute", top:"38%", right:10, zIndex:5, width:36, height:36, borderRadius:"50%", background:"rgba(120,120,128,0.5)", border:"none", color:"#fff", fontSize:18, fontWeight:700, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}>›</button>}
+            {dToplam > 1 && <div style={{ position:"absolute", top:14, left:14, zIndex:5, background:"rgba(120,120,128,0.5)", color:"#fff", fontSize:10, fontWeight:700, padding:"4px 9px", borderRadius:980 }}>{dIdx+1} / {dToplam}</div>}
             <div style={{ aspectRatio:"4/3", background:"#f7f7f8", display:"flex", alignItems:"center", justifyContent:"center", overflow:"hidden", position:"relative" }}>
               {detayModel.foto ? <img src={detayModel.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"contain" }}/> : <div style={{ fontSize:50, color:"#d2d2d7" }}>◇</div>}
               {/* ═══ DETAY LENSLERİ — kırpma (aynı foto) veya ayrı yüklenen foto, tam noktada yüzer ═══ */}
@@ -2594,7 +2620,8 @@ function VitrinModu({ kod, onizleme }) {
             </div>
           </div>
         </div>
-      )}
+        );
+      })()}
     </div>
   );
 }
@@ -3693,6 +3720,26 @@ function Atolye({ onSirketDegis }) {
     else r=[...r].sort((a,b)=>(b.t||0)-(a.t||0)); // VARSAYILAN: en son eklenen üstte
     return r;
   }, [aktMod, filtre, etiketF, kategoriF, onEkF, arama, sirala, altinKgUSD, madenCarpan, kollar]);
+
+  // Düzenleme modalında sağ/sol ok ile bir sonraki/önceki modele geçiş — ekranda o an gösterilen (gorunen) sıraya göre
+  const editKomsu = (yon) => {
+    if (!editM) return;
+    const idx = gorunen.findIndex(m => m.id === editM.id);
+    if (idx === -1) return;
+    const yeniIdx = idx + yon;
+    if (yeniIdx < 0 || yeniIdx >= gorunen.length) return;
+    openEM(gorunen[yeniIdx]);
+  };
+  useEffect(() => {
+    if (!showMM || !editM) return;
+    const dinle = (e) => {
+      if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA" || e.target.tagName === "SELECT") return;
+      if (e.key === "ArrowLeft") editKomsu(-1);
+      else if (e.key === "ArrowRight") editKomsu(1);
+    };
+    window.addEventListener("keydown", dinle);
+    return () => window.removeEventListener("keydown", dinle);
+  }, [showMM, editM, gorunen]);
 
   const togKonf     = m => setKonfList(p => p.find(x => x.id === m.id) ? p.filter(x => x.id !== m.id) : [...p, m]);
   const konfAyarSec  = (id, ayar) => setKonfAyarlar(p => ({ ...p, [id]: ayar }));
@@ -8964,6 +9011,20 @@ ${gbOzet}`;
           onCancel={()=>setKirpModal(null)}
           onConfirm={(sonuc)=>{ setFFoto(sonuc); setKirpModal(null); }}/>
       )}
+
+      {/* MODEL MODAL — SOL/SAĞ GEZİNME OKLARI (sadece düzenlerken, ekrandaki sıraya göre) */}
+      {showMM && editM && (() => {
+        const idx = gorunen.findIndex(m => m.id === editM.id);
+        if (idx === -1) return null;
+        const okStil = (aktif) => ({ position:"fixed", top:"50%", transform:"translateY(-50%)", width:46, height:46, borderRadius:"50%", background:T.card, border:"1px solid "+T.border, color:aktif?T.gold:T.dim, fontSize:20, fontWeight:700, cursor:aktif?"pointer":"default", opacity:aktif?1:0.35, zIndex:1001, display:"flex", alignItems:"center", justifyContent:"center" });
+        return (
+          <>
+            <button onClick={()=>editKomsu(-1)} disabled={idx<=0} title="Önceki model" style={{ ...okStil(idx>0), left:14 }}>‹</button>
+            <button onClick={()=>editKomsu(1)} disabled={idx>=gorunen.length-1} title="Sonraki model" style={{ ...okStil(idx<gorunen.length-1), right:14 }}>›</button>
+            <div style={{ position:"fixed", top:"calc(50% + 40px)", left:"50%", transform:"translateX(-50%)", zIndex:1001, fontSize:9, color:T.dim, background:T.card, border:"1px solid "+T.border, borderRadius:8, padding:"3px 9px" }}>{idx+1} / {gorunen.length}</div>
+          </>
+        );
+      })()}
 
       {/* MODEL MODAL */}
       <Modal open={showMM} onClose={()=>{setShowMM(false);setEditM(null);}} title={editM?"Modeli Duzenle":"Yeni Model"} T={T}>
