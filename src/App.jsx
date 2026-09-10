@@ -4449,7 +4449,7 @@ function Atolye({ onSirketDegis }) {
                       <div style={{ height:2, background:"rgba(var(--vurgu-rgb),0.07)", borderRadius:1, overflow:"hidden", marginBottom:3 }}>
                         <div style={{ height:"100%", width:(dur.s/9*100)+"%", background:dur.c, borderRadius:1 }} />
                       </div>
-                      <div style={{ fontSize:10, fontWeight:700, color:"var(--goldtext)", marginBottom:2 }}>{m.ad}</div>
+                      <div style={{ fontSize:10, fontWeight:700, color:"var(--goldtext)", marginBottom:2 }}>{m.ac || m.ad}</div>
                       <div style={{ display:"flex", gap:3, flexWrap:"wrap", marginBottom:2 }}>
                         {m.gram>0 && <span style={{ fontSize:6, color:T.sub, background:"rgba(var(--vurgu-rgb),0.07)", padding:"1px 3px", borderRadius:2, fontWeight:600 }}>{m.gram}gr</span>}
                         {m.refAyar && <span style={{ fontSize:6, color:T.sub, background:"rgba(var(--vurgu-rgb),0.07)", padding:"1px 3px", borderRadius:2, fontWeight:600 }}>{m.refAyar}</span>}
