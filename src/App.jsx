@@ -2443,7 +2443,7 @@ function VitrinModu({ kod, onizleme }) {
               <div style={{ display:"flex", alignItems:"baseline", gap:10, margin:"0 0 14px", paddingBottom:9, borderBottom:"0.5px solid rgba(var(--voverlay-rgb),0.10)", flexWrap:"wrap" }}>
                 <span onClick={()=>kolAc(kol)} style={{ fontSize:19, fontWeight:600, color:"var(--vt1)", letterSpacing:"-0.02em", cursor:"pointer" }}>{kol.ad}</span>
                 <span style={{ fontSize:12, color:"var(--vt2)" }}>{liste.length} model</span>
-                {yeniSay > 0 && <span style={{ fontSize:11, color:"#fff", background:"var(--vurgu)", padding:"3px 10px", borderRadius:980, fontWeight:700 }}>{yeniSay} yeni</span>}
+                {yeniSay > 0 && <span style={{ fontSize:11, color:"#1d1d1f", background:"var(--vurgu)", padding:"3px 10px", borderRadius:980, fontWeight:700 }}>{yeniSay} yeni</span>}
               </div>
               <div style={modelGridStil}>{liste.map(vKart)}</div>
             </div>
@@ -2583,9 +2583,9 @@ function VitrinModu({ kod, onizleme }) {
                   const gg = gramDonustur(Number(detayModel.gram)||0, detayModel.refAyar||"14K", a.id, Number(detayModel.tasGram)||0);
                   const on = a.id === aktifAyar;
                   return (
-                    <div key={a.id} style={{ background: on?"rgba(var(--vurgu-rgb),0.14)":"rgba(var(--voverlay-rgb),0.05)", borderRadius:11, padding:"14px 10px", textAlign:"center" }}>
-                      <div style={{ fontSize:11, color: on?"var(--vurgu)":"var(--vt2)", fontWeight:500 }}>{a.id.replace("K","")} Ayar</div>
-                      <div style={{ fontSize:20, fontWeight:500, color: on?"var(--vurgu)":"var(--vt1)", marginTop:4, letterSpacing:"-0.02em" }}>{gg > 0 ? gg.toFixed(2) : "—"}</div>
+                    <div key={a.id} style={{ background: on?"rgba(var(--vurgu-rgb),0.14)":"rgba(var(--voverlay-rgb),0.05)", border: on?"1px solid rgba(var(--vurgu-rgb),0.4)":"1px solid transparent", borderRadius:11, padding:"14px 10px", textAlign:"center" }}>
+                      <div style={{ fontSize:11, color:"var(--vt2)", fontWeight: on?700:500 }}>{a.id.replace("K","")} Ayar</div>
+                      <div style={{ fontSize:20, fontWeight: on?700:500, color:"var(--vt1)", marginTop:4, letterSpacing:"-0.02em" }}>{gg > 0 ? gg.toFixed(2) : "—"}</div>
                       <div style={{ fontSize:10, color:"var(--vt3)" }}>gram</div>
                     </div>
                   );
@@ -2915,6 +2915,12 @@ function Atolye({ onSirketDegis }) {
     return { left: ((ofX + cx*gW) / r.width * 100) + "%", top: ((ofY + cy*gH) / r.height * 100) + "%" };
   };
   const [fKolId,       setFKolId]      = useState("");
+  // SET MODU — iki mevcut ürünü (yüzük+kolye vs.) seçili koleksiyona birlikte kopyalamak için
+  const [fSetModu,      setFSetModu]   = useState(false);
+  const [fSetKod1,      setFSetKod1]   = useState("");
+  const [fSetKod2,      setFSetKod2]   = useState("");
+  const [fSetM1,        setFSetM1]     = useState(null);
+  const [fSetM2,        setFSetM2]     = useState(null);
   const [fDurum,       setFDurum]      = useState("baslanmadi");
   const [fEtiketler,   setFEtiketler]  = useState([]);
   const [fDetayNoktalari, setFDetayNoktalari] = useState([]); // bileklik: [{id,etiket,x,y}] — kilit/zincir yakın çekim noktaları
@@ -3487,7 +3493,7 @@ function Atolye({ onSirketDegis }) {
   }, [kollar]);
 
   const rkf = () => { setFkAd(""); setFkAc(""); setFkOn(""); };
-  const rmf = () => { setFAd(""); setFKod(""); setFGram(""); setFRefAyar("14K"); setFTasGram(""); setFTasBoy(""); setFTaslar([]); setFTasSekil("ROUND"); setFTasTur("N"); setFTasBoyut(""); setFTasAdet(""); setFTasOzelIsim(""); setFMadenC(""); setFIscilikDolar(""); setFIscilikBirim("dolar"); setFIscilikAyarlar({}); setFEkMaliyet(""); setFKategori("yuzuk"); setFSetKodu(""); setFAc(""); setFFoto(""); setFKolId(""); setFDurum("baslanmadi"); setFEtiketler([]); setFYeniEtiket(""); setFDetayNoktalari([]); setFDetayAcik(false); };
+  const rmf = () => { setFAd(""); setFKod(""); setFGram(""); setFRefAyar("14K"); setFTasGram(""); setFTasBoy(""); setFTaslar([]); setFTasSekil("ROUND"); setFTasTur("N"); setFTasBoyut(""); setFTasAdet(""); setFTasOzelIsim(""); setFMadenC(""); setFIscilikDolar(""); setFIscilikBirim("dolar"); setFIscilikAyarlar({}); setFEkMaliyet(""); setFKategori("yuzuk"); setFSetKodu(""); setFAc(""); setFFoto(""); setFKolId(""); setFDurum("baslanmadi"); setFEtiketler([]); setFYeniEtiket(""); setFDetayNoktalari([]); setFDetayAcik(false); setFSetModu(false); setFSetKod1(""); setFSetKod2(""); setFSetM1(null); setFSetM2(null); };
 
   const saveKol = () => {
     if (!fkAd.trim()) return;
@@ -8173,6 +8179,7 @@ ${gbOzet}`;
         </Modal>
       )}
 
+
       {/* HURDA MODAL */}
       {hurdaModal && (
         <Modal open={!!hurdaModal} onClose={()=>setHurdaModal(null)} title="Hurda Kaydı" T={T}>
@@ -9109,6 +9116,15 @@ ${gbOzet}`;
           </div>
         )}
 
+        {!editM && (
+          <button type="button" onClick={()=>setFSetModu(v=>!v)}
+            style={{ display:"flex", alignItems:"center", gap:8, background: fSetModu?"rgba(64,200,192,0.12)":"rgba(255,255,255,0.04)", border:"1px solid "+(fSetModu?"rgba(64,200,192,0.4)":T.border), borderRadius:10, padding:"9px 12px", marginBottom:10, cursor:"pointer", width:"100%" }}>
+            <span style={{ width:34, height:19, borderRadius:980, background: fSetModu?"#40c8c0":"rgba(255,255,255,0.15)", position:"relative", flexShrink:0, transition:"background .15s" }}>
+              <span style={{ position:"absolute", top:2, left: fSetModu?17:2, width:15, height:15, borderRadius:"50%", background:"#fff", transition:"left .15s" }}/>
+            </span>
+            <span style={{ fontSize:11, fontWeight:700, color: fSetModu?"#40c8c0":T.sub }}>🔗 Bu bir SET (2 mevcut ürünü birlikte kopyala)</span>
+          </button>
+        )}
         <div style={{ display:"flex", gap:7 }}>
           <div style={{ flex:1 }}>
             <Fl label="Urun Kodu" req T={T}>
@@ -9117,6 +9133,63 @@ ${gbOzet}`;
           </div>
           <div style={{ flex:1 }}><Fl label="Koleksiyon" T={T}><select value={fKolId} onChange={e=>setFKolId(e.target.value)} style={IS}><option value="">-- Sec --</option>{kollar.map(k=><option key={k.id} value={k.id}>{k.on?"["+k.on+"] ":""}{k.ad}</option>)}</select></Fl></div>
         </div>
+
+        {fSetModu && (
+          <div style={{ background:"rgba(64,200,192,0.05)", border:"1px solid rgba(64,200,192,0.2)", borderRadius:12, padding:"12px 14px", marginBottom:12 }}>
+            <div style={{ fontSize:9, color:T.sub, marginBottom:10 }}>Setin iki parçasının kodunu girin — gram, taş, fiyat bilgisi mevcut kayıttan otomatik gelir. Hedef koleksiyon yukarıdaki "Koleksiyon" alanından seçilir.</div>
+            {[1,2].map(n => {
+              const kodAlan = n===1 ? fSetKod1 : fSetKod2;
+              const secili = n===1 ? fSetM1 : fSetM2;
+              const kodSec = (v) => { if(n===1){ setFSetKod1(v); setFSetM1(modeller.find(m=>m.kod.toUpperCase()===v.trim().toUpperCase())||null);} else { setFSetKod2(v); setFSetM2(modeller.find(m=>m.kod.toUpperCase()===v.trim().toUpperCase())||null);} };
+              const eslesenler = kodAlan.trim().length>0 && !secili ? modeller.filter(m=>(m.kod||"").toUpperCase().includes(kodAlan.trim().toUpperCase())).slice(0,6) : [];
+              return (
+                <div key={n} style={{ marginBottom:10 }}>
+                  <Fl label={"Ürün "+n+" kodu"} T={T}>
+                    <input value={kodAlan} onChange={e=>kodSec(e.target.value)} placeholder="Örn: NS-001" style={IS}/>
+                  </Fl>
+                  {eslesenler.length>0 && (
+                    <div style={{ background:T.card, border:"1px solid "+T.border, borderRadius:8, marginTop:-6, marginBottom:6, overflow:"hidden" }}>
+                      {eslesenler.map(m => (
+                        <div key={m.id} onClick={()=>{ if(n===1){setFSetKod1(m.kod);setFSetM1(m);} else {setFSetKod2(m.kod);setFSetM2(m);} }}
+                          style={{ padding:"6px 9px", fontSize:9, color:T.text, cursor:"pointer", borderBottom:"1px solid "+T.border }}>
+                          <b>{m.kod}</b> — {m.ad} ({(kollar.find(k=>k.id===m.ki)||{}).ad||"?"})
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {secili && (
+                    <div style={{ display:"flex", gap:9, alignItems:"center", background:"rgba(var(--vurgu-rgb),0.05)", borderRadius:7, padding:"7px 9px" }}>
+                      {secili.foto && <div className="model-foto-wrap" style={{ width:42, height:42, borderRadius:6, overflow:"hidden", flexShrink:0 }}><img src={secili.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }}/></div>}
+                      <div style={{ fontSize:8, color:T.sub }}>
+                        <div style={{ color:GOLD, fontWeight:800, fontSize:10 }}>{secili.kod} — {secili.ad}</div>
+                        {secili.kategori} · {secili.gram}gr · {secili.refAyar}{secili.tasSekil ? " · "+secili.tasSekil+" "+(secili.tasTur||"")+" "+(secili.tasBoyut||"") : ""}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+            <button
+              disabled={!fSetM1 || !fSetM2 || !fKolId}
+              onClick={()=>{
+                const cakisan = [fSetM1, fSetM2].filter(m => modeller.some(x=>x.ki===fKolId && x.kod===m.kod));
+                if (cakisan.length>0 && !confirm(cakisan.map(m=>m.kod).join(", ")+" kodu bu koleksiyonda zaten var.\n\nÜzerine yazılsın mı?")) return;
+                let yeniListe = modeller.filter(m => !((m.ki===fKolId) && (m.kod===fSetM1.kod || m.kod===fSetM2.kod)));
+                [fSetM1, fSetM2].forEach(m => {
+                  yeniListe.push({ ...m, id:uid(), ki:fKolId, kaynakKi:m.kaynakKi||m.ki, t:Date.now() });
+                });
+                svM(yeniListe);
+                setShowMM(false); rmf(); setEditM(null);
+                const hedefKol = kollar.find(k=>k.id===fKolId);
+                if (hedefKol) { setAktifKol(hedefKol); setSayfa("modeller"); }
+              }}
+              style={{ ...BG, width:"100%", marginTop:2, opacity:(!fSetM1||!fSetM2||!fKolId)?0.4:1 }}>
+              🔗 Seti Oluştur
+            </button>
+            {(!fKolId) && <div style={{ fontSize:8, color:"#e85a4f", marginTop:6 }}>⚠ Yukarıdan hedef koleksiyon seçin</div>}
+          </div>
+        )}
+        <div style={{ display: fSetModu ? "none" : undefined }}>
 
         {/* Kod uyarısı */}
         {kodKontrol?.tip==="tekrar" && (
@@ -9414,6 +9487,7 @@ ${gbOzet}`;
         )}
 
         <button onClick={saveModel} disabled={!fKod.trim()} style={{ ...BG, width:"100%", marginTop:4, opacity:fKod.trim()?1:0.4 }}>{editM?"Kaydet":"Ekle"}</button>
+        </div>
       </Modal>
 
       {/* SİLME ONAY */}
