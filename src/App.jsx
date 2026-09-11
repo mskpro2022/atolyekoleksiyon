@@ -2224,7 +2224,9 @@ function VitrinModu({ kod, onizleme }) {
           style={{ position:"absolute", top:6, right:6, width:secBtnBoyut, height:secBtnBoyut, borderRadius:"50%", background: sec?"var(--vurgu)":"rgba(255,255,255,0.92)", border: sec?"none":"1px solid rgba(0,0,0,0.08)", color: sec?"#fff":"#c7c7cc", fontSize: cokKucuk?10:13, fontWeight:600, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", transition:"all .15s ease", boxShadow:"0 1px 3px rgba(0,0,0,0.12)" }}>✓</button>
       </div>
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", marginTop: kucuk?6:10, padding:"0 2px", gap:4 }}>
-        <span style={{ fontSize:gramBoyut, color:"var(--vt1)", fontWeight:600, letterSpacing:"-0.01em", whiteSpace:"nowrap" }}>{g || "—"}<span style={{ fontSize: cokKucuk?8:11, color:"var(--vt2)", marginLeft:1 }}>g</span></span>
+        {Array.isArray(m.setParcalari) && m.setParcalari.length>0
+          ? <span style={{ fontSize:gramBoyut, color:"var(--vurgu)", fontWeight:700, letterSpacing:"-0.01em" }}>SET</span>
+          : <span style={{ fontSize:gramBoyut, color:"var(--vt1)", fontWeight:600, letterSpacing:"-0.01em", whiteSpace:"nowrap" }}>{g || "—"}<span style={{ fontSize: cokKucuk?8:11, color:"var(--vt2)", marginLeft:1 }}>g</span></span>}
         <span style={{ fontSize:kodBoyut, color:"var(--vt3)", fontWeight:600, letterSpacing:"0.01em", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{m.kod}</span>
       </div>
     </div>
@@ -2578,6 +2580,24 @@ function VitrinModu({ kod, onizleme }) {
                 <span style={{ fontSize:20, fontWeight:500, color:"var(--vt1)", letterSpacing:"-0.02em" }}>{detayModel.ad}</span>
                 <span style={{ fontSize:12, color:"var(--vt3)" }}>{detayModel.kod}</span>
               </div>
+              {Array.isArray(detayModel.setParcalari) && detayModel.setParcalari.length > 0 ? (
+                <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+                  {detayModel.setParcalari.map(refKod => {
+                    const parca = modeller.find(x => x.kod === refKod);
+                    if (!parca) return null;
+                    const gg = gramDonustur(Number(parca.gram)||0, parca.refAyar||"14K", aktifAyar, Number(parca.tasGram)||0);
+                    return (
+                      <div key={refKod} style={{ background:"rgba(var(--voverlay-rgb),0.05)", border:"1px solid rgba(var(--voverlay-rgb),0.08)", borderRadius:11, padding:"12px 14px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                        <div>
+                          <div style={{ fontSize:13, color:"var(--vt1)", fontWeight:600 }}>{parca.kod}</div>
+                          <div style={{ fontSize:11, color:"var(--vt2)" }}>{(KATEGORILER.find(k=>k.id===parca.kategori)||{l:parca.kategori}).l}</div>
+                        </div>
+                        <div style={{ fontSize:16, fontWeight:600, color:"var(--vt1)" }}>{gg>0?gg.toFixed(2):"—"} <span style={{ fontSize:11, color:"var(--vt2)" }}>g</span></div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:9 }}>
                 {VITRIN_AYARLAR.map(a => {
                   const gg = gramDonustur(Number(detayModel.gram)||0, detayModel.refAyar||"14K", a.id, Number(detayModel.tasGram)||0);
@@ -2591,6 +2611,7 @@ function VitrinModu({ kod, onizleme }) {
                   );
                 })}
               </div>
+              )}
               {/* ═══ TAŞ BİLGİSİ — SADECE BSP VİTRİNİNDE (MSK'da gizli) ═══ */}
               {aktifOnek === "bsp2_" && (Number(detayModel.tasGram) > 0 || (detayModel.taslar && detayModel.taslar.length > 0)) && (
                 <div style={{ marginTop:16, background:"rgba(var(--voverlay-rgb),0.05)", borderRadius:11, padding:"14px 16px" }}>
@@ -4521,7 +4542,7 @@ function Atolye({ onSirketDegis }) {
                             return (
                               <div key={refKod} style={{ background:T.header, border:"1px solid "+T.border, borderRadius:6, padding:"4px 6px" }}>
                                 <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", marginBottom:2 }}>
-                                  <span style={{ fontSize:6, color:GOLD, fontWeight:800 }}>{parca.kod}</span>
+                                  <span style={{ fontSize:6, color:GOLD, fontWeight:800 }}>{parca.kod} <span style={{ color:"#5b9bd5", fontWeight:700 }}>· {(KATEGORILER.find(k=>k.id===parca.kategori)||{l:parca.kategori}).l}</span></span>
                                   <span style={{ fontSize:6, color:T.sub }}>{parca.gram}gr · {parca.refAyar}</span>
                                 </div>
                                 {ph && (
@@ -9184,7 +9205,7 @@ ${gbOzet}`;
                       {secili.foto && <div className="model-foto-wrap" style={{ width:42, height:42, borderRadius:6, overflow:"hidden", flexShrink:0 }}><img src={secili.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }}/></div>}
                       <div style={{ fontSize:8, color:T.sub }}>
                         <div style={{ color:GOLD, fontWeight:800, fontSize:10 }}>{secili.kod} — {secili.ad}</div>
-                        {secili.kategori} · {secili.gram}gr · {secili.refAyar}{secili.tasSekil ? " · "+secili.tasSekil+" "+(secili.tasTur||"")+" "+(secili.tasBoyut||"") : ""}
+                        {(KATEGORILER.find(k=>k.id===secili.kategori)||{l:secili.kategori}).l} · {secili.gram}gr · {secili.refAyar}{secili.tasSekil ? " · "+secili.tasSekil+" "+(secili.tasTur||"")+" "+(secili.tasBoyut||"") : ""}
                       </div>
                     </div>
                   )}
