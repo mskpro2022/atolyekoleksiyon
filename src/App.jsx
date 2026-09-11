@@ -4512,7 +4512,29 @@ function Atolye({ onSirketDegis }) {
                         {m.iscilikDolar>0 && <span style={{ fontSize:6, color:"#e8833a", background:"rgba(232,131,58,0.08)", padding:"1px 3px", borderRadius:2, fontWeight:600 }}>{fUSD(m.iscilikDolar)}/gr</span>}
                         {(m.etiketler||[]).slice(0,2).map(e => <span key={e} style={{ fontSize:6, color:"#a78bfa", background:"rgba(167,139,250,0.08)", padding:"1px 3px", borderRadius:2, fontWeight:600 }}>#{e}</span>)}
                       </div>
-                      {h && (
+                      {Array.isArray(m.setParcalari) && m.setParcalari.length > 0 ? (
+                        <div style={{ display:"flex", flexDirection:"column", gap:4, marginTop:2 }}>
+                          {m.setParcalari.map(refKod => {
+                            const parca = modeller.find(x => x.kod === refKod);
+                            if (!parca) return <div key={refKod} style={{ fontSize:6, color:"#e85a4f", fontWeight:700 }}>⚠ {refKod} bulunamadı</div>;
+                            const ph = altinKgUSD>0 ? hesapla(parca, parca.refAyar, altinKgUSD, madenCarpan) : null;
+                            return (
+                              <div key={refKod} style={{ background:T.header, border:"1px solid "+T.border, borderRadius:6, padding:"4px 6px" }}>
+                                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", marginBottom:2 }}>
+                                  <span style={{ fontSize:6, color:GOLD, fontWeight:800 }}>{parca.kod}</span>
+                                  <span style={{ fontSize:6, color:T.sub }}>{parca.gram}gr · {parca.refAyar}</span>
+                                </div>
+                                {ph && (
+                                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline" }}>
+                                    <span style={{ fontSize:6, color:T.sub }}>{ph.gumusMu ? "925 Gümüş" : "Mal: "+fN(ph.topMaliyetHas,4)+" has"}</span>
+                                    <span style={{ fontSize:9, fontWeight:800, color:ph.gumusMu?"#c0c0c0":(ph.karUyari?"#e85a4f":"#6abf69") }}>{ph.gumusMu ? "$"+fN(ph.gumusIscilikGr,2)+"/gr" : (ph.mamulGram>0 ? fN(ph.karMly||ph.karHas/ph.mamulGram,3)+" mly/gr" : fN(ph.karHas,4)+" has")}</span>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : h && (
                         <div style={{ background:T.header, border:"1px solid "+T.border, borderRadius:6, padding:"4px 6px", marginTop:2 }}>
                           <div style={{ display:"flex", justifyContent:"space-between", fontSize:7, color:T.sub, marginBottom:1 }}>
                             <span>Tas: {fN(h.tasHas,4)} has</span>
@@ -9170,23 +9192,35 @@ ${gbOzet}`;
               );
             })}
             <button
-              disabled={!fSetM1 || !fSetM2 || !fKolId}
-              onClick={()=>{
-                const cakisan = [fSetM1, fSetM2].filter(m => modeller.some(x=>x.ki===fKolId && x.kod===m.kod));
-                if (cakisan.length>0 && !confirm(cakisan.map(m=>m.kod).join(", ")+" kodu bu koleksiyonda zaten var.\n\nÜzerine yazılsın mı?")) return;
-                let yeniListe = modeller.filter(m => !((m.ki===fKolId) && (m.kod===fSetM1.kod || m.kod===fSetM2.kod)));
-                [fSetM1, fSetM2].forEach(m => {
-                  yeniListe.push({ ...m, id:uid(), ki:fKolId, kaynakKi:m.kaynakKi||m.ki, t:Date.now() });
-                });
+              disabled={!fSetM1 || !fSetM2 || !fKolId || !fKod.trim()}
+              onClick={async ()=>{
+                const kodUst = fKod.trim().toUpperCase();
+                const cakisan = modeller.find(m => m.ki===fKolId && m.kod===kodUst);
+                if (cakisan && !confirm(kodUst+" kodu bu koleksiyonda zaten var.\n\nÜzerine yazılsın mı?")) return;
+                const yeniId = uid();
+                let fotoURL = fFoto;
+                if (fotoURL && fotoURL.startsWith("data:")) {
+                  fotoURL = await fotoYukleStorage(fotoURL, yeniId, AKTIF_SIRKET_ONEK);
+                }
+                const yeniSet = {
+                  id: yeniId, kod: kodUst, ad: fAd.trim() || kodUst, kategori: "set",
+                  foto: fotoURL, ki: fKolId, durum: "baslanmadi",
+                  setParcalari: [fSetM1.kod, fSetM2.kod], t: Date.now(),
+                };
+                const yeniListe = cakisan ? modeller.filter(m=>m.id!==cakisan.id).concat(yeniSet) : [...modeller, yeniSet];
                 svM(yeniListe);
                 setShowMM(false); rmf(); setEditM(null);
                 const hedefKol = kollar.find(k=>k.id===fKolId);
                 if (hedefKol) { setAktifKol(hedefKol); setSayfa("modeller"); }
               }}
-              style={{ ...BG, width:"100%", marginTop:2, opacity:(!fSetM1||!fSetM2||!fKolId)?0.4:1 }}>
+              style={{ ...BG, width:"100%", marginTop:2, opacity:(!fSetM1||!fSetM2||!fKolId||!fKod.trim())?0.4:1 }}>
               🔗 Seti Oluştur
             </button>
-            {(!fKolId) && <div style={{ fontSize:8, color:"#e85a4f", marginTop:6 }}>⚠ Yukarıdan hedef koleksiyon seçin</div>}
+            <div style={{ fontSize:8, color:T.sub, marginTop:6 }}>
+              {!fFoto && "📷 Yukarıdan setin kendi fotoğrafını yükleyin. "}
+              {!fKod.trim() && "⚠ Yukarıdaki \"Urun Kodu\" alanına bu SETin kendi kodunu girin. "}
+              {!fKolId && "⚠ Yukarıdan hedef koleksiyon seçin."}
+            </div>
           </div>
         )}
         <div style={{ display: fSetModu ? "none" : undefined }}>
