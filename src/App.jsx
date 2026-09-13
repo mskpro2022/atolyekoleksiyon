@@ -1963,11 +1963,14 @@ function VitrinModu({ kod, onizleme }) {
         .map(mod => {
           const kaynakId = mod.kaynakKi || mod.ki;
           const kaynakKolObj = (k || []).find(kk => kk.id === kaynakId);
+          // Hassas (fiyat/maliyet) alanları HARİÇ, geri kalan HER ŞEYİ olduğu gibi geçir —
+          // böylece yeni eklenen alanlar (setParcalari, detayNoktalari vs.) otomatik gelir, unutulmaz.
+          const { iscilikDolar, iscilikBirim, iscilikAyarlar, ekMaliyet, madenCarpan, gizliMus, ...guvenliKalan } = mod;
           return {
-            id: mod.id, ki: mod.ki, kaynakKi: kaynakId,
+            ...guvenliKalan,
+            kaynakKi: kaynakId,
             kaynakAd: kaynakKolObj ? kaynakKolObj.ad : "Diğer",
-            foto: mod.foto || "",
-            kod: mod.kod || "", ad: mod.ad || "",
+            foto: mod.foto || "", kod: mod.kod || "", ad: mod.ad || "",
             gram: mod.gram || "", refAyar: mod.refAyar || "14K", kategori: mod.kategori || "",
             tasGram: mod.tasGram || 0, t: mod.t || 0,
           };
@@ -2007,8 +2010,10 @@ function VitrinModu({ kod, onizleme }) {
           .map(mod => {
             const kaynakId = mod.kaynakKi || mod.ki;
             const kaynakKolObj = (k || []).find(kk => kk.id === kaynakId);
+            const { iscilikDolar, iscilikBirim, iscilikAyarlar, ekMaliyet, madenCarpan, gizliMus, ...guvenliKalan } = mod;
             return {
-              id: mod.id, ki: mod.ki, kaynakKi: kaynakId,
+              ...guvenliKalan,
+              kaynakKi: kaynakId,
               kaynakAd: kaynakKolObj ? kaynakKolObj.ad : "Diğer",
               foto: mod.foto || "", kod: mod.kod || "", ad: mod.ad || "",
               gram: mod.gram || "", refAyar: mod.refAyar || "14K", kategori: mod.kategori || "",
