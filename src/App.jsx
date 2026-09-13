@@ -2216,17 +2216,17 @@ function VitrinModu({ kod, onizleme }) {
     return (
     <div key={m.id} className="vm-card">
       <div onClick={()=>{ setDetayModel(m); if(vitrinMusteri && !onizleme) vitrinAktiviteKaydet(vitrinMusteri.onek, vitrinMusteri.kod, vitrinMusteri.ad, "model", kolAdi, m.kod, m.ad); }}
-        style={{ aspectRatio:"4/3", background:"#f7f7f8", borderRadius: kucuk?9:12, position:"relative", overflow:"hidden", outline: sec?"2px solid var(--vurgu)":"none", outlineOffset:2 }}>
+        style={{ aspectRatio:"4/3", background:"#f7f7f8", borderRadius: kucuk?9:12, position:"relative", overflow:"hidden", boxShadow: sec?"0 0 0 1px rgba(0,0,0,0.4), 0 0 0 3px var(--vurgu), 0 0 0 5px rgba(var(--vurgu-rgb),0.35)":"none" }}>
         {m.foto
           ? <img className="vm-ph" src={m.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"contain", display:"block" }}/>
           : <div style={{ width:"100%", height:"100%", display:"flex", alignItems:"center", justifyContent:"center", color:"#d2d2d7", fontSize:26 }}>◇</div>}
-        {yeni && !cokKucuk && <span style={{ position:"absolute", top: kucuk?6:10, left: kucuk?6:10, background:"var(--vurgu)", color:"#fff", fontSize: kucuk?9:12, padding: kucuk?"3px 8px":"5px 13px", borderRadius:980, fontWeight:700, letterSpacing:"0.05em", boxShadow:"0 2px 10px rgba(0,0,0,0.35)" }}>YENİ</span>}
+        {yeni && !cokKucuk && <span style={{ position:"absolute", top: kucuk?6:10, left: kucuk?6:10, background:"var(--vurgu)", color:"#1d1d1f", fontSize: kucuk?9:12, padding: kucuk?"3px 8px":"5px 13px", borderRadius:980, fontWeight:700, letterSpacing:"0.05em", boxShadow:"0 2px 10px rgba(0,0,0,0.35)" }}>YENİ</span>}
         {yeni && cokKucuk && <span style={{ position:"absolute", top:5, left:5, width:8, height:8, borderRadius:"50%", background:"var(--vurgu)", boxShadow:"0 1px 4px rgba(0,0,0,0.4)" }}/>}
         {Array.isArray(m.detayNoktalari) && m.detayNoktalari.length > 0 && !cokKucuk && (
           <span style={{ position:"absolute", bottom:8, left:8, background:"rgba(28,28,30,0.75)", backdropFilter:"blur(6px)", color:"#fff", fontSize: kucuk?9:10, width: kucuk?20:22, height: kucuk?20:22, borderRadius:"50%", display:"flex", alignItems:"center", justifyContent:"center" }}>🔍</span>
         )}
         <button onClick={(e)=>{ e.stopPropagation(); const ns=new Set(secili); sec?ns.delete(m.id):ns.add(m.id); setSecili(ns); }}
-          style={{ position:"absolute", top:6, right:6, width:secBtnBoyut, height:secBtnBoyut, borderRadius:"50%", background: sec?"var(--vurgu)":"rgba(255,255,255,0.92)", border: sec?"none":"1px solid rgba(0,0,0,0.08)", color: sec?"#fff":"#c7c7cc", fontSize: cokKucuk?10:13, fontWeight:600, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", transition:"all .15s ease", boxShadow:"0 1px 3px rgba(0,0,0,0.12)" }}>✓</button>
+          style={{ position:"absolute", top:6, right:6, width:secBtnBoyut, height:secBtnBoyut, borderRadius:"50%", background: sec?"var(--vurgu)":"rgba(255,255,255,0.92)", border: sec?"1px solid rgba(0,0,0,0.15)":"1px solid rgba(0,0,0,0.08)", color: sec?"#1d1d1f":"#c7c7cc", fontSize: cokKucuk?10:13, fontWeight:800, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", transition:"all .15s ease", boxShadow:"0 1px 3px rgba(0,0,0,0.12)" }}>✓</button>
       </div>
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", marginTop: kucuk?6:10, padding:"0 2px", gap:4 }}>
         {Array.isArray(m.setParcalari) && m.setParcalari.length>0
@@ -2296,7 +2296,7 @@ function VitrinModu({ kod, onizleme }) {
               <button key={k.id} onClick={()=>kolAc(k)}
                 className="vm-pill" style={{ position:"relative", flexShrink:0, fontSize:14, color:"var(--vt1)", padding:"9px 18px", borderRadius:12, background: on?"var(--vcard)":"rgba(var(--voverlay-rgb),0.07)", border: on?"1px solid rgba(var(--voverlay-rgb),0.15)":"none", fontWeight: on?600:500, cursor:"pointer", whiteSpace:"nowrap" }}>
                 {k.ad}
-                {yeniVar && <span style={{ position:"absolute", top:-5, right:-5, background:"var(--vurgu)", color:"#fff", fontSize:8, fontWeight:700, padding:"2px 6px", borderRadius:980, boxShadow:"0 2px 6px rgba(0,0,0,0.3)" }}>YENİ</span>}
+                {yeniVar && <span style={{ position:"absolute", top:-5, right:-5, background:"var(--vurgu)", color:"#1d1d1f", fontSize:8, fontWeight:700, padding:"2px 6px", borderRadius:980, boxShadow:"0 2px 6px rgba(0,0,0,0.3)" }}>YENİ</span>}
               </button>
             );
           })}
@@ -2348,7 +2348,7 @@ function VitrinModu({ kod, onizleme }) {
             <div style={{ margin:"6px 28px 14px", background:"rgba(var(--vurgu-rgb),0.12)", borderRadius:12, padding:"12px 18px", display:"flex", alignItems:"center", justifyContent:"space-between", gap:12, flexWrap:"wrap" }}>
               <span style={{ fontSize:14, color:"var(--vurgu)", fontWeight:600 }}>{seciliKlasorler.length} koleksiyon seçildi</span>
               <div style={{ display:"flex", gap:8 }}>
-                <button onClick={()=>vitrinKlasorPDF(3)} style={{ background:"var(--vurgu)", border:"none", borderRadius:10, padding:"9px 20px", color:"#fff", fontSize:14, fontWeight:600, cursor:"pointer" }}>Katalog Al</button>
+                <button onClick={()=>vitrinKlasorPDF(3)} style={{ background:"var(--vurgu)", border:"none", borderRadius:10, padding:"9px 20px", color:"#1d1d1f", fontSize:14, fontWeight:600, cursor:"pointer" }}>Katalog Al</button>
                 <button onClick={()=>setSeciliKlasorler([])} style={{ background:"transparent", border:"none", color:"var(--vt2)", fontSize:13, fontWeight:500, cursor:"pointer", padding:"9px 10px" }}>Temizle</button>
               </div>
             </div>
@@ -2392,7 +2392,7 @@ function VitrinModu({ kod, onizleme }) {
                   {secildi ? (sira+1) : "+"}
                 </button>
                 {yeniSay > 0 && (
-                  <div style={{ position:"absolute", top:10, right:10, zIndex:3, background:"var(--vurgu)", color:"#fff", fontSize:11, fontWeight:700, padding:"4px 11px", borderRadius:980, boxShadow:"0 2px 8px rgba(0,0,0,0.3)" }}>{yeniSay} yeni</div>
+                  <div style={{ position:"absolute", top:10, right:10, zIndex:3, background:"var(--vurgu)", color:"#1d1d1f", fontSize:11, fontWeight:700, padding:"4px 11px", borderRadius:980, boxShadow:"0 2px 8px rgba(0,0,0,0.3)" }}>{yeniSay} yeni</div>
                 )}
                 <div style={{ aspectRatio:"4/3", background:"#f7f7f8", display:"grid", gridTemplateColumns:"1fr 1fr", gridTemplateRows:"1fr 1fr", gap:1 }}>
                   {kapaklar.length > 0 ? [0,1,2,3].map(i => (
@@ -2424,7 +2424,7 @@ function VitrinModu({ kod, onizleme }) {
             {aktifOnek === "bsp2_" && (
               <button onClick={()=>setSiparisModal(true)} style={{ background:"var(--vcard)", border:"none", borderRadius:8, padding:"7px 16px", color:"var(--vt1)", fontSize:12, fontWeight:700, cursor:"pointer" }}>🛍️ Sipariş Ver</button>
             )}
-            <button onClick={()=>vitrinPDF(3)} style={{ background:"var(--vurgu)", border:"none", borderRadius:8, padding:"7px 16px", color:"#fff", fontSize:12, fontWeight:500, cursor:"pointer" }}>Seçilenlerden PDF</button>
+            <button onClick={()=>vitrinPDF(3)} style={{ background:"var(--vurgu)", border:"none", borderRadius:8, padding:"7px 16px", color:"#1d1d1f", fontSize:12, fontWeight:500, cursor:"pointer" }}>Seçilenlerden PDF</button>
             <button onClick={()=>setSecili(new Set())} style={{ background:"transparent", border:"none", color:"var(--vt2)", fontSize:12, fontWeight:500, cursor:"pointer", padding:"7px 10px" }}>Temizle</button>
           </div>
         </div>
@@ -2507,7 +2507,7 @@ function VitrinModu({ kod, onizleme }) {
                 <textarea value={siparisNot} onChange={e=>setSiparisNot(e.target.value)} placeholder="Not eklemek isterseniz (opsiyonel)..."
                   style={{ width:"100%", minHeight:64, background:"rgba(var(--voverlay-rgb),0.07)", border:"none", borderRadius:11, padding:"11px 13px", color:"var(--vt1)", fontSize:13, outline:"none", resize:"vertical", fontFamily:"inherit", marginBottom:16 }}/>
                 <button disabled={siparisGonderiliyor} onClick={siparisGonder}
-                  style={{ width:"100%", background: siparisGonderiliyor?"rgba(var(--voverlay-rgb),0.15)":"var(--vurgu)", border:"none", borderRadius:11, padding:"14px", color:"#fff", fontSize:15, fontWeight:600, cursor: siparisGonderiliyor?"default":"pointer" }}>
+                  style={{ width:"100%", background: siparisGonderiliyor?"rgba(var(--voverlay-rgb),0.15)":"var(--vurgu)", border:"none", borderRadius:11, padding:"14px", color:"#1d1d1f", fontSize:15, fontWeight:600, cursor: siparisGonderiliyor?"default":"pointer" }}>
                   {siparisGonderiliyor ? "Gönderiliyor..." : "Siparişi Gönder"}
                 </button>
               </div>
@@ -2586,18 +2586,28 @@ function VitrinModu({ kod, onizleme }) {
                 <span style={{ fontSize:12, color:"var(--vt3)" }}>{detayModel.kod}</span>
               </div>
               {Array.isArray(detayModel.setParcalari) && detayModel.setParcalari.length > 0 ? (
-                <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+                <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
                   {detayModel.setParcalari.map(refKod => {
                     const parca = modeller.find(x => x.kod === refKod);
                     if (!parca) return null;
-                    const gg = gramDonustur(Number(parca.gram)||0, parca.refAyar||"14K", aktifAyar, Number(parca.tasGram)||0);
                     return (
-                      <div key={refKod} style={{ background:"rgba(var(--voverlay-rgb),0.05)", border:"1px solid rgba(var(--voverlay-rgb),0.08)", borderRadius:11, padding:"12px 14px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-                        <div>
+                      <div key={refKod} style={{ background:"rgba(var(--voverlay-rgb),0.05)", border:"1px solid rgba(var(--voverlay-rgb),0.08)", borderRadius:11, padding:"12px 14px" }}>
+                        <div style={{ marginBottom:10 }}>
                           <div style={{ fontSize:13, color:"var(--vt1)", fontWeight:600 }}>{parca.kod}</div>
                           <div style={{ fontSize:11, color:"var(--vt2)" }}>{(KATEGORILER.find(k=>k.id===parca.kategori)||{l:parca.kategori}).l}</div>
                         </div>
-                        <div style={{ fontSize:16, fontWeight:600, color:"var(--vt1)" }}>{gg>0?gg.toFixed(2):"—"} <span style={{ fontSize:11, color:"var(--vt2)" }}>g</span></div>
+                        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:7 }}>
+                          {VITRIN_AYARLAR.map(a => {
+                            const gg = gramDonustur(Number(parca.gram)||0, parca.refAyar||"14K", a.id, Number(parca.tasGram)||0);
+                            const on = a.id === aktifAyar;
+                            return (
+                              <div key={a.id} style={{ background: on?"rgba(var(--vurgu-rgb),0.14)":"rgba(var(--voverlay-rgb),0.06)", border: on?"1px solid rgba(var(--vurgu-rgb),0.4)":"1px solid transparent", borderRadius:8, padding:"7px 4px", textAlign:"center" }}>
+                                <div style={{ fontSize:9, color:"var(--vt2)", fontWeight: on?700:500 }}>{a.id.replace("K","")} Ayar</div>
+                                <div style={{ fontSize:14, fontWeight: on?700:500, color:"var(--vt1)" }}>{gg>0?gg.toFixed(2):"—"}</div>
+                              </div>
+                            );
+                          })}
+                        </div>
                       </div>
                     );
                   })}
@@ -2640,7 +2650,7 @@ function VitrinModu({ kod, onizleme }) {
                 </div>
               )}
               <button onClick={()=>{ const ns=new Set(secili); secili.has(detayModel.id)?ns.delete(detayModel.id):ns.add(detayModel.id); setSecili(ns); }}
-                style={{ width:"100%", marginTop:18, background: secili.has(detayModel.id)?"rgba(var(--voverlay-rgb),0.1)":"var(--vurgu)", border:"none", borderRadius:11, padding:"13px", color:"#fff", fontSize:14, fontWeight:500, cursor:"pointer" }}>
+                style={{ width:"100%", marginTop:18, background: secili.has(detayModel.id)?"rgba(var(--voverlay-rgb),0.1)":"var(--vurgu)", border:"none", borderRadius:11, padding:"13px", color:"#1d1d1f", fontSize:14, fontWeight:500, cursor:"pointer" }}>
                 {secili.has(detayModel.id) ? "Seçimden çıkar" : "Seç"}
               </button>
             </div>
