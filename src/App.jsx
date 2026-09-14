@@ -2046,6 +2046,16 @@ function VitrinModu({ kod, onizleme }) {
     const g = gramDonustur(Number(m.gram) || 0, m.refAyar || "14K", aktifAyar, Number(m.tasGram) || 0);
     return g > 0 ? g.toFixed(2) : "";
   };
+  // Set modelleri için: parçaların toplam gramı (seçili ayara göre)
+  const setToplamGram = (m) => {
+    if (!Array.isArray(m.setParcalari) || !m.setParcalari.length) return "";
+    const toplam = m.setParcalari.reduce((s, refKod) => {
+      const parca = modeller.find(x => x.kod === refKod);
+      if (!parca) return s;
+      return s + gramDonustur(Number(parca.gram)||0, parca.refAyar||"14K", aktifAyar, Number(parca.tasGram)||0);
+    }, 0);
+    return toplam > 0 ? toplam.toFixed(2) : "";
+  };
 
   const GOLD2 = "#d8d3cb"; // nötr açık ton (altın değil)
   if (durum === "yukleniyor") {
@@ -2229,9 +2239,17 @@ function VitrinModu({ kod, onizleme }) {
           style={{ position:"absolute", top:6, right:6, width:secBtnBoyut, height:secBtnBoyut, borderRadius:"50%", background: sec?"var(--vurgu)":"rgba(255,255,255,0.92)", border: sec?"1px solid rgba(0,0,0,0.15)":"1px solid rgba(0,0,0,0.08)", color: sec?"#1d1d1f":"#c7c7cc", fontSize: cokKucuk?10:13, fontWeight:800, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", transition:"all .15s ease", boxShadow:"0 1px 3px rgba(0,0,0,0.12)" }}>✓</button>
       </div>
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", marginTop: kucuk?6:10, padding:"0 2px", gap:4 }}>
-        {Array.isArray(m.setParcalari) && m.setParcalari.length>0
-          ? <span style={{ fontSize:gramBoyut, color:"var(--vurgu)", fontWeight:700, letterSpacing:"-0.01em" }}>SET</span>
-          : <span style={{ fontSize:gramBoyut, color:"var(--vt1)", fontWeight:600, letterSpacing:"-0.01em", whiteSpace:"nowrap" }}>{g || "—"}<span style={{ fontSize: cokKucuk?8:11, color:"var(--vt2)", marginLeft:1 }}>g</span></span>}
+        {Array.isArray(m.setParcalari) && m.setParcalari.length>0 ? (() => {
+          const tg = setToplamGram(m);
+          return (
+            <span style={{ fontSize:gramBoyut, color:"var(--vt1)", fontWeight:600, letterSpacing:"-0.01em", whiteSpace:"nowrap" }}>
+              {tg || "—"}<span style={{ fontSize: cokKucuk?8:11, color:"var(--vt2)", marginLeft:1 }}>g</span>
+              <span style={{ fontSize: cokKucuk?7:9, color:"var(--vt2)", fontWeight:800, marginLeft:5, letterSpacing:"0.03em", border:"1px solid rgba(var(--voverlay-rgb),0.25)", borderRadius:4, padding:"1px 4px" }}>SET</span>
+            </span>
+          );
+        })() : (
+          <span style={{ fontSize:gramBoyut, color:"var(--vt1)", fontWeight:600, letterSpacing:"-0.01em", whiteSpace:"nowrap" }}>{g || "—"}<span style={{ fontSize: cokKucuk?8:11, color:"var(--vt2)", marginLeft:1 }}>g</span></span>
+        )}
         <span style={{ fontSize:kodBoyut, color:"var(--vt3)", fontWeight:600, letterSpacing:"0.01em", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{m.kod}</span>
       </div>
     </div>
