@@ -9201,6 +9201,29 @@ ${gbOzet}`;
             <span style={{ fontSize:11, fontWeight:700, color: fSetModu?"#40c8c0":T.sub }}>🔗 Bu bir SET (2 mevcut ürünü birlikte kopyala)</span>
           </button>
         )}
+
+        {/* MEVCUT SET'i DÜZENLERKEN — hangi iki ürüne bağlı olduğunu göster (salt okunur) */}
+        {editM && Array.isArray(editM.setParcalari) && editM.setParcalari.length > 0 && (
+          <div style={{ background:"rgba(64,200,192,0.06)", border:"1px solid rgba(64,200,192,0.25)", borderRadius:11, padding:"11px 13px", marginBottom:12 }}>
+            <div style={{ fontSize:10, fontWeight:700, color:"#40c8c0", marginBottom:9 }}>🔗 Bu SET'in içeriği</div>
+            <div style={{ display:"flex", flexDirection:"column", gap:7 }}>
+              {editM.setParcalari.map(refKod => {
+                const parca = modeller.find(x => x.kod === refKod);
+                if (!parca) return <div key={refKod} style={{ fontSize:10, color:"#e85a4f", fontWeight:700 }}>⚠ {refKod} bulunamadı (silinmiş olabilir)</div>;
+                return (
+                  <div key={refKod} style={{ display:"flex", gap:9, alignItems:"center", background:"rgba(0,0,0,0.15)", borderRadius:8, padding:"7px 9px" }}>
+                    {parca.foto && <div className="model-foto-wrap" style={{ width:42, height:42, borderRadius:6, overflow:"hidden", flexShrink:0 }}><img src={parca.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }}/></div>}
+                    <div style={{ fontSize:9, color:T.sub, flex:1 }}>
+                      <div style={{ color:GOLD, fontWeight:800, fontSize:11 }}>{parca.kod} <span style={{ color:"#5b9bd5", fontWeight:700 }}>· {(KATEGORILER.find(k=>k.id===parca.kategori)||{l:parca.kategori}).l}</span></div>
+                      {parca.gram}gr · {parca.refAyar}{parca.tasSekil ? " · "+parca.tasSekil+" "+(parca.tasTur||"")+" "+(parca.tasBoyut||"") : ""}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <div style={{ fontSize:8, color:T.dim, marginTop:8 }}>Aşağıdaki gram/taş alanları bu SET için kullanılmaz — bilgiler yukarıdaki iki üründen otomatik gelir.</div>
+          </div>
+        )}
         <div style={{ display:"flex", gap:7 }}>
           <div style={{ flex:1 }}>
             <Fl label="Urun Kodu" req T={T}>
