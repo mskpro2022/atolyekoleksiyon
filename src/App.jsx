@@ -2975,6 +2975,16 @@ function Atolye({ onSirketDegis }) {
   const [fSetKod2,      setFSetKod2]   = useState("");
   const [fSetM1,        setFSetM1]     = useState(null);
   const [fSetM2,        setFSetM2]     = useState(null);
+  // Set modunda (yeni oluştururken ya da mevcut seti düzenlerken) GRAM alanını iki ürünün toplamıyla otomatik doldur
+  useEffect(() => {
+    if (fSetModu && fSetM1 && fSetM2) {
+      const toplam = [fSetM1, fSetM2].reduce((s,p) => s + gramDonustur(Number(p.gram)||0, p.refAyar||"14K", fRefAyar||"14K", Number(p.tasGram)||0), 0);
+      setFGram(toplam > 0 ? toplam.toFixed(2) : "");
+    } else if (editM && Array.isArray(editM.setParcalari) && editM.setParcalari.length>0) {
+      const toplam = editM.setParcalari.reduce((s,refKod) => { const p = modeller.find(x=>x.kod===refKod); return p ? s + gramDonustur(Number(p.gram)||0, p.refAyar||"14K", fRefAyar||"14K", Number(p.tasGram)||0) : s; }, 0);
+      setFGram(toplam > 0 ? toplam.toFixed(2) : "");
+    }
+  }, [fSetModu, fSetM1, fSetM2, editM, fRefAyar, modeller]);
   const [fDurum,       setFDurum]      = useState("baslanmadi");
   const [fEtiketler,   setFEtiketler]  = useState([]);
   const [fDetayNoktalari, setFDetayNoktalari] = useState([]); // bileklik: [{id,etiket,x,y}] — kilit/zincir yakın çekim noktaları
@@ -9136,13 +9146,16 @@ ${gbOzet}`;
             </div>
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8 }}>
               {["10K","14K","18K"].map(a => {
-                const gg = gramDonustur(Number(fGram)||0, fRefAyar||"14K", a, Number(fTasGram)||0);
+                const setIcerik = editM && Array.isArray(editM.setParcalari) && editM.setParcalari.length>0 ? editM.setParcalari : null;
+                const gg = setIcerik
+                  ? setIcerik.reduce((s,refKod) => { const p = modeller.find(x=>x.kod===refKod); return p ? s + gramDonustur(Number(p.gram)||0, p.refAyar||"14K", a, Number(p.tasGram)||0) : s; }, 0)
+                  : gramDonustur(Number(fGram)||0, fRefAyar||"14K", a, Number(fTasGram)||0);
                 const on = a === fRefAyar;
                 return (
                   <div key={a} style={{ background: on?"rgba(var(--vurgu-rgb),0.12)":"rgba(255,255,255,0.03)", border:"1px solid "+(on?"rgba(var(--vurgu-rgb),0.35)":"rgba(255,255,255,0.07)"), borderRadius:9, padding:"9px 6px", textAlign:"center" }}>
                     <div style={{ fontSize:9, color: on?GOLD:"#998a6e", fontWeight:700 }}>{a.replace("K"," Ayar")}</div>
                     <div style={{ fontSize:16, fontWeight:800, color: on?GOLD:T.text, marginTop:2 }}>{gg>0?gg.toFixed(2):"—"}</div>
-                    <div style={{ fontSize:8, color:"#665d4a" }}>gram</div>
+                    <div style={{ fontSize:8, color:"#665d4a" }}>{setIcerik?"toplam gram":"gram"}</div>
                   </div>
                 );
               })}
