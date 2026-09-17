@@ -1886,6 +1886,105 @@ function VitrinModu({ kod, onizleme }) {
     try { return localStorage.getItem("vitrin_isik") || "gunduz"; } catch { return "gunduz"; }
   });
   useEffect(() => { try { localStorage.setItem("vitrin_isik", vitrinIsik); } catch {} }, [vitrinIsik]);
+  const [vitrinDil, setVitrinDil] = useState(() => {
+    try { return localStorage.getItem("vitrin_dil") || "tr"; } catch { return "tr"; }
+  });
+  useEffect(() => { try { localStorage.setItem("vitrin_dil", vitrinDil); } catch {} }, [vitrinDil]);
+  // Ürün adı/açıklaması çeviri önbelleği — { "orijinal TR metin": "İngilizce çeviri" }, tarayıcıda kalıcı
+  const [ceviriOnbellek, setCeviriOnbellek] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("vitrin_ceviri") || "{}"); } catch { return {}; }
+  });
+  const ceviriIstegindeRef = useRef(new Set()); // aynı metni iki kez isteme (aynı render turunda)
+
+  // Arayüz metinleri sözlüğü — TR sabit, EN karşılığı. ce("anahtar") ile çağrılır.
+  const CEVIRI_SOZLUK = {
+    ara_placeholder: { tr:"Ad, kod veya etiket ara...", en:"Search name, code or tag..." },
+    ara: { tr:"Ara", en:"Search" },
+    gr_kisa: { tr:"gr", en:"g" },
+    kod_yeni_eski_opt: { tr:"Kod: Yeni → Eski", en:"Code: Newest → Oldest" },
+    kod_eski_yeni_opt: { tr:"Kod: Eski → Yeni", en:"Code: Oldest → Newest" },
+    son_eklenen: { tr:"Son Eklenen", en:"Recently Added" },
+    gram_yuksek_dusuk_opt: { tr:"Gram: Yüksek → Düşük", en:"Weight: High → Low" },
+    gram_dusuk_yuksek_opt: { tr:"Gram: Düşük → Yüksek", en:"Weight: Low → High" },
+    katalog_al: { tr:"Katalog Al", en:"Get Catalog" },
+    tum_koleksiyonlar: { tr:"Tüm Koleksiyonlar", en:"All Collections" },
+    tum_koleksiyonlari_gor: { tr:"Tüm Koleksiyonları Gör", en:"View All Collections" },
+    begen_mesaj: { tr:"👇 Beğendiğiniz modelleri seçin, size özel katalog hazırlayalım", en:"👇 Select the pieces you like and we'll prepare a catalog for you" },
+    koleksiyon_gir_mesaj: { tr:"👇 Bir koleksiyona girin veya + ile seçip size özel katalog alın", en:"👇 Enter a collection or select with + to get your own catalog" },
+    sec: { tr:"Seç", en:"Select" },
+    secimden_cikar: { tr:"Seçimden çıkar", en:"Remove selection" },
+    secilenlerden_pdf: { tr:"Seçilenlerden PDF", en:"PDF of selected" },
+    siparis_ver: { tr:"Sipariş Ver", en:"Place Order" },
+    siparis_ver_emoji: { tr:"🛍️ Sipariş Ver", en:"🛍️ Place Order" },
+    siparisi_gonder: { tr:"Siparişi Gönder", en:"Send Order" },
+    gonderiliyor: { tr:"Gönderiliyor...", en:"Sending..." },
+    siparis_alindi: { tr:"Siparişiniz alındı", en:"Your order has been received" },
+    en_kisa_surede: { tr:"En kısa sürede size dönüş yapılacaktır.", en:"We'll get back to you as soon as possible." },
+    tas_bilgisi: { tr:"Taş Bilgisi", en:"Stone Info" },
+    tas_agirligi: { tr:"Taş ağırlığı", en:"Stone weight" },
+    tas: { tr:"Taş", en:"Stone" },
+    adet: { tr:"adet", en:"pcs" },
+    onceki: { tr:"Önceki", en:"Previous" },
+    buyut: { tr:"Büyüt", en:"Enlarge" },
+    kucult: { tr:"Küçült", en:"Shrink" },
+    gece_moduna_gec: { tr:"Gece moduna geç", en:"Switch to dark mode" },
+    gunduz_moduna_gec: { tr:"Gündüz moduna geç", en:"Switch to light mode" },
+    model_bulunamadi: { tr:"Model bulunamadı", en:"Model not found" },
+    katalog_yukleniyor: { tr:"Katalog yükleniyor...", en:"Loading catalog..." },
+    henuz_koleksiyon_yok: { tr:"Henüz size açılmış koleksiyon yok", en:"No collections have been shared with you yet" },
+    gecersiz_link_baslik: { tr:"Geçersiz veya Süresi Dolmuş Bağlantı", en:"Invalid or Expired Link" },
+    gecersiz_link_mesaj: { tr:"Bu katalog bağlantısı geçerli değil. Lütfen yetkiliyle iletişime geçin.", en:"This catalog link is not valid. Please contact the shop." },
+    once_koleksiyon_sec: { tr:"Önce koleksiyon seçin.", en:"Please select a collection first." },
+    once_model_sec: { tr:"Önce model seçin veya bir koleksiyon açın.", en:"Please select a model or open a collection first." },
+    secili_kol_model_yok: { tr:"Seçili koleksiyonlarda model yok.", en:"No models in the selected collections." },
+    kart_ekrani_ipucu: { tr:"Katalog için koleksiyon kartlarındaki + butonuna basın.", en:"Use the + button on collection cards for the catalog." },
+    yeni: { tr:"YENİ", en:"NEW" },
+    set_etiket: { tr:"SET", en:"SET" },
+    gr: { tr:"gram", en:"g" },
+  };
+  const ce = (anahtar) => (CEVIRI_SOZLUK[anahtar]?.[vitrinDil]) || CEVIRI_SOZLUK[anahtar]?.tr || anahtar;
+  // Kategori id -> görünen etiket (kategori pill'leri VE set parça etiketleri için)
+  const KATEGORI_CEVIRI = {
+    yuzuk:{tr:"Yuzuk",en:"Ring"}, kolye:{tr:"Kolye",en:"Necklace"}, kupe:{tr:"Kupe",en:"Earring"},
+    bilezik:{tr:"Bilezik",en:"Bangle"}, bileklik:{tr:"Bileklik",en:"Bracelet"}, pendant:{tr:"Pendant",en:"Pendant"},
+    set:{tr:"Set",en:"Set"}, diger:{tr:"Diger",en:"Other"},
+  };
+  const kategoriEtiket = (id) => (KATEGORI_CEVIRI[id]?.[vitrinDil]) || KATEGORI_CEVIRI[id]?.tr || id;
+
+  const ceviriKuyrukRef = useRef([]); // bekleyen orijinal metinler (henüz gönderilmedi)
+  const ceviriTimerRef = useRef(null);
+  const ceviriGonder = useCallback(async () => {
+    const kuyruk = [...new Set(ceviriKuyrukRef.current)];
+    ceviriKuyrukRef.current = [];
+    if (!kuyruk.length) return;
+    try {
+      const metinler = kuyruk.map((m,i) => ({ id:String(i), metin:m }));
+      const res = await fetch("/api/translate", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ metinler }) });
+      const data = await res.json();
+      if (Array.isArray(data.sonuclar)) {
+        setCeviriOnbellek(onceki => {
+          const yeni = { ...onceki };
+          data.sonuclar.forEach(s => { const orijinal = kuyruk[Number(s.id)]; if (orijinal && s.en) yeni[orijinal] = s.en; });
+          try { localStorage.setItem("vitrin_ceviri", JSON.stringify(yeni)); } catch {}
+          return yeni;
+        });
+      }
+    } catch (e) { console.error("Çeviri hatası:", e.message); }
+  }, []);
+
+  // Ürün adı/açıklaması çevirisi — önbellekte varsa direkt döner, yoksa boş kuyruğa ekler (400ms sonra toplu gönderilir)
+  const urunCevir = (orijinalMetin) => {
+    if (!orijinalMetin || !orijinalMetin.trim()) return orijinalMetin;
+    if (vitrinDil === "tr") return orijinalMetin;
+    if (ceviriOnbellek[orijinalMetin]) return ceviriOnbellek[orijinalMetin];
+    if (!ceviriIstegindeRef.current.has(orijinalMetin)) {
+      ceviriIstegindeRef.current.add(orijinalMetin);
+      ceviriKuyrukRef.current.push(orijinalMetin);
+      if (ceviriTimerRef.current) clearTimeout(ceviriTimerRef.current);
+      ceviriTimerRef.current = setTimeout(ceviriGonder, 400);
+    }
+    return orijinalMetin; // çeviri gelene kadar orijinali göster
+  };
   const [zumNokta, setZumNokta] = useState(null); // detay noktası yakınlaştırma (bileklik kilit/zincir)
   const dokunmaBasX = useRef(null); // detay ekranında sağa/sola kaydırma takibi
   useEffect(() => { setZumNokta(null); }, [detayModel?.id]); // farklı model açılınca zoom sıfırlansın
@@ -2059,13 +2158,13 @@ function VitrinModu({ kod, onizleme }) {
 
   const GOLD2 = "#d8d3cb"; // nötr açık ton (altın değil)
   if (durum === "yukleniyor") {
-    return <div style={{ minHeight:"100vh", background:"#0d0b07", display:"flex", alignItems:"center", justifyContent:"center", color:GOLD2, fontFamily:"sans-serif", fontSize:14 }}>Katalog yükleniyor...</div>;
+    return <div style={{ minHeight:"100vh", background:"#0d0b07", display:"flex", alignItems:"center", justifyContent:"center", color:GOLD2, fontFamily:"sans-serif", fontSize:14 }}>{ce("katalog_yukleniyor")}</div>;
   }
   if (durum === "gecersiz") {
     return <div style={{ minHeight:"100vh", background:"#0d0b07", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", color:"#e8dcc8", fontFamily:"sans-serif", textAlign:"center", padding:20 }}>
       <div style={{ fontSize:40, marginBottom:12 }}>🔒</div>
-      <div style={{ fontSize:18, fontWeight:700, color:GOLD2, marginBottom:6 }}>Geçersiz veya Süresi Dolmuş Bağlantı</div>
-      <div style={{ fontSize:12, color:"#998a6e" }}>Bu katalog bağlantısı geçerli değil. Lütfen yetkiliyle iletişime geçin.</div>
+      <div style={{ fontSize:18, fontWeight:700, color:GOLD2, marginBottom:6 }}>{ce("gecersiz_link_baslik")}</div>
+      <div style={{ fontSize:12, color:"#998a6e" }}>{ce("gecersiz_link_mesaj")}</div>
     </div>;
   }
 
@@ -2130,7 +2229,7 @@ function VitrinModu({ kod, onizleme }) {
 
   const vitrinPDF = (sutun) => {
     const liste = seciliModeller.length > 0 ? seciliModeller : koldaki;
-    if (liste.length === 0) { alert("Önce model seçin veya bir koleksiyon açın."); return; }
+    if (liste.length === 0) { alert(ce("once_model_sec")); return; }
     // ANA SİSTEMİN KATALOG MOTORU — kapak, kategori bazlı kart boyutları, sayfa düzeni
     // (fiyat/kâr bilgisi zaten içermiyor — sadece kod + gram + ayar)
     const sahteKol = { ad: vitrinAd, on: "", id: aktifKol?.id || "" };
@@ -2140,7 +2239,7 @@ function VitrinModu({ kod, onizleme }) {
 
   // Kart ekranında "+" ile seçilen KOLEKSİYONLARI, verilen sırayla tek PDF'te topla
   const vitrinKlasorPDF = (sutun) => {
-    if (seciliKlasorler.length === 0) { alert("Önce koleksiyon seçin."); return; }
+    if (seciliKlasorler.length === 0) { alert(ce("once_koleksiyon_sec")); return; }
     // Seçim sırasına göre koleksiyonları diz (1. koleksiyon önce, 2. sonra...)
     let liste = [];
     seciliKlasorler.forEach(kid => {
@@ -2151,7 +2250,7 @@ function VitrinModu({ kod, onizleme }) {
         .map(m => ({ ...m, kaynakAd: k.ad }));
       liste = liste.concat(grup);
     });
-    if (liste.length === 0) { alert("Seçili koleksiyonlarda model yok."); return; }
+    if (liste.length === 0) { alert(ce("secili_kol_model_yok")); return; }
     const sahteKol = { ad: vitrinAd, on: "", id: "" };
     const html = buildKatalogHTML(sahteKol, liste, sutun || 3, aktifAyar, kollar, true); // gruplu=true (sıra korunur + başlıklar)
     downloadPDF(html, (vitrinAd || "katalog") + "-" + aktifAyar);
@@ -2199,7 +2298,7 @@ function VitrinModu({ kod, onizleme }) {
   // "Katalog Al" — kart ekranındaysa seçili koleksiyonlar, içerideyse görünen/seçilen modeller
   const katalogAl = (sutun) => {
     if (!aktifKol && !tumGorunum) {
-      if (seciliKlasorler.length === 0) { alert("Katalog için koleksiyon kartlarındaki + butonuna basın."); return; }
+      if (seciliKlasorler.length === 0) { alert(ce("kart_ekrani_ipucu")); return; }
       vitrinKlasorPDF(sutun);
     } else vitrinPDF(sutun);
   };
@@ -2230,7 +2329,7 @@ function VitrinModu({ kod, onizleme }) {
         {m.foto
           ? <img className="vm-ph" src={m.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"contain", display:"block" }}/>
           : <div style={{ width:"100%", height:"100%", display:"flex", alignItems:"center", justifyContent:"center", color:"#d2d2d7", fontSize:26 }}>◇</div>}
-        {yeni && !cokKucuk && <span style={{ position:"absolute", top: kucuk?6:10, left: kucuk?6:10, background:"var(--vurgu)", color:"#1d1d1f", fontSize: kucuk?9:12, padding: kucuk?"3px 8px":"5px 13px", borderRadius:980, fontWeight:700, letterSpacing:"0.05em", boxShadow:"0 2px 10px rgba(0,0,0,0.35)" }}>YENİ</span>}
+        {yeni && !cokKucuk && <span style={{ position:"absolute", top: kucuk?6:10, left: kucuk?6:10, background:"var(--vurgu)", color:"#1d1d1f", fontSize: kucuk?9:12, padding: kucuk?"3px 8px":"5px 13px", borderRadius:980, fontWeight:700, letterSpacing:"0.05em", boxShadow:"0 2px 10px rgba(0,0,0,0.35)" }}>{ce("yeni")}</span>}
         {yeni && cokKucuk && <span style={{ position:"absolute", top:5, left:5, width:8, height:8, borderRadius:"50%", background:"var(--vurgu)", boxShadow:"0 1px 4px rgba(0,0,0,0.4)" }}/>}
         {Array.isArray(m.detayNoktalari) && m.detayNoktalari.length > 0 && !cokKucuk && (
           <span style={{ position:"absolute", bottom:8, left:8, background:"rgba(28,28,30,0.75)", backdropFilter:"blur(6px)", color:"#fff", fontSize: kucuk?9:10, width: kucuk?20:22, height: kucuk?20:22, borderRadius:"50%", display:"flex", alignItems:"center", justifyContent:"center" }}>🔍</span>
@@ -2244,7 +2343,7 @@ function VitrinModu({ kod, onizleme }) {
           return (
             <span style={{ fontSize:gramBoyut, color:"var(--vt1)", fontWeight:600, letterSpacing:"-0.01em", whiteSpace:"nowrap" }}>
               {tg || "—"}<span style={{ fontSize: cokKucuk?8:11, color:"var(--vt2)", marginLeft:1 }}>g</span>
-              <span style={{ fontSize: cokKucuk?7:9, color:"var(--vt2)", fontWeight:800, marginLeft:5, letterSpacing:"0.03em", border:"1px solid rgba(var(--voverlay-rgb),0.25)", borderRadius:4, padding:"1px 4px" }}>SET</span>
+              <span style={{ fontSize: cokKucuk?7:9, color:"var(--vt2)", fontWeight:800, marginLeft:5, letterSpacing:"0.03em", border:"1px solid rgba(var(--voverlay-rgb),0.25)", borderRadius:4, padding:"1px 4px" }}>{ce("set_etiket")}</span>
             </span>
           );
         })() : (
@@ -2280,24 +2379,28 @@ function VitrinModu({ kod, onizleme }) {
         {(aktifKol || tumGorunum) && (
           <button onClick={kartEkraninaDon}
             style={{ display:"inline-flex", alignItems:"center", gap:8, background:"var(--vcard)", border:"none", borderRadius:980, padding:"10px 20px", color:"var(--vt1)", fontSize:14, fontWeight:700, cursor:"pointer", boxShadow:"0 4px 16px rgba(0,0,0,0.35)", marginBottom:14 }}>
-            <span style={{ fontSize:19, lineHeight:1, marginTop:-1 }}>‹</span> Tüm Koleksiyonlar
+            <span style={{ fontSize:19, lineHeight:1, marginTop:-1 }}>‹</span> {ce("tum_koleksiyonlar")}
           </button>
         )}
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", flexWrap:"wrap", gap:12 }}>
           <div style={{ flex:"1 1 auto", minWidth:0 }}>
             <div className="vm-baslik" style={{ fontSize:24, fontWeight:600, color:"var(--vt1)", letterSpacing:"-0.02em" }}>
-              {aktifKol ? aktifKol.ad : (tumGorunum ? "Tüm Koleksiyonlar" : vitrinAd)}
+              {aktifKol ? aktifKol.ad : (tumGorunum ? ce("tum_koleksiyonlar") : vitrinAd)}
             </div>
             <div className="vm-aciklama" style={{ fontSize:14, color:"var(--vt2)", marginTop:5 }}>
               {(aktifKol || tumGorunum)
-                ? "👇 Beğendiğiniz modelleri seçin, size özel katalog hazırlayalım"
-                : "👇 Bir koleksiyona girin veya + ile seçip size özel katalog alın"}
+                ? ce("begen_mesaj")
+                : ce("koleksiyon_gir_mesaj")}
             </div>
           </div>
           <button onClick={()=>katalogAl(3)} style={{ flexShrink:0, background:"var(--vcard)", color:"var(--vt1)", border:"none", borderRadius:980, padding:"10px 20px", fontSize:14, fontWeight:600, cursor:"pointer" }}>
-            Katalog Al{(!aktifKol && !tumGorunum && seciliKlasorler.length > 0) ? " ("+seciliKlasorler.length+")" : ""}
+            {ce("katalog_al")}{(!aktifKol && !tumGorunum && seciliKlasorler.length > 0) ? " ("+seciliKlasorler.length+")" : ""}
           </button>
-          <button onClick={()=>setVitrinIsik(gunduz?"gece":"gunduz")} title={gunduz?"Gece moduna geç":"Gündüz moduna geç"}
+          <button onClick={()=>setVitrinDil(vitrinDil==="tr"?"en":"tr")} title={vitrinDil==="tr"?"Switch to English":"Türkçe'ye geç"}
+            style={{ flexShrink:0, height:40, minWidth:40, padding:"0 10px", borderRadius:20, background:"rgba(var(--voverlay-rgb),0.08)", border:"1px solid rgba(var(--voverlay-rgb),0.15)", color:"var(--vt1)", fontSize:11, fontWeight:800, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", letterSpacing:"0.02em" }}>
+            {vitrinDil==="tr" ? "🌐 EN" : "🌐 TR"}
+          </button>
+          <button onClick={()=>setVitrinIsik(gunduz?"gece":"gunduz")} title={gunduz?ce("gece_moduna_gec"):ce("gunduz_moduna_gec")}
             style={{ flexShrink:0, width:40, height:40, borderRadius:"50%", background:"rgba(var(--voverlay-rgb),0.08)", border:"1px solid rgba(var(--voverlay-rgb),0.15)", color:"var(--vt1)", fontSize:16, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}>
             {gunduz ? "🌙" : "☀️"}
           </button>
@@ -2314,7 +2417,7 @@ function VitrinModu({ kod, onizleme }) {
               <button key={k.id} onClick={()=>kolAc(k)}
                 className="vm-pill" style={{ position:"relative", flexShrink:0, fontSize:14, color:"var(--vt1)", padding:"9px 18px", borderRadius:12, background: on?"var(--vcard)":"rgba(var(--voverlay-rgb),0.07)", border: on?"1px solid rgba(var(--voverlay-rgb),0.15)":"none", fontWeight: on?600:500, cursor:"pointer", whiteSpace:"nowrap" }}>
                 {k.ad}
-                {yeniVar && <span style={{ position:"absolute", top:-5, right:-5, background:"var(--vurgu)", color:"#1d1d1f", fontSize:8, fontWeight:700, padding:"2px 6px", borderRadius:980, boxShadow:"0 2px 6px rgba(0,0,0,0.3)" }}>YENİ</span>}
+                {yeniVar && <span style={{ position:"absolute", top:-5, right:-5, background:"var(--vurgu)", color:"#1d1d1f", fontSize:8, fontWeight:700, padding:"2px 6px", borderRadius:980, boxShadow:"0 2px 6px rgba(0,0,0,0.3)" }}>{ce("yeni")}</span>}
               </button>
             );
           })}
@@ -2335,21 +2438,21 @@ function VitrinModu({ kod, onizleme }) {
             );
           })}
         </div>
-        <input value={arama} onChange={e=>setArama(e.target.value)} placeholder="Ara"
+        <input value={arama} onChange={e=>setArama(e.target.value)} placeholder={ce("ara")}
           style={{ flex:"1 1 130px", maxWidth:260, background:"rgba(var(--voverlay-rgb),0.07)", border:"none", borderRadius:9, padding:"9px 14px", color:"var(--vt1)", fontSize:13, outline:"none" }}/>
         <div style={{ display:"flex", alignItems:"center", gap:6, background:"rgba(var(--voverlay-rgb),0.07)", borderRadius:9, padding:"5px 11px" }}>
-          <span style={{ fontSize:12, color:"var(--vt3)" }}>gr</span>
+          <span style={{ fontSize:12, color:"var(--vt3)" }}>{ce("gr_kisa")}</span>
           <input value={gramFiltre.min} onChange={e=>setGramFiltre(p=>({...p,min:e.target.value}))} placeholder="min" type="number" style={{ width:46, background:"transparent", border:"none", color:"var(--vt1)", fontSize:12, outline:"none" }}/>
           <span style={{ color:"#48484a", fontSize:12 }}>–</span>
           <input value={gramFiltre.max} onChange={e=>setGramFiltre(p=>({...p,max:e.target.value}))} placeholder="max" type="number" style={{ width:46, background:"transparent", border:"none", color:"var(--vt1)", fontSize:12, outline:"none" }}/>
         </div>
         <select value={siralama} onChange={e=>setSiralama(e.target.value)}
           style={{ background:"rgba(var(--voverlay-rgb),0.07)", border:"none", borderRadius:9, padding:"9px 12px", color:"var(--vt1)", fontSize:13, outline:"none", cursor:"pointer" }}>
-          <option value="kodTers" style={{background:"var(--vcard)"}}>Kod: Yeni → Eski</option>
-          <option value="kod" style={{background:"var(--vcard)"}}>Kod: Eski → Yeni</option>
-          <option value="yeni" style={{background:"var(--vcard)"}}>Son Eklenen</option>
-          <option value="gramAzalan" style={{background:"var(--vcard)"}}>Gram: Yüksek → Düşük</option>
-          <option value="gramArtan" style={{background:"var(--vcard)"}}>Gram: Düşük → Yüksek</option>
+          <option value="kodTers" style={{background:"var(--vcard)"}}>{ce("kod_yeni_eski_opt")}</option>
+          <option value="kod" style={{background:"var(--vcard)"}}>{ce("kod_eski_yeni_opt")}</option>
+          <option value="yeni" style={{background:"var(--vcard)"}}>{ce("son_eklenen")}</option>
+          <option value="gramAzalan" style={{background:"var(--vcard)"}}>{ce("gram_yuksek_dusuk_opt")}</option>
+          <option value="gramArtan" style={{background:"var(--vcard)"}}>{ce("gram_dusuk_yuksek_opt")}</option>
         </select>
       </div>
       )}
@@ -2385,7 +2488,7 @@ function VitrinModu({ kod, onizleme }) {
                   ))}
                 </div>
                 <div style={{ flex:1, minWidth:0 }}>
-                  <div style={{ fontSize:17, fontWeight:600, color:"var(--vt1)", letterSpacing:"-0.01em" }}>Tüm Koleksiyonları Gör</div>
+                  <div style={{ fontSize:17, fontWeight:600, color:"var(--vt1)", letterSpacing:"-0.01em" }}>{ce("tum_koleksiyonlari_gor")}</div>
                   <div style={{ fontSize:12, color:"var(--vt2)", marginTop:3 }}>{kollarSirali.length} koleksiyon · {toplamModel} model · en yeniler önce</div>
                 </div>
                 <span style={{ fontSize:22, color:"var(--vurgu)", lineHeight:1, flexShrink:0 }}>›</span>
@@ -2428,7 +2531,7 @@ function VitrinModu({ kod, onizleme }) {
             })}
           </div>
           {kollarSirali.length === 0 && (
-            <div style={{ textAlign:"center", color:"var(--vt3)", padding:"60px 0", fontSize:14 }}>Henüz size açılmış koleksiyon yok</div>
+            <div style={{ textAlign:"center", color:"var(--vt3)", padding:"60px 0", fontSize:14 }}>{ce("henuz_koleksiyon_yok")}</div>
           )}
         </div>
         );
@@ -2440,9 +2543,9 @@ function VitrinModu({ kod, onizleme }) {
           <span style={{ fontSize:13, color:"var(--vurgu)", fontWeight:500 }}>{secili.size} model seçildi</span>
           <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
             {aktifOnek === "bsp2_" && (
-              <button onClick={()=>setSiparisModal(true)} style={{ background:"var(--vcard)", border:"none", borderRadius:8, padding:"7px 16px", color:"var(--vt1)", fontSize:12, fontWeight:700, cursor:"pointer" }}>🛍️ Sipariş Ver</button>
+              <button onClick={()=>setSiparisModal(true)} style={{ background:"var(--vcard)", border:"none", borderRadius:8, padding:"7px 16px", color:"var(--vt1)", fontSize:12, fontWeight:700, cursor:"pointer" }}>{ce("siparis_ver_emoji")}</button>
             )}
-            <button onClick={()=>vitrinPDF(3)} style={{ background:"var(--vurgu)", border:"none", borderRadius:8, padding:"7px 16px", color:"#1d1d1f", fontSize:12, fontWeight:500, cursor:"pointer" }}>Seçilenlerden PDF</button>
+            <button onClick={()=>vitrinPDF(3)} style={{ background:"var(--vurgu)", border:"none", borderRadius:8, padding:"7px 16px", color:"#1d1d1f", fontSize:12, fontWeight:500, cursor:"pointer" }}>{ce("secilenlerden_pdf")}</button>
             <button onClick={()=>setSecili(new Set())} style={{ background:"transparent", border:"none", color:"var(--vt2)", fontSize:12, fontWeight:500, cursor:"pointer", padding:"7px 10px" }}>Temizle</button>
           </div>
         </div>
@@ -2452,7 +2555,7 @@ function VitrinModu({ kod, onizleme }) {
       {aktifKol && (
         <div className="vm-pad" style={{ padding:"0 28px 40px" }}>
           {koldaki.length === 0
-            ? <div style={{ textAlign:"center", color:"var(--vt3)", padding:"60px 0", fontSize:14 }}>Model bulunamadı</div>
+            ? <div style={{ textAlign:"center", color:"var(--vt3)", padding:"60px 0", fontSize:14 }}>{ce("model_bulunamadi")}</div>
             : <div style={modelGridStil}>{koldaki.map(vKart)}</div>}
         </div>
       )}
@@ -2460,7 +2563,7 @@ function VitrinModu({ kod, onizleme }) {
       {/* ═══ TÜM KOLEKSİYONLAR — koleksiyon bazlı gruplu liste ═══ */}
       {tumGorunum && (
         <div className="vm-pad" style={{ padding:"0 28px 40px" }}>
-          {tumGruplar.length === 0 && <div style={{ textAlign:"center", color:"var(--vt3)", padding:"60px 0", fontSize:14 }}>Model bulunamadı</div>}
+          {tumGruplar.length === 0 && <div style={{ textAlign:"center", color:"var(--vt3)", padding:"60px 0", fontSize:14 }}>{ce("model_bulunamadi")}</div>}
           {tumGruplar.map(({ kol, liste }) => {
             const yeniSay = liste.filter(m => yeniMi(m)).length;
             return (
@@ -2481,10 +2584,10 @@ function VitrinModu({ kod, onizleme }) {
       {(aktifKol || tumGorunum) && (
         <div style={{ position:"fixed", right:16, bottom:20, zIndex:50, display:"flex", flexDirection:"column", background:"var(--vfloatbg)", backdropFilter:"blur(12px)", WebkitBackdropFilter:"blur(12px)", borderRadius:16, boxShadow:"0 6px 24px rgba(0,0,0,0.5)", border:"1px solid rgba(var(--voverlay-rgb),0.12)", overflow:"hidden" }}>
           <button onClick={()=>setVitrinSutun(s=>Math.max(1,s-1))} disabled={vitrinSutun<=1}
-            title="Büyüt" style={{ width:48, height:48, border:"none", background:"transparent", color: vitrinSutun<=1?"#48484a":"var(--vt1)", fontSize:26, fontWeight:300, cursor: vitrinSutun<=1?"default":"pointer", display:"flex", alignItems:"center", justifyContent:"center", lineHeight:1 }}>+</button>
+            title={ce("buyut")} style={{ width:48, height:48, border:"none", background:"transparent", color: vitrinSutun<=1?"#48484a":"var(--vt1)", fontSize:26, fontWeight:300, cursor: vitrinSutun<=1?"default":"pointer", display:"flex", alignItems:"center", justifyContent:"center", lineHeight:1 }}>+</button>
           <div style={{ height:1, background:"rgba(var(--voverlay-rgb),0.12)" }}/>
           <button onClick={()=>setVitrinSutun(s=>Math.min(6,s+1))} disabled={vitrinSutun>=6}
-            title="Küçült" style={{ width:48, height:48, border:"none", background:"transparent", color: vitrinSutun>=6?"#48484a":"var(--vt1)", fontSize:26, fontWeight:300, cursor: vitrinSutun>=6?"default":"pointer", display:"flex", alignItems:"center", justifyContent:"center", lineHeight:1 }}>−</button>
+            title={ce("kucult")} style={{ width:48, height:48, border:"none", background:"transparent", color: vitrinSutun>=6?"#48484a":"var(--vt1)", fontSize:26, fontWeight:300, cursor: vitrinSutun>=6?"default":"pointer", display:"flex", alignItems:"center", justifyContent:"center", lineHeight:1 }}>−</button>
         </div>
       )}
 
@@ -2496,13 +2599,13 @@ function VitrinModu({ kod, onizleme }) {
             {siparisBasarili ? (
               <div style={{ padding:"40px 28px", textAlign:"center" }}>
                 <div style={{ fontSize:44, marginBottom:14 }}>✓</div>
-                <div style={{ fontSize:18, fontWeight:600, color:"var(--vt1)", marginBottom:8 }}>Siparişiniz alındı</div>
-                <div style={{ fontSize:14, color:"var(--vt2)", marginBottom:24 }}>En kısa sürede size dönüş yapılacaktır.</div>
+                <div style={{ fontSize:18, fontWeight:600, color:"var(--vt1)", marginBottom:8 }}>{ce("siparis_alindi")}</div>
+                <div style={{ fontSize:14, color:"var(--vt2)", marginBottom:24 }}>{ce("en_kisa_surede")}</div>
                 <button onClick={()=>{ setSiparisModal(false); setSiparisBasarili(false); }} style={{ background:"var(--vcard)", border:"none", borderRadius:11, padding:"12px 28px", color:"var(--vt1)", fontSize:14, fontWeight:600, cursor:"pointer" }}>Tamam</button>
               </div>
             ) : (
               <div style={{ padding:"22px 24px 24px" }}>
-                <div style={{ fontSize:18, fontWeight:600, color:"var(--vt1)", marginBottom:4 }}>Sipariş Ver</div>
+                <div style={{ fontSize:18, fontWeight:600, color:"var(--vt1)", marginBottom:4 }}>{ce("siparis_ver")}</div>
                 <div style={{ fontSize:13, color:"var(--vt2)", marginBottom:18 }}>{seciliModeller.length} model — {aktifAyar.replace("K"," Ayar")}</div>
                 <div style={{ display:"flex", flexDirection:"column", gap:10, maxHeight:280, overflow:"auto", marginBottom:16 }}>
                   {seciliModeller.map(m => (
@@ -2526,7 +2629,7 @@ function VitrinModu({ kod, onizleme }) {
                   style={{ width:"100%", minHeight:64, background:"rgba(var(--voverlay-rgb),0.07)", border:"none", borderRadius:11, padding:"11px 13px", color:"var(--vt1)", fontSize:13, outline:"none", resize:"vertical", fontFamily:"inherit", marginBottom:16 }}/>
                 <button disabled={siparisGonderiliyor} onClick={siparisGonder}
                   style={{ width:"100%", background: siparisGonderiliyor?"rgba(var(--voverlay-rgb),0.15)":"var(--vurgu)", border:"none", borderRadius:11, padding:"14px", color:"#1d1d1f", fontSize:15, fontWeight:600, cursor: siparisGonderiliyor?"default":"pointer" }}>
-                  {siparisGonderiliyor ? "Gönderiliyor..." : "Siparişi Gönder"}
+                  {siparisGonderiliyor ? ce("gonderiliyor") : ce("siparisi_gonder")}
                 </button>
               </div>
             )}
@@ -2550,8 +2653,8 @@ function VitrinModu({ kod, onizleme }) {
             }}
             style={{ background:"var(--vcard)", borderRadius:18, maxWidth:560, width:"100%", maxHeight:"90vh", overflow:"auto", position:"relative", touchAction:"pan-y" }}>
             <button onClick={()=>setDetayModel(null)} style={{ position:"absolute", top:14, right:14, zIndex:5, width:30, height:30, borderRadius:"50%", background:"rgba(120,120,128,0.5)", border:"none", color:"#fff", fontSize:15, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}>✕</button>
-            {dIdx > 0 && <button onClick={()=>detayKomsu(-1)} title="Önceki" style={{ position:"absolute", top:"38%", left:10, zIndex:5, width:36, height:36, borderRadius:"50%", background:"rgba(120,120,128,0.5)", border:"none", color:"#fff", fontSize:18, fontWeight:700, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}>‹</button>}
-            {dIdx < dToplam-1 && <button onClick={()=>detayKomsu(1)} title="Sonraki" style={{ position:"absolute", top:"38%", right:10, zIndex:5, width:36, height:36, borderRadius:"50%", background:"rgba(120,120,128,0.5)", border:"none", color:"#fff", fontSize:18, fontWeight:700, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}>›</button>}
+            {dIdx > 0 && <button onClick={()=>detayKomsu(-1)} title={ce("onceki")} style={{ position:"absolute", top:"38%", left:10, zIndex:5, width:36, height:36, borderRadius:"50%", background:"rgba(120,120,128,0.5)", border:"none", color:"#fff", fontSize:18, fontWeight:700, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}>‹</button>}
+            {dIdx < dToplam-1 && <button onClick={()=>detayKomsu(1)} title={vitrinDil==="tr"?"Sonraki":"Next"} style={{ position:"absolute", top:"38%", right:10, zIndex:5, width:36, height:36, borderRadius:"50%", background:"rgba(120,120,128,0.5)", border:"none", color:"#fff", fontSize:18, fontWeight:700, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}>›</button>}
             {dToplam > 1 && <div style={{ position:"absolute", top:14, left:14, zIndex:5, background:"rgba(120,120,128,0.5)", color:"#fff", fontSize:10, fontWeight:700, padding:"4px 9px", borderRadius:980 }}>{dIdx+1} / {dToplam}</div>}
             <div style={{ aspectRatio:"4/3", background:"#f7f7f8", display:"flex", alignItems:"center", justifyContent:"center", overflow:"hidden", position:"relative" }}>
               {detayModel.foto ? <img src={detayModel.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"contain" }}/> : <div style={{ fontSize:50, color:"#d2d2d7" }}>◇</div>}
@@ -2600,7 +2703,7 @@ function VitrinModu({ kod, onizleme }) {
             })()}
             <div style={{ padding:"22px 24px 24px" }}>
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", marginBottom:20 }}>
-                <span style={{ fontSize:20, fontWeight:500, color:"var(--vt1)", letterSpacing:"-0.02em" }}>{detayModel.ad}</span>
+                <span style={{ fontSize:20, fontWeight:500, color:"var(--vt1)", letterSpacing:"-0.02em" }}>{urunCevir(detayModel.ad)}</span>
                 <span style={{ fontSize:12, color:"var(--vt3)" }}>{detayModel.kod}</span>
               </div>
               {Array.isArray(detayModel.setParcalari) && detayModel.setParcalari.length > 0 ? (
@@ -2612,7 +2715,7 @@ function VitrinModu({ kod, onizleme }) {
                       <div key={refKod} style={{ background:"rgba(var(--voverlay-rgb),0.05)", border:"1px solid rgba(var(--voverlay-rgb),0.08)", borderRadius:11, padding:"12px 14px" }}>
                         <div style={{ marginBottom:10 }}>
                           <div style={{ fontSize:13, color:"var(--vt1)", fontWeight:600 }}>{parca.kod}</div>
-                          <div style={{ fontSize:11, color:"var(--vt2)" }}>{(KATEGORILER.find(k=>k.id===parca.kategori)||{l:parca.kategori}).l}</div>
+                          <div style={{ fontSize:11, color:"var(--vt2)" }}>{kategoriEtiket(parca.kategori)}</div>
                         </div>
                         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:7 }}>
                           {VITRIN_AYARLAR.map(a => {
@@ -2648,10 +2751,10 @@ function VitrinModu({ kod, onizleme }) {
               {/* ═══ TAŞ BİLGİSİ — SADECE BSP VİTRİNİNDE (MSK'da gizli) ═══ */}
               {aktifOnek === "bsp2_" && (Number(detayModel.tasGram) > 0 || (detayModel.taslar && detayModel.taslar.length > 0)) && (
                 <div style={{ marginTop:16, background:"rgba(var(--voverlay-rgb),0.05)", borderRadius:11, padding:"14px 16px" }}>
-                  <div style={{ fontSize:11, color:"var(--vt2)", fontWeight:600, letterSpacing:"0.04em", textTransform:"uppercase", marginBottom:12 }}>Taş Bilgisi</div>
+                  <div style={{ fontSize:11, color:"var(--vt2)", fontWeight:600, letterSpacing:"0.04em", textTransform:"uppercase", marginBottom:12 }}>{ce("tas_bilgisi")}</div>
                   {Number(detayModel.tasGram) > 0 && (
                     <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", marginBottom: (detayModel.taslar && detayModel.taslar.length) ? 12 : 0, paddingBottom: (detayModel.taslar && detayModel.taslar.length) ? 12 : 0, borderBottom: (detayModel.taslar && detayModel.taslar.length) ? "0.5px solid rgba(var(--voverlay-rgb),0.08)" : "none" }}>
-                      <span style={{ fontSize:13, color:"var(--vt2)" }}>Taş ağırlığı</span>
+                      <span style={{ fontSize:13, color:"var(--vt2)" }}>{ce("tas_agirligi")}</span>
                       <span style={{ fontSize:15, color:"var(--vt1)", fontWeight:600 }}>{Number(detayModel.tasGram).toFixed(2)} <span style={{ fontSize:11, color:"var(--vt2)" }}>g</span></span>
                     </div>
                   )}
@@ -2659,8 +2762,8 @@ function VitrinModu({ kod, onizleme }) {
                     <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
                       {detayModel.taslar.map((t, i) => (
                         <div key={i} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", fontSize:13 }}>
-                          <span style={{ color:"var(--vt1)" }}>{t.sekil || "Taş"}{t.boyut ? " · " + t.boyut : ""}</span>
-                          <span style={{ color:"var(--vt2)" }}>{t.adet || 1} adet</span>
+                          <span style={{ color:"var(--vt1)" }}>{t.sekil || ce("tas")}{t.boyut ? " · " + t.boyut : ""}</span>
+                          <span style={{ color:"var(--vt2)" }}>{t.adet || 1} {ce("adet")}</span>
                         </div>
                       ))}
                     </div>
@@ -2669,7 +2772,7 @@ function VitrinModu({ kod, onizleme }) {
               )}
               <button onClick={()=>{ const ns=new Set(secili); secili.has(detayModel.id)?ns.delete(detayModel.id):ns.add(detayModel.id); setSecili(ns); }}
                 style={{ width:"100%", marginTop:18, background: secili.has(detayModel.id)?"rgba(var(--voverlay-rgb),0.1)":"var(--vurgu)", border:"none", borderRadius:11, padding:"13px", color:"#1d1d1f", fontSize:14, fontWeight:500, cursor:"pointer" }}>
-                {secili.has(detayModel.id) ? "Seçimden çıkar" : "Seç"}
+                {secili.has(detayModel.id) ? ce("secimden_cikar") : ce("sec")}
               </button>
             </div>
           </div>
@@ -3713,6 +3816,7 @@ function Atolye({ onSirketDegis }) {
     setFIscilikDolar(String(m.iscilikDolar||"")); setFIscilikBirim(m.iscilikBirim||"dolar"); setFIscilikAyarlar(m.iscilikAyarlar||{}); setFEkMaliyet(String(m.ekMaliyet||""));
     setFAc(m.ac||""); setFFoto(m.foto||""); setFKolId(m.ki||""); setFDurum(m.durum||"baslanmadi");
     setFKategori(m.kategori||"yuzuk"); setFEtiketler(m.etiketler||[]); setFDetayNoktalari(m.detayNoktalari||[]); setEditM(m); setShowMM(true);
+    setFSetModu(false); setFSetKod1(""); setFSetKod2(""); setFSetM1(null); setFSetM2(null); // her model açılışında SET modu sıfırlansın — bir önceki modelden yapışık kalmasın
   };
 
   const handleFoto = async e => {
