@@ -17,9 +17,11 @@ const fN = (n, d) => (Number(n) || 0).toFixed(d || 3);
 
 const AYARLAR = [
   { id: "8K",  l: "8 Ayar",     o: 0.333 },
+  { id: "9K",  l: "9 Ayar",     o: 0.375 },
   { id: "10K", l: "10 Ayar",    o: 0.417 },
   { id: "14K", l: "14 Ayar",    o: 0.585 },
   { id: "18K", l: "18 Ayar",    o: 0.750 },
+  { id: "21K", l: "21 Ayar",    o: 0.875 },
   { id: "22K", l: "22 Ayar",    o: 0.916 },
   { id: "24K", l: "24 Ayar",    o: 1.000 },
   { id: "925", l: "925 Gumus",  o: 0.925 },
@@ -131,7 +133,7 @@ const KATEGORILER = [
 function gramDonustur(refGram, refAyar, hedefAyar, tasGram) {
   if (refAyar === hedefAyar) return refGram;
   // Yoğunluk bazlı dönüşüm (g/cm³) — sektör standardı
-  const yogunluk = { "8K":11.0, "10K":11.6, "14K":13.4, "18K":15.5, "22K":17.7, "24K":19.3, "925":10.4 };
+  const yogunluk = { "8K":11.0, "9K":11.3, "10K":11.6, "14K":13.4, "18K":15.5, "21K":17.0, "22K":17.7, "24K":19.3, "925":10.4 };
   const eskiY = yogunluk[refAyar] || 13.4;
   const yeniY = yogunluk[hedefAyar] || 13.4;
   // Taş gramını ayır (taş değişmez!)
@@ -2944,6 +2946,26 @@ function Atolye({ onSirketDegis }) {
   const [onEkF,      setOnEkF]      = useState(""); // kod ön eki filtresi (ALT, KDN, FER...)
   const [grupla,     setGrupla]     = useState(false); // kod ön ekine göre grupla
   const [arama,     setArama]     = useState("");
+  const [katalogZoom, setKatalogZoom] = useState(() => { try { return Number(localStorage.getItem("atolye_katalog_zoom")) || 220; } catch(e) { return 220; } }); // Ctrl+scroll ile büyüt/küçült — kart min-genişliği (px)
+  const katalogZoomTut = useCallback((delta) => {
+    setKatalogZoom(prev => {
+      const yeni = Math.min(420, Math.max(130, prev - delta * 0.4));
+      try { localStorage.setItem("atolye_katalog_zoom", String(yeni)); } catch(e) {}
+      return yeni;
+    });
+  }, []);
+  const katalogGridRef = useRef(null);
+  useEffect(() => {
+    const el = katalogGridRef.current;
+    if (!el) return;
+    const onWheel = (e) => {
+      if (!e.ctrlKey) return;
+      e.preventDefault(); // tarayıcı sayfa zoom'u yerine kart boyutunu değiştir
+      katalogZoomTut(e.deltaY);
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, [katalogZoomTut]);
 
   const [showKM,  setShowKM]  = useState(false);
   const [hizalaModal, setHizalaModal] = useState(false);
@@ -4487,11 +4509,14 @@ function Atolye({ onSirketDegis }) {
 
         {/* MODELLER */}
         {sayfa==="modeller" && (
-          <div style={{ animation:"fadein .3s" }}>
+          <div ref={katalogGridRef} style={{ animation:"fadein .3s" }}>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10, flexWrap:"wrap", gap:6 }}>
               <div style={{ display:"flex", alignItems:"center", gap:6 }}>
                 {aktifKol && <button onClick={() => { setSayfa("koleksiyonlar"); setAktifKol(null); }} style={{ ...GH, padding:"4px 7px", fontSize:10 }}>{"<"}</button>}
                 <h2 style={{ margin:0, fontSize:14, fontWeight:700, color:"var(--goldtext)" }}>{aktifKol ? aktifKol.ad : "Tum Modeller"} <span style={{ fontSize:10, color:"#7a6f5a" }}>({gorunen.length})</span></h2>
+                {katalogZoom !== 220 && (
+                  <button onClick={()=>{ setKatalogZoom(220); try{localStorage.setItem("atolye_katalog_zoom","220");}catch(e){} }} title="Ctrl+scroll ile büyüt/küçült" style={{ background:"rgba(var(--vurgu-rgb),0.08)", border:"1px solid rgba(var(--vurgu-rgb),0.15)", borderRadius:6, padding:"3px 8px", color:"#8a7d64", fontSize:8, fontWeight:700, cursor:"pointer" }}>🔍 {Math.round(katalogZoom)}px ↺</button>
+                )}
               </div>
               <div style={{ display:"flex", gap:4 }}>
                 {aktifKol && <button onClick={() => { setKatalogKol(aktifKol); setKatalogSiraliModeller(seciliModeller.size>0 ? modeller.filter(m=>seciliModeller.has(m.id)) : []); setKatalogSutun(3); setKatalogAyar("14K"); setKatalogSiralaModal(true); }} style={{ ...GH, fontSize:9, padding:"5px 9px" }}>PDF 3'lü{seciliModeller.size>0?" ("+seciliModeller.size+")":""}</button>}
@@ -4728,7 +4753,7 @@ function Atolye({ onSirketDegis }) {
                   </div>
                 );
               };
-              const gridStil = { display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))", gap:9 };
+              const gridStil = { display:"grid", gridTemplateColumns:`repeat(auto-fill,minmax(${katalogZoom}px,1fr))`, gap:9 };
               // Klasör sistemi gruplama işini yapıyor → burada hep düz liste
               return <div style={gridStil}>{gorunen.map((m,i)=>renderKart(m,i))}</div>;
             })()}
@@ -9249,7 +9274,7 @@ ${gbOzet}`;
               </div>
             </div>
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8 }}>
-              {["10K","14K","18K"].map(a => {
+              {["9K","10K","14K","18K","21K","22K"].map(a => {
                 const setIcerik = editM && Array.isArray(editM.setParcalari) && editM.setParcalari.length>0 ? editM.setParcalari : null;
                 const gg = setIcerik
                   ? setIcerik.reduce((s,refKod) => { const p = modeller.find(x=>x.kod===refKod); return p ? s + gramDonustur(Number(p.gram)||0, p.refAyar||"14K", a, Number(p.tasGram)||0) : s; }, 0)
@@ -9658,7 +9683,7 @@ ${gbOzet}`;
               <div style={{ display:"flex", gap:5, marginTop:4 }}>
                 <select onChange={e=>{ if(!e.target.value) return; const ayar=e.target.value; if(!fIscilikAyarlar[ayar]) setFIscilikAyarlar(p=>({...p,[ayar]:{dolar:"",birim:fIscilikBirim}})); e.target.value=""; }} style={{ ...IS, flex:1, padding:"4px 6px", fontSize:10 }}>
                   <option value="">+ Ayar ekle...</option>
-                  {["8K","10K","14K","18K","21K","22K","24K","925"].filter(a=>!fIscilikAyarlar[a]).map(a=><option key={a} value={a}>{a}</option>)}
+                  {["8K","9K","10K","14K","18K","21K","22K","24K","925"].filter(a=>!fIscilikAyarlar[a]).map(a=><option key={a} value={a}>{a}</option>)}
                 </select>
               </div>
             </div>
