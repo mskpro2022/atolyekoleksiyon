@@ -2664,7 +2664,7 @@ function VitrinModu({ kod, onizleme }) {
             {/* ═══ SOLDAKİ ÖNİZLEME — kartın DIŞINDA, koyu arka planda, önceki modelin flu fotoğrafı ═══ */}
             {dIdx > 0 && typeof window !== "undefined" && window.innerWidth > 760 && (() => { const pm = koldaki[dIdx-1]; return (
               <div onClick={(e)=>{ e.stopPropagation(); detayKomsu(-1); }} title={ce("onceki")}
-                style={{ width:"min(250px,22vw)", height:"min(680px,80vh)", flexShrink:0, cursor:"pointer", opacity:0.45, borderRadius:20, overflow:"hidden", transition:"opacity .2s, transform .2s", display:"flex", alignItems:"center", justifyContent:"center", background:"rgba(255,255,255,0.06)", border:"1px solid rgba(255,255,255,0.14)", boxShadow:"0 12px 34px rgba(0,0,0,0.4)", padding:14 }}
+                style={{ width:"min(300px,25vw)", height:"min(660px,76vh)", flexShrink:0, cursor:"pointer", opacity:0.45, borderRadius:20, overflow:"hidden", transition:"opacity .2s, transform .2s", display:"flex", alignItems:"center", justifyContent:"center", background:"rgba(255,255,255,0.06)", border:"1px solid rgba(255,255,255,0.14)", boxShadow:"0 12px 34px rgba(0,0,0,0.4)", padding:8 }}
                 onMouseEnter={e=>{ e.currentTarget.style.opacity=0.85; e.currentTarget.style.transform="scale(1.02)"; }}
                 onMouseLeave={e=>{ e.currentTarget.style.opacity=0.45; e.currentTarget.style.transform="scale(1)"; }}>
                 <div style={{ width:"100%", height:"100%", borderRadius:16, overflow:"hidden", background:"#f2f2f4" }}>
@@ -2839,7 +2839,7 @@ function VitrinModu({ kod, onizleme }) {
             {/* ═══ SAĞDAKİ ÖNİZLEME — kartın DIŞINDA, koyu arka planda, sonraki modelin flu fotoğrafı ═══ */}
             {dIdx < dToplam-1 && typeof window !== "undefined" && window.innerWidth > 760 && (() => { const nm = koldaki[dIdx+1]; return (
               <div onClick={(e)=>{ e.stopPropagation(); detayKomsu(1); }} title={vitrinDil==="tr"?"Sonraki":"Next"}
-                style={{ width:"min(250px,22vw)", height:"min(680px,80vh)", flexShrink:0, cursor:"pointer", opacity:0.45, borderRadius:20, overflow:"hidden", transition:"opacity .2s, transform .2s", display:"flex", alignItems:"center", justifyContent:"center", background:"rgba(255,255,255,0.06)", border:"1px solid rgba(255,255,255,0.14)", boxShadow:"0 12px 34px rgba(0,0,0,0.4)", padding:14 }}
+                style={{ width:"min(300px,25vw)", height:"min(660px,76vh)", flexShrink:0, cursor:"pointer", opacity:0.45, borderRadius:20, overflow:"hidden", transition:"opacity .2s, transform .2s", display:"flex", alignItems:"center", justifyContent:"center", background:"rgba(255,255,255,0.06)", border:"1px solid rgba(255,255,255,0.14)", boxShadow:"0 12px 34px rgba(0,0,0,0.4)", padding:8 }}
                 onMouseEnter={e=>{ e.currentTarget.style.opacity=0.85; e.currentTarget.style.transform="scale(1.02)"; }}
                 onMouseLeave={e=>{ e.currentTarget.style.opacity=0.45; e.currentTarget.style.transform="scale(1)"; }}>
                 <div style={{ width:"100%", height:"100%", borderRadius:16, overflow:"hidden", background:"#f2f2f4" }}>
