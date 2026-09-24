@@ -58,8 +58,10 @@ function otoTemaHesapla() {
 let _tema = TEMALAR.charcoal;
 try {
   const mod = localStorage.getItem("atolye_tema_modu");
-  if (mod === "oto") _tema = otoTemaHesapla();
-  else { const t = localStorage.getItem("atolye_tema"); if (t && TEMALAR[t]) _tema = TEMALAR[t]; }
+  // Varsayılan (hiç seçim yapılmamışsa, ya da her yeni deploy/tarayıcıda) OTOMATİK modda başlar.
+  // Sadece kullanıcı elle sabit bir tema seçtiyse ("manuel" olarak kaydedilir) o tema kullanılır.
+  if (mod === "manuel") { const t = localStorage.getItem("atolye_tema"); if (t && TEMALAR[t]) _tema = TEMALAR[t]; }
+  else _tema = otoTemaHesapla();
 } catch {}
 
 // ═══ VURGU RENGİ — Ayarlar'dan değiştirilebilir (charcoal zemin sabit, sadece vurgu) ═══
@@ -2834,14 +2836,15 @@ export default function Root() {
 }
 
 function Atolye({ onSirketDegis }) {
+  // Varsayılan: OTOMATİK (hiç seçim yapılmamışsa). Sadece elle sabit tema seçilmişse ("manuel") o kullanılır.
   const [temaModu, setTemaModu] = useState(() => {
-    try { return localStorage.getItem("atolye_tema_modu") === "oto" ? "oto" : "manuel"; } catch { return "manuel"; }
+    try { return localStorage.getItem("atolye_tema_modu") === "manuel" ? "manuel" : "oto"; } catch { return "oto"; }
   });
   const [tema, setTema] = useState(() => {
     try {
-      if (localStorage.getItem("atolye_tema_modu") === "oto") return otoTemaHesapla();
-      const t = localStorage.getItem("atolye_tema"); return TEMALAR[t] || TEMALAR.altin;
-    } catch { return TEMALAR.altin; }
+      if (localStorage.getItem("atolye_tema_modu") === "manuel") { const t = localStorage.getItem("atolye_tema"); return TEMALAR[t] || TEMALAR.altin; }
+      return otoTemaHesapla();
+    } catch { return otoTemaHesapla(); }
   });
   // Otomatik modda aktifken saat gündüz/gece sınırını geçince temayı canlı güncelle
   useEffect(() => {
