@@ -1884,6 +1884,8 @@ function VitrinModu({ kod, onizleme }) {
   const [arama, setArama] = useState("");
   const [aktifAyar, setAktifAyar] = useState("14K"); // üstten seçilen ayar — gramlar buna göre
   const [detayModel, setDetayModel] = useState(null); // büyük foto/detay modal
+  const [tamFotoAc, setTamFotoAc] = useState(false); // ürün fotosunu tam ekran büyüt
+  const [fotoBuyuk, setFotoBuyuk] = useState(false); // tam ekranda fotoya tıklayınca ek yakınlaştırma (masaüstü için)
   const [gramFiltre, setGramFiltre] = useState({ min: "", max: "" }); // gram aralığı filtresi
   const [aktifOnek, setAktifOnek] = useState(""); // vitrin hangi şirkete ait
   const [oncekiZiyaret, setOncekiZiyaret] = useState(0); // toptancının önceki ziyareti (yeni model tespiti)
@@ -2000,7 +2002,7 @@ function VitrinModu({ kod, onizleme }) {
   };
   const [zumNokta, setZumNokta] = useState(null); // detay noktası yakınlaştırma (bileklik kilit/zincir)
   const dokunmaBasX = useRef(null); // detay ekranında sağa/sola kaydırma takibi
-  useEffect(() => { setZumNokta(null); }, [detayModel?.id]); // farklı model açılınca zoom sıfırlansın
+  useEffect(() => { setZumNokta(null); setTamFotoAc(false); setFotoBuyuk(false); }, [detayModel?.id]); // farklı model açılınca zoom sıfırlansın
   const VITRIN_AYARLAR = [
     { id: "10K", l: "10 Ayar" },
     { id: "14K", l: "14 Ayar" },
@@ -2664,13 +2666,14 @@ function VitrinModu({ kod, onizleme }) {
               if (Math.abs(fark) > 55) detayKomsu(fark > 0 ? -1 : 1); // sağa kaydır = önceki, sola kaydır = sonraki
               dokunmaBasX.current = null;
             }}
-            style={{ background:"var(--vcard)", borderRadius:18, maxWidth:560, width:"100%", maxHeight:"90vh", overflow:"auto", position:"relative", touchAction:"pan-y" }}>
+            style={{ background:"var(--vcard)", borderRadius:18, maxWidth:560, width:"100%", maxHeight:"90vh", overflow:"auto", position:"relative", touchAction:"pan-y pinch-zoom" }}>
             <button onClick={()=>setDetayModel(null)} style={{ position:"absolute", top:14, right:14, zIndex:5, width:30, height:30, borderRadius:"50%", background:"rgba(120,120,128,0.5)", border:"none", color:"#fff", fontSize:15, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}>✕</button>
             {dIdx > 0 && <button onClick={()=>detayKomsu(-1)} title={ce("onceki")} style={{ position:"absolute", top:"38%", left:10, zIndex:5, width:36, height:36, borderRadius:"50%", background:"rgba(120,120,128,0.5)", border:"none", color:"#fff", fontSize:18, fontWeight:700, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}>‹</button>}
             {dIdx < dToplam-1 && <button onClick={()=>detayKomsu(1)} title={vitrinDil==="tr"?"Sonraki":"Next"} style={{ position:"absolute", top:"38%", right:10, zIndex:5, width:36, height:36, borderRadius:"50%", background:"rgba(120,120,128,0.5)", border:"none", color:"#fff", fontSize:18, fontWeight:700, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}>›</button>}
             {dToplam > 1 && <div style={{ position:"absolute", top:14, left:14, zIndex:5, background:"rgba(120,120,128,0.5)", color:"#fff", fontSize:10, fontWeight:700, padding:"4px 9px", borderRadius:980 }}>{dIdx+1} / {dToplam}</div>}
-            <div style={{ aspectRatio:"4/3", background:"#f7f7f8", display:"flex", alignItems:"center", justifyContent:"center", overflow:"hidden", position:"relative" }}>
+            <div onClick={(e)=>{ e.stopPropagation(); if (detayModel.foto) setTamFotoAc(true); }} style={{ aspectRatio:"4/3", background:"#f7f7f8", display:"flex", alignItems:"center", justifyContent:"center", overflow:"hidden", position:"relative", cursor: detayModel.foto ? "zoom-in" : "default" }}>
               {detayModel.foto ? <img src={detayModel.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"contain" }}/> : <div style={{ fontSize:50, color:"#d2d2d7" }}>◇</div>}
+              {detayModel.foto && <div style={{ position:"absolute", bottom:8, right:8, zIndex:3, background:"rgba(0,0,0,0.55)", color:"#fff", width:28, height:28, borderRadius:"50%", display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, pointerEvents:"none" }}>🔍</div>}
               {/* ═══ DETAY LENSLERİ — kırpma (aynı foto) veya ayrı yüklenen foto, tam noktada yüzer ═══ */}
               {Array.isArray(detayModel.detayNoktalari) && detayModel.detayNoktalari.filter(n => (n.tip!=="foto") || n.foto).map(n => {
                 const ayriFoto = n.tip === "foto";
@@ -2714,6 +2717,20 @@ function VitrinModu({ kod, onizleme }) {
               </div>
               );
             })()}
+
+            {/* ═══ ÜRÜN FOTOSUNU TAM EKRAN BÜYÜT — ana fotoya tıklanınca (lenslerden bağımsız) ═══ */}
+            {tamFotoAc && detayModel.foto && (
+              <div onClick={()=>setTamFotoAc(false)} style={{ position:"fixed", inset:0, background:"#0a0a0a", zIndex:200, display:"flex", flexDirection:"column", touchAction:"pinch-zoom pan-x pan-y" }}>
+                <button onClick={(e)=>{ e.stopPropagation(); setTamFotoAc(false); }} style={{ position:"absolute", top:14, right:14, zIndex:5, width:34, height:34, borderRadius:"50%", background:"rgba(120,120,128,0.5)", border:"none", color:"#fff", fontSize:16, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}>✕</button>
+                <div style={{ flex:1, display:"flex", alignItems:"center", justifyContent:"center", overflow:"auto", padding:20 }}>
+                  <img src={detayModel.foto} alt="" onClick={(e)=>{ e.stopPropagation(); setFotoBuyuk(v=>!v); }}
+                    style={{ maxWidth: fotoBuyuk ? "none" : "100%", maxHeight: fotoBuyuk ? "none" : "100%", width: fotoBuyuk ? "180%" : "auto", objectFit:"contain", cursor: fotoBuyuk ? "zoom-out" : "zoom-in", transition:"width .25s" }}/>
+                </div>
+                <div style={{ padding:"12px 18px", textAlign:"center", fontSize:10, color:"rgba(255,255,255,0.5)" }}>
+                  {vitrinDil==="tr" ? "Parmaklarınızla yakınlaştırabilir ya da fotoya dokunarak büyütebilirsiniz" : "Pinch to zoom, or tap the photo to enlarge"}
+                </div>
+              </div>
+            )}
             <div style={{ padding:"22px 24px 24px" }}>
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", marginBottom:20 }}>
                 <span style={{ fontSize:20, fontWeight:500, color:"var(--vt1)", letterSpacing:"-0.02em" }}>{urunCevir(detayModel.ad)}</span>
