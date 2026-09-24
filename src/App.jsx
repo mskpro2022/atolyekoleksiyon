@@ -50,8 +50,17 @@ const TEMALAR = {
   charcoal:  { id:"charcoal",  l:"◆ Charcoal",       ac:"Kömür gri, mavi vurgu",   bg:"#0a0a0a", bg2:"#0a0a0a", gold:"var(--vurgu)", text:"#f0f0f0", sub:"#888888", dim:"#555555", card:"rgba(255,255,255,0.03)", border:"#252525", header:"rgba(255,255,255,0.02)", headerBorder:"#1e1e1e", btnBg:"rgba(var(--vurgu-rgb),0.12)", btnBorder:"rgba(var(--vurgu-rgb),0.3)", accent:"var(--vurgu)", danger:"#ff453a", success:"#30d158", info:"var(--vurgu)" },
 };
 
+// Otomatik gündüz/gece tema — 07:00-19:00 arası gündüz (Beyaz), gerisi gece (Obsidyen)
+function otoTemaHesapla() {
+  const saat = new Date().getHours();
+  return (saat >= 7 && saat < 19) ? TEMALAR.beyaz : TEMALAR.obsidyen;
+}
 let _tema = TEMALAR.charcoal;
-try { const t = localStorage.getItem("atolye_tema"); if (t && TEMALAR[t]) _tema = TEMALAR[t]; } catch {}
+try {
+  const mod = localStorage.getItem("atolye_tema_modu");
+  if (mod === "oto") _tema = otoTemaHesapla();
+  else { const t = localStorage.getItem("atolye_tema"); if (t && TEMALAR[t]) _tema = TEMALAR[t]; }
+} catch {}
 
 // ═══ VURGU RENGİ — Ayarlar'dan değiştirilebilir (charcoal zemin sabit, sadece vurgu) ═══
 const VURGU_RENKLERI = {
@@ -2825,9 +2834,22 @@ export default function Root() {
 }
 
 function Atolye({ onSirketDegis }) {
-  const [tema, setTema] = useState(() => {
-    try { const t = localStorage.getItem("atolye_tema"); return TEMALAR[t] || TEMALAR.altin; } catch { return TEMALAR.altin; }
+  const [temaModu, setTemaModu] = useState(() => {
+    try { return localStorage.getItem("atolye_tema_modu") === "oto" ? "oto" : "manuel"; } catch { return "manuel"; }
   });
+  const [tema, setTema] = useState(() => {
+    try {
+      if (localStorage.getItem("atolye_tema_modu") === "oto") return otoTemaHesapla();
+      const t = localStorage.getItem("atolye_tema"); return TEMALAR[t] || TEMALAR.altin;
+    } catch { return TEMALAR.altin; }
+  });
+  // Otomatik modda aktifken saat gündüz/gece sınırını geçince temayı canlı güncelle
+  useEffect(() => {
+    if (temaModu !== "oto") return;
+    setTema(otoTemaHesapla());
+    const iv = setInterval(() => setTema(otoTemaHesapla()), 5 * 60 * 1000); // 5 dk'da bir kontrol
+    return () => clearInterval(iv);
+  }, [temaModu]);
   // Yazı rengi özelleştirme (tema üstüne override)
   const [yaziRenkleri, setYaziRenkleri] = useState(() => {
     try { return JSON.parse(localStorage.getItem("atolye_yazi_renk") || "{}"); } catch { return {}; }
@@ -2869,8 +2891,14 @@ function Atolye({ onSirketDegis }) {
   const GH = { background:T.btnBg, border:"1px solid "+T.btnBorder, borderRadius:9, padding:"7px 13px", color:T.gold, fontSize:11, fontWeight:700, cursor:"pointer" };
   const RD = { background:"rgba(232,90,79,0.08)", border:"1px solid rgba(232,90,79,0.2)", borderRadius:9, padding:"7px 13px", color:T.danger||"#e85a4f", fontSize:11, fontWeight:700, cursor:"pointer" };
   const temaUygula = (t) => {
+    setTemaModu("manuel");
     setTema(t);
-    try { localStorage.setItem("atolye_tema", t.id); } catch {}
+    try { localStorage.setItem("atolye_tema_modu", "manuel"); localStorage.setItem("atolye_tema", t.id); } catch {}
+  };
+  const otoTemaAc = () => {
+    setTemaModu("oto");
+    setTema(otoTemaHesapla());
+    try { localStorage.setItem("atolye_tema_modu", "oto"); } catch {}
   };
 
   const [kollar,    setKollar]    = useState([]);
@@ -7403,7 +7431,19 @@ ${gbOzet}`;
             <Akordiyon baslik="🎨 Tema & Vurgu Rengi" T={T}>
             <div style={{ background:T.card, border:"1px solid "+T.border, borderRadius:14, padding:"15px 16px" }}>
               <div style={{ fontSize:10, fontWeight:700, color:T.sub, marginBottom:10, letterSpacing:"0.05em", textTransform:"uppercase" }}>Tema</div>
-              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+              <button onClick={otoTemaAc} style={{
+                width:"100%", marginBottom:10, textAlign:"left", cursor:"pointer",
+                background: temaModu==="oto" ? "rgba(var(--vurgu-rgb),0.1)" : T.btnBg,
+                border: temaModu==="oto" ? "2px solid "+T.accent : "1px solid "+T.btnBorder,
+                borderRadius:12, padding:"10px 14px", display:"flex", alignItems:"center", gap:10
+              }}>
+                <span style={{ fontSize:18 }}>🌓</span>
+                <div>
+                  <div style={{ fontSize:11, fontWeight:800, color:T.text }}>Otomatik {temaModu==="oto" && "✓"}</div>
+                  <div style={{ fontSize:9, color:T.sub }}>Gündüz (07:00-19:00) Beyaz · Gece Obsidyen — saat değişince otomatik geçer</div>
+                </div>
+              </button>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, opacity: temaModu==="oto" ? 0.5 : 1 }}>
                 {Object.values(TEMALAR).map(t => (
                   <button key={t.id} onClick={()=>temaUygula(t)} style={{
                     background: t.bg, border: tema.id===t.id ? "2px solid "+t.accent : "1px solid "+t.border,
