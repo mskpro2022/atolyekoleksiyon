@@ -2002,7 +2002,10 @@ function VitrinModu({ kod, onizleme }) {
   };
   const [zumNokta, setZumNokta] = useState(null); // detay noktası yakınlaştırma (bileklik kilit/zincir)
   const dokunmaBasX = useRef(null); // detay ekranında sağa/sola kaydırma takibi
-  useEffect(() => { setZumNokta(null); setTamFotoAc(false); setFotoBuyuk(false); }, [detayModel?.id]); // farklı model açılınca zoom sıfırlansın
+  const [surukleX, setSurukleX] = useState(0); // fotoğrafı parmakla/mouse ile sürüklerken anlık kayma miktarı (px)
+  const [surukluyor, setSurukluyor] = useState(false); // sürükleme sırasında geçişi anlık takip etsin diye (transition kapalı)
+  const surukleRef = useRef({ basX: null, aktif: false });
+  useEffect(() => { setZumNokta(null); setTamFotoAc(false); setFotoBuyuk(false); setSurukleX(0); setSurukluyor(false); }, [detayModel?.id]); // farklı model açılınca zoom sıfırlansın
   const VITRIN_AYARLAR = [
     { id: "10K", l: "10 Ayar" },
     { id: "14K", l: "14 Ayar" },
@@ -2661,27 +2664,43 @@ function VitrinModu({ kod, onizleme }) {
             {/* ═══ SOLDAKİ ÖNİZLEME — kartın DIŞINDA, koyu arka planda, önceki modelin flu fotoğrafı ═══ */}
             {dIdx > 0 && typeof window !== "undefined" && window.innerWidth > 760 && (() => { const pm = koldaki[dIdx-1]; return (
               <div onClick={(e)=>{ e.stopPropagation(); detayKomsu(-1); }} title={ce("onceki")}
-                style={{ width:"min(210px,19vw)", height:"min(640px,78vh)", flexShrink:0, cursor:"pointer", opacity:0.4, borderRadius:16, overflow:"hidden", transition:"opacity .2s", display:"flex", alignItems:"center", justifyContent:"center" }}
-                onMouseEnter={e=>{ e.currentTarget.style.opacity=0.8; }}
-                onMouseLeave={e=>{ e.currentTarget.style.opacity=0.4; }}>
-                {pm?.foto ? <img src={pm.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"contain" }}/> : <div style={{ width:"100%", height:"100%", background:"#eee" }}/>}
+                style={{ width:"min(250px,22vw)", height:"min(680px,80vh)", flexShrink:0, cursor:"pointer", opacity:0.45, borderRadius:20, overflow:"hidden", transition:"opacity .2s, transform .2s", display:"flex", alignItems:"center", justifyContent:"center", background:"rgba(255,255,255,0.06)", border:"1px solid rgba(255,255,255,0.14)", boxShadow:"0 12px 34px rgba(0,0,0,0.4)", padding:14 }}
+                onMouseEnter={e=>{ e.currentTarget.style.opacity=0.85; e.currentTarget.style.transform="scale(1.02)"; }}
+                onMouseLeave={e=>{ e.currentTarget.style.opacity=0.45; e.currentTarget.style.transform="scale(1)"; }}>
+                {pm?.foto ? <img src={pm.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"contain", borderRadius:10 }}/> : <div style={{ width:"100%", height:"100%", background:"#eee", borderRadius:10 }}/>}
               </div>
             ); })()}
           <div onClick={e=>e.stopPropagation()}
-            onTouchStart={e=>{ dokunmaBasX.current = e.touches[0].clientX; }}
-            onTouchEnd={e=>{
-              if (dokunmaBasX.current === null) return;
-              const fark = e.changedTouches[0].clientX - dokunmaBasX.current;
-              if (Math.abs(fark) > 55) detayKomsu(fark > 0 ? -1 : 1); // sağa kaydır = önceki, sola kaydır = sonraki
-              dokunmaBasX.current = null;
-            }}
             style={{ background:"var(--vcard)", borderRadius:18, maxWidth:560, width:"100%", maxHeight:"90vh", overflow:"auto", position:"relative", touchAction:"pan-y pinch-zoom" }}>
             <button onClick={()=>setDetayModel(null)} style={{ position:"absolute", top:14, right:14, zIndex:5, width:30, height:30, borderRadius:"50%", background:"rgba(120,120,128,0.5)", border:"none", color:"#fff", fontSize:15, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}>✕</button>
             {dIdx > 0 && <button onClick={()=>detayKomsu(-1)} title={ce("onceki")} style={{ position:"absolute", top:"38%", left:10, zIndex:5, width:36, height:36, borderRadius:"50%", background:"rgba(120,120,128,0.5)", border:"none", color:"#fff", fontSize:18, fontWeight:700, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}>‹</button>}
             {dIdx < dToplam-1 && <button onClick={()=>detayKomsu(1)} title={vitrinDil==="tr"?"Sonraki":"Next"} style={{ position:"absolute", top:"38%", right:10, zIndex:5, width:36, height:36, borderRadius:"50%", background:"rgba(120,120,128,0.5)", border:"none", color:"#fff", fontSize:18, fontWeight:700, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}>›</button>}
             {dToplam > 1 && <div style={{ position:"absolute", top:14, left:14, zIndex:5, background:"rgba(120,120,128,0.5)", color:"#fff", fontSize:10, fontWeight:700, padding:"4px 9px", borderRadius:980 }}>{dIdx+1} / {dToplam}</div>}
-            <div onClick={(e)=>{ e.stopPropagation(); if (detayModel.foto) setTamFotoAc(true); }} style={{ height:"min(640px,78vh)", background:"#f7f7f8", display:"flex", alignItems:"flex-start", justifyContent:"center", overflow:"hidden", position:"relative", cursor: detayModel.foto ? "zoom-in" : "default" }}>
-              {detayModel.foto ? <img src={detayModel.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"contain", objectPosition:"center 20%" }}/> : <div style={{ fontSize:50, color:"#d2d2d7" }}>◇</div>}
+            <div
+              onPointerDown={e=>{ surukleRef.current = { basX: e.clientX, aktif: true, suruklendi: false }; setSurukluyor(true); }}
+              onPointerMove={e=>{
+                const s = surukleRef.current;
+                if (!s.aktif) return;
+                const fark = e.clientX - s.basX;
+                if (Math.abs(fark) > 6) s.suruklendi = true;
+                // uç noktalarda (ilk/son model) hafif direnç — kauçuk bant hissi
+                let sinirli = fark;
+                if ((fark > 0 && dIdx === 0) || (fark < 0 && dIdx === dToplam-1)) sinirli = fark * 0.35;
+                setSurukleX(Math.max(-260, Math.min(260, sinirli)));
+              }}
+              onPointerUp={e=>{
+                const s = surukleRef.current;
+                if (!s.aktif) return;
+                s.aktif = false;
+                setSurukluyor(false);
+                const fark = e.clientX - s.basX;
+                if (Math.abs(fark) > 60) { detayKomsu(fark > 0 ? -1 : 1); }
+                setSurukleX(0);
+              }}
+              onPointerLeave={()=>{ if (surukleRef.current.aktif) { surukleRef.current.aktif=false; setSurukluyor(false); setSurukleX(0); } }}
+              onClick={(e)=>{ e.stopPropagation(); if (surukleRef.current.suruklendi) { surukleRef.current.suruklendi=false; return; } if (detayModel.foto) setTamFotoAc(true); }}
+              style={{ maxHeight:"min(640px,72vh)", background:"#f7f7f8", display:"flex", alignItems:"center", justifyContent:"center", overflow:"hidden", position:"relative", cursor: detayModel.foto ? "grab" : "default", touchAction:"pan-y" }}>
+              {detayModel.foto ? <img src={detayModel.foto} alt="" draggable={false} style={{ width:"100%", height:"auto", maxHeight:"min(640px,72vh)", objectFit:"contain", display:"block", transform:`translateX(${surukleX}px)`, transition: surukluyor ? "none" : "transform .32s cubic-bezier(0.22,1,0.36,1)", userSelect:"none" }}/> : <div style={{ width:"100%", height:280, display:"flex", alignItems:"center", justifyContent:"center", fontSize:50, color:"#d2d2d7" }}>◇</div>}
               {detayModel.foto && <div style={{ position:"absolute", bottom:8, right:8, zIndex:3, background:"rgba(0,0,0,0.55)", color:"#fff", width:28, height:28, borderRadius:"50%", display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, pointerEvents:"none" }}>🔍</div>}
               {/* ═══ DETAY LENSLERİ — kırpma (aynı foto) veya ayrı yüklenen foto, tam noktada yüzer ═══ */}
               {Array.isArray(detayModel.detayNoktalari) && detayModel.detayNoktalari.filter(n => (n.tip!=="foto") || n.foto).map(n => {
@@ -2818,10 +2837,10 @@ function VitrinModu({ kod, onizleme }) {
             {/* ═══ SAĞDAKİ ÖNİZLEME — kartın DIŞINDA, koyu arka planda, sonraki modelin flu fotoğrafı ═══ */}
             {dIdx < dToplam-1 && typeof window !== "undefined" && window.innerWidth > 760 && (() => { const nm = koldaki[dIdx+1]; return (
               <div onClick={(e)=>{ e.stopPropagation(); detayKomsu(1); }} title={vitrinDil==="tr"?"Sonraki":"Next"}
-                style={{ width:"min(210px,19vw)", height:"min(640px,78vh)", flexShrink:0, cursor:"pointer", opacity:0.4, borderRadius:16, overflow:"hidden", transition:"opacity .2s", display:"flex", alignItems:"center", justifyContent:"center" }}
-                onMouseEnter={e=>{ e.currentTarget.style.opacity=0.8; }}
-                onMouseLeave={e=>{ e.currentTarget.style.opacity=0.4; }}>
-                {nm?.foto ? <img src={nm.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"contain" }}/> : <div style={{ width:"100%", height:"100%", background:"#eee" }}/>}
+                style={{ width:"min(250px,22vw)", height:"min(680px,80vh)", flexShrink:0, cursor:"pointer", opacity:0.45, borderRadius:20, overflow:"hidden", transition:"opacity .2s, transform .2s", display:"flex", alignItems:"center", justifyContent:"center", background:"rgba(255,255,255,0.06)", border:"1px solid rgba(255,255,255,0.14)", boxShadow:"0 12px 34px rgba(0,0,0,0.4)", padding:14 }}
+                onMouseEnter={e=>{ e.currentTarget.style.opacity=0.85; e.currentTarget.style.transform="scale(1.02)"; }}
+                onMouseLeave={e=>{ e.currentTarget.style.opacity=0.45; e.currentTarget.style.transform="scale(1)"; }}>
+                {nm?.foto ? <img src={nm.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"contain", borderRadius:10 }}/> : <div style={{ width:"100%", height:"100%", background:"#eee", borderRadius:10 }}/>}
               </div>
             ); })()}
         </div>
