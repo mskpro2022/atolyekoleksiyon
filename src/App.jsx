@@ -2667,7 +2667,9 @@ function VitrinModu({ kod, onizleme }) {
                 style={{ width:"min(250px,22vw)", height:"min(680px,80vh)", flexShrink:0, cursor:"pointer", opacity:0.45, borderRadius:20, overflow:"hidden", transition:"opacity .2s, transform .2s", display:"flex", alignItems:"center", justifyContent:"center", background:"rgba(255,255,255,0.06)", border:"1px solid rgba(255,255,255,0.14)", boxShadow:"0 12px 34px rgba(0,0,0,0.4)", padding:14 }}
                 onMouseEnter={e=>{ e.currentTarget.style.opacity=0.85; e.currentTarget.style.transform="scale(1.02)"; }}
                 onMouseLeave={e=>{ e.currentTarget.style.opacity=0.45; e.currentTarget.style.transform="scale(1)"; }}>
-                {pm?.foto ? <img src={pm.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"contain", borderRadius:10 }}/> : <div style={{ width:"100%", height:"100%", background:"#eee", borderRadius:10 }}/>}
+                <div style={{ width:"100%", height:"100%", borderRadius:16, overflow:"hidden", background:"#f2f2f4" }}>
+                  {pm?.foto ? <img src={pm.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"contain" }}/> : <div style={{ width:"100%", height:"100%", background:"#eee" }}/>}
+                </div>
               </div>
             ); })()}
           <div onClick={e=>e.stopPropagation()}
@@ -2840,7 +2842,9 @@ function VitrinModu({ kod, onizleme }) {
                 style={{ width:"min(250px,22vw)", height:"min(680px,80vh)", flexShrink:0, cursor:"pointer", opacity:0.45, borderRadius:20, overflow:"hidden", transition:"opacity .2s, transform .2s", display:"flex", alignItems:"center", justifyContent:"center", background:"rgba(255,255,255,0.06)", border:"1px solid rgba(255,255,255,0.14)", boxShadow:"0 12px 34px rgba(0,0,0,0.4)", padding:14 }}
                 onMouseEnter={e=>{ e.currentTarget.style.opacity=0.85; e.currentTarget.style.transform="scale(1.02)"; }}
                 onMouseLeave={e=>{ e.currentTarget.style.opacity=0.45; e.currentTarget.style.transform="scale(1)"; }}>
-                {nm?.foto ? <img src={nm.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"contain", borderRadius:10 }}/> : <div style={{ width:"100%", height:"100%", background:"#eee", borderRadius:10 }}/>}
+                <div style={{ width:"100%", height:"100%", borderRadius:16, overflow:"hidden", background:"#f2f2f4" }}>
+                  {nm?.foto ? <img src={nm.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"contain" }}/> : <div style={{ width:"100%", height:"100%", background:"#eee" }}/>}
+                </div>
               </div>
             ); })()}
         </div>
