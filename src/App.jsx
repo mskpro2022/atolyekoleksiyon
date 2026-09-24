@@ -2671,21 +2671,40 @@ function VitrinModu({ kod, onizleme }) {
             {dIdx > 0 && <button onClick={()=>detayKomsu(-1)} title={ce("onceki")} style={{ position:"absolute", top:"38%", left:10, zIndex:5, width:36, height:36, borderRadius:"50%", background:"rgba(120,120,128,0.5)", border:"none", color:"#fff", fontSize:18, fontWeight:700, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}>‹</button>}
             {dIdx < dToplam-1 && <button onClick={()=>detayKomsu(1)} title={vitrinDil==="tr"?"Sonraki":"Next"} style={{ position:"absolute", top:"38%", right:10, zIndex:5, width:36, height:36, borderRadius:"50%", background:"rgba(120,120,128,0.5)", border:"none", color:"#fff", fontSize:18, fontWeight:700, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}>›</button>}
             {dToplam > 1 && <div style={{ position:"absolute", top:14, left:14, zIndex:5, background:"rgba(120,120,128,0.5)", color:"#fff", fontSize:10, fontWeight:700, padding:"4px 9px", borderRadius:980 }}>{dIdx+1} / {dToplam}</div>}
-            <div onClick={(e)=>{ e.stopPropagation(); if (detayModel.foto) setTamFotoAc(true); }} style={{ aspectRatio:"4/3", background:"#f7f7f8", display:"flex", alignItems:"center", justifyContent:"center", overflow:"hidden", position:"relative", cursor: detayModel.foto ? "zoom-in" : "default" }}>
-              {detayModel.foto ? <img src={detayModel.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"contain" }}/> : <div style={{ fontSize:50, color:"#d2d2d7" }}>◇</div>}
-              {detayModel.foto && <div style={{ position:"absolute", bottom:8, right:8, zIndex:3, background:"rgba(0,0,0,0.55)", color:"#fff", width:28, height:28, borderRadius:"50%", display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, pointerEvents:"none" }}>🔍</div>}
-              {/* ═══ DETAY LENSLERİ — kırpma (aynı foto) veya ayrı yüklenen foto, tam noktada yüzer ═══ */}
-              {Array.isArray(detayModel.detayNoktalari) && detayModel.detayNoktalari.filter(n => (n.tip!=="foto") || n.foto).map(n => {
-                const ayriFoto = n.tip === "foto";
-                const r = Math.min(0.2, Math.max(0.05, n.r || 0.12));
-                const zoom = Math.round((1/r) * 100); // % — kırpma modunda nokta-odaklı yakınlaştırma
-                return (
-                  <button key={n.id} onClick={(e)=>{ e.stopPropagation(); setZumNokta(n); }} title={n.etiket}
-                    style={{ position:"absolute", left:((n.cx||0.5)*100)+"%", top:((n.cy||0.5)*100)+"%", transform:"translate(-50%,-50%)", width:52, height:52, borderRadius:"50%", overflow:"hidden", border:"2.5px solid #fff", boxShadow:"0 3px 14px rgba(0,0,0,0.45)", cursor:"pointer", padding:0, background:"#f7f7f8", animation:"vmpulse 2.4s ease-in-out infinite" }}>
-                    {ayriFoto ? <img src={n.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }}/> : <img src={detayModel.foto} alt="" style={lensImgStil(n.cx, n.cy, zoom)}/>}
-                  </button>
-                );
-              })}
+            {/* ═══ FİLM ŞERİDİ — ortada net ana foto, yanlarda önceki/sonraki modelin flu önizlemesi ═══ */}
+            <div style={{ display:"flex", alignItems:"stretch", aspectRatio:"4/3", background:"#f7f7f8", overflow:"hidden" }}>
+              {dIdx > 0 && (() => { const pm = koldaki[dIdx-1]; return (
+                <div onClick={(e)=>{ e.stopPropagation(); detayKomsu(-1); }} title={ce("onceki")}
+                  style={{ width:"15%", flexShrink:0, cursor:"pointer", opacity:0.38, filter:"blur(1.5px)", transition:"opacity .2s, filter .2s" }}
+                  onMouseEnter={e=>{ e.currentTarget.style.opacity=0.65; e.currentTarget.style.filter="blur(0.5px)"; }}
+                  onMouseLeave={e=>{ e.currentTarget.style.opacity=0.38; e.currentTarget.style.filter="blur(1.5px)"; }}>
+                  {pm?.foto ? <img src={pm.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }}/> : <div style={{ width:"100%", height:"100%", background:"#eee" }}/>}
+                </div>
+              ); })()}
+              <div onClick={(e)=>{ e.stopPropagation(); if (detayModel.foto) setTamFotoAc(true); }} style={{ flex:1, minWidth:0, display:"flex", alignItems:"center", justifyContent:"center", overflow:"hidden", position:"relative", cursor: detayModel.foto ? "zoom-in" : "default" }}>
+                {detayModel.foto ? <img src={detayModel.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"contain" }}/> : <div style={{ fontSize:50, color:"#d2d2d7" }}>◇</div>}
+                {detayModel.foto && <div style={{ position:"absolute", bottom:8, right:8, zIndex:3, background:"rgba(0,0,0,0.55)", color:"#fff", width:28, height:28, borderRadius:"50%", display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, pointerEvents:"none" }}>🔍</div>}
+                {/* ═══ DETAY LENSLERİ — kırpma (aynı foto) veya ayrı yüklenen foto, tam noktada yüzer ═══ */}
+                {Array.isArray(detayModel.detayNoktalari) && detayModel.detayNoktalari.filter(n => (n.tip!=="foto") || n.foto).map(n => {
+                  const ayriFoto = n.tip === "foto";
+                  const r = Math.min(0.2, Math.max(0.05, n.r || 0.12));
+                  const zoom = Math.round((1/r) * 100); // % — kırpma modunda nokta-odaklı yakınlaştırma
+                  return (
+                    <button key={n.id} onClick={(e)=>{ e.stopPropagation(); setZumNokta(n); }} title={n.etiket}
+                      style={{ position:"absolute", left:((n.cx||0.5)*100)+"%", top:((n.cy||0.5)*100)+"%", transform:"translate(-50%,-50%)", width:52, height:52, borderRadius:"50%", overflow:"hidden", border:"2.5px solid #fff", boxShadow:"0 3px 14px rgba(0,0,0,0.45)", cursor:"pointer", padding:0, background:"#f7f7f8", animation:"vmpulse 2.4s ease-in-out infinite" }}>
+                      {ayriFoto ? <img src={n.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }}/> : <img src={detayModel.foto} alt="" style={lensImgStil(n.cx, n.cy, zoom)}/>}
+                    </button>
+                  );
+                })}
+              </div>
+              {dIdx < dToplam-1 && (() => { const nm = koldaki[dIdx+1]; return (
+                <div onClick={(e)=>{ e.stopPropagation(); detayKomsu(1); }} title={vitrinDil==="tr"?"Sonraki":"Next"}
+                  style={{ width:"15%", flexShrink:0, cursor:"pointer", opacity:0.38, filter:"blur(1.5px)", transition:"opacity .2s, filter .2s" }}
+                  onMouseEnter={e=>{ e.currentTarget.style.opacity=0.65; e.currentTarget.style.filter="blur(0.5px)"; }}
+                  onMouseLeave={e=>{ e.currentTarget.style.opacity=0.38; e.currentTarget.style.filter="blur(1.5px)"; }}>
+                  {nm?.foto ? <img src={nm.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }}/> : <div style={{ width:"100%", height:"100%", background:"#eee" }}/>}
+                </div>
+              ); })()}
             </div>
 
             {/* ═══ DETAY BÜYÜTME — lense tıklanınca kırpılmış bölgeyi ya da ayrı fotoyu tam ekran göster ═══ */}
