@@ -2006,6 +2006,19 @@ function VitrinModu({ kod, onizleme }) {
   const [surukluyor, setSurukluyor] = useState(false); // sürükleme sırasında geçişi anlık takip etsin diye (transition kapalı)
   const surukleRef = useRef({ basX: null, aktif: false });
   useEffect(() => { setZumNokta(null); setTamFotoAc(false); setFotoBuyuk(false); setSurukleX(0); setSurukluyor(false); }, [detayModel?.id]); // farklı model açılınca zoom sıfırlansın
+  // Yan çerçevelerin boyu ortadaki kart ile birebir aynı olsun diye kartın gerçek yüksekliğini ölçüp takip ediyoruz
+  const detayKartRef = useRef(null);
+  const [detayKartH, setDetayKartH] = useState(0);
+  useEffect(() => {
+    if (!detayModel) return;
+    const el = detayKartRef.current;
+    if (!el) return;
+    const guncelle = () => setDetayKartH(el.offsetHeight);
+    guncelle();
+    const ro = new ResizeObserver(guncelle);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [detayModel?.id]);
   const VITRIN_AYARLAR = [
     { id: "10K", l: "10 Ayar" },
     { id: "14K", l: "14 Ayar" },
@@ -2664,7 +2677,7 @@ function VitrinModu({ kod, onizleme }) {
             {/* ═══ SOLDAKİ ÖNİZLEME — kartın DIŞINDA, koyu arka planda, önceki modelin flu fotoğrafı ═══ */}
             {dIdx > 0 && typeof window !== "undefined" && window.innerWidth > 760 && (() => { const pm = koldaki[dIdx-1]; return (
               <div onClick={(e)=>{ e.stopPropagation(); detayKomsu(-1); }} title={ce("onceki")}
-                style={{ width:"min(300px,25vw)", height:"min(660px,76vh)", flexShrink:0, cursor:"pointer", opacity:0.45, borderRadius:20, overflow:"hidden", transition:"opacity .2s, transform .2s", display:"flex", alignItems:"center", justifyContent:"center", background:"rgba(255,255,255,0.06)", border:"1px solid rgba(255,255,255,0.14)", boxShadow:"0 12px 34px rgba(0,0,0,0.4)", padding:8 }}
+                style={{ width:"min(300px,25vw)", height: detayKartH ? detayKartH+"px" : "min(660px,76vh)", flexShrink:0, cursor:"pointer", opacity:0.45, borderRadius:20, overflow:"hidden", transition:"opacity .2s, transform .2s, height .2s", display:"flex", alignItems:"center", justifyContent:"center", background:"rgba(255,255,255,0.06)", border:"1px solid rgba(255,255,255,0.14)", boxShadow:"0 12px 34px rgba(0,0,0,0.4)", padding:8 }}
                 onMouseEnter={e=>{ e.currentTarget.style.opacity=0.85; e.currentTarget.style.transform="scale(1.02)"; }}
                 onMouseLeave={e=>{ e.currentTarget.style.opacity=0.45; e.currentTarget.style.transform="scale(1)"; }}>
                 <div style={{ width:"100%", height:"100%", borderRadius:16, overflow:"hidden", background:"#f2f2f4" }}>
@@ -2672,7 +2685,7 @@ function VitrinModu({ kod, onizleme }) {
                 </div>
               </div>
             ); })()}
-          <div onClick={e=>e.stopPropagation()}
+          <div ref={detayKartRef} onClick={e=>e.stopPropagation()}
             style={{ background:"var(--vcard)", borderRadius:18, maxWidth:560, width:"100%", maxHeight:"90vh", overflow:"auto", position:"relative", touchAction:"pan-y pinch-zoom" }}>
             <button onClick={()=>setDetayModel(null)} style={{ position:"absolute", top:14, right:14, zIndex:5, width:30, height:30, borderRadius:"50%", background:"rgba(120,120,128,0.5)", border:"none", color:"#fff", fontSize:15, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}>✕</button>
             {dIdx > 0 && <button onClick={()=>detayKomsu(-1)} title={ce("onceki")} style={{ position:"absolute", top:"38%", left:10, zIndex:5, width:36, height:36, borderRadius:"50%", background:"rgba(120,120,128,0.5)", border:"none", color:"#fff", fontSize:18, fontWeight:700, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}>‹</button>}
@@ -2839,7 +2852,7 @@ function VitrinModu({ kod, onizleme }) {
             {/* ═══ SAĞDAKİ ÖNİZLEME — kartın DIŞINDA, koyu arka planda, sonraki modelin flu fotoğrafı ═══ */}
             {dIdx < dToplam-1 && typeof window !== "undefined" && window.innerWidth > 760 && (() => { const nm = koldaki[dIdx+1]; return (
               <div onClick={(e)=>{ e.stopPropagation(); detayKomsu(1); }} title={vitrinDil==="tr"?"Sonraki":"Next"}
-                style={{ width:"min(300px,25vw)", height:"min(660px,76vh)", flexShrink:0, cursor:"pointer", opacity:0.45, borderRadius:20, overflow:"hidden", transition:"opacity .2s, transform .2s", display:"flex", alignItems:"center", justifyContent:"center", background:"rgba(255,255,255,0.06)", border:"1px solid rgba(255,255,255,0.14)", boxShadow:"0 12px 34px rgba(0,0,0,0.4)", padding:8 }}
+                style={{ width:"min(300px,25vw)", height: detayKartH ? detayKartH+"px" : "min(660px,76vh)", flexShrink:0, cursor:"pointer", opacity:0.45, borderRadius:20, overflow:"hidden", transition:"opacity .2s, transform .2s, height .2s", display:"flex", alignItems:"center", justifyContent:"center", background:"rgba(255,255,255,0.06)", border:"1px solid rgba(255,255,255,0.14)", boxShadow:"0 12px 34px rgba(0,0,0,0.4)", padding:8 }}
                 onMouseEnter={e=>{ e.currentTarget.style.opacity=0.85; e.currentTarget.style.transform="scale(1.02)"; }}
                 onMouseLeave={e=>{ e.currentTarget.style.opacity=0.45; e.currentTarget.style.transform="scale(1)"; }}>
                 <div style={{ width:"100%", height:"100%", borderRadius:16, overflow:"hidden", background:"#f2f2f4" }}>
