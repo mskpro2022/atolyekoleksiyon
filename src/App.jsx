@@ -1,4 +1,4 @@
-import { dbLoad, dbSave, fotoYukleStorage, yedekKaydet, yedekListesi, yedekGetir, bugunYedekVarMi, tabloModelleriSenkron, tabloSiparisleriSenkron, tabloSiparisleriToplu, tabloMusterileriYaz, akilliModelOku, akilliSiparisOku, akilliMusteriOku, islemKaydet, islemGecmisiGetir, realtimeBaslat, tabloKoleksiyonlariYaz, tabloKasaYaz, akilliKoleksiyonOku, akilliKasaOku, tabloKoleksiyonlariOku, tabloKasaOku, saglikDenetimi, ekranSunucuFarki, toptanciKaydet, toptancilariGetir, toptanciSil, vitrinAktiviteKaydet, vitrinGecmisiGetir, vitrinEnCokBakilan, vitrinOzetGetir, vitrinAnaliz } from "./supabase.js";
+import { dbLoad, dbSave, fotoYukleStorage, yedekKaydet, yedekListesi, yedekGetir, bugunYedekVarMi, tabloModelleriSenkron, tabloModelleriToplu, tabloModelSil, tabloSiparisleriSenkron, tabloSiparisleriToplu, tabloMusterileriYaz, akilliModelOku, akilliSiparisOku, akilliMusteriOku, islemKaydet, islemGecmisiGetir, realtimeBaslat, tabloKoleksiyonlariYaz, tabloKasaYaz, akilliKoleksiyonOku, akilliKasaOku, tabloKoleksiyonlariOku, tabloKasaOku, saglikDenetimi, ekranSunucuFarki, toptanciKaydet, toptancilariGetir, toptanciSil, vitrinAktiviteKaydet, vitrinGecmisiGetir, vitrinEnCokBakilan, vitrinOzetGetir, vitrinAnaliz } from "./supabase.js";
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 
 const uid = () => "x" + Date.now() + Math.random().toString(36).substr(2, 5);
@@ -513,10 +513,10 @@ function dogalSirala(a, b) {
   const ma = ka.match(/^([A-Za-zÇĞİÖŞÜçğışöşü\-]*)(\d+)(.*)$/);
   const mb = kb.match(/^([A-Za-zÇĞİÖŞÜçğışöşü\-]*)(\d+)(.*)$/);
   if (ma && mb) {
-    const prefCmp = ma[1].localeCompare(mb[1], "tr");
-    if (prefCmp !== 0) return prefCmp;
     const numCmp = Number(ma[2]) - Number(mb[2]);
     if (numCmp !== 0) return numCmp;
+    const prefCmp = ma[1].localeCompare(mb[1], "tr");
+    if (prefCmp !== 0) return prefCmp;
     return ma[3].localeCompare(mb[3], "tr");
   }
   return ka.localeCompare(kb, "tr");
@@ -3455,7 +3455,8 @@ function Atolye({ onSirketDegis }) {
     img.src = base64;
   });
 
-  const svM = useCallback(async d => {
+  const svM = useCallback(async (d, opts) => {
+    const { bekle = false, zorla = false } = opts || {};
     console.log("💾 Model yazılıyor → şirket öneği: [" + AKTIF_SIRKET_ONEK + "] (" + (AKTIF_SIRKET_ONEK==="bsp2_"?"BSP":AKTIF_SIRKET_ONEK===""?"MSK":AKTIF_SIRKET_ONEK) + "), " + d.length + " model");
     // ═══ ÇAKIŞMA KORUMASI ═══
     // modeller tablosunda benzersizlik SADECE `id` üzerinde (onConflict:'id').
@@ -3517,11 +3518,57 @@ function Atolye({ onSirketDegis }) {
     } catch (e) { /* birleştirme başarısızsa yine de kaydet, veri kaybetme */ }
     sonKendiYazma.current = Date.now(); // Realtime kendi yazmamızı yok saysın
     // Tabloya SENKRON et (tek kaynak — silinenler temizlenir, boşaltma/toplu-silme koruması içinde)
-    tabloModelleriSenkron(AKTIF_SIRKET_ONEK, yazilacak).then(r => {
+    const senkronP = tabloModelleriSenkron(AKTIF_SIRKET_ONEK, yazilacak, zorla).then(r => {
       sonKendiYazma.current = Date.now(); // senkron bitti, damgayı YENİLE (uzun sürdüyse)
       const v = Date.now(); sv("v7m_v", v); versiyonRef.current.v7m = v; // versiyon damgası — polling için (hafif, tek sayı)
-      if (r.yazilan !== yazilacak.length) console.warn("⚠ Tablo senkron: " + r.yazilan + "/" + yazilacak.length);
-    }).catch(e => console.error("Tablo senkron (arka plan):", e.message));
+      if (r.iptal) console.error("🛑 Tablo senkron İPTAL edildi (güvenlik eşiği) — hiçbir model yazılmadı");
+      else if (r.yazilan !== yazilacak.length) console.warn("⚠ Tablo senkron: " + r.yazilan + "/" + yazilacak.length);
+      return { ...r, toplam: yazilacak.length };
+    }).catch(e => {
+      console.error("Tablo senkron (arka plan):", e.message);
+      return { yazilan: 0, silinen: 0, hata: e.message, toplam: yazilacak.length };
+    });
+    // Normal düzenlemelerde (bekle yok) arka planda devam eder, kullanıcı beklemez.
+    // Geri yükleme gibi kritik akışlar bekle:true geçip GERÇEK sonucu (iptal/hata) görebilir.
+    if (bekle) return await senkronP;
+    return { beklenmedi: true, toplam: yazilacak.length };
+  }, []);
+  // ═══ UPSERT (SADECE İLGİLİ KAYITLAR) — Kopyala/Toplu Kopyala için ═══
+  // svM tüm tabloyu "aynalar" (listede olmayanı siler) — bu, iki işlem üst üste gelince
+  // (örn. bir kopyalama + hemen ardından başka bir düzenleme) birinin diğerinin az önce
+  // eklediği kaydı, henüz kendi state'inde görmediği için SİLMESİNE yol açabiliyordu.
+  // svMUpsert bunun yerine SADECE verilen modelleri yazar/siler, tabloyu aynalamaz —
+  // böylece başka bir işlemin eski/stale listesi bu kayıtları asla silemez.
+  const svMUpsert = useCallback(async (yeniModeller, silinecekIdler = []) => {
+    let d = yeniModeller || [];
+    if (AKTIF_SIRKET_ONEK) {
+      const on = AKTIF_SIRKET_ONEK;
+      d = d.map(m => { if (!m || !m.id) return m; const id = String(m.id); return id.startsWith(on) ? m : { ...m, id: on + id }; });
+    }
+    const silSet = new Set((silinecekIdler || []).map(String));
+    setModeller(prev => {
+      const kalanlar = prev.filter(m => !silSet.has(String(m.id)));
+      const idMap = new Map(kalanlar.map(m => [m.id, m]));
+      d.forEach(m => { if (m && m.id) idMap.set(m.id, m); });
+      const yeni = [...idMap.values()];
+      try {
+        const fc = localStorage.getItem("atolye_full_cache_" + AKTIF_SIRKET_ONEK);
+        const fcd = fc ? JSON.parse(fc) : {};
+        localStorage.setItem("atolye_full_cache_" + AKTIF_SIRKET_ONEK, JSON.stringify({ ...fcd, m: yeni, ts: Date.now() }));
+      } catch {}
+      return yeni;
+    });
+    sonKendiYazma.current = Date.now();
+    try {
+      if (silSet.size) { for (const id of silSet) await tabloModelSil(id); }
+      if (d.length) await tabloModelleriToplu(AKTIF_SIRKET_ONEK, d);
+      const v = Date.now(); sv("v7m_v", v); versiyonRef.current.v7m = v;
+      sonKendiYazma.current = Date.now();
+      return { ok: true, yazilan: d.length, silinen: silSet.size };
+    } catch (e) {
+      console.error("svMUpsert hata:", e.message);
+      return { ok: false, hata: e.message };
+    }
   }, []);
   const svS = useCallback(async d => {
     setSiparisler(d);
@@ -3893,13 +3940,13 @@ function Atolye({ onSirketDegis }) {
       const ma=ka.match(/^([A-Za-zÇĞİÖŞÜçğışöşü\-]*)(\d+)(.*)$/);
       const mb=kb.match(/^([A-Za-zÇĞİÖŞÜçğışöşü\-]*)(\d+)(.*)$/);
       if (ma && mb) {
-        // Önce prefix karşılaştır
-        const prefCmp = ma[1].localeCompare(mb[1],"tr");
-        if (prefCmp !== 0) return prefCmp;
-        // Sonra ana sayı
+        // Önce rakam (sayı) karşılaştır — 8K < 22K, CRE9 < ALT100 gibi, harf önekine bakmadan
         const numCmp = Number(ma[2]) - Number(mb[2]);
         if (numCmp !== 0) return numCmp;
-        // Sayı aynıysa suffix (ALT80 < ALT80-A < ALT80-B)
+        // Sayı aynıysa harf öneki (ALT80 < CRE80)
+        const prefCmp = ma[1].localeCompare(mb[1],"tr");
+        if (prefCmp !== 0) return prefCmp;
+        // Öneki de aynıysa suffix (ALT80 < ALT80-A < ALT80-B)
         return ma[3].localeCompare(mb[3],"tr");
       }
       return ka.localeCompare(kb,"tr");
@@ -4547,7 +4594,6 @@ function Atolye({ onSirketDegis }) {
             <div style={{ display:"flex", gap:3, marginBottom:6, overflowX:"auto", paddingBottom:2, alignItems:"center" }}>
               <span style={{ fontSize:7, color:T.dim, fontWeight:700, whiteSpace:"nowrap", marginRight:2 }}>SIRALA:</span>
               {[
-                { id:"varsayilan",    l:"Varsayılan" },
                 { id:"yeni_eskiye",   l:"Yeni → Eski" },
                 { id:"eski_yeniye",   l:"Eski → Yeni" },
                 { id:"kar_desc",      l:"Karlı önce" },
@@ -7622,11 +7668,20 @@ ${gbOzet}`;
                       if (veri.musteriler) await svMus(veri.musteriler);
                       if (veri.kasa) await svKasa(veri.kasa);
                       if (Array.isArray(veri.modeller)) {
-                        // Modelleri parça parça güvenli yaz
-                        await svM(veri.modeller);
+                        // Modelleri sunucuya yaz — sayfayı yenilemeden önce GERÇEKTEN bitmesini bekle
+                        toastGoster("ok","Modeller sunucuya yazılıyor, lütfen bekleyin...");
+                        let sonuc = await svM(veri.modeller, { bekle: true });
+                        if (sonuc && sonuc.iptal) {
+                          const devamEt = window.confirm(
+                            "⚠ GÜVENLİK UYARISI\n\nBu yedekte " + veri.modeller.length + " model var, sunucuda şu anda " + (sonuc.mevcutSayi||"?") + " model kayıtlı — fark büyük olduğu için sistem durdurdu, hiçbir model değişmedi.\n\nYine de bu yedeği yüklemek istiyor musunuz? (Sunucudaki fazla modeller silinecek)"
+                          );
+                          if (!devamEt) { toastGoster("hata","Model geri yükleme iptal edildi — sayfa yenileniyor"); setTimeout(()=>window.location.reload(), 800); return; }
+                          sonuc = await svM(veri.modeller, { bekle: true, zorla: true });
+                        }
+                        if (sonuc && sonuc.hata) { toastGoster("hata","Sunucu hatası: "+sonuc.hata+" — tekrar deneyin"); return; }
                       }
-                      toastGoster("ok","Yedek geri yüklendi — sayfa yenileniyor");
-                      setTimeout(()=>window.location.reload(), 1200);
+                      toastGoster("ok","Yedek geri yüklendi ve doğrulandı — sayfa yenileniyor");
+                      setTimeout(()=>window.location.reload(), 600);
                     }} style={{ background:"rgba(106,191,105,0.12)", border:"1px solid rgba(106,191,105,0.3)", borderRadius:6, padding:"5px 12px", color:"#6abf69", fontSize:10, fontWeight:700, cursor:"pointer" }}>↶ Bu Yedeğe Dön</button>
                   </div>
                 ))}
@@ -8027,21 +8082,15 @@ ${gbOzet}`;
                 }
               });
 
-              // Çakışan modelleri çıkar, yeni kopyaları ekle (aynı kodla)
-              const yeniModeller = modeller.filter(m => !silinecekIdler.has(m.id));
-              [...seciliModeller].forEach(id => {
+              // Sadece yeni kopyaları yaz + çakışanları sil (TÜM tabloyu aynalamaz —
+              // başka bir işlemin eski listesi bu kopyaları silemesin diye)
+              const yeniKopyalar = [...seciliModeller].map(id => {
                 const m = modeller.find(x=>x.id===id);
-                if (!m) return;
-                yeniModeller.push({ 
-                  ...m, 
-                  id:uid(), 
-                  ki:topluHedefKolId, 
-                  kaynakKi: m.kaynakKi || m.ki, // orijinal kaynak
-                  t:Date.now() 
-                });
-              });
-              
-              svM(yeniModeller);
+                if (!m) return null;
+                return { ...m, id:uid(), ki:topluHedefKolId, kaynakKi: m.kaynakKi || m.ki, t:Date.now() };
+              }).filter(Boolean);
+
+              svMUpsert(yeniKopyalar, [...silinecekIdler]);
               setTopluKopyalaModal(false);
               setTopluHedefKolId("");
               setSeciliModeller(new Set());
@@ -8364,7 +8413,6 @@ ${gbOzet}`;
               
               if (ayniKodModel) {
                 if (!confirm("Hedef koleksiyonda " + kopyalaModal.model.kod + " kodlu model var.\n\nÜzerine yazılsın mı?")) return;
-                const yeniListe = modeller.filter(m => m.id !== ayniKodModel.id);
                 const kopya = {
                   ...kopyalaModal.model,
                   id: uid(),
@@ -8372,7 +8420,7 @@ ${gbOzet}`;
                   kaynakKi: kopyalaModal.model.kaynakKi || kopyalaModal.model.ki, // orijinal kaynak
                   t: Date.now(),
                 };
-                svM([...yeniListe, kopya]);
+                svMUpsert([kopya], [ayniKodModel.id]);
               } else {
                 const kopya = {
                   ...kopyalaModal.model,
@@ -8381,7 +8429,7 @@ ${gbOzet}`;
                   kaynakKi: kopyalaModal.model.kaynakKi || kopyalaModal.model.ki, // orijinal kaynak
                   t: Date.now(),
                 };
-                svM([...modeller, kopya]);
+                svMUpsert([kopya]);
               }
               
               setKopyalaModal(null);
@@ -8771,9 +8819,20 @@ ${gbOzet}`;
               if (d.kollar)     await svK(d.kollar);
               if (d.siparisler) await svS(d.siparisler);
               if (d.musteriler) await svMus(d.musteriler);
-              // Modelleri parça parça kaydet
+              // Modelleri parça parça kaydet — SUNUCUYA GERÇEKTEN YAZILDIĞINI bekle ve doğrula
+              let modelSonuc = null;
               if (d.modeller) {
-                await svM(d.modeller);
+                setDriveYukleniyor("yukle-modeller");
+                modelSonuc = await svM(d.modeller, { bekle: true });
+                if (modelSonuc && modelSonuc.iptal) {
+                  const devamEt = window.confirm(
+                    "⚠ GÜVENLİK UYARISI\n\nYüklediğiniz yedekte " + d.modeller.length + " model var, ama sunucuda şu anda " + (modelSonuc.mevcutSayi||"?") + " model kayıtlı. Aradaki fark büyük olduğu için sistem otomatik olarak DURDURDU (yanlışlıkla veri silinmesin diye) — hiçbir model henüz değişmedi.\n\nBu yedeği YİNE DE yüklemek istiyor musunuz? (Sunucudaki, bu yedekte olmayan modeller silinecek)"
+                  );
+                  if (devamEt) {
+                    setDriveYukleniyor("yukle-modeller");
+                    modelSonuc = await svM(d.modeller, { bekle: true, zorla: true });
+                  }
+                }
               }
               // Ayarlar
               if (d.ayarlar) {
@@ -8806,7 +8865,15 @@ ${gbOzet}`;
               setDriveYukleniyor(null);
               setShowYedek(false);
               setYedekJson("");
-              alert("✓ Yükleme tamamlandı!\n" + (d.modeller?.length||0) + " model\n" + (d.kollar?.length||0) + " koleksiyon\n" + (d.siparisler?.length||0) + " sipariş\nKasa ve ayarlar da geri yüklendi.");
+              if (modelSonuc && modelSonuc.iptal) {
+                alert("⚠ Model yüklemesi İPTAL edildi — hiçbir model değişmedi (üstteki güvenlik uyarısını onaylamadınız).\n\nDiğer veriler (koleksiyon/sipariş/müşteri/kasa/ayarlar) yine de yüklendi.");
+              } else if (modelSonuc && modelSonuc.hata) {
+                alert("⚠ Modeller sunucuya yazılırken HATA oluştu: " + modelSonuc.hata + "\n\nLütfen sayfayı yenileyip tekrar deneyin. Diğer veriler yüklendi.");
+              } else if (d.modeller && modelSonuc && modelSonuc.yazilan !== d.modeller.length) {
+                alert("⚠ Kısmi yükleme: " + modelSonuc.yazilan + "/" + d.modeller.length + " model sunucuya yazıldı. Bazı modeller yazılamamış olabilir — tekrar deneyin.");
+              } else {
+                alert("✓ Yükleme tamamlandı ve sunucuda DOĞRULANDI!\n" + (d.modeller?.length||0) + " model" + (modelSonuc?.silinen ? " (" + modelSonuc.silinen + " eski kayıt temizlendi)" : "") + "\n" + (d.kollar?.length||0) + " koleksiyon\n" + (d.siparisler?.length||0) + " sipariş\nKasa ve ayarlar da geri yüklendi.");
+              }
             } catch(e) {
               setDriveYukleniyor(null);
               alert("Hata: " + e.message);
@@ -8815,7 +8882,7 @@ ${gbOzet}`;
           disabled={(() => { try { JSON.parse(yedekJson); return false; } catch { return true; } })()}
           style={{ ...BG, width:"100%", marginTop:8, opacity: (() => { try { JSON.parse(yedekJson); return 1; } catch { return 0.3; } })() }}
         >
-          {driveYukleniyor==="yukle" ? "Supabase'e kaydediliyor..." : "Yukle"}
+          {driveYukleniyor==="yukle-modeller" ? "Modeller sunucuya yazılıyor ve doğrulanıyor..." : driveYukleniyor==="yukle" ? "Supabase'e kaydediliyor..." : "Yukle"}
         </button>
       </Modal>
 
