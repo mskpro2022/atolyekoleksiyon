@@ -1,5 +1,7 @@
-// api/translate.js — Vitrin ürün adı/açıklamasını TR→EN çevirir, ucuz/hızlı bir model kullanır.
+// api/translate.js — Vitrin ürün adı/açıklamasını TR→EN veya TR→ES çevirir, ucuz/hızlı bir model kullanır.
 // Anahtar sadece sunucuda kalır. Toplu (batch) çeviri destekler — tek istekte birden fazla metin.
+
+const DIL_ADI = { en: "English", es: "Spanish (Mexico / Latin America, natural)" };
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
@@ -12,12 +14,14 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { metinler } = req.body; // [{id, metin}, ...]
+    const { metinler, hedefDil: hedefDilHam } = req.body; // [{id, metin}, ...], hedefDil: "en" | "es"
     if (!Array.isArray(metinler) || !metinler.length) {
       return res.status(400).json({ error: { message: "metinler dizisi gerekli" } });
     }
+    const hedefDil = (hedefDilHam === "es") ? "es" : "en"; // varsayılan: en (geriye dönük uyum)
+    const hedefDilAdi = DIL_ADI[hedefDil];
 
-    const sistem = "Sen bir kuyumculuk kataloğu çevirmenisin. Sana JSON dizi olarak Türkçe ürün adları/açıklamaları verilecek. Her birini doğal, kısa, İngilizce mücevher kataloğu diline çevir (örn. 'KURU KAFA' -> 'SKULL', 'Kalp Kolye' -> 'Heart Necklace'). SADECE şu JSON formatında yanıt ver, başka hiçbir şey yazma: [{\"id\":\"...\",\"en\":\"...\"}]";
+    const sistem = `Sen bir kuyumculuk kataloğu çevirmenisin. Sana JSON dizi olarak Türkçe ürün adları/açıklamaları verilecek. Her birini doğal, kısa, ${hedefDilAdi} mücevher kataloğu diline çevir (örn. 'KURU KAFA' -> 'SKULL' / 'CALAVERA', 'Kalp Kolye' -> 'Heart Necklace' / 'Collar de Corazón'). SADECE şu JSON formatında yanıt ver, başka hiçbir şey yazma: [{"id":"...","${hedefDil}":"..."}]`;
     const kullanici = JSON.stringify(metinler);
 
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
