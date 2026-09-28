@@ -3869,7 +3869,7 @@ function Atolye({ onSirketDegis }) {
     const hesaplananTasGram = fTaslar.length > 0 && toplamTasGram > 0
       ? toplamTasGram
       : (Number(fTasGram)||0);
-    const obj = { ad: fAd.trim() || fKod.trim().toUpperCase(), kod: fKod.trim().toUpperCase(), kategori: fKategori, gram: Number(fGram)||0, refAyar: fRefAyar, tasGram: hesaplananTasGram, taslar: fTaslar, tasBoy: fTasBoy.trim(), tasSekil: fTasSekil, tasTur: fTasTur, tasBoyut: fTasBoyut, tasAdet: Number(fTasAdet)||0, madenCarpan: Number(fMadenC)||0, iscilikDolar: Number(fIscilikDolar)||0, iscilikBirim: fIscilikBirim, iscilikAyarlar: fIscilikAyarlar, ekMaliyet: Number(fEkMaliyet)||0, ac: fAc.trim(), foto: fFoto, ki: fKolId, durum: fDurum, etiketler: fEtiketler, detayNoktalari: fDetayNoktalari };
+    const obj = { ad: fAd.trim(), kod: fKod.trim().toUpperCase(), kategori: fKategori, gram: Number(fGram)||0, refAyar: fRefAyar, tasGram: hesaplananTasGram, taslar: fTaslar, tasBoy: fTasBoy.trim(), tasSekil: fTasSekil, tasTur: fTasTur, tasBoyut: fTasBoyut, tasAdet: Number(fTasAdet)||0, madenCarpan: Number(fMadenC)||0, iscilikDolar: Number(fIscilikDolar)||0, iscilikBirim: fIscilikBirim, iscilikAyarlar: fIscilikAyarlar, ekMaliyet: Number(fEkMaliyet)||0, ac: fAc.trim(), foto: fFoto, ki: fKolId, durum: fDurum, etiketler: fEtiketler, detayNoktalari: fDetayNoktalari };
     if (!obj.id) obj.olusturma = Date.now();
     // Aynı kodlu diğer modeller var mı kontrol et
     // NOT: aynı kod İKİ FARKLI SEBEPLE oluşabilir:
@@ -4843,7 +4843,7 @@ function Atolye({ onSirketDegis }) {
                       <div style={{ height:2, background:"rgba(var(--vurgu-rgb),0.07)", borderRadius:1, overflow:"hidden", marginBottom:3 }}>
                         <div style={{ height:"100%", width:(dur.s/9*100)+"%", background:dur.c, borderRadius:1 }} />
                       </div>
-                      <div style={{ fontSize:10, fontWeight:700, color:"var(--goldtext)", marginBottom:2 }}>{m.ac || m.ad}</div>
+                      {(m.ac || m.ad) && <div style={{ fontSize:10, fontWeight:700, color:"var(--goldtext)", marginBottom:2 }}>{m.ac || m.ad}</div>}
                       <div style={{ display:"flex", gap:3, flexWrap:"wrap", marginBottom:2 }}>
                         {m.gram>0 && <span style={{ fontSize:6, color:T.sub, background:"rgba(var(--vurgu-rgb),0.07)", padding:"1px 3px", borderRadius:2, fontWeight:600 }}>{m.gram}gr</span>}
                         {m.refAyar && <span style={{ fontSize:6, color:T.sub, background:"rgba(var(--vurgu-rgb),0.07)", padding:"1px 3px", borderRadius:2, fontWeight:600 }}>{m.refAyar}</span>}
@@ -9480,19 +9480,10 @@ ${gbOzet}`;
             {fFoto && <button onClick={e=>{e.stopPropagation();setFFoto("");}} style={{ position:"absolute", top:4, right:4, background:"rgba(0,0,0,0.6)", border:"none", borderRadius:4, width:18, height:18, color:"#fff", fontSize:9, cursor:"pointer" }}>X</button>}
             {fFoto && <div onClick={e=>{ e.stopPropagation(); setKirpModal(fFoto); }} style={{ position:"absolute", bottom:4, right:4, background:"rgba(0,0,0,0.6)", color:"#fff", fontSize:9, fontWeight:600, padding:"3px 8px", borderRadius:5, cursor:"pointer" }}>✂️ Kırp</div>}
           </div>
-          {fFoto && (
-            <AiIsimlendir foto={fFoto} onResult={(ad, kat) => { setFAd(ad); if (kat) setFKategori(kat); }} />
-          )}
         </div>
         )}
         {/* Dosya seçici — hem yeni hem düzenleme için */}
         <input ref={fileRef} type="file" accept="image/*" onChange={handleFoto} style={{ display:"none" }}/>
-        {/* Düzenlemede AI isimlendir (üstteki büyük fotonun altında) */}
-        {editM && fFoto && (
-          <div style={{ marginBottom:8 }}>
-            <AiIsimlendir foto={fFoto} onResult={(ad, kat) => { setFAd(ad); if (kat) setFKategori(kat); }} />
-          </div>
-        )}
 
         {/* ═══ DETAY NOKTALARI — her üründe opsiyonel, sadece istediğinde aç ═══ */}
         {fFoto && (
