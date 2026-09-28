@@ -517,20 +517,22 @@ function kodOnEk(kod) {
   return m ? m[1].toUpperCase() : "—";
 }
 
-function dogalSirala(a, b) {
+function dogalSirala(a, b, ters) {
   const ka = a.kod || "", kb = b.kod || "";
   // Karmaşık kodları doğru sırala: prefix + ana sayı + suffix
   // "01GS21" < "01GS21-B" < "01GS21-V2" < "01GSP21" gibi
+  // NOT: yön (ters) SADECE ana sayıyı çevirir — aynı sayılı varyantların (renk/harf eki) sırası
+  // "Yeni→Eski" ile "Eski→Yeni" arasında geçiş yapınca KARIŞMASIN diye her zaman aynı kalır.
   const ma = ka.match(/^([A-Za-zÇĞİÖŞÜçğışöşü\-]*)(\d+)(.*)$/);
   const mb = kb.match(/^([A-Za-zÇĞİÖŞÜçğışöşü\-]*)(\d+)(.*)$/);
   if (ma && mb) {
-    const numCmp = Number(ma[2]) - Number(mb[2]);
+    const numCmp = (Number(ma[2]) - Number(mb[2])) * (ters ? -1 : 1);
     if (numCmp !== 0) return numCmp;
     const prefCmp = ma[1].localeCompare(mb[1], "tr");
     if (prefCmp !== 0) return prefCmp;
     return ma[3].localeCompare(mb[3], "tr");
   }
-  return ka.localeCompare(kb, "tr");
+  return ka.localeCompare(kb, "tr") * (ters ? -1 : 1);
 }
 
 function buildKatalogHTML(kol, modeller, sutun, hedefAyar, kollar, gruplu) {
@@ -1911,90 +1913,103 @@ function VitrinModu({ kod, onizleme }) {
   });
   const ceviriIstegindeRef = useRef(new Set()); // aynı metni iki kez isteme (aynı render turunda)
 
-  // Arayüz metinleri sözlüğü — TR sabit, EN karşılığı. ce("anahtar") ile çağrılır.
+  // Arayüz metinleri sözlüğü — TR sabit, EN/ES karşılığı. ce("anahtar") ile çağrılır.
   const CEVIRI_SOZLUK = {
-    ara_placeholder: { tr:"Ad, kod veya etiket ara...", en:"Search name, code or tag..." },
-    ara: { tr:"Ara", en:"Search" },
-    gr_kisa: { tr:"gr", en:"g" },
-    kod_yeni_eski_opt: { tr:"Kod: Yeni → Eski", en:"Code: Newest → Oldest" },
-    kod_eski_yeni_opt: { tr:"Kod: Eski → Yeni", en:"Code: Oldest → Newest" },
-    son_eklenen: { tr:"Son Eklenen", en:"Recently Added" },
-    gram_yuksek_dusuk_opt: { tr:"Gram: Yüksek → Düşük", en:"Weight: High → Low" },
-    gram_dusuk_yuksek_opt: { tr:"Gram: Düşük → Yüksek", en:"Weight: Low → High" },
-    katalog_al: { tr:"Katalog Al", en:"Get Catalog" },
-    tum_koleksiyonlar: { tr:"Tüm Koleksiyonlar", en:"All Collections" },
-    tum_koleksiyonlari_gor: { tr:"Tüm Koleksiyonları Gör", en:"View All Collections" },
-    begen_mesaj: { tr:"👇 Beğendiğiniz modelleri seçin, size özel katalog hazırlayalım", en:"👇 Select the pieces you like and we'll prepare a catalog for you" },
-    koleksiyon_gir_mesaj: { tr:"👇 Bir koleksiyona girin veya + ile seçip size özel katalog alın", en:"👇 Enter a collection or select with + to get your own catalog" },
-    sec: { tr:"Seç", en:"Select" },
-    secimden_cikar: { tr:"Seçimden çıkar", en:"Remove selection" },
-    secilenlerden_pdf: { tr:"Seçilenlerden PDF", en:"PDF of selected" },
-    siparis_ver: { tr:"Sipariş Ver", en:"Place Order" },
-    siparis_ver_emoji: { tr:"🛍️ Sipariş Ver", en:"🛍️ Place Order" },
-    siparisi_gonder: { tr:"Siparişi Gönder", en:"Send Order" },
-    gonderiliyor: { tr:"Gönderiliyor...", en:"Sending..." },
-    siparis_alindi: { tr:"Siparişiniz alındı", en:"Your order has been received" },
-    en_kisa_surede: { tr:"En kısa sürede size dönüş yapılacaktır.", en:"We'll get back to you as soon as possible." },
-    tas_bilgisi: { tr:"Taş Bilgisi", en:"Stone Info" },
-    tas_agirligi: { tr:"Taş ağırlığı", en:"Stone weight" },
-    tas: { tr:"Taş", en:"Stone" },
-    adet: { tr:"adet", en:"pcs" },
-    onceki: { tr:"Önceki", en:"Previous" },
-    buyut: { tr:"Büyüt", en:"Enlarge" },
-    kucult: { tr:"Küçült", en:"Shrink" },
-    gece_moduna_gec: { tr:"Gece moduna geç", en:"Switch to dark mode" },
-    gunduz_moduna_gec: { tr:"Gündüz moduna geç", en:"Switch to light mode" },
-    model_bulunamadi: { tr:"Model bulunamadı", en:"Model not found" },
-    katalog_yukleniyor: { tr:"Katalog yükleniyor...", en:"Loading catalog..." },
-    henuz_koleksiyon_yok: { tr:"Henüz size açılmış koleksiyon yok", en:"No collections have been shared with you yet" },
-    gecersiz_link_baslik: { tr:"Geçersiz veya Süresi Dolmuş Bağlantı", en:"Invalid or Expired Link" },
-    gecersiz_link_mesaj: { tr:"Bu katalog bağlantısı geçerli değil. Lütfen yetkiliyle iletişime geçin.", en:"This catalog link is not valid. Please contact the shop." },
-    once_koleksiyon_sec: { tr:"Önce koleksiyon seçin.", en:"Please select a collection first." },
-    once_model_sec: { tr:"Önce model seçin veya bir koleksiyon açın.", en:"Please select a model or open a collection first." },
-    secili_kol_model_yok: { tr:"Seçili koleksiyonlarda model yok.", en:"No models in the selected collections." },
-    kart_ekrani_ipucu: { tr:"Katalog için koleksiyon kartlarındaki + butonuna basın.", en:"Use the + button on collection cards for the catalog." },
-    yeni: { tr:"YENİ", en:"NEW" },
-    set_etiket: { tr:"SET", en:"SET" },
-    gr: { tr:"gram", en:"g" },
+    ara_placeholder: { tr:"Ad, kod veya etiket ara...", en:"Search name, code or tag...", es:"Buscar por nombre, código o etiqueta..." },
+    ara: { tr:"Ara", en:"Search", es:"Buscar" },
+    gr_kisa: { tr:"gr", en:"g", es:"g" },
+    kod_yeni_eski_opt: { tr:"Kod: Yeni → Eski", en:"Code: Newest → Oldest", es:"Código: Más nuevo → Más antiguo" },
+    kod_eski_yeni_opt: { tr:"Kod: Eski → Yeni", en:"Code: Oldest → Newest", es:"Código: Más antiguo → Más nuevo" },
+    son_eklenen: { tr:"Son Eklenen", en:"Recently Added", es:"Agregado recientemente" },
+    gram_yuksek_dusuk_opt: { tr:"Gram: Yüksek → Düşük", en:"Weight: High → Low", es:"Peso: Alto → Bajo" },
+    gram_dusuk_yuksek_opt: { tr:"Gram: Düşük → Yüksek", en:"Weight: Low → High", es:"Peso: Bajo → Alto" },
+    katalog_al: { tr:"Katalog Al", en:"Get Catalog", es:"Obtener catálogo" },
+    tum_koleksiyonlar: { tr:"Tüm Koleksiyonlar", en:"All Collections", es:"Todas las colecciones" },
+    tum_koleksiyonlari_gor: { tr:"Tüm Koleksiyonları Gör", en:"View All Collections", es:"Ver todas las colecciones" },
+    begen_mesaj: { tr:"👇 Beğendiğiniz modelleri seçin, size özel katalog hazırlayalım", en:"👇 Select the pieces you like and we'll prepare a catalog for you", es:"👇 Seleccione las piezas que le gusten y le prepararemos un catálogo personalizado" },
+    koleksiyon_gir_mesaj: { tr:"👇 Bir koleksiyona girin veya + ile seçip size özel katalog alın", en:"👇 Enter a collection or select with + to get your own catalog", es:"👇 Ingrese a una colección o seleccione con + para obtener su propio catálogo" },
+    sec: { tr:"Seç", en:"Select", es:"Seleccionar" },
+    secimden_cikar: { tr:"Seçimden çıkar", en:"Remove selection", es:"Quitar selección" },
+    secilenlerden_pdf: { tr:"Seçilenlerden PDF", en:"PDF of selected", es:"PDF de seleccionados" },
+    siparis_ver: { tr:"Sipariş Ver", en:"Place Order", es:"Hacer pedido" },
+    siparis_ver_emoji: { tr:"🛍️ Sipariş Ver", en:"🛍️ Place Order", es:"🛍️ Hacer pedido" },
+    siparisi_gonder: { tr:"Siparişi Gönder", en:"Send Order", es:"Enviar pedido" },
+    gonderiliyor: { tr:"Gönderiliyor...", en:"Sending...", es:"Enviando..." },
+    siparis_alindi: { tr:"Siparişiniz alındı", en:"Your order has been received", es:"Su pedido ha sido recibido" },
+    en_kisa_surede: { tr:"En kısa sürede size dönüş yapılacaktır.", en:"We'll get back to you as soon as possible.", es:"Nos pondremos en contacto con usted lo antes posible." },
+    tas_bilgisi: { tr:"Taş Bilgisi", en:"Stone Info", es:"Información de la piedra" },
+    tas_agirligi: { tr:"Taş ağırlığı", en:"Stone weight", es:"Peso de la piedra" },
+    tas: { tr:"Taş", en:"Stone", es:"Piedra" },
+    adet: { tr:"adet", en:"pcs", es:"uds" },
+    onceki: { tr:"Önceki", en:"Previous", es:"Anterior" },
+    sonraki: { tr:"Sonraki", en:"Next", es:"Siguiente" },
+    pinch_zoom_ipucu: { tr:"Parmaklarınızla yakınlaştırabilir ya da fotoya dokunarak büyütebilirsiniz", en:"Pinch to zoom, or tap the photo to enlarge", es:"Puede pellizcar para acercar o tocar la foto para ampliarla" },
+    buyut: { tr:"Büyüt", en:"Enlarge", es:"Ampliar" },
+    kucult: { tr:"Küçült", en:"Shrink", es:"Reducir" },
+    gece_moduna_gec: { tr:"Gece moduna geç", en:"Switch to dark mode", es:"Cambiar a modo oscuro" },
+    gunduz_moduna_gec: { tr:"Gündüz moduna geç", en:"Switch to light mode", es:"Cambiar a modo claro" },
+    model_bulunamadi: { tr:"Model bulunamadı", en:"Model not found", es:"Modelo no encontrado" },
+    katalog_yukleniyor: { tr:"Katalog yükleniyor...", en:"Loading catalog...", es:"Cargando catálogo..." },
+    henuz_koleksiyon_yok: { tr:"Henüz size açılmış koleksiyon yok", en:"No collections have been shared with you yet", es:"Aún no se le ha compartido ninguna colección" },
+    gecersiz_link_baslik: { tr:"Geçersiz veya Süresi Dolmuş Bağlantı", en:"Invalid or Expired Link", es:"Enlace inválido o expirado" },
+    gecersiz_link_mesaj: { tr:"Bu katalog bağlantısı geçerli değil. Lütfen yetkiliyle iletişime geçin.", en:"This catalog link is not valid. Please contact the shop.", es:"Este enlace de catálogo no es válido. Por favor, comuníquese con la tienda." },
+    once_koleksiyon_sec: { tr:"Önce koleksiyon seçin.", en:"Please select a collection first.", es:"Primero seleccione una colección." },
+    once_model_sec: { tr:"Önce model seçin veya bir koleksiyon açın.", en:"Please select a model or open a collection first.", es:"Primero seleccione un modelo o abra una colección." },
+    secili_kol_model_yok: { tr:"Seçili koleksiyonlarda model yok.", en:"No models in the selected collections.", es:"No hay modelos en las colecciones seleccionadas." },
+    kart_ekrani_ipucu: { tr:"Katalog için koleksiyon kartlarındaki + butonuna basın.", en:"Use the + button on collection cards for the catalog.", es:"Use el botón + en las tarjetas de colección para el catálogo." },
+    yeni: { tr:"YENİ", en:"NEW", es:"NUEVO" },
+    set_etiket: { tr:"SET", en:"SET", es:"SET" },
+    gr: { tr:"gram", en:"g", es:"g" },
   };
   const ce = (anahtar) => (CEVIRI_SOZLUK[anahtar]?.[vitrinDil]) || CEVIRI_SOZLUK[anahtar]?.tr || anahtar;
   // Kategori id -> görünen etiket (kategori pill'leri VE set parça etiketleri için)
   const KATEGORI_CEVIRI = {
-    yuzuk:{tr:"Yuzuk",en:"Ring"}, kolye:{tr:"Kolye",en:"Necklace"}, kupe:{tr:"Kupe",en:"Earring"},
-    bilezik:{tr:"Bilezik",en:"Bangle"}, bileklik:{tr:"Bileklik",en:"Bracelet"}, pendant:{tr:"Pendant",en:"Pendant"},
-    set:{tr:"Set",en:"Set"}, diger:{tr:"Diger",en:"Other"},
+    yuzuk:{tr:"Yuzuk",en:"Ring",es:"Anillo"}, kolye:{tr:"Kolye",en:"Necklace",es:"Collar"}, kupe:{tr:"Kupe",en:"Earring",es:"Arete"},
+    bilezik:{tr:"Bilezik",en:"Bangle",es:"Brazalete"}, bileklik:{tr:"Bileklik",en:"Bracelet",es:"Pulsera"}, pendant:{tr:"Pendant",en:"Pendant",es:"Dije"},
+    set:{tr:"Set",en:"Set",es:"Set"}, diger:{tr:"Diger",en:"Other",es:"Otro"},
   };
   const kategoriEtiket = (id) => (KATEGORI_CEVIRI[id]?.[vitrinDil]) || KATEGORI_CEVIRI[id]?.tr || id;
 
-  const ceviriKuyrukRef = useRef([]); // bekleyen orijinal metinler (henüz gönderilmedi)
+  const ceviriKuyrukRef = useRef([]); // bekleyen orijinal metinler (henüz gönderilmedi) — { dil, metin }
   const ceviriTimerRef = useRef(null);
   const ceviriGonder = useCallback(async () => {
-    const kuyruk = [...new Set(ceviriKuyrukRef.current)];
+    const kuyrukTum = [...ceviriKuyrukRef.current];
     ceviriKuyrukRef.current = [];
-    if (!kuyruk.length) return;
-    try {
-      const metinler = kuyruk.map((m,i) => ({ id:String(i), metin:m }));
-      const res = await fetch("/api/translate", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ metinler }) });
-      const data = await res.json();
-      if (Array.isArray(data.sonuclar)) {
-        setCeviriOnbellek(onceki => {
-          const yeni = { ...onceki };
-          data.sonuclar.forEach(s => { const orijinal = kuyruk[Number(s.id)]; if (orijinal && s.en) yeni[orijinal] = s.en; });
-          try { localStorage.setItem("vitrin_ceviri", JSON.stringify(yeni)); } catch {}
-          return yeni;
-        });
-      }
-    } catch (e) { console.error("Çeviri hatası:", e.message); }
+    if (!kuyrukTum.length) return;
+    // dile göre grupla (aynı anda birden fazla hedef dile istek çıkabilir diye)
+    const dillere = {};
+    kuyrukTum.forEach(k => { (dillere[k.dil] = dillere[k.dil] || []).push(k.metin); });
+    for (const hedefDil of Object.keys(dillere)) {
+      const kuyruk = [...new Set(dillere[hedefDil])];
+      try {
+        const metinler = kuyruk.map((m,i) => ({ id:String(i), metin:m }));
+        const res = await fetch("/api/translate", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ metinler, hedefDil }) });
+        const data = await res.json();
+        if (Array.isArray(data.sonuclar)) {
+          setCeviriOnbellek(onceki => {
+            const yeni = { ...onceki };
+            data.sonuclar.forEach(s => {
+              const orijinal = kuyruk[Number(s.id)];
+              const ceviri = s[hedefDil] || s.en || s.ceviri;
+              if (orijinal && ceviri) yeni[orijinal] = { ...(yeni[orijinal]||{}), [hedefDil]: ceviri };
+            });
+            try { localStorage.setItem("vitrin_ceviri", JSON.stringify(yeni)); } catch {}
+            return yeni;
+          });
+        }
+      } catch (e) { console.error("Çeviri hatası:", e.message); }
+    }
   }, []);
 
   // Ürün adı/açıklaması çevirisi — önbellekte varsa direkt döner, yoksa boş kuyruğa ekler (400ms sonra toplu gönderilir)
   const urunCevir = (orijinalMetin) => {
     if (!orijinalMetin || !orijinalMetin.trim()) return orijinalMetin;
     if (vitrinDil === "tr") return orijinalMetin;
-    if (ceviriOnbellek[orijinalMetin]) return ceviriOnbellek[orijinalMetin];
-    if (!ceviriIstegindeRef.current.has(orijinalMetin)) {
-      ceviriIstegindeRef.current.add(orijinalMetin);
-      ceviriKuyrukRef.current.push(orijinalMetin);
+    const onbellekAnahtari = orijinalMetin + "|" + vitrinDil;
+    if (ceviriOnbellek[orijinalMetin]?.[vitrinDil]) return ceviriOnbellek[orijinalMetin][vitrinDil];
+    if (!ceviriIstegindeRef.current.has(onbellekAnahtari)) {
+      ceviriIstegindeRef.current.add(onbellekAnahtari);
+      ceviriKuyrukRef.current.push({ dil: vitrinDil, metin: orijinalMetin });
       if (ceviriTimerRef.current) clearTimeout(ceviriTimerRef.current);
       ceviriTimerRef.current = setTimeout(ceviriGonder, 400);
     }
@@ -2221,12 +2236,8 @@ function VitrinModu({ kod, onizleme }) {
     // YENİ olanlar her zaman en üstte (hangi sıralama olursa olsun)
     const ay = yeniMi(a) ? 1 : 0, by = yeniMi(b) ? 1 : 0;
     if (ay !== by) return by - ay;
-    if (siralama === "kod") return dogalSirala(a, b);
-    if (siralama === "kodTers") return dogalSirala(b, a);
-    if (siralama === "gramArtan") return (Number(ayarliGram(a))||0) - (Number(ayarliGram(b))||0);
-    if (siralama === "gramAzalan") return (Number(ayarliGram(b))||0) - (Number(ayarliGram(a))||0);
-    // varsayılan "yeni" — en son eklenen (t) üstte
-    return (b.t || 0) - (a.t || 0);
+    if (siralama === "kod") return dogalSirala(a, b, false);
+    return dogalSirala(a, b, true); // varsayılan "kodTers" — koda göre en yeniden eskiye
   };
 
   // TÜM KOLEKSİYONLAR görünümü — koleksiyon bazlı gruplar, koleksiyon sırası korunur
@@ -2427,9 +2438,10 @@ function VitrinModu({ kod, onizleme }) {
           <button onClick={()=>katalogAl(3)} style={{ flexShrink:0, background:"var(--vcard)", color:"var(--vt1)", border:"none", borderRadius:980, padding:"10px 20px", fontSize:14, fontWeight:600, cursor:"pointer" }}>
             {ce("katalog_al")}{(!aktifKol && !tumGorunum && seciliKlasorler.length > 0) ? " ("+seciliKlasorler.length+")" : ""}
           </button>
-          <button onClick={()=>setVitrinDil(vitrinDil==="tr"?"en":"tr")} title={vitrinDil==="tr"?"Switch to English":"Türkçe'ye geç"}
+          <button onClick={()=>setVitrinDil(vitrinDil==="tr"?"en":vitrinDil==="en"?"es":"tr")}
+            title={vitrinDil==="tr"?"Switch to English":vitrinDil==="en"?"Cambiar a Español":"Türkçe'ye geç"}
             style={{ flexShrink:0, height:40, minWidth:40, padding:"0 10px", borderRadius:20, background:"rgba(var(--voverlay-rgb),0.08)", border:"1px solid rgba(var(--voverlay-rgb),0.15)", color:"var(--vt1)", fontSize:11, fontWeight:800, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", letterSpacing:"0.02em" }}>
-            {vitrinDil==="tr" ? "🌐 EN" : "🌐 TR"}
+            {vitrinDil==="tr" ? "🌐 TR" : vitrinDil==="en" ? "🌐 EN" : "🌐 ES"}
           </button>
           <button onClick={()=>setVitrinIsik(gunduz?"gece":"gunduz")} title={gunduz?ce("gece_moduna_gec"):ce("gunduz_moduna_gec")}
             style={{ flexShrink:0, width:40, height:40, borderRadius:"50%", background:"rgba(var(--voverlay-rgb),0.08)", border:"1px solid rgba(var(--voverlay-rgb),0.15)", color:"var(--vt1)", fontSize:16, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}>
@@ -2481,9 +2493,6 @@ function VitrinModu({ kod, onizleme }) {
           style={{ background:"rgba(var(--voverlay-rgb),0.07)", border:"none", borderRadius:9, padding:"9px 12px", color:"var(--vt1)", fontSize:13, outline:"none", cursor:"pointer" }}>
           <option value="kodTers" style={{background:"var(--vcard)"}}>{ce("kod_yeni_eski_opt")}</option>
           <option value="kod" style={{background:"var(--vcard)"}}>{ce("kod_eski_yeni_opt")}</option>
-          <option value="yeni" style={{background:"var(--vcard)"}}>{ce("son_eklenen")}</option>
-          <option value="gramAzalan" style={{background:"var(--vcard)"}}>{ce("gram_yuksek_dusuk_opt")}</option>
-          <option value="gramArtan" style={{background:"var(--vcard)"}}>{ce("gram_dusuk_yuksek_opt")}</option>
         </select>
       </div>
       )}
@@ -2689,7 +2698,7 @@ function VitrinModu({ kod, onizleme }) {
             style={{ background:"var(--vcard)", borderRadius:18, maxWidth:560, width:"100%", maxHeight:"90vh", overflow:"auto", position:"relative", touchAction:"pan-y pinch-zoom" }}>
             <button onClick={()=>setDetayModel(null)} style={{ position:"absolute", top:14, right:14, zIndex:5, width:30, height:30, borderRadius:"50%", background:"rgba(120,120,128,0.5)", border:"none", color:"#fff", fontSize:15, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}>✕</button>
             {dIdx > 0 && <button onClick={()=>detayKomsu(-1)} title={ce("onceki")} style={{ position:"absolute", top:"38%", left:10, zIndex:5, width:36, height:36, borderRadius:"50%", background:"rgba(120,120,128,0.5)", border:"none", color:"#fff", fontSize:18, fontWeight:700, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}>‹</button>}
-            {dIdx < dToplam-1 && <button onClick={()=>detayKomsu(1)} title={vitrinDil==="tr"?"Sonraki":"Next"} style={{ position:"absolute", top:"38%", right:10, zIndex:5, width:36, height:36, borderRadius:"50%", background:"rgba(120,120,128,0.5)", border:"none", color:"#fff", fontSize:18, fontWeight:700, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}>›</button>}
+            {dIdx < dToplam-1 && <button onClick={()=>detayKomsu(1)} title={ce("sonraki")} style={{ position:"absolute", top:"38%", right:10, zIndex:5, width:36, height:36, borderRadius:"50%", background:"rgba(120,120,128,0.5)", border:"none", color:"#fff", fontSize:18, fontWeight:700, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}>›</button>}
             {dToplam > 1 && <div style={{ position:"absolute", top:14, left:14, zIndex:5, background:"rgba(120,120,128,0.5)", color:"#fff", fontSize:10, fontWeight:700, padding:"4px 9px", borderRadius:980 }}>{dIdx+1} / {dToplam}</div>}
             <div
               onPointerDown={e=>{ surukleRef.current = { basX: e.clientX, aktif: true, suruklendi: false }; setSurukluyor(true); }}
@@ -2770,7 +2779,7 @@ function VitrinModu({ kod, onizleme }) {
                     style={{ maxWidth: fotoBuyuk ? "none" : "100%", maxHeight: fotoBuyuk ? "none" : "100%", width: fotoBuyuk ? "180%" : "auto", objectFit:"contain", cursor: fotoBuyuk ? "zoom-out" : "zoom-in", transition:"width .25s" }}/>
                 </div>
                 <div style={{ padding:"12px 18px", textAlign:"center", fontSize:10, color:"rgba(255,255,255,0.5)" }}>
-                  {vitrinDil==="tr" ? "Parmaklarınızla yakınlaştırabilir ya da fotoya dokunarak büyütebilirsiniz" : "Pinch to zoom, or tap the photo to enlarge"}
+                  {ce("pinch_zoom_ipucu")}
                 </div>
               </div>
             )}
@@ -2851,7 +2860,7 @@ function VitrinModu({ kod, onizleme }) {
           </div>
             {/* ═══ SAĞDAKİ ÖNİZLEME — kartın DIŞINDA, koyu arka planda, sonraki modelin flu fotoğrafı ═══ */}
             {dIdx < dToplam-1 && typeof window !== "undefined" && window.innerWidth > 760 && (() => { const nm = koldaki[dIdx+1]; return (
-              <div onClick={(e)=>{ e.stopPropagation(); detayKomsu(1); }} title={vitrinDil==="tr"?"Sonraki":"Next"}
+              <div onClick={(e)=>{ e.stopPropagation(); detayKomsu(1); }} title={ce("sonraki")}
                 style={{ width:"min(300px,25vw)", height: detayKartH ? detayKartH+"px" : "min(660px,76vh)", flexShrink:0, cursor:"pointer", opacity:0.45, borderRadius:20, overflow:"hidden", transition:"opacity .2s, transform .2s, height .2s", display:"flex", alignItems:"center", justifyContent:"center", background:"rgba(255,255,255,0.06)", border:"1px solid rgba(255,255,255,0.14)", boxShadow:"0 12px 34px rgba(0,0,0,0.4)", padding:8 }}
                 onMouseEnter={e=>{ e.currentTarget.style.opacity=0.85; e.currentTarget.style.transform="scale(1.02)"; }}
                 onMouseLeave={e=>{ e.currentTarget.style.opacity=0.45; e.currentTarget.style.transform="scale(1)"; }}>
@@ -4041,11 +4050,13 @@ function Atolye({ onSirketDegis }) {
     const kodSirala = (a,b) => {
       const ka=a.kod||"", kb=b.kod||"";
       // "ALT79", "ALT80", "ALT80-A", "ALT100" → ["ALT", 79, ""], ["ALT", 80, ""], ["ALT", 80, "-A"], ["ALT", 100, ""]
+      // NOT: yön (ters) SADECE ana sayıyı çevirir — aynı sayılı varyantların (renk/harf eki) sırası
+      // yön değişince KARIŞMASIN diye her zaman aynı kalır.
       const ma=ka.match(/^([A-Za-zÇĞİÖŞÜçğışöşü\-]*)(\d+)(.*)$/);
       const mb=kb.match(/^([A-Za-zÇĞİÖŞÜçğışöşü\-]*)(\d+)(.*)$/);
       if (ma && mb) {
         // Önce rakam (sayı) karşılaştır — 8K < 22K, CRE9 < ALT100 gibi, harf önekine bakmadan
-        const numCmp = Number(ma[2]) - Number(mb[2]);
+        const numCmp = (Number(ma[2]) - Number(mb[2])) * (ters ? -1 : 1);
         if (numCmp !== 0) return numCmp;
         // Sayı aynıysa harf öneki (ALT80 < CRE80)
         const prefCmp = ma[1].localeCompare(mb[1],"tr");
@@ -4053,12 +4064,12 @@ function Atolye({ onSirketDegis }) {
         // Öneki de aynıysa suffix (ALT80 < ALT80-A < ALT80-B)
         return ma[3].localeCompare(mb[3],"tr");
       }
-      return ka.localeCompare(kb,"tr");
+      return ka.localeCompare(kb,"tr") * (ters ? -1 : 1);
     };
     if (sirala==="yeni_eskiye") r=[...r].sort((a,b)=>(b.t||0)-(a.t||0));
     else if (sirala==="eski_yeniye") r=[...r].sort((a,b)=>(a.t||0)-(b.t||0));
-    else if (sirala==="kod_yeni") r=[...r].sort((a,b)=>kodSirala(b,a)); // Koda göre en yeni — en yüksek kod üstte (ALT185 > ALT184)
-    else if (sirala==="kod_eski") r=[...r].sort((a,b)=>kodSirala(a,b)); // Koda göre en eski — en düşük kod üstte (ALT1 > ALT2)
+    else if (sirala==="kod_yeni") r=[...r].sort((a,b)=>kodSirala(a,b,true)); // Koda göre en yeni — en yüksek kod üstte (ALT185 > ALT184)
+    else if (sirala==="kod_eski") r=[...r].sort((a,b)=>kodSirala(a,b,false)); // Koda göre en eski — en düşük kod üstte (ALT1 > ALT2)
     else if (sirala==="kar_desc" && altinKgUSD>0) r=[...r].sort((a,b)=>{ const ha=hesapla(a,a.refAyar,altinKgUSD,madenCarpan),hb=hesapla(b,b.refAyar,altinKgUSD,madenCarpan); return hb.karHas-ha.karHas; });
     else if (sirala==="kar_asc" && altinKgUSD>0) r=[...r].sort((a,b)=>{ const ha=hesapla(a,a.refAyar,altinKgUSD,madenCarpan),hb=hesapla(b,b.refAyar,altinKgUSD,madenCarpan); return ha.karHas-hb.karHas; });
     else if (sirala==="gram_asc") r=[...r].sort((a,b)=>(Number(a.gram)||0)-(Number(b.gram)||0));
