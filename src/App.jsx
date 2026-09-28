@@ -2428,7 +2428,7 @@ function VitrinModu({ kod, onizleme }) {
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", flexWrap:"wrap", gap:12 }}>
           <div style={{ flex:"1 1 auto", minWidth:0 }}>
             <div className="vm-baslik" style={{ fontSize:24, fontWeight:600, color:"var(--vt1)", letterSpacing:"-0.02em" }}>
-              {aktifKol ? aktifKol.ad : (tumGorunum ? ce("tum_koleksiyonlar") : vitrinAd)}
+              {aktifKol ? urunCevir(aktifKol.ad) : (tumGorunum ? ce("tum_koleksiyonlar") : vitrinAd)}
             </div>
             <div className="vm-aciklama" style={{ fontSize:14, color:"var(--vt2)", marginTop:5 }}>
               {(aktifKol || tumGorunum)
@@ -2466,7 +2466,7 @@ function VitrinModu({ kod, onizleme }) {
             return (
               <button key={k.id} onClick={()=>kolAc(k)}
                 className="vm-pill" style={{ position:"relative", flexShrink:0, fontSize:14, color:"var(--vt1)", padding:"9px 18px", borderRadius:12, background: on?"var(--vcard)":"rgba(var(--voverlay-rgb),0.07)", border: on?"1px solid rgba(var(--voverlay-rgb),0.15)":"none", fontWeight: on?600:500, cursor:"pointer", whiteSpace:"nowrap" }}>
-                {k.ad}
+                {urunCevir(k.ad)}
                 {yeniVar && <span style={{ position:"absolute", top:-5, right:-5, background:"var(--vurgu)", color:"#1d1d1f", fontSize:8, fontWeight:700, padding:"2px 6px", borderRadius:980, boxShadow:"0 2px 6px rgba(0,0,0,0.3)" }}>{ce("yeni")}</span>}
               </button>
             );
@@ -2570,7 +2570,7 @@ function VitrinModu({ kod, onizleme }) {
                   )) : <div style={{ gridColumn:"1/-1", gridRow:"1/-1", display:"flex", alignItems:"center", justifyContent:"center", color:"#d2d2d7", fontSize:32 }}>◇</div>}
                 </div>
                 <div style={{ padding:"12px 14px" }}>
-                  <div style={{ fontSize:15, fontWeight:500, color:"var(--vt1)", letterSpacing:"-0.01em" }}>{k.ad}</div>
+                  <div style={{ fontSize:15, fontWeight:500, color:"var(--vt1)", letterSpacing:"-0.01em" }}>{urunCevir(k.ad)}</div>
                   <div style={{ fontSize:11, color:"var(--vt2)", marginTop:3 }}>{kolModelleri.length} model</div>
                 </div>
               </div>
@@ -2616,7 +2616,7 @@ function VitrinModu({ kod, onizleme }) {
             return (
             <div key={kol.id} style={{ marginBottom:34 }}>
               <div style={{ display:"flex", alignItems:"baseline", gap:10, margin:"0 0 14px", paddingBottom:9, borderBottom:"0.5px solid rgba(var(--voverlay-rgb),0.10)", flexWrap:"wrap" }}>
-                <span onClick={()=>kolAc(kol)} style={{ fontSize:19, fontWeight:600, color:"var(--vt1)", letterSpacing:"-0.02em", cursor:"pointer" }}>{kol.ad}</span>
+                <span onClick={()=>kolAc(kol)} style={{ fontSize:19, fontWeight:600, color:"var(--vt1)", letterSpacing:"-0.02em", cursor:"pointer" }}>{urunCevir(kol.ad)}</span>
                 <span style={{ fontSize:12, color:"var(--vt2)" }}>{liste.length} model</span>
                 {yeniSay > 0 && <span style={{ fontSize:11, color:"#1d1d1f", background:"var(--vurgu)", padding:"3px 10px", borderRadius:980, fontWeight:700 }}>{yeniSay} yeni</span>}
               </div>
