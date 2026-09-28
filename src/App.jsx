@@ -2439,11 +2439,17 @@ function VitrinModu({ kod, onizleme }) {
           <button onClick={()=>katalogAl(3)} style={{ flexShrink:0, background:"var(--vcard)", color:"var(--vt1)", border:"none", borderRadius:980, padding:"10px 20px", fontSize:14, fontWeight:600, cursor:"pointer" }}>
             {ce("katalog_al")}{(!aktifKol && !tumGorunum && seciliKlasorler.length > 0) ? " ("+seciliKlasorler.length+")" : ""}
           </button>
-          <button onClick={()=>setVitrinDil(vitrinDil==="tr"?"en":vitrinDil==="en"?"es":"tr")}
-            title={vitrinDil==="tr"?"Switch to English":vitrinDil==="en"?"Cambiar a Español":"Türkçe'ye geç"}
-            style={{ flexShrink:0, height:40, minWidth:40, padding:"0 10px", borderRadius:20, background:"rgba(var(--voverlay-rgb),0.08)", border:"1px solid rgba(var(--voverlay-rgb),0.15)", color:"var(--vt1)", fontSize:11, fontWeight:800, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", letterSpacing:"0.02em" }}>
-            {vitrinDil==="tr" ? "🌐 TR" : vitrinDil==="en" ? "🌐 EN" : "🌐 ES"}
-          </button>
+          <div style={{ flexShrink:0, height:40, padding:3, borderRadius:20, background:"rgba(var(--voverlay-rgb),0.08)", border:"1px solid rgba(var(--voverlay-rgb),0.15)", display:"flex", alignItems:"center", gap:2 }}>
+            {[["tr","TR"],["en","EN"],["es","ES"]].map(([kod,etiket]) => (
+              <button key={kod} onClick={()=>setVitrinDil(kod)}
+                style={{ height:"100%", minWidth:34, padding:"0 8px", borderRadius:17, border:"none", cursor:"pointer",
+                  background: vitrinDil===kod ? "var(--vurgu)" : "transparent",
+                  color: vitrinDil===kod ? "#fff" : "var(--vt1)",
+                  fontSize:11, fontWeight:800, letterSpacing:"0.02em", transition:"background .15s, color .15s" }}>
+                {etiket}
+              </button>
+            ))}
+          </div>
           <button onClick={()=>setVitrinIsik(gunduz?"gece":"gunduz")} title={gunduz?ce("gece_moduna_gec"):ce("gunduz_moduna_gec")}
             style={{ flexShrink:0, width:40, height:40, borderRadius:"50%", background:"rgba(var(--voverlay-rgb),0.08)", border:"1px solid rgba(var(--voverlay-rgb),0.15)", color:"var(--vt1)", fontSize:16, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}>
             {gunduz ? "🌙" : "☀️"}
