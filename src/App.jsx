@@ -2238,6 +2238,8 @@ function VitrinModu({ kod, onizleme }) {
     const ay = yeniMi(a) ? 1 : 0, by = yeniMi(b) ? 1 : 0;
     if (ay !== by) return by - ay;
     if (siralama === "kod") return dogalSirala(a, b, false);
+    if (siralama === "gramAzalan") return (Number(ayarliGram(b))||0) - (Number(ayarliGram(a))||0);
+    if (siralama === "gramArtan") return (Number(ayarliGram(a))||0) - (Number(ayarliGram(b))||0);
     return dogalSirala(a, b, true); // varsayılan "kodTers" — koda göre en yeniden eskiye
   };
 
@@ -2500,6 +2502,8 @@ function VitrinModu({ kod, onizleme }) {
           style={{ background:"rgba(var(--voverlay-rgb),0.07)", border:"none", borderRadius:9, padding:"9px 12px", color:"var(--vt1)", fontSize:13, outline:"none", cursor:"pointer" }}>
           <option value="kodTers" style={{background:"var(--vcard)"}}>{ce("kod_yeni_eski_opt")}</option>
           <option value="kod" style={{background:"var(--vcard)"}}>{ce("kod_eski_yeni_opt")}</option>
+          <option value="gramAzalan" style={{background:"var(--vcard)"}}>{ce("gram_yuksek_dusuk_opt")}</option>
+          <option value="gramArtan" style={{background:"var(--vcard)"}}>{ce("gram_dusuk_yuksek_opt")}</option>
         </select>
       </div>
       )}
