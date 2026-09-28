@@ -1762,8 +1762,9 @@ function GirisEkrani({ onGiris }) {
   );
 }
 
-function SifreDegistir() {
-  const IS2 = { background:"rgba(0,0,0,0.25)", border:"1px solid rgba(var(--vurgu-rgb),0.15)", borderRadius:7, padding:"7px 10px", color:"#e8dcc8", fontSize:11, outline:"none", width:"100%" };
+function SifreDegistir({ T }) {
+  const tema = T || _tema;
+  const IS2 = { background:tema.card, border:"1px solid "+tema.border, borderRadius:7, padding:"7px 10px", color:tema.text, fontSize:11, outline:"none", width:"100%" };
   const [eskiSifre,  setEskiSifre]  = useState("");
   const [yeniSifre,  setYeniSifre]  = useState("");
   const [yeniSifre2, setYeniSifre2] = useState("");
@@ -1780,14 +1781,14 @@ function SifreDegistir() {
     setTimeout(()=>setMesaj(null), 3000);
   };
   return (
-    <div style={{ background:"rgba(232,90,79,0.03)", border:"1px solid rgba(232,90,79,0.1)", borderRadius:12, padding:"14px 16px", marginBottom:14 }}>
+    <div style={{ background:"rgba(232,90,79,0.06)", border:"1px solid rgba(232,90,79,0.18)", borderRadius:12, padding:"14px 16px", marginBottom:14 }}>
       <div style={{ fontSize:10, fontWeight:700, color:"#e85a4f", marginBottom:12 }}>🔒 ŞİFRE DEĞİŞTİR</div>
       <div style={{ display:"flex", flexDirection:"column", gap:8, maxWidth:320 }}>
         <input type="password" value={eskiSifre}  onChange={e=>setEskiSifre(e.target.value)}  placeholder="Mevcut şifre"      style={IS2}/>
         <input type="password" value={yeniSifre}  onChange={e=>setYeniSifre(e.target.value)}  placeholder="Yeni şifre"         style={IS2}/>
         <input type="password" value={yeniSifre2} onChange={e=>setYeniSifre2(e.target.value)} placeholder="Yeni şifre (tekrar)" style={IS2}/>
         {mesaj && <div style={{ fontSize:9, color:mesaj.ok?"#6abf69":"#e85a4f", fontWeight:700 }}>{mesaj.txt}</div>}
-        <button onClick={kaydet} style={{ background:"rgba(var(--vurgu-rgb),0.12)", border:"1px solid rgba(var(--vurgu-rgb),0.25)", borderRadius:7, padding:"7px 14px", color:"var(--vurgu)", fontSize:10, fontWeight:700, cursor:"pointer" }}>Şifreyi Değiştir</button>
+        <button onClick={kaydet} style={{ background:"rgba(var(--vurgu-rgb),0.16)", border:"1px solid rgba(var(--vurgu-rgb),0.32)", borderRadius:7, padding:"7px 14px", color:tema.text, fontSize:10, fontWeight:700, cursor:"pointer" }}>Şifreyi Değiştir</button>
       </div>
     </div>
   );
@@ -7643,14 +7644,14 @@ ${gbOzet}`;
 
             {/* ŞİFRE DEĞİŞTİR */}
             <Akordiyon baslik="🔒 Şifre Değiştir" T={T}>
-            <SifreDegistir />
+            <SifreDegistir T={T}/>
             </Akordiyon>
 
             {/* KOPYA MODEL BULUCU */}
             <Akordiyon baslik="🧬 Kopya Model Bulucu" T={T}>
             <div style={{ background:T.card, border:"1px solid "+T.border, borderRadius:14, padding:"15px 16px" }}>
               <div style={{ fontSize:10, fontWeight:700, color:T.sub, marginBottom:10, letterSpacing:"0.05em", textTransform:"uppercase" }}>🧬 Kopya Model Bulucu</div>
-              <div style={{ fontSize:9, color:"#665d4a", marginBottom:12 }}>Aynı koleksiyonda, aynı kodu taşıyan ve BİREBİR AYNI fotoğrafı kullanan modelleri bulur (gerçek kopya işareti — farklı renk/taş varyantı bu şekilde yakalanmaz). Hiçbir şeyi otomatik silmez, sadece listeler.</div>
+              <div style={{ fontSize:9, color:T.dim, marginBottom:12 }}>Aynı koleksiyonda, aynı kodu taşıyan ve BİREBİR AYNI fotoğrafı kullanan modelleri bulur (gerçek kopya işareti — farklı renk/taş varyantı bu şekilde yakalanmaz). Hiçbir şeyi otomatik silmez, sadece listeler.</div>
               <button onClick={()=>{ setKopyaRapor(true); }} style={{ ...BG, fontSize:11, padding:"7px 14px", marginBottom:12 }}>🧬 Kopyaları Tara</button>
               {kopyaRapor && (() => {
                 const gruplar = {};
@@ -7684,7 +7685,7 @@ ${gbOzet}`;
                                 <div style={{ width:56, height:56, borderRadius:6, overflow:"hidden", background:"#1a1a1a" }}>
                                   {m.foto && <img src={m.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }}/>}
                                 </div>
-                                <div style={{ fontSize:7, color:"#998a6e", textAlign:"center" }}>{m.gram}gr · {m.iscilikDolar}{m.iscilikBirim==="milyem"?"mly":"$"}</div>
+                                <div style={{ fontSize:7, color:T.sub, textAlign:"center" }}>{m.gram}gr · {m.iscilikDolar}{m.iscilikBirim==="milyem"?"mly":"$"}</div>
                                 <button onClick={()=>setDelOnay({ type:"mod", id:m.id })} style={{ background:"rgba(232,90,79,0.12)", border:"none", borderRadius:5, padding:"3px 8px", color:"#e85a4f", fontSize:8, fontWeight:700, cursor:"pointer", width:"100%" }}>Sil</button>
                               </div>
                             ))}
@@ -7702,7 +7703,7 @@ ${gbOzet}`;
             <Akordiyon baslik="🩺 Sistem Durumu" T={T}>
             <div style={{ background:T.card, border:"1px solid "+T.border, borderRadius:14, padding:"15px 16px" }}>
               <div style={{ fontSize:10, fontWeight:700, color:T.sub, marginBottom:10, letterSpacing:"0.05em", textTransform:"uppercase" }}>Sistem Durumu</div>
-              <div style={{ fontSize:9, color:"#665d4a", marginBottom:12 }}>Tablo ve chunk verilerinin tutarlılığını kontrol eder. Bir sorun varsa buradan görürsünüz.</div>
+              <div style={{ fontSize:9, color:T.dim, marginBottom:12 }}>Tablo ve chunk verilerinin tutarlılığını kontrol eder. Bir sorun varsa buradan görürsünüz.</div>
               <button onClick={async()=>{
                 setSaglikRapor({ yukleniyor:true });
                 const r = await saglikDenetimi(AKTIF_SIRKET_ONEK);
@@ -7741,8 +7742,8 @@ ${gbOzet}`;
                 <div style={{ fontSize:10, fontWeight:700, color:T.sub, marginBottom:10, letterSpacing:"0.05em", textTransform:"uppercase" }}>İşlem Geçmişi</div>
                 <button onClick={()=>islemGecmisiGetir(AKTIF_SIRKET_ONEK, 50).then(setIslemGecmisi)} style={{ ...GH, fontSize:9, padding:"4px 10px" }}>↻ Yenile</button>
               </div>
-              <div style={{ fontSize:9, color:"#665d4a", marginBottom:12 }}>Son 50 işlem (ekleme, düzenleme, silme). Bir şeyin ne zaman değiştiğini buradan görebilirsiniz.</div>
-              {islemGecmisi.length === 0 && <div style={{ fontSize:9, color:"#665d4a" }}>Henüz işlem kaydı yok.</div>}
+              <div style={{ fontSize:9, color:T.dim, marginBottom:12 }}>Son 50 işlem (ekleme, düzenleme, silme). Bir şeyin ne zaman değiştiğini buradan görebilirsiniz.</div>
+              {islemGecmisi.length === 0 && <div style={{ fontSize:9, color:T.dim }}>Henüz işlem kaydı yok.</div>}
               {islemGecmisi.length > 0 && <div style={{ display:"flex", flexDirection:"column", gap:4, maxHeight:280, overflowY:"auto" }}>
                 {islemGecmisi.map(ig => {
                   const renk = ig.islem==="sil" ? "#e85a4f" : ig.islem==="ekle" ? "#6abf69" : "#5b9bd5";
@@ -7751,9 +7752,9 @@ ${gbOzet}`;
                     <div key={ig.id} style={{ display:"flex", alignItems:"center", gap:8, padding:"5px 9px", background:"rgba(0,0,0,0.15)", borderRadius:6, fontSize:9 }}>
                       <span style={{ fontSize:11 }}>{ikon}</span>
                       <span style={{ color:renk, fontWeight:700, minWidth:44 }}>{ig.islem}</span>
-                      <span style={{ color:"#998a6e", minWidth:40 }}>{ig.tur}</span>
-                      <span style={{ color:"#e8dcc8", flex:1, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{ig.detay||""}</span>
-                      <span style={{ color:"#665d4a", fontSize:8, whiteSpace:"nowrap" }}>{new Date(ig.zaman).toLocaleString("tr-TR",{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"})}</span>
+                      <span style={{ color:T.sub, minWidth:40 }}>{ig.tur}</span>
+                      <span style={{ color:T.text, flex:1, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{ig.detay||""}</span>
+                      <span style={{ color:T.dim, fontSize:8, whiteSpace:"nowrap" }}>{new Date(ig.zaman).toLocaleString("tr-TR",{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"})}</span>
                     </div>
                   );
                 })}
@@ -7765,7 +7766,7 @@ ${gbOzet}`;
             <Akordiyon baslik="💾 Otomatik Yedekler" T={T}>
             <div style={{ background:T.card, border:"1px solid "+T.border, borderRadius:14, padding:"15px 16px" }}>
               <div style={{ fontSize:10, fontWeight:700, color:T.sub, marginBottom:10, letterSpacing:"0.05em", textTransform:"uppercase" }}>Otomatik Yedekler</div>
-              <div style={{ fontSize:9, color:"#665d4a", marginBottom:12 }}>Sistem her gün otomatik yedek alır (son 7 gün saklanır). Buradan geçmiş bir yedeğe dönebilirsiniz. Foto'lar Storage'da olduğu için yedekler hafiftir.</div>
+              <div style={{ fontSize:9, color:T.dim, marginBottom:12 }}>Sistem her gün otomatik yedek alır (son 7 gün saklanır). Buradan geçmiş bir yedeğe dönebilirsiniz. Foto'lar Storage'da olduğu için yedekler hafiftir.</div>
 
               <div style={{ display:"flex", gap:8, marginBottom:12 }}>
                 <button onClick={async()=>{
@@ -7777,13 +7778,13 @@ ${gbOzet}`;
                 <button onClick={()=>yedekListesi(AKTIF_SIRKET_ONEK).then(setOtoYedekler)} style={{ ...GH, fontSize:11, padding:"7px 14px" }}>↻ Listeyi Yenile</button>
               </div>
 
-              {otoYedekler.length === 0 && <div style={{ fontSize:9, color:"#665d4a" }}>Henüz otomatik yedek yok. İlk yedek yarın (veya "Şimdi Yedek Al" ile) oluşur.</div>}
+              {otoYedekler.length === 0 && <div style={{ fontSize:9, color:T.dim }}>Henüz otomatik yedek yok. İlk yedek yarın (veya "Şimdi Yedek Al" ile) oluşur.</div>}
               {otoYedekler.length > 0 && <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
                 {otoYedekler.map(y => (
                   <div key={y.id} style={{ background:"rgba(0,0,0,0.15)", border:"1px solid "+T.border, borderRadius:8, padding:"9px 11px", display:"flex", justifyContent:"space-between", alignItems:"center", gap:8, flexWrap:"wrap" }}>
                     <div>
                       <div style={{ fontSize:11, fontWeight:700, color:GOLD }}>{new Date(y.tarih).toLocaleDateString("tr-TR", {day:"2-digit", month:"long", year:"numeric"})}</div>
-                      <div style={{ fontSize:8, color:"#665d4a" }}>{y.model_sayisi||0} model · {y.siparis_sayisi||0} sipariş · {new Date(y.olusturma).toLocaleTimeString("tr-TR",{hour:"2-digit",minute:"2-digit"})}</div>
+                      <div style={{ fontSize:8, color:T.dim }}>{y.model_sayisi||0} model · {y.siparis_sayisi||0} sipariş · {new Date(y.olusturma).toLocaleTimeString("tr-TR",{hour:"2-digit",minute:"2-digit"})}</div>
                     </div>
                     <button onClick={async()=>{
                       if(!window.confirm(new Date(y.tarih).toLocaleDateString("tr-TR")+" tarihli yedeğe dönmek istiyor musunuz?\n\nMevcut veriler bu yedekle değiştirilecek ("+(y.model_sayisi||0)+" model, "+(y.siparis_sayisi||0)+" sipariş).")) return;
@@ -7821,7 +7822,7 @@ ${gbOzet}`;
             <div style={{ background:T.card, border:"1px solid "+T.border, borderRadius:14, padding:"15px 16px" }}>
               <div style={{ fontSize:10, fontWeight:700, color:T.sub, marginBottom:10, letterSpacing:"0.05em", textTransform:"uppercase" }}>Aktif Şirket</div>
               <div style={{ fontSize:14, fontWeight:800, color:GOLD, marginBottom:4 }}>{AKTIF_SIRKET}</div>
-              <div style={{ fontSize:9, color:"#665d4a", marginBottom:10 }}>Şu an bu şirketin kataloğundasınız. Diğer şirkete geçmek için aşağıdaki butonu kullanın (verileriniz korunur).</div>
+              <div style={{ fontSize:9, color:T.dim, marginBottom:10 }}>Şu an bu şirketin kataloğundasınız. Diğer şirkete geçmek için aşağıdaki butonu kullanın (verileriniz korunur).</div>
               <button onClick={()=>{ if (onSirketDegis) onSirketDegis(); }}
                 style={{ background:"rgba(167,139,250,0.12)", border:"1px solid rgba(167,139,250,0.25)", borderRadius:7, padding:"7px 14px", color:"#a78bfa", fontSize:10, fontWeight:700, cursor:"pointer" }}>Şirket Değiştir →</button>
             </div>
@@ -7831,7 +7832,7 @@ ${gbOzet}`;
             <Akordiyon baslik="👥 Personel Sistemi" T={T}>
             <div style={{ background:T.card, border:"1px solid "+T.border, borderRadius:14, padding:"15px 16px" }}>
               <div style={{ fontSize:10, fontWeight:700, color:"#5b9bd5", marginBottom:8 }}>👥 PERSONEL SİSTEMİ</div>
-              <div style={{ fontSize:9, color:"#665d4a", marginBottom:10 }}>Personel, bordro, mesai, avans, izin ve gider takibi için diğer sisteme geçiş yapın.</div>
+              <div style={{ fontSize:9, color:T.dim, marginBottom:10 }}>Personel, bordro, mesai, avans, izin ve gider takibi için diğer sisteme geçiş yapın.</div>
               <button onClick={()=>{ window.open("https://personeltakip-pearl.vercel.app/", "_blank"); }}
                 style={{ background:"rgba(91,155,213,0.12)", border:"1px solid rgba(91,155,213,0.25)", borderRadius:7, padding:"7px 14px", color:"#5b9bd5", fontSize:10, fontWeight:700, cursor:"pointer" }}>Personel Sistemini Aç →</button>
             </div>
@@ -7841,7 +7842,7 @@ ${gbOzet}`;
             <Akordiyon baslik="🚪 Oturumu Kapat" T={T}>
             <div style={{ background:T.card, border:"1px solid "+T.border, borderRadius:14, padding:"15px 16px" }}>
               <div style={{ fontSize:10, fontWeight:700, color:T.sub, marginBottom:10, letterSpacing:"0.05em", textTransform:"uppercase" }}>Oturum</div>
-              <div style={{ fontSize:9, color:"#665d4a", marginBottom:10 }}>"Beni hatırla" ile açık oturumu kapatır, bir dahaki açılışta tekrar şifre sorulur.</div>
+              <div style={{ fontSize:9, color:T.dim, marginBottom:10 }}>"Beni hatırla" ile açık oturumu kapatır, bir dahaki açılışta tekrar şifre sorulur.</div>
               <button onClick={()=>{
                 if (!window.confirm("Oturumu kapatmak istediğinize emin misiniz? Tekrar şifre girmeniz gerekecek.")) return;
                 try { localStorage.removeItem("atolye_oturum"); } catch {}
@@ -7889,9 +7890,9 @@ ${gbOzet}`;
             <Akordiyon baslik="🏷️ Etiket Yönetimi" T={T}>
             <div style={{ background:T.card, border:"1px solid "+T.border, borderRadius:14, padding:"15px 16px" }}>
               <div style={{ fontSize:10, fontWeight:700, color:T.sub, marginBottom:10, letterSpacing:"0.05em", textTransform:"uppercase" }}>Etiket Yönetimi</div>
-              <div style={{ fontSize:9, color:"#665d4a", marginBottom:8 }}>Modellerde kullanilan tum etiketler:</div>
+              <div style={{ fontSize:9, color:T.dim, marginBottom:8 }}>Modellerde kullanilan tum etiketler:</div>
               <div style={{ display:"flex", gap:5, flexWrap:"wrap", marginBottom:10 }}>
-                {tumEtiketler.length === 0 && <span style={{ fontSize:9, color:"#665d4a" }}>Henuz etiket yok</span>}
+                {tumEtiketler.length === 0 && <span style={{ fontSize:9, color:T.dim }}>Henuz etiket yok</span>}
                 {tumEtiketler.map(e => (
                   <span key={e} style={{ background:"rgba(167,139,250,0.1)", color:"#a78bfa", padding:"3px 8px", borderRadius:5, fontSize:9, fontWeight:600, display:"flex", alignItems:"center", gap:4 }}>
                     #{e}
@@ -7903,7 +7904,7 @@ ${gbOzet}`;
                   </span>
                 ))}
               </div>
-              <div style={{ fontSize:8, color:"#665d4a", fontStyle:"italic" }}>
+              <div style={{ fontSize:8, color:T.dim, fontStyle:"italic" }}>
                 Yeni etiketler model eklerken/düzenlerken oluşturulur. Buradan mevcut etiketleri tüm modellerden kaldırabilirsiniz.
               </div>
             </div>
@@ -7947,15 +7948,15 @@ ${gbOzet}`;
               {!roundGramAcik ? (
                 <button onClick={()=>setRoundGramAcik(true)} style={{ background:"none", border:"none", padding:0, cursor:"pointer", width:"100%", textAlign:"left" }}>
                   <div style={{ fontSize:10, fontWeight:700, color:T.sub, marginBottom:4, letterSpacing:"0.05em", textTransform:"uppercase" }}>💎 Round Taş Gramajları</div>
-                  <div style={{ fontSize:9, color:"#665d4a" }}>1 gramdaki taş adedi değiştiyse buradan güncelleyin {Object.keys(tasGramOverride).length>0 && <span style={{ color:"#6abf69" }}>· {Object.values(tasGramOverride).reduce((s,o)=>s+Object.keys(o).length,0)} boyut güncellendi</span>}</div>
+                  <div style={{ fontSize:9, color:T.dim }}>1 gramdaki taş adedi değiştiyse buradan güncelleyin {Object.keys(tasGramOverride).length>0 && <span style={{ color:"#6abf69" }}>· {Object.values(tasGramOverride).reduce((s,o)=>s+Object.keys(o).length,0)} boyut güncellendi</span>}</div>
                 </button>
               ) : (
                 <div>
                   <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:4 }}>
                     <div style={{ fontSize:10, fontWeight:700, color:T.sub, letterSpacing:"0.05em", textTransform:"uppercase" }}>💎 Round Taş Gramajları</div>
-                    <button onClick={()=>setRoundGramAcik(false)} style={{ background:"none", border:"none", color:"#665d4a", fontSize:9, cursor:"pointer" }}>Kapat</button>
+                    <button onClick={()=>setRoundGramAcik(false)} style={{ background:"none", border:"none", color:T.dim, fontSize:9, cursor:"pointer" }}>Kapat</button>
                   </div>
-                  <div style={{ fontSize:9, color:"#665d4a", marginBottom:12 }}>1 gramda kaç adet taş var — değiştirmek istediğiniz boyutu güncelleyin, boş bırakırsanız yerleşik değer kullanılır.</div>
+                  <div style={{ fontSize:9, color:T.dim, marginBottom:12 }}>1 gramda kaç adet taş var — değiştirmek istediğiniz boyutu güncelleyin, boş bırakırsanız yerleşik değer kullanılır.</div>
                   {["ROUND_N","ROUND_H"].map(key => (
                     <div key={key} style={{ marginBottom:14 }}>
                       <div style={{ fontSize:9, fontWeight:700, color:GOLD, marginBottom:7 }}>{key==="ROUND_N"?"NORMAL":"HEAVY"}</div>
@@ -7967,7 +7968,7 @@ ${gbOzet}`;
                           const degisti = !!ovr;
                           return (
                             <div key={boyut} style={{ background: degisti?"rgba(106,191,105,0.08)":"rgba(255,255,255,0.03)", border:"1px solid "+(degisti?"rgba(106,191,105,0.25)":T.border), borderRadius:8, padding:"5px 7px" }}>
-                              <div style={{ fontSize:8, color:"#998a6e", marginBottom:3 }}>{boyut} mm</div>
+                              <div style={{ fontSize:8, color:T.sub, marginBottom:3 }}>{boyut} mm</div>
                               <input type="number" defaultValue={guncelAdet} placeholder={String(varsayilanAdet)}
                                 onBlur={e=>{
                                   const v = Number(e.target.value);
@@ -7997,7 +7998,7 @@ ${gbOzet}`;
             <Akordiyon baslik="💎 Özel Taş Boyutları" T={T}>
             <div style={{ background:T.card, border:"1px solid "+T.border, borderRadius:14, padding:"15px 16px" }}>
               <div style={{ fontSize:10, fontWeight:700, color:T.sub, marginBottom:10, letterSpacing:"0.05em", textTransform:"uppercase" }}>Özel Taş Boyutları</div>
-              <div style={{ fontSize:9, color:"#665d4a", marginBottom:10 }}>Tabloda olmayan taş boyutlarını buraya ekleyin. Model formunda otomatik kullanılır.</div>
+              <div style={{ fontSize:9, color:T.dim, marginBottom:10 }}>Tabloda olmayan taş boyutlarını buraya ekleyin. Model formunda otomatik kullanılır.</div>
               {AKTIF_SIRKET_ONEK && (
                 <button onClick={async()=>{
                   if (!window.confirm("MSK'daki tüm ayarlar (özel taşlar, kategoriler, etiketler, notlar, varsayılanlar) bu şirkete KOPYALANACAK.\n\nBu şirketteki mevcut ayarların üzerine yazılır. Devam edilsin mi?")) return;
@@ -8040,7 +8041,7 @@ ${gbOzet}`;
                         <span style={{ fontSize:10, fontWeight:700, color:"#5b9bd5", minWidth:70 }}>{t.sekil}</span>
                         <span style={{ fontSize:10, color:"var(--goldtext)", minWidth:80 }}>{t.boyut}</span>
                         <span style={{ fontSize:9, color:"#6abf69" }}>{t.gramPerAdet.toFixed(6)} gr/adet</span>
-                        <span style={{ fontSize:8, color:"#665d4a" }}>({Math.round(1/t.gramPerAdet)} adet/gr)</span>
+                        <span style={{ fontSize:8, color:T.dim }}>({Math.round(1/t.gramPerAdet)} adet/gr)</span>
                         <button onClick={() => {
                           // Değerleri forma yükle — düzenle, tekrar "Ekle"ye bas (aynı şekil+boyut üzerine yazılır)
                           const bilinen = ["ROUND","OVAL","DAMLA","MARKİZ","TRAPEZ","BAGET","KARE","KALP"];
@@ -8118,8 +8119,8 @@ ${gbOzet}`;
             <Akordiyon baslik="🔑 Koleksiyon Kod Önekleri" T={T}>
             <div style={{ background:"rgba(106,191,105,0.04)", border:"1px solid rgba(106,191,105,0.1)", borderRadius:12, padding:"14px 16px" }}>
               <div style={{ fontSize:10, fontWeight:700, color:"#6abf69", marginBottom:10 }}>🔑 KOLEKSIYON KOD ONEKLERİ</div>
-              <div style={{ fontSize:9, color:"#665d4a", marginBottom:10 }}>Mevcut koleksiyonlar ve kod onekleri:</div>
-              {kollar.length === 0 && <p style={{ fontSize:9, color:"#665d4a" }}>Henuz koleksiyon yok</p>}
+              <div style={{ fontSize:9, color:T.dim, marginBottom:10 }}>Mevcut koleksiyonlar ve kod onekleri:</div>
+              {kollar.length === 0 && <p style={{ fontSize:9, color:T.dim }}>Henuz koleksiyon yok</p>}
               {kollar.map(kol => {
                 const kolModeller = modeller.filter(m => m.ki === kol.id);
                 return (
@@ -8127,7 +8128,7 @@ ${gbOzet}`;
                     <div style={{ background:"rgba(var(--vurgu-rgb),0.15)", color:GOLD, padding:"2px 8px", borderRadius:5, fontSize:11, fontWeight:800, minWidth:50, textAlign:"center" }}>{kol.on||"—"}</div>
                     <div style={{ flex:1 }}>
                       <div style={{ fontSize:11, fontWeight:700, color:"var(--goldtext)" }}>{kol.ad}</div>
-                      <div style={{ fontSize:8, color:"#665d4a" }}>{kolModeller.length} model · Ornek: {kol.on||"XX"}-001, {kol.on||"XX"}-002...</div>
+                      <div style={{ fontSize:8, color:T.dim }}>{kolModeller.length} model · Ornek: {kol.on||"XX"}-001, {kol.on||"XX"}-002...</div>
                     </div>
                     <button onClick={() => { setSayfa("koleksiyonlar"); }} style={{ ...GH, fontSize:8, padding:"3px 8px" }}>Duzenle</button>
                   </div>
