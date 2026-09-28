@@ -3909,15 +3909,15 @@ function Atolye({ onSirketDegis }) {
         const detayYuklu = await detayFotolariYukle(editM.id, obj.detayNoktalari);
         const objURLli = { ...obj, foto: fotoURL, detayNoktalari: detayYuklu };
         const capraObjURLli = { ...capraSyncObj, foto: fotoURL }; // çapraz koleksiyon: foto da dahil, gerçek URL ile
-        const yeniListe = modeller.map(m => {
-          if (m.id === editM.id) return { ...m, ...objURLli };
-          if (onayliSync && m.kod === obj.kod) {
-            const capraz = m.ki !== editM.ki; // farklı koleksiyon → aynı ürünün çapraz kopyası, tam senkron
-            return { ...m, ...(capraz ? capraObjURLli : syncObj) };
-          }
-          return m;
-        });
-        svM(yeniListe);
+        // Sadece GERÇEKTEN değişen modelleri yaz (tüm tabloyu değil) — realtime broadcast fırtınasını önler
+        const editliModel = { ...editM, ...objURLli };
+        const digerDegisenler = onayliSync
+          ? modeller.filter(m => m.id !== editM.id && m.kod === obj.kod).map(m => {
+              const capraz = m.ki !== editM.ki; // farklı koleksiyon → aynı ürünün çapraz kopyası, tam senkron
+              return { ...m, ...(capraz ? capraObjURLli : syncObj) };
+            })
+          : [];
+        svMUpsert([editliModel, ...digerDegisenler]);
         islemKaydet(AKTIF_SIRKET_ONEK, "düzenle", "model", (obj.kod || "") + " · " + (obj.ad || ""));
       } else {
         const yeniId = uid();
@@ -3930,9 +3930,10 @@ function Atolye({ onSirketDegis }) {
         const yeniModel = { id: yeniId, ...obj, foto: fotoURL, detayNoktalari: detayYuklu, t: Date.now() };
         const capraObjURLliYeni = { ...capraSyncObj, foto: fotoURL };
         if (onayliSync && ayniKodlular.length > 0) {
-          svM([...modeller.map(m => m.kod === obj.kod ? { ...m, ...((m.ki !== obj.ki) ? capraObjURLliYeni : syncObj) } : m), yeniModel]);
+          const digerDegisenler = modeller.filter(m => m.kod === obj.kod).map(m => ({ ...m, ...((m.ki !== obj.ki) ? capraObjURLliYeni : syncObj) }));
+          svMUpsert([...digerDegisenler, yeniModel]);
         } else {
-          svM([...modeller, yeniModel]);
+          svMUpsert([yeniModel]);
         }
         islemKaydet(AKTIF_SIRKET_ONEK, "ekle", "model", (obj.kod || "") + " · " + (obj.ad || ""));
       }
@@ -3962,18 +3963,19 @@ function Atolye({ onSirketDegis }) {
 
   const delMod = id => {
     const m = modeller.find(x => x.id === id);
-    svM(modeller.filter(m => m.id !== id));
+    svMUpsert([], [id]);
     setDelOnay(null);
     if (m) islemKaydet(AKTIF_SIRKET_ONEK, "sil", "model", (m.kod || "") + " · " + (m.ad || ""));
   };
   const delSip = id => {
     const sip = siparisler.find(s => s.id === id);
-    if (sip) {
-      svM(modeller.map(m => {
-        const kalem = (sip.kalemler||[]).find(k => k.id === m.id);
-        if (kalem) return { ...m, satisSayisi: Math.max(0, (m.satisSayisi||0) - (kalem.adet||1)) };
-        return m;
-      }));
+    if (sip && Array.isArray(sip.kalemler) && sip.kalemler.length > 0) {
+      const kalemIdSet = new Set(sip.kalemler.map(k => k.id));
+      const digerDegisenler = modeller.filter(m => kalemIdSet.has(m.id)).map(m => {
+        const kalem = sip.kalemler.find(k => k.id === m.id);
+        return { ...m, satisSayisi: Math.max(0, (m.satisSayisi||0) - (kalem.adet||1)) };
+      });
+      if (digerDegisenler.length) svMUpsert(digerDegisenler);
     }
     svS(siparisler.filter(s => s.id !== id));
     setDelOnay(null);
@@ -4154,7 +4156,7 @@ function Atolye({ onSirketDegis }) {
     const yeni = { id: uid(), musteri: musAd, musKod, tarih: Date.now(), teslimTarihi: konfTeslim||"", aciklama: konfSipAciklama.trim(), altinKgUSD, mc: madenCarpan, kalemler: konfKalemler, gelir: kTop.gelir, maliyet: kTop.maliyet, kar: kTop.kar };
     svS([...siparisler, yeni]);
     islemKaydet(AKTIF_SIRKET_ONEK, "ekle", "sipariş", (musAd || "") + " · " + (konfKalemler?.length || 0) + " kalem");
-    svM(modeller.map(m => { const k = konfKalemler.find(x => x.id === m.id); return k ? { ...m, satisSayisi: (m.satisSayisi||0)+1 } : m; }));
+    svMUpsert(modeller.filter(m => konfKalemler.find(x => x.id === m.id)).map(m => ({ ...m, satisSayisi: (m.satisSayisi||0)+1 })));
     // Müşteri-model fiyat hafızasını güncelle
     if (musAd && Object.keys(konfFiyatlar).length > 0) {
       const yeniFiyatHafiza = { ...(kasa.musteriModelFiyat||{}), [musAd]: { ...((kasa.musteriModelFiyat||{})[musAd]||{}) } };
@@ -8453,7 +8455,7 @@ ${gbOzet}`;
                             const mevcut = Array.isArray(m.gizliMus) ? m.gizliMus : [];
                             const yeniGizli = gizli ? mevcut.filter(x=>x!==mkod) : [...mevcut, mkod];
                             const guncelModel = { ...m, gizliMus: yeniGizli };
-                            svM(modeller.map(x => x.id===m.id ? guncelModel : x));
+                            svMUpsert([guncelModel]);
                             setDetayModel(guncelModel);
                             toastGoster("ok", gizli ? mad+" artık görebilir" : mad+" artık göremez");
                           }} style={{ background: gizli?"rgba(232,90,79,0.18)":"rgba(255,255,255,0.03)", border:"1px solid "+(gizli?"rgba(232,90,79,0.45)":"rgba(255,255,255,0.08)"), borderRadius:6, padding:"4px 9px", color: gizli?"#e85a4f":T.sub, fontSize:10, fontWeight:700, cursor:"pointer" }}>
@@ -9598,8 +9600,7 @@ ${gbOzet}`;
                   foto: fotoURL, ki: fKolId, durum: "baslanmadi",
                   setParcalari: [fSetM1.kod, fSetM2.kod], t: Date.now(),
                 };
-                const yeniListe = cakisan ? modeller.filter(m=>m.id!==cakisan.id).concat(yeniSet) : [...modeller, yeniSet];
-                svM(yeniListe);
+                svMUpsert([yeniSet], cakisan ? [cakisan.id] : []);
                 setShowMM(false); rmf(); setEditM(null);
                 const hedefKol = kollar.find(k=>k.id===fKolId);
                 if (hedefKol) { setAktifKol(hedefKol); setSayfa("modeller"); }
@@ -9897,7 +9898,7 @@ ${gbOzet}`;
                     const yeniGizli = gizli ? mevcut.filter(x=>x!==mkod) : [...mevcut, mkod];
                     const guncelModel = { ...editM, gizliMus: yeniGizli };
                     setEditM(guncelModel);
-                    svM(modeller.map(x => x.id===editM.id ? { ...x, gizliMus: yeniGizli } : x));
+                    svMUpsert([guncelModel]);
                     toastGoster("ok", gizli ? mad+" artık görebilir" : mad+" artık göremez");
                   }} style={{ background: gizli?"rgba(232,90,79,0.18)":"rgba(255,255,255,0.03)", border:"1px solid "+(gizli?"rgba(232,90,79,0.45)":"rgba(255,255,255,0.08)"), borderRadius:6, padding:"4px 9px", color: gizli?"#e85a4f":T.sub, fontSize:10, fontWeight:700, cursor:"pointer" }}>
                     {gizli ? "🚫 " : ""}{mad}
