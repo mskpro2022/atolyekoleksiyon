@@ -4047,7 +4047,7 @@ function Atolye({ onSirketDegis }) {
       return kad === onEkF;
     });
     if (arama.trim()) { const q = arama.toLowerCase(); r = r.filter(m => (m.ad||"").toLowerCase().includes(q) || (m.kod||"").toLowerCase().includes(q) || (m.etiketler||[]).some(e => e.includes(q))); }
-    const kodSirala = (a,b) => {
+    const kodSirala = (a,b,ters) => {
       const ka=a.kod||"", kb=b.kod||"";
       // "ALT79", "ALT80", "ALT80-A", "ALT100" → ["ALT", 79, ""], ["ALT", 80, ""], ["ALT", 80, "-A"], ["ALT", 100, ""]
       // NOT: yön (ters) SADECE ana sayıyı çevirir — aynı sayılı varyantların (renk/harf eki) sırası
