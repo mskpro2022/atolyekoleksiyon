@@ -32,11 +32,23 @@ export default async function handler(req, res) {
       const koleksiyonlar = (kolRow?.veri || []).map(k => k.ad).filter(Boolean);
 
       // Modeller: sadece yapısal alanlar (kategori, ayar, gram) — maliyet/müşteri YOK
-      const { data: modeller, error } = await supabase
-        .from('modeller')
-        .select('kategori, veri')
-        .eq('onek', onek);
-      if (error) return res.status(500).json({ basarili: false, hata: error.message });
+      // Supabase/PostgREST varsayılan olarak sorguyu 1000 satırla sınırlıyor — sayfalayarak TÜMÜNÜ çekiyoruz
+      let modeller = [];
+      {
+        const SAYFA = 1000;
+        let bas = 0;
+        while (true) {
+          const { data: parca, error } = await supabase
+            .from('modeller')
+            .select('kategori, veri')
+            .eq('onek', onek)
+            .range(bas, bas + SAYFA - 1);
+          if (error) return res.status(500).json({ basarili: false, hata: error.message });
+          modeller = modeller.concat(parca || []);
+          if (!parca || parca.length < SAYFA) break;
+          bas += SAYFA;
+        }
+      }
 
       const kategoriDagilimi = {};
       const ayarDagilimi = {};
