@@ -1,4 +1,4 @@
-import { supabase, dbLoad, dbSave, fotoYukleStorage, yedekKaydet, yedekListesi, yedekGetir, bugunYedekVarMi, tabloModelleriSenkron, tabloModelleriToplu, tabloModelSil, tabloSiparisleriSenkron, tabloSiparisleriToplu, tabloMusterileriYaz, akilliModelOku, akilliSiparisOku, akilliMusteriOku, islemKaydet, islemGecmisiGetir, realtimeBaslat, tabloKoleksiyonlariYaz, tabloKasaYaz, akilliKoleksiyonOku, akilliKasaOku, tabloKoleksiyonlariOku, tabloKasaOku, saglikDenetimi, ekranSunucuFarki, toptanciKaydet, toptancilariGetir, toptanciSil, vitrinGecmisiGetir, vitrinEnCokBakilan, vitrinOzetGetir, vitrinAnaliz, vitrinGetirGuvenli, siparisOlusturGuvenli, vitrinAktiviteKaydetGuvenli, radarTrendleriOku, radarKaynaklariOku, radarKanitlariOku, radarTrendGuncelle, radarTrendSil, radarManuelKanitEkle } from "./supabase.js";
+import { supabase, dbLoad, dbSave, fotoYukleStorage, yedekKaydet, yedekListesi, yedekGetir, bugunYedekVarMi, tabloModelleriSenkron, tabloModelleriToplu, tabloModelSil, tabloSiparisleriSenkron, tabloSiparisleriToplu, tabloMusterileriYaz, akilliModelOku, akilliSiparisOku, akilliMusteriOku, islemKaydet, islemGecmisiGetir, realtimeBaslat, tabloKoleksiyonlariYaz, tabloKasaYaz, akilliKoleksiyonOku, akilliKasaOku, tabloKoleksiyonlariOku, tabloKasaOku, saglikDenetimi, ekranSunucuFarki, toptanciKaydet, toptancilariGetir, toptanciSil, vitrinGecmisiGetir, vitrinEnCokBakilan, vitrinOzetGetir, vitrinAnaliz, vitrinGetirGuvenli, siparisOlusturGuvenli, vitrinAktiviteKaydetGuvenli, radarTrendleriOku, radarKaynaklariOku, radarKanitlariOku, radarTumKanitlariOku, radarTrendGuncelle, radarTrendSil, radarManuelKanitEkle } from "./supabase.js";
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 
 const uid = () => "x" + Date.now() + Math.random().toString(36).substr(2, 5);
@@ -2847,11 +2847,17 @@ function VitrinModu({ kod, onizleme }) {
 }
 
 // ═══ TREND RADAR SAYFASI — radar_sources/radar_trends/radar_evidence, authenticated (worker) oturum + RLS ile ═══
-function TrendRadarSayfasi({ T }) {
+function TrendRadarSayfasi({ T, modeller }) {
   const [trendler, setTrendler] = useState([]);
   const [kaynaklar, setKaynaklar] = useState([]);
+  const [kanitOzet, setKanitOzet] = useState([]); // hafif kanıt listesi: {id, trend_id, source_id, observed_at} — istatistik/rozet için
   const [yukleniyor, setYukleniyor] = useState(true);
   const [asamaFiltre, setAsamaFiltre] = useState("all");
+  const [kategoriFiltre, setKategoriFiltre] = useState("");
+  const [bolgeFiltre, setBolgeFiltre] = useState("");
+  const [minSkor, setMinSkor] = useState(0);
+  const [arama, setArama] = useState("");
+  const [siralama, setSiralama] = useState("skor"); // skor | guncel | isim | kanit
   const [seciliTrend, setSeciliTrend] = useState(null);
   const [kanitlar, setKanitlar] = useState([]);
   const [duzenle, setDuzenle] = useState(null);
@@ -2862,14 +2868,61 @@ function TrendRadarSayfasi({ T }) {
 
   const yukle = async () => {
     setYukleniyor(true);
-    const [t, k] = await Promise.all([radarTrendleriOku(), radarKaynaklariOku()]);
-    setTrendler(t); setKaynaklar(k);
+    const [t, k, e] = await Promise.all([radarTrendleriOku(), radarKaynaklariOku(), radarTumKanitlariOku()]);
+    setTrendler(t); setKaynaklar(k); setKanitOzet(e);
     setYukleniyor(false);
   };
   useEffect(() => { yukle(); }, []);
 
   const skor = (t) => Math.round(((t.usa_fit||0)+(t.manufacturing_fit||0)+(t.margin_fit||0)+(t.longevity_fit||0)+(t.catalog_gap||0)) * 4);
-  const gorunenler = trendler.filter(t => asamaFiltre==="all" || t.stage===asamaFiltre).sort((a,b)=>skor(b)-skor(a));
+
+  // Trend başına kanıt sayısı
+  const kanitSayisi = useMemo(() => {
+    const m = {};
+    kanitOzet.forEach(k => { m[k.trend_id] = (m[k.trend_id]||0) + 1; });
+    return m;
+  }, [kanitOzet]);
+
+  const buHaftaKanit = useMemo(() => {
+    const sinir = Date.now() - 7*24*60*60*1000;
+    return kanitOzet.filter(k => k.observed_at && new Date(k.observed_at).getTime() >= sinir).length;
+  }, [kanitOzet]);
+
+  const ortSkor = trendler.length ? Math.round(trendler.reduce((s,t)=>s+skor(t),0) / trendler.length) : 0;
+  const enYuksekTrend = trendler.length ? [...trendler].sort((a,b)=>skor(b)-skor(a))[0] : null;
+
+  const kategoriler = useMemo(() => { const s=new Set(); trendler.forEach(t=>t.category && s.add(t.category)); return [...s].sort(); }, [trendler]);
+  const bolgeler = useMemo(() => { const s=new Set(); trendler.forEach(t=>t.region && s.add(t.region)); return [...s].sort(); }, [trendler]);
+
+  const kategoriDagilimi = useMemo(() => {
+    const m = {};
+    trendler.forEach(t => { const k = t.category||"diğer"; m[k] = (m[k]||0)+1; });
+    return Object.entries(m).sort((a,b)=>b[1]-a[1]).slice(0,8);
+  }, [trendler]);
+  const maxKategoriSayi = kategoriDagilimi.length ? kategoriDagilimi[0][1] : 1;
+
+  const gorunenler = useMemo(() => {
+    let r = trendler;
+    if (asamaFiltre!=="all") r = r.filter(t=>t.stage===asamaFiltre);
+    if (kategoriFiltre) r = r.filter(t=>t.category===kategoriFiltre);
+    if (bolgeFiltre) r = r.filter(t=>t.region===bolgeFiltre);
+    if (minSkor>0) r = r.filter(t=>skor(t)>=minSkor);
+    if (arama.trim()) { const q=arama.toLowerCase(); r = r.filter(t => (t.name||"").toLowerCase().includes(q) || (t.design_cluster||"").toLowerCase().includes(q)); }
+    r = [...r];
+    if (siralama==="skor") r.sort((a,b)=>skor(b)-skor(a));
+    else if (siralama==="guncel") r.sort((a,b)=>new Date(b.updated_at)-new Date(a.updated_at));
+    else if (siralama==="isim") r.sort((a,b)=>(a.name||"").localeCompare(b.name||"","tr"));
+    else if (siralama==="kanit") r.sort((a,b)=>(kanitSayisi[b.id]||0)-(kanitSayisi[a.id]||0));
+    return r;
+  }, [trendler, asamaFiltre, kategoriFiltre, bolgeFiltre, minSkor, arama, siralama, kanitSayisi]);
+
+  // Trend'in eşleşen model kodlarını/ID'lerini gerçek katalogdaki modellerle eşleştirir (foto/gram/ayar göstermek için)
+  const eslesenModeller = useMemo(() => {
+    if (!seciliTrend || !Array.isArray(modeller)) return [];
+    const referanslar = seciliTrend.matched_model_ids || [];
+    if (!referanslar.length) return [];
+    return referanslar.map(ref => modeller.find(m => m.id===ref || m.kod===ref)).filter(Boolean);
+  }, [seciliTrend, modeller]);
 
   const trendAc = async (t) => {
     setSeciliTrend(t);
@@ -2910,29 +2963,67 @@ function TrendRadarSayfasi({ T }) {
   const ASAMA_ETIKET = { watch:"👁 İzleniyor", concept:"✏️ Konsept", sample:"🔨 Numune", archive:"📦 Arşiv" };
   const ASAMA_RENK = { watch:"#7aa2f7", concept:"#e8a23a", sample:"#4fd1c5", archive:"#8b8b8b" };
   const IS = { background:T.card, border:"1px solid "+T.border, borderRadius:7, padding:"7px 10px", color:T.text, fontSize:11, outline:"none", width:"100%" };
+  const skorRenk = (s) => s>=60 ? "#4fd1c5" : s>=35 ? "#e8a23a" : "#e85a4f";
 
   return (
-    <div style={{ animation:"fadein .3s", maxWidth:1200 }}>
+    <div style={{ animation:"fadein .3s", maxWidth:1280 }}>
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:8, marginBottom:16 }}>
         <h2 style={{ margin:0, fontSize:15, fontWeight:700, color:T.text }}>📡 Trend Radar</h2>
         <button onClick={()=>setManuelAcik(true)} style={{ background:"rgba(var(--vurgu-rgb),0.12)", border:"1px solid rgba(var(--vurgu-rgb),0.3)", borderRadius:8, padding:"7px 14px", color:"var(--vurgu)", fontSize:11, fontWeight:700, cursor:"pointer" }}>+ Manuel Kanıt Ekle</button>
       </div>
 
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))", gap:10, marginBottom:16 }}>
+      {/* ÖZET / ANALİZ PANELİ */}
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(130px,1fr))", gap:10, marginBottom:12 }}>
         {[
           { l:"Toplam Trend", v: trendler.length },
+          { l:"Ortalama Skor", v: ortSkor, renk: skorRenk(ortSkor) },
           { l:"İzleniyor", v: trendler.filter(t=>t.stage==="watch").length },
           { l:"Numune Aşamasında", v: trendler.filter(t=>t.stage==="sample").length },
-          { l:"Kayıtlı Kaynak", v: kaynaklar.length },
+          { l:"Toplam Kanıt", v: kanitOzet.length },
+          { l:"Bu Hafta Yeni Kanıt", v: buHaftaKanit },
         ].map((k,i)=>(
           <div key={i} style={{ background:T.card, border:"1px solid "+T.border, borderRadius:10, padding:"10px 14px" }}>
             <div style={{ fontSize:8, color:T.dim, marginBottom:4, textTransform:"uppercase", letterSpacing:".04em" }}>{k.l}</div>
-            <div style={{ fontSize:18, fontWeight:800, color:T.text }}>{k.v}</div>
+            <div style={{ fontSize:18, fontWeight:800, color:k.renk||T.text }}>{k.v}</div>
           </div>
         ))}
       </div>
 
-      <div style={{ display:"flex", gap:6, marginBottom:14, flexWrap:"wrap" }}>
+      {/* KATEGORİ DAĞILIMI + EN YÜKSEK POTANSİYEL */}
+      {trendler.length > 0 && (
+        <div style={{ display:"grid", gridTemplateColumns:"1.3fr 1fr", gap:10, marginBottom:16 }}>
+          <div style={{ background:T.card, border:"1px solid "+T.border, borderRadius:10, padding:"12px 14px" }}>
+            <div style={{ fontSize:9, fontWeight:700, color:T.dim, marginBottom:8, textTransform:"uppercase", letterSpacing:".04em" }}>Kategori Dağılımı</div>
+            <div style={{ display:"flex", flexDirection:"column", gap:5 }}>
+              {kategoriDagilimi.map(([kat,sayi])=>(
+                <div key={kat} style={{ display:"flex", alignItems:"center", gap:8 }}>
+                  <div style={{ fontSize:9, color:T.sub, width:80, flexShrink:0, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{kat}</div>
+                  <div style={{ flex:1, height:7, background:"rgba(255,255,255,0.05)", borderRadius:4, overflow:"hidden" }}>
+                    <div style={{ height:"100%", width:(sayi/maxKategoriSayi*100)+"%", background:"linear-gradient(90deg,var(--vurgu),#4fd1c5)", borderRadius:4 }} />
+                  </div>
+                  <div style={{ fontSize:9, fontWeight:700, color:T.text, width:16, textAlign:"right" }}>{sayi}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div style={{ background:T.card, border:"1px solid "+T.border, borderRadius:10, padding:"12px 14px" }}>
+            <div style={{ fontSize:9, fontWeight:700, color:T.dim, marginBottom:8, textTransform:"uppercase", letterSpacing:".04em" }}>En Yüksek Potansiyel</div>
+            {enYuksekTrend ? (
+              <div onClick={()=>trendAc(enYuksekTrend)} style={{ cursor:"pointer" }}>
+                <div style={{ fontSize:13, fontWeight:700, color:T.text, marginBottom:4 }}>{enYuksekTrend.name}</div>
+                <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                  <div style={{ fontSize:20, fontWeight:800, color:skorRenk(skor(enYuksekTrend)) }}>{skor(enYuksekTrend)}</div>
+                  <div style={{ fontSize:9, color:T.dim }}>/100 fırsat skoru</div>
+                </div>
+                {enYuksekTrend.category && <div style={{ fontSize:9, color:T.sub, marginTop:4 }}>{enYuksekTrend.category}{enYuksekTrend.region ? " · "+enYuksekTrend.region : ""}</div>}
+              </div>
+            ) : <div style={{ fontSize:10, color:T.dim }}>—</div>}
+          </div>
+        </div>
+      )}
+
+      {/* FİLTRELER */}
+      <div style={{ display:"flex", gap:6, marginBottom:8, flexWrap:"wrap" }}>
         {["all","watch","concept","sample","archive"].map(a=>(
           <button key={a} onClick={()=>setAsamaFiltre(a)}
             style={{ background: asamaFiltre===a?"rgba(var(--vurgu-rgb),0.15)":"transparent", border:"1px solid "+(asamaFiltre===a?"rgba(var(--vurgu-rgb),0.4)":T.border), borderRadius:20, padding:"5px 12px", color: asamaFiltre===a?"var(--vurgu)":T.sub, fontSize:10, fontWeight:700, cursor:"pointer" }}>
@@ -2940,30 +3031,60 @@ function TrendRadarSayfasi({ T }) {
           </button>
         ))}
       </div>
+      <div style={{ display:"flex", gap:6, marginBottom:14, flexWrap:"wrap", alignItems:"center" }}>
+        <input value={arama} onChange={e=>setArama(e.target.value)} placeholder="Trend ara..." style={{ ...IS, width:160 }} />
+        <select value={kategoriFiltre} onChange={e=>setKategoriFiltre(e.target.value)} style={{ ...IS, width:130 }}>
+          <option value="">Tüm kategoriler</option>
+          {kategoriler.map(k=><option key={k} value={k}>{k}</option>)}
+        </select>
+        <select value={bolgeFiltre} onChange={e=>setBolgeFiltre(e.target.value)} style={{ ...IS, width:130 }}>
+          <option value="">Tüm bölgeler</option>
+          {bolgeler.map(b=><option key={b} value={b}>{b}</option>)}
+        </select>
+        <select value={minSkor} onChange={e=>setMinSkor(Number(e.target.value))} style={{ ...IS, width:130 }}>
+          <option value={0}>Tüm skorlar</option>
+          <option value={35}>Skor ≥ 35</option>
+          <option value={60}>Skor ≥ 60</option>
+          <option value={80}>Skor ≥ 80</option>
+        </select>
+        <select value={siralama} onChange={e=>setSiralama(e.target.value)} style={{ ...IS, width:150 }}>
+          <option value="skor">Sırala: Skor</option>
+          <option value="guncel">Sırala: Güncellenme</option>
+          <option value="isim">Sırala: İsim</option>
+          <option value="kanit">Sırala: Kanıt Sayısı</option>
+        </select>
+        <div style={{ fontSize:9, color:T.dim, marginLeft:"auto" }}>{gorunenler.length} / {trendler.length} trend gösteriliyor</div>
+      </div>
 
       {yukleniyor ? (
         <div style={{ color:T.dim, fontSize:12, padding:20, textAlign:"center" }}>Yükleniyor...</div>
       ) : gorunenler.length===0 ? (
         <div style={{ color:T.dim, fontSize:12, padding:30, textAlign:"center", background:T.card, borderRadius:12, border:"1px solid "+T.border }}>
-          Henüz trend kaydı yok. ChatGPT Action'ı ile otomatik ekleniyor olacak, ya da yukarıdan manuel ekleyebilirsin.
+          {trendler.length===0 ? "Henüz trend kaydı yok. ChatGPT Action'ı ile otomatik ekleniyor olacak, ya da yukarıdan manuel ekleyebilirsin." : "Filtrelere uyan trend yok."}
         </div>
       ) : (
         <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))", gap:10 }}>
-          {gorunenler.map(t=>(
-            <div key={t.id} onClick={()=>trendAc(t)} style={{ background:T.card, border:"1px solid "+T.border, borderRadius:12, padding:"12px 14px", cursor:"pointer" }}>
+          {gorunenler.map(t=>{
+            const s = skor(t);
+            return (
+            <div key={t.id} onClick={()=>trendAc(t)} style={{ background:T.card, border:"1px solid "+T.border, borderLeft:"3px solid "+skorRenk(s), borderRadius:12, padding:"12px 14px", cursor:"pointer" }}>
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"start", gap:8, marginBottom:6 }}>
                 <div style={{ fontSize:12, fontWeight:700, color:T.text }}>{t.name}</div>
-                <div style={{ fontSize:14, fontWeight:800, color: skor(t)>=60?"#4fd1c5":skor(t)>=35?"#e8a23a":T.dim, whiteSpace:"nowrap" }}>{skor(t)}</div>
+                <div style={{ fontSize:14, fontWeight:800, color:skorRenk(s), whiteSpace:"nowrap" }}>{s}</div>
+              </div>
+              <div style={{ height:4, background:"rgba(255,255,255,0.06)", borderRadius:3, overflow:"hidden", marginBottom:8 }}>
+                <div style={{ height:"100%", width:s+"%", background:skorRenk(s), borderRadius:3 }} />
               </div>
               <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:8 }}>
                 <span style={{ fontSize:8, fontWeight:700, padding:"2px 8px", borderRadius:10, background:ASAMA_RENK[t.stage]+"22", color:ASAMA_RENK[t.stage] }}>{ASAMA_ETIKET[t.stage]||t.stage}</span>
                 {t.category && <span style={{ fontSize:8, color:T.dim, padding:"2px 8px", borderRadius:10, background:"rgba(255,255,255,0.04)" }}>{t.category}</span>}
                 {t.region && <span style={{ fontSize:8, color:T.dim, padding:"2px 8px", borderRadius:10, background:"rgba(255,255,255,0.04)" }}>{t.region}</span>}
+                <span style={{ fontSize:8, color:"#a78bfa", padding:"2px 8px", borderRadius:10, background:"rgba(167,139,250,0.08)" }}>📋 {kanitSayisi[t.id]||0} kanıt</span>
               </div>
               {t.design_cluster && <div style={{ fontSize:10, color:T.sub, marginBottom:4 }}>{t.design_cluster}</div>}
               <div style={{ fontSize:8, color:T.dim }}>Güncellendi: {new Date(t.updated_at).toLocaleDateString("tr-TR")}</div>
             </div>
-          ))}
+          );})}
         </div>
       )}
 
@@ -2976,18 +3097,46 @@ function TrendRadarSayfasi({ T }) {
                 {["watch","concept","sample","archive"].map(a=><option key={a} value={a}>{ASAMA_ETIKET[a]}</option>)}
               </select>
               <div style={{ fontSize:9, fontWeight:700, color:T.dim, marginBottom:6, textTransform:"uppercase" }}>Uygunluk Puanları (0-5)</div>
-              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:6, marginBottom:10, fontSize:10, color:T.sub }}>
-                <div>ABD Pazarı: <b style={{color:T.text}}>{seciliTrend.usa_fit}</b></div>
-                <div>Üretim Uygunluğu: <b style={{color:T.text}}>{seciliTrend.manufacturing_fit}</b></div>
-                <div>Kâr Marjı: <b style={{color:T.text}}>{seciliTrend.margin_fit}</b></div>
-                <div>Kalıcılık: <b style={{color:T.text}}>{seciliTrend.longevity_fit}</b></div>
-                <div>Katalog Boşluğu: <b style={{color:T.text}}>{seciliTrend.catalog_gap}</b></div>
-                <div>Toplam Skor: <b style={{color:"#4fd1c5"}}>{skor(seciliTrend)}/100</b></div>
+              <div style={{ display:"flex", flexDirection:"column", gap:5, marginBottom:10 }}>
+                {[
+                  ["ABD Pazarı", seciliTrend.usa_fit],
+                  ["Üretim Uygunluğu", seciliTrend.manufacturing_fit],
+                  ["Kâr Marjı", seciliTrend.margin_fit],
+                  ["Kalıcılık", seciliTrend.longevity_fit],
+                  ["Katalog Boşluğu", seciliTrend.catalog_gap],
+                ].map(([etiket,deger])=>(
+                  <div key={etiket} style={{ display:"flex", alignItems:"center", gap:8 }}>
+                    <div style={{ fontSize:9, color:T.sub, width:100, flexShrink:0 }}>{etiket}</div>
+                    <div style={{ flex:1, height:6, background:"rgba(255,255,255,0.05)", borderRadius:3, overflow:"hidden" }}>
+                      <div style={{ height:"100%", width:((deger||0)/5*100)+"%", background:"var(--vurgu)", borderRadius:3 }} />
+                    </div>
+                    <div style={{ fontSize:9, fontWeight:700, color:T.text, width:12, textAlign:"right" }}>{deger||0}</div>
+                  </div>
+                ))}
+                <div style={{ display:"flex", justifyContent:"space-between", marginTop:2, paddingTop:6, borderTop:"1px solid "+T.border }}>
+                  <span style={{ fontSize:10, fontWeight:700, color:T.dim }}>Toplam Fırsat Skoru</span>
+                  <span style={{ fontSize:13, fontWeight:800, color:skorRenk(skor(seciliTrend)) }}>{skor(seciliTrend)}/100</span>
+                </div>
               </div>
               <div style={{ fontSize:9, fontWeight:700, color:T.dim, marginBottom:6, textTransform:"uppercase" }}>Üretim Notları</div>
               <textarea value={duzenle.production_notes} onChange={e=>setDuzenle(d=>({...d, production_notes:e.target.value}))} rows={4} style={{...IS, marginBottom:10, resize:"vertical", fontFamily:"inherit"}} />
               <div style={{ fontSize:9, fontWeight:700, color:T.dim, marginBottom:6, textTransform:"uppercase" }}>Eşleşen Model Kodları (virgülle ayır)</div>
               <input value={duzenle.matched_model_ids} onChange={e=>setDuzenle(d=>({...d, matched_model_ids:e.target.value}))} style={{...IS, marginBottom:10}} placeholder="örn. MC-001, MC-014" />
+              {eslesenModeller.length > 0 && (
+                <div style={{ marginBottom:10 }}>
+                  <div style={{ fontSize:9, fontWeight:700, color:T.dim, marginBottom:6, textTransform:"uppercase" }}>Katalogdaki Eşleşen Modeller</div>
+                  <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(90px,1fr))", gap:8 }}>
+                    {eslesenModeller.map(m=>(
+                      <div key={m.id} style={{ background:T.header, border:"1px solid "+T.border, borderRadius:8, padding:6, textAlign:"center" }}>
+                        {m.foto ? <img src={m.foto} alt={m.kod} style={{ width:"100%", aspectRatio:"1", objectFit:"cover", borderRadius:6, marginBottom:4 }} />
+                          : <div style={{ width:"100%", aspectRatio:"1", borderRadius:6, marginBottom:4, background:"rgba(255,255,255,0.04)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:16, color:T.dim }}>—</div>}
+                        <div style={{ fontSize:8, fontWeight:700, color:T.text, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{m.kod}</div>
+                        <div style={{ fontSize:7, color:T.dim }}>{m.gram}gr · {m.refAyar}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
               <div style={{ display:"flex", gap:8 }}>
                 <button onClick={kaydet} disabled={kaydediliyor} style={{ flex:1, background:"var(--vurgu)", border:"none", borderRadius:8, padding:"9px", color:"#1d1d1f", fontSize:11, fontWeight:700, cursor:"pointer" }}>{kaydediliyor?"Kaydediliyor...":"Kaydet"}</button>
                 <button onClick={()=>sil(seciliTrend)} style={{ background:"rgba(232,90,79,0.1)", border:"1px solid rgba(232,90,79,0.3)", borderRadius:8, padding:"9px 14px", color:"#e85a4f", fontSize:11, fontWeight:700, cursor:"pointer" }}>Sil</button>
@@ -7914,7 +8063,7 @@ function Atolye({ onSirketDegis }) {
         )}
 
         {/* TREND RADAR */}
-        {sayfa==="radar" && <TrendRadarSayfasi T={T} />}
+        {sayfa==="radar" && <TrendRadarSayfasi T={T} modeller={modeller} />}
       </div>
 
       {/* TOPLU KOPYALA MODAL */}
