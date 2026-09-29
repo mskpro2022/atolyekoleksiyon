@@ -644,6 +644,33 @@ export async function vitrinAktiviteKaydet(onek, musteriKod, musteriAd, eylem, k
     })
   } catch (e) { /* sessiz */ }
 }
+
+// ═══ VİTRİN GÜVENLİ ERİŞİM (RLS/RPC üzerinden — anon artık tabloları doğrudan göremiyor) ═══
+// Müşteri koduna göre sadece izinli koleksiyon/modelleri (maliyet alanları çıkarılmış) döner.
+export async function vitrinGetirGuvenli(kod, onek = '') {
+  try {
+    const { data, error } = await supabase.rpc('vitrin_getir', { p_kod: kod, p_onek: onek })
+    if (error) { console.error('vitrinGetirGuvenli:', error.message); return { gecerli: false } }
+    return data || { gecerli: false }
+  } catch (e) { console.error('vitrinGetirGuvenli:', e.message); return { gecerli: false } }
+}
+// Vitrinden sipariş oluşturur — sunucu tarafında müşteri kodu doğrulanır
+export async function siparisOlusturGuvenli(kod, onek, siparis) {
+  try {
+    const { data, error } = await supabase.rpc('siparis_olustur', { p_kod: kod, p_onek: onek, p_siparis: siparis })
+    if (error) { console.error('siparisOlusturGuvenli:', error.message); return { basarili: false } }
+    return data || { basarili: false }
+  } catch (e) { console.error('siparisOlusturGuvenli:', e.message); return { basarili: false } }
+}
+// Vitrin aktivite kaydı — sunucu tarafında müşteri kodu doğrulanır
+export async function vitrinAktiviteKaydetGuvenli(kod, onek, eylem, koleksiyon, modelKod, modelAd) {
+  try {
+    await supabase.rpc('vitrin_aktivite_ekle', {
+      p_kod: kod, p_onek: onek, p_eylem: eylem,
+      p_koleksiyon: koleksiyon || null, p_model_kod: modelKod || null, p_model_ad: modelAd || null
+    })
+  } catch (e) { /* sessiz */ }
+}
 export async function vitrinGecmisiGetir(onek, musteriKod, limit = 100) {
   try {
     const { data, error } = await supabase.from('vitrin_aktivite')
