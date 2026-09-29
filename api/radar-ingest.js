@@ -1,354 +1,177 @@
-openapi: 3.1.0
-info:
-  title: MSK Trend Radar Ingest
-  description: >
-    Kuyumculuk trend kanıtlarını MSK'nın Trend Radar veritabanına kaydeder.
-    Tek başına hashtag/mention kanıt sayılmaz — somut bir ürün sayfası,
-    gönderi veya stok hareketi gerekir.
-  version: "1.0.0"
-servers:
-  - url: https://atolyekoleksiyon.com
-    description: Vercel'de yayınlı MSK ERP sitesi
-paths:
-  /api/radar-ingest:
-    post:
-      operationId: kaydetTrendKaniti
-      summary: Bir trend bulgusunu (kaynak + trend + kanıt) kaydeder
-      security:
-        - RadarApiKey: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [source, trend, evidence]
-              properties:
-                source:
-                  type: object
-                  description: Bulgunun geldiği hesap/site (Instagram, Pinterest, perakendeci sitesi, vb.)
-                  required: [name, platform]
-                  properties:
-                    name:
-                      type: string
-                      description: Hesap adı veya site adı (örn. "@goldconceptsusa", "James Allen")
-                    platform:
-                      type: string
-                      enum: [instagram, pinterest, tiktok, retailer, wholesale, editorial, fair, marketplace, search, other]
-                    role:
-                      type: string
-                      enum: [leader, regional_retail, regional_wholesale, discovery, commercial]
-                      description: leader = büyük marka/öncü; regional_retail = bölgesel perakendeci (ABD/Meksika/Panama); regional_wholesale = bölgesel toptancı; discovery = keşif amaçlı hesap; commercial = doğrudan satış odaklı
-                    url:
-                      type: string
-                      description: Hesap/site linki
-                    region:
-                      type: string
-                      description: "örn. USA, Mexico, Panama, Global"
-                    tier:
-                      type: integer
-                      minimum: 1
-                      maximum: 3
-                      description: 1 = en yüksek öncelik/güven, 3 = en düşük
-                    notes:
-                      type: string
-                trend:
-                  type: object
-                  description: Tespit edilen tasarım trendi. Aynı isimde bir trend zaten varsa güncellenir/birleştirilir.
-                  required: [name]
-                  properties:
-                    name:
-                      type: string
-                      description: Kısa, tutarlı trend adı (örn. "Twisted Rope Huggie Earrings") — aynı trend için hep aynı adı kullan ki tekilleşsin
-                    category:
-                      type: string
-                      description: "örn. ring, earring, pendant, bracelet, chain, set, other"
-                    design_cluster:
-                      type: string
-                      description: Bu trendi tanımlayan tasarım özellikleri (motif, teknik, form)
-                    region:
-                      type: string
-                      description: "Trendin en güçlü görüldüğü bölge, örn. USA, Mexico, Panama"
-                    stage:
-                      type: string
-                      enum: [watch, concept, sample, archive]
-                      description: "watch = yeni izleniyor (varsayılan); diğerlerini sadece Mahmut/atölye değiştirir, sen normalde 'watch' bırak"
-                    production_notes:
-                      type: string
-                      description: Üretilebilirlik ile ilgili gözlemler (teknik, malzeme, zorluk)
-                    target_grams:
-                      type: string
-                      description: "Gözlemlenen yaklaşık gram aralığı, örn. '2-4g'"
-                    karats:
-                      type: array
-                      items:
-                        type: string
-                      description: "örn. [\"10K\",\"14K\"]"
-                    cz_compatible:
-                      type: boolean
-                      description: Zirkon/taş ile uyumlu bir tasarım mı
-                    usa_fit:
-                      type: integer
-                      minimum: 0
-                      maximum: 5
-                      description: ABD pazarına uygunluk (0-5)
-                    manufacturing_fit:
-                      type: integer
-                      minimum: 0
-                      maximum: 5
-                      description: MSK/BSP mevcut üretim kapasitesine uygunluk (0-5)
-                    margin_fit:
-                      type: integer
-                      minimum: 0
-                      maximum: 5
-                      description: Kâr marjı potansiyeli (0-5)
-                    longevity_fit:
-                      type: integer
-                      minimum: 0
-                      maximum: 5
-                      description: Geçici moda mı, kalıcı trend mi (0-5, 5=kalıcı)
-                    catalog_gap:
-                      type: integer
-                      minimum: 0
-                      maximum: 5
-                      description: Mevcut katalogda bu trende ne kadar boşluk var (0-5, 5=büyük boşluk)
-                evidence:
-                  type: object
-                  description: Bu spesifik gözlemin kanıtı (link, tarih, ne tür bir sinyal)
-                  required: [signal]
-                  properties:
-                    url:
-                      type: string
-                      description: Gönderi/ürün sayfası linki
-                    observed_at:
-                      type: string
-                      format: date
-                      description: "YYYY-MM-DD, belirtilmezse bugün"
-                    signal:
-                      type: string
-                      enum: [new_arrival, restock, repeat, variation, customer, editorial, search, other]
-                      description: >
-                        new_arrival = yeni ürün eklenmiş; restock = tükenip yeniden stoklanmış
-                        (güçlü sinyal); repeat = aynı tasarımın tekrarı; variation = varyasyonu;
-                        customer = müşteri talebi/yorumu; editorial = basın/editoryal içerik;
-                        search = arama hacmi/trend verisi; other = diğer
-                    note:
-                      type: string
-                      description: Kısa gözlem notu
-      responses:
-        "200":
-          description: Kaydedildi
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  basarili:
-                    type: boolean
-                  kaynak_id:
-                    type: string
-                  trend_id:
-                    type: string
-                  trend_yeni_mi:
-                    type: boolean
-                  kanit_id:
-                    type: string
-        "400":
-          description: Geçersiz istek
-        "401":
-          description: Geçersiz API anahtarı
-        "500":
-          description: Sunucu hatası
-  /api/radar-list:
-    get:
-      operationId: listeleTrendler
-      summary: Kaydedilmiş trendleri ve son kanıt sayılarını listeler (tekrar kaydı önlemek ve özet vermek için)
-      security:
-        - RadarApiKey: []
-      parameters:
-        - name: gun
-          in: query
-          required: false
-          schema:
-            type: integer
-            default: 30
-          description: Son kaç gündeki kanıtlar sayılsın (varsayılan 30)
-      responses:
-        "200":
-          description: Trend listesi
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  basarili:
-                    type: boolean
-                  gun:
-                    type: integer
-                  trendler:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        id:
-                          type: string
-                        name:
-                          type: string
-                        category:
-                          type: string
-                        stage:
-                          type: string
-                        region:
-                          type: string
-                        usa_fit:
-                          type: integer
-                        manufacturing_fit:
-                          type: integer
-                        margin_fit:
-                          type: integer
-                        longevity_fit:
-                          type: integer
-                        catalog_gap:
-                          type: integer
-                        updated_at:
-                          type: string
-                        son_gun_kanit_sayisi:
-                          type: integer
-        "401":
-          description: Geçersiz API anahtarı
-        "500":
-          description: Sunucu hatası
-  /api/radar-catalog:
-    get:
-      operationId: katalogYapisiniGetir
-      summary: Katalog yapısını döner (koleksiyonlar, kategori/ayar dağılımı) — fiyat/müşteri verisi yok
-      description: >
-        MSK/BSP kataloğunun yapısı: koleksiyon isimleri, kategori ve ayar/gram
-        dağılımı. Fiyat/maliyet/müşteri verisi yok. Trend değerlendirirken
-        önce bunu çağır, hangi kategoride zaten güçlü/hangi kategoride
-        boşluk olduğunu anlamak için.
-      security:
-        - RadarApiKey: []
-      responses:
-        "200":
-          description: Katalog yapısı
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  basarili:
-                    type: boolean
-                  sirketler:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        sirket:
-                          type: string
-                        toplam_model:
-                          type: integer
-                        koleksiyon_sayisi:
-                          type: integer
-                        koleksiyonlar:
-                          type: array
-                          items:
-                            type: string
-                        kategori_dagilimi:
-                          type: array
-                          items:
-                            type: object
-                            properties:
-                              kategori: { type: string }
-                              sayi: { type: integer }
-                        ayar_dagilimi:
-                          type: array
-                          items:
-                            type: object
-                            properties:
-                              ayar: { type: string }
-                              sayi: { type: integer }
-                        gram_araligi:
-                          type: object
-                          properties:
-                            min: { type: number }
-                            max: { type: number }
-                            ortalama: { type: number }
-        "401":
-          description: Geçersiz API anahtarı
-        "500":
-          description: Sunucu hatası
-  /api/radar-models:
-    get:
-      operationId: modelleriGetir
-      summary: Belirli modelleri (kod, isim, kategori, gram, ayar, FOTOĞRAF linki) listeler — maliyet/müşteri verisi yok
-      description: >
-        Bir kategoride veya isimde/kodda arama yaparak gerçek modelleri (fotoğraf
-        linkleriyle birlikte) getirir. Bir trendi Mahmut'un mevcut ürünleriyle
-        somut olarak eşleştirmek için kullan — fotoğraf linklerini açıp
-        görsel olarak inceleyebilirsin.
-      security:
-        - RadarApiKey: []
-      parameters:
-        - name: sirket
-          in: query
-          required: false
-          schema:
-            type: string
-            enum: [MSK, BSP]
-            default: MSK
-        - name: kategori
-          in: query
-          required: false
-          schema:
-            type: string
-          description: "örn. yuzuk, pendant, kupe, bileklik, set, bilezik, kolye"
-        - name: arama
-          in: query
-          required: false
-          schema:
-            type: string
-          description: Kod veya isim içinde aranacak metin
-        - name: limit
-          in: query
-          required: false
-          schema:
-            type: integer
-            default: 30
-      responses:
-        "200":
-          description: Model listesi
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  basarili:
-                    type: boolean
-                  sirket:
-                    type: string
-                  adet:
-                    type: integer
-                  modeller:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        id: { type: string }
-                        kod: { type: string }
-                        kategori: { type: string }
-                        ad: { type: string }
-                        gram: { type: number }
-                        ayar: { type: string }
-                        foto: { type: string }
-        "401":
-          description: Geçersiz API anahtarı
-        "500":
-          description: Sunucu hatası
-components:
-  schemas: {}
-  securitySchemes:
-    RadarApiKey:
-      type: apiKey
-      in: header
-      name: x-radar-key
+// api/radar-ingest.js
+// Trend Radar — ChatGPT (Custom GPT Action) buradan bulduğu trend kanıtlarını sisteme gönderir.
+// Statik bir gizli anahtarla korunur (Supabase Auth değil — ChatGPT Action interaktif login yapamaz).
+// service_role anahtarı SADECE burada, sunucu tarafında kullanılır; tarayıcıya asla gitmez.
+
+import { createClient } from '@supabase/supabase-js';
+
+const PLATFORMS = ['instagram', 'pinterest', 'tiktok', 'retailer', 'wholesale', 'editorial', 'fair', 'marketplace', 'search', 'other'];
+const ROLES = ['leader', 'regional_retail', 'regional_wholesale', 'discovery', 'commercial'];
+const STAGES = ['watch', 'concept', 'sample', 'archive'];
+const SIGNALS = ['new_arrival', 'restock', 'repeat', 'variation', 'customer', 'editorial', 'search', 'other'];
+
+function hata(res, kod, mesaj) {
+  return res.status(kod).json({ basarili: false, hata: mesaj });
+}
+
+export default async function handler(req, res) {
+  if (req.method !== 'POST') return hata(res, 405, 'Sadece POST kabul edilir');
+
+  // ── Yetkilendirme ──────────────────────────────────────────────
+  const gelenAnahtar = req.headers['x-radar-key'];
+  const beklenenAnahtar = process.env.RADAR_INGEST_KEY;
+  if (!beklenenAnahtar) return hata(res, 500, 'RADAR_INGEST_KEY tanımlı değil (Vercel env)');
+  if (!gelenAnahtar || gelenAnahtar !== beklenenAnahtar) return hata(res, 401, 'Geçersiz anahtar');
+
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+  const ownerId = process.env.RADAR_OWNER_ID; // worker Auth hesabının UUID'si
+  if (!serviceKey || !supabaseUrl) return hata(res, 500, 'SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY tanımlı değil (Vercel env)');
+  if (!ownerId) return hata(res, 500, 'RADAR_OWNER_ID tanımlı değil (Vercel env)');
+
+  const supabase = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
+
+  try {
+    const { source, trend, evidence } = req.body || {};
+    if (!source || !trend || !evidence) {
+      return hata(res, 400, 'source, trend ve evidence alanlarının hepsi gerekli');
+    }
+
+    // ── Doğrulama ─────────────────────────────────────────────────
+    if (!source.name || !source.platform) return hata(res, 400, 'source.name ve source.platform gerekli');
+    if (!PLATFORMS.includes(source.platform)) return hata(res, 400, `source.platform geçersiz: ${PLATFORMS.join(', ')}`);
+    if (source.role && !ROLES.includes(source.role)) return hata(res, 400, `source.role geçersiz: ${ROLES.join(', ')}`);
+
+    if (!trend.name) return hata(res, 400, 'trend.name gerekli');
+    if (trend.stage && !STAGES.includes(trend.stage)) return hata(res, 400, `trend.stage geçersiz: ${STAGES.join(', ')}`);
+    for (const alan of ['usa_fit', 'manufacturing_fit', 'margin_fit', 'longevity_fit', 'catalog_gap']) {
+      if (trend[alan] != null && (trend[alan] < 0 || trend[alan] > 5)) return hata(res, 400, `trend.${alan} 0-5 arası olmalı`);
+    }
+
+    if (!evidence.signal) return hata(res, 400, 'evidence.signal gerekli');
+    if (!SIGNALS.includes(evidence.signal)) return hata(res, 400, `evidence.signal geçersiz: ${SIGNALS.join(', ')}`);
+
+    // ── 1) Kaynak: aynı isim+platform varsa yeniden kullan, yoksa oluştur ──
+    let kaynakId;
+    {
+      const { data: mevcut } = await supabase
+        .from('radar_sources')
+        .select('id')
+        .eq('owner_id', ownerId)
+        .ilike('name', source.name)
+        .eq('platform', source.platform)
+        .maybeSingle();
+
+      if (mevcut) {
+        kaynakId = mevcut.id;
+      } else {
+        const { data: yeni, error: eKaynak } = await supabase
+          .from('radar_sources')
+          .insert({
+            owner_id: ownerId,
+            platform: source.platform,
+            role: source.role || 'discovery',
+            name: source.name,
+            url: source.url || '',
+            region: source.region || 'Global',
+            tier: source.tier || 2,
+            scan_days: source.scan_days || 7,
+            notes: source.notes || '',
+          })
+          .select('id')
+          .single();
+        if (eKaynak) return hata(res, 500, 'Kaynak kaydedilemedi: ' + eKaynak.message);
+        kaynakId = yeni.id;
+      }
+    }
+
+    // ── 2) Trend: aynı isimde varsa güncelle/birleştir, yoksa oluştur ──────
+    let trendId, trendYeniMi = false;
+    {
+      const { data: mevcut } = await supabase
+        .from('radar_trends')
+        .select('id, production_notes')
+        .eq('owner_id', ownerId)
+        .ilike('name', trend.name)
+        .maybeSingle();
+
+      if (mevcut) {
+        trendId = mevcut.id;
+        const guncelleme = { updated_at: new Date().toISOString() };
+        if (trend.category) guncelleme.category = trend.category;
+        if (trend.design_cluster) guncelleme.design_cluster = trend.design_cluster;
+        if (trend.region) guncelleme.region = trend.region;
+        if (trend.stage) guncelleme.stage = trend.stage;
+        if (trend.target_grams) guncelleme.target_grams = trend.target_grams;
+        if (trend.karats) guncelleme.karats = trend.karats;
+        if (trend.cz_compatible != null) guncelleme.cz_compatible = trend.cz_compatible;
+        if (trend.usa_fit != null) guncelleme.usa_fit = trend.usa_fit;
+        if (trend.manufacturing_fit != null) guncelleme.manufacturing_fit = trend.manufacturing_fit;
+        if (trend.margin_fit != null) guncelleme.margin_fit = trend.margin_fit;
+        if (trend.longevity_fit != null) guncelleme.longevity_fit = trend.longevity_fit;
+        if (trend.catalog_gap != null) guncelleme.catalog_gap = trend.catalog_gap;
+        if (trend.matched_model_ids) guncelleme.matched_model_ids = trend.matched_model_ids;
+        if (trend.production_notes) {
+          const eskiNot = mevcut.production_notes || '';
+          guncelleme.production_notes = eskiNot
+            ? eskiNot + '\n---\n' + trend.production_notes
+            : trend.production_notes;
+        }
+        const { error: eGuncelle } = await supabase.from('radar_trends').update(guncelleme).eq('id', trendId);
+        if (eGuncelle) return hata(res, 500, 'Trend güncellenemedi: ' + eGuncelle.message);
+      } else {
+        trendYeniMi = true;
+        const { data: yeni, error: eTrend } = await supabase
+          .from('radar_trends')
+          .insert({
+            owner_id: ownerId,
+            name: trend.name,
+            category: trend.category || 'other',
+            design_cluster: trend.design_cluster || '',
+            region: trend.region || 'USA',
+            stage: trend.stage || 'watch',
+            production_notes: trend.production_notes || '',
+            target_grams: trend.target_grams || '',
+            karats: trend.karats || ['10K', '14K'],
+            cz_compatible: trend.cz_compatible != null ? trend.cz_compatible : true,
+            usa_fit: trend.usa_fit || 0,
+            manufacturing_fit: trend.manufacturing_fit || 0,
+            margin_fit: trend.margin_fit || 0,
+            longevity_fit: trend.longevity_fit || 0,
+            catalog_gap: trend.catalog_gap || 0,
+            matched_model_ids: trend.matched_model_ids || [],
+          })
+          .select('id')
+          .single();
+        if (eTrend) return hata(res, 500, 'Trend kaydedilemedi: ' + eTrend.message);
+        trendId = yeni.id;
+      }
+    }
+
+    // ── 3) Kanıt: her zaman yeni satır ─────────────────────────────
+    const { data: yeniKanit, error: eKanit } = await supabase
+      .from('radar_evidence')
+      .insert({
+        owner_id: ownerId,
+        trend_id: trendId,
+        source_id: kaynakId,
+        url: evidence.url || '',
+        observed_at: evidence.observed_at || new Date().toISOString().slice(0, 10),
+        signal: evidence.signal,
+        note: evidence.note || '',
+      })
+      .select('id')
+      .single();
+    if (eKanit) return hata(res, 500, 'Kanıt kaydedilemedi: ' + eKanit.message);
+
+    return res.status(200).json({
+      basarili: true,
+      kaynak_id: kaynakId,
+      trend_id: trendId,
+      trend_yeni_mi: trendYeniMi,
+      kanit_id: yeniKanit.id,
+    });
+  } catch (e) {
+    return hata(res, 500, e.message);
+  }
+}
