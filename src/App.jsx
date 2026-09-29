@@ -1,7 +1,19 @@
-import { dbLoad, dbSave, fotoYukleStorage, yedekKaydet, yedekListesi, yedekGetir, bugunYedekVarMi, tabloModelleriSenkron, tabloModelleriToplu, tabloModelSil, tabloSiparisleriSenkron, tabloSiparisleriToplu, tabloMusterileriYaz, akilliModelOku, akilliSiparisOku, akilliMusteriOku, islemKaydet, islemGecmisiGetir, realtimeBaslat, tabloKoleksiyonlariYaz, tabloKasaYaz, akilliKoleksiyonOku, akilliKasaOku, tabloKoleksiyonlariOku, tabloKasaOku, saglikDenetimi, ekranSunucuFarki, toptanciKaydet, toptancilariGetir, toptanciSil, vitrinGecmisiGetir, vitrinEnCokBakilan, vitrinOzetGetir, vitrinAnaliz, vitrinGetirGuvenli, siparisOlusturGuvenli, vitrinAktiviteKaydetGuvenli } from "./supabase.js";
+import { supabase, dbLoad, dbSave, fotoYukleStorage, yedekKaydet, yedekListesi, yedekGetir, bugunYedekVarMi, tabloModelleriSenkron, tabloModelleriToplu, tabloModelSil, tabloSiparisleriSenkron, tabloSiparisleriToplu, tabloMusterileriYaz, akilliModelOku, akilliSiparisOku, akilliMusteriOku, islemKaydet, islemGecmisiGetir, realtimeBaslat, tabloKoleksiyonlariYaz, tabloKasaYaz, akilliKoleksiyonOku, akilliKasaOku, tabloKoleksiyonlariOku, tabloKasaOku, saglikDenetimi, ekranSunucuFarki, toptanciKaydet, toptancilariGetir, toptanciSil, vitrinGecmisiGetir, vitrinEnCokBakilan, vitrinOzetGetir, vitrinAnaliz, vitrinGetirGuvenli, siparisOlusturGuvenli, vitrinAktiviteKaydetGuvenli } from "./supabase.js";
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 
 const uid = () => "x" + Date.now() + Math.random().toString(36).substr(2, 5);
+// ═══ ÇALIŞAN AUTH OTURUMU — yerel şifre kontrolünün ardından gerçek Supabase Auth oturumu açar ═══
+// (RLS politikaları "authenticated" rolüne dayanacak; hesap Supabase Dashboard'da manuel oluşturuldu)
+const ATOLYE_AUTH_EMAIL = "worker@atolyekoleksiyon.internal";
+const ATOLYE_AUTH_SIFRE = "Kw9$mVr2Xp!qL8zN";
+async function atolyeAuthGiris() {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session) return; // zaten oturum açık
+    const { error } = await supabase.auth.signInWithPassword({ email: ATOLYE_AUTH_EMAIL, password: ATOLYE_AUTH_SIFRE });
+    if (error) console.warn("Supabase Auth girişi başarısız:", error.message);
+  } catch (e) { console.warn("Supabase Auth girişi hata:", e.message); }
+}
 // ═══ GLOBAL SIFIRLAMA — Vite'ın varsayılan #root kısıtını (max-width:1280px, padding:2rem) ezer ═══
 // Dosya yüklenirken BİR KEZ çalışır, TÜM ekranları kapsar (giriş, seçim, vitrin, ana sistem)
 if (typeof document !== "undefined" && !document.getElementById("atolye-global-reset")) {
@@ -2867,6 +2879,7 @@ export default function Root() {
   const [secim, setSecim] = useState(false);     // katalog seçildi mi
   const [sirket, setSirket] = useState(false);   // şirket seçildi mi
   const [sirketKey, setSirketKey] = useState(0); // şirket değişince Atolye'yi yeniden mount eder
+  useEffect(() => { if (giris) atolyeAuthGiris(); }, [giris]);
   if (!giris) return <GirisEkrani onGiris={()=>setGiris(true)} />;
   if (!secim) return <SecimEkrani onKatalog={()=>setSecim(true)} />;
   if (!sirket) return <SirketSecimEkrani onSec={()=>{ setSirketKey(k=>k+1); setSirket(true); }} />;
