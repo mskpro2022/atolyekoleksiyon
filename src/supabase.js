@@ -756,3 +756,65 @@ export async function vitrinAnaliz(onek) {
     }
   } catch { return { modeller: [], koleksiyonlar: [], musteriler: [], toplamGiris: 0, toplamModel: 0 } }
 }
+
+// ═══ TREND RADAR — kayıtlı authenticated (worker) oturumu üzerinden çalışır, RLS owner_id=auth.uid() ile korunur ═══
+export async function radarTrendleriOku() {
+  try {
+    const { data, error } = await supabase.from('radar_trends').select('*').order('updated_at', { ascending: false })
+    if (error) { console.error('radarTrendleriOku:', error.message); return [] }
+    return data || []
+  } catch (e) { console.error('radarTrendleriOku:', e.message); return [] }
+}
+export async function radarKaynaklariOku() {
+  try {
+    const { data, error } = await supabase.from('radar_sources').select('*').order('created_at', { ascending: false })
+    if (error) { console.error('radarKaynaklariOku:', error.message); return [] }
+    return data || []
+  } catch (e) { console.error('radarKaynaklariOku:', e.message); return [] }
+}
+export async function radarKanitlariOku(trendId) {
+  try {
+    const { data, error } = await supabase.from('radar_evidence')
+      .select('*, radar_sources(name, platform, url)')
+      .eq('trend_id', trendId).order('observed_at', { ascending: false })
+    if (error) { console.error('radarKanitlariOku:', error.message); return [] }
+    return data || []
+  } catch (e) { console.error('radarKanitlariOku:', e.message); return [] }
+}
+export async function radarTrendGuncelle(id, alanlar) {
+  try {
+    const { error } = await supabase.from('radar_trends').update({ ...alanlar, updated_at: new Date().toISOString() }).eq('id', id)
+    if (error) { console.error('radarTrendGuncelle:', error.message); return false }
+    return true
+  } catch (e) { console.error('radarTrendGuncelle:', e.message); return false }
+}
+export async function radarTrendSil(id) {
+  try {
+    await supabase.from('radar_trends').delete().eq('id', id)
+    return true
+  } catch (e) { console.error('radarTrendSil:', e.message); return false }
+}
+// Manuel kanıt ekleme (Mahmut'un kendisi elle girerse) — kaynak/trend isim eşleşmesiyle bulunur/oluşturulur, aynı ingest mantığı client tarafında
+export async function radarManuelKanitEkle({ kaynakAd, platform, trendAd, kategori, url, sinyal, not: notMetni }) {
+  try {
+    let kaynakId
+    const { data: mevcutKaynak } = await supabase.from('radar_sources').select('id').ilike('name', kaynakAd).eq('platform', platform).maybeSingle()
+    if (mevcutKaynak) kaynakId = mevcutKaynak.id
+    else {
+      const { data: yeniKaynak, error: eK } = await supabase.from('radar_sources').insert({ name: kaynakAd, platform, role: 'discovery' }).select('id').single()
+      if (eK) return { basarili: false, hata: eK.message }
+      kaynakId = yeniKaynak.id
+    }
+    let trendId
+    const { data: mevcutTrend } = await supabase.from('radar_trends').select('id').ilike('name', trendAd).maybeSingle()
+    if (mevcutTrend) trendId = mevcutTrend.id
+    else {
+      const { data: yeniTrend, error: eT } = await supabase.from('radar_trends').insert({ name: trendAd, category: kategori || 'other' }).select('id').single()
+      if (eT) return { basarili: false, hata: eT.message }
+      trendId = yeniTrend.id
+    }
+    const { error: eKanit } = await supabase.from('radar_evidence').insert({ trend_id: trendId, source_id: kaynakId, url: url || '', signal: sinyal, note: notMetni || '' })
+    if (eKanit) return { basarili: false, hata: eKanit.message }
+    return { basarili: true }
+  } catch (e) { return { basarili: false, hata: e.message } }
+}
