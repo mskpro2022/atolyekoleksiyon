@@ -1,4 +1,4 @@
-import { supabase, dbLoad, dbSave, fotoYukleStorage, yedekKaydet, yedekListesi, yedekGetir, bugunYedekVarMi, tabloModelleriSenkron, tabloModelleriToplu, tabloModelSil, tabloSiparisleriSenkron, tabloSiparisleriToplu, tabloMusterileriYaz, akilliModelOku, akilliSiparisOku, akilliMusteriOku, islemKaydet, islemGecmisiGetir, realtimeBaslat, tabloKoleksiyonlariYaz, tabloKasaYaz, akilliKoleksiyonOku, akilliKasaOku, tabloKoleksiyonlariOku, tabloKasaOku, saglikDenetimi, ekranSunucuFarki, toptanciKaydet, toptancilariGetir, toptanciSil, vitrinGecmisiGetir, vitrinEnCokBakilan, vitrinOzetGetir, vitrinAnaliz, vitrinGetirGuvenli, siparisOlusturGuvenli, vitrinAktiviteKaydetGuvenli } from "./supabase.js";
+import { supabase, dbLoad, dbSave, fotoYukleStorage, yedekKaydet, yedekListesi, yedekGetir, bugunYedekVarMi, tabloModelleriSenkron, tabloModelleriToplu, tabloModelSil, tabloSiparisleriSenkron, tabloSiparisleriToplu, tabloMusterileriYaz, akilliModelOku, akilliSiparisOku, akilliMusteriOku, islemKaydet, islemGecmisiGetir, realtimeBaslat, tabloKoleksiyonlariYaz, tabloKasaYaz, akilliKoleksiyonOku, akilliKasaOku, tabloKoleksiyonlariOku, tabloKasaOku, saglikDenetimi, ekranSunucuFarki, toptanciKaydet, toptancilariGetir, toptanciSil, vitrinGecmisiGetir, vitrinEnCokBakilan, vitrinOzetGetir, vitrinAnaliz, vitrinGetirGuvenli, siparisOlusturGuvenli, vitrinAktiviteKaydetGuvenli, radarTrendleriOku, radarKaynaklariOku, radarKanitlariOku, radarTrendGuncelle, radarTrendSil, radarManuelKanitEkle } from "./supabase.js";
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 
 const uid = () => "x" + Date.now() + Math.random().toString(36).substr(2, 5);
@@ -2846,6 +2846,198 @@ function VitrinModu({ kod, onizleme }) {
   );
 }
 
+// ═══ TREND RADAR SAYFASI — radar_sources/radar_trends/radar_evidence, authenticated (worker) oturum + RLS ile ═══
+function TrendRadarSayfasi({ T }) {
+  const [trendler, setTrendler] = useState([]);
+  const [kaynaklar, setKaynaklar] = useState([]);
+  const [yukleniyor, setYukleniyor] = useState(true);
+  const [asamaFiltre, setAsamaFiltre] = useState("all");
+  const [seciliTrend, setSeciliTrend] = useState(null);
+  const [kanitlar, setKanitlar] = useState([]);
+  const [duzenle, setDuzenle] = useState(null);
+  const [manuelAcik, setManuelAcik] = useState(false);
+  const [manuelForm, setManuelForm] = useState({ kaynakAd:"", platform:"instagram", trendAd:"", kategori:"", url:"", sinyal:"new_arrival", not:"" });
+  const [kaydediliyor, setKaydediliyor] = useState(false);
+  const [mesaj, setMesaj] = useState(null);
+
+  const yukle = async () => {
+    setYukleniyor(true);
+    const [t, k] = await Promise.all([radarTrendleriOku(), radarKaynaklariOku()]);
+    setTrendler(t); setKaynaklar(k);
+    setYukleniyor(false);
+  };
+  useEffect(() => { yukle(); }, []);
+
+  const skor = (t) => Math.round(((t.usa_fit||0)+(t.manufacturing_fit||0)+(t.margin_fit||0)+(t.longevity_fit||0)+(t.catalog_gap||0)) * 4);
+  const gorunenler = trendler.filter(t => asamaFiltre==="all" || t.stage===asamaFiltre).sort((a,b)=>skor(b)-skor(a));
+
+  const trendAc = async (t) => {
+    setSeciliTrend(t);
+    setDuzenle({ stage: t.stage, production_notes: t.production_notes||"", matched_model_ids: (t.matched_model_ids||[]).join(", ") });
+    const kn = await radarKanitlariOku(t.id);
+    setKanitlar(kn);
+  };
+
+  const kaydet = async () => {
+    if (!seciliTrend) return;
+    setKaydediliyor(true);
+    const ok = await radarTrendGuncelle(seciliTrend.id, {
+      stage: duzenle.stage,
+      production_notes: duzenle.production_notes,
+      matched_model_ids: duzenle.matched_model_ids.split(",").map(s=>s.trim()).filter(Boolean),
+    });
+    setKaydediliyor(false);
+    if (ok) { setMesaj({ok:true, txt:"Kaydedildi"}); yukle(); setTimeout(()=>setMesaj(null),2000); }
+    else setMesaj({ok:false, txt:"Kaydedilemedi"});
+  };
+
+  const sil = async (t) => {
+    if (!window.confirm(`"${t.name}" trendini silmek istediğine emin misin?`)) return;
+    await radarTrendSil(t.id);
+    setSeciliTrend(null);
+    yukle();
+  };
+
+  const manuelKaydet = async () => {
+    if (!manuelForm.kaynakAd || !manuelForm.trendAd) { setMesaj({ok:false, txt:"Kaynak adı ve trend adı gerekli"}); return; }
+    setKaydediliyor(true);
+    const r = await radarManuelKanitEkle(manuelForm);
+    setKaydediliyor(false);
+    if (r.basarili) { setMesaj({ok:true, txt:"Kanıt eklendi"}); setManuelAcik(false); setManuelForm({ kaynakAd:"", platform:"instagram", trendAd:"", kategori:"", url:"", sinyal:"new_arrival", not:"" }); yukle(); setTimeout(()=>setMesaj(null),2000); }
+    else setMesaj({ok:false, txt: r.hata || "Kaydedilemedi"});
+  };
+
+  const ASAMA_ETIKET = { watch:"👁 İzleniyor", concept:"✏️ Konsept", sample:"🔨 Numune", archive:"📦 Arşiv" };
+  const ASAMA_RENK = { watch:"#7aa2f7", concept:"#e8a23a", sample:"#4fd1c5", archive:"#8b8b8b" };
+  const IS = { background:T.card, border:"1px solid "+T.border, borderRadius:7, padding:"7px 10px", color:T.text, fontSize:11, outline:"none", width:"100%" };
+
+  return (
+    <div style={{ animation:"fadein .3s", maxWidth:1200 }}>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:8, marginBottom:16 }}>
+        <h2 style={{ margin:0, fontSize:15, fontWeight:700, color:T.text }}>📡 Trend Radar</h2>
+        <button onClick={()=>setManuelAcik(true)} style={{ background:"rgba(var(--vurgu-rgb),0.12)", border:"1px solid rgba(var(--vurgu-rgb),0.3)", borderRadius:8, padding:"7px 14px", color:"var(--vurgu)", fontSize:11, fontWeight:700, cursor:"pointer" }}>+ Manuel Kanıt Ekle</button>
+      </div>
+
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))", gap:10, marginBottom:16 }}>
+        {[
+          { l:"Toplam Trend", v: trendler.length },
+          { l:"İzleniyor", v: trendler.filter(t=>t.stage==="watch").length },
+          { l:"Numune Aşamasında", v: trendler.filter(t=>t.stage==="sample").length },
+          { l:"Kayıtlı Kaynak", v: kaynaklar.length },
+        ].map((k,i)=>(
+          <div key={i} style={{ background:T.card, border:"1px solid "+T.border, borderRadius:10, padding:"10px 14px" }}>
+            <div style={{ fontSize:8, color:T.dim, marginBottom:4, textTransform:"uppercase", letterSpacing:".04em" }}>{k.l}</div>
+            <div style={{ fontSize:18, fontWeight:800, color:T.text }}>{k.v}</div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ display:"flex", gap:6, marginBottom:14, flexWrap:"wrap" }}>
+        {["all","watch","concept","sample","archive"].map(a=>(
+          <button key={a} onClick={()=>setAsamaFiltre(a)}
+            style={{ background: asamaFiltre===a?"rgba(var(--vurgu-rgb),0.15)":"transparent", border:"1px solid "+(asamaFiltre===a?"rgba(var(--vurgu-rgb),0.4)":T.border), borderRadius:20, padding:"5px 12px", color: asamaFiltre===a?"var(--vurgu)":T.sub, fontSize:10, fontWeight:700, cursor:"pointer" }}>
+            {a==="all" ? "Tümü" : ASAMA_ETIKET[a]}
+          </button>
+        ))}
+      </div>
+
+      {yukleniyor ? (
+        <div style={{ color:T.dim, fontSize:12, padding:20, textAlign:"center" }}>Yükleniyor...</div>
+      ) : gorunenler.length===0 ? (
+        <div style={{ color:T.dim, fontSize:12, padding:30, textAlign:"center", background:T.card, borderRadius:12, border:"1px solid "+T.border }}>
+          Henüz trend kaydı yok. ChatGPT Action'ı ile otomatik ekleniyor olacak, ya da yukarıdan manuel ekleyebilirsin.
+        </div>
+      ) : (
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))", gap:10 }}>
+          {gorunenler.map(t=>(
+            <div key={t.id} onClick={()=>trendAc(t)} style={{ background:T.card, border:"1px solid "+T.border, borderRadius:12, padding:"12px 14px", cursor:"pointer" }}>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"start", gap:8, marginBottom:6 }}>
+                <div style={{ fontSize:12, fontWeight:700, color:T.text }}>{t.name}</div>
+                <div style={{ fontSize:14, fontWeight:800, color: skor(t)>=60?"#4fd1c5":skor(t)>=35?"#e8a23a":T.dim, whiteSpace:"nowrap" }}>{skor(t)}</div>
+              </div>
+              <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:8 }}>
+                <span style={{ fontSize:8, fontWeight:700, padding:"2px 8px", borderRadius:10, background:ASAMA_RENK[t.stage]+"22", color:ASAMA_RENK[t.stage] }}>{ASAMA_ETIKET[t.stage]||t.stage}</span>
+                {t.category && <span style={{ fontSize:8, color:T.dim, padding:"2px 8px", borderRadius:10, background:"rgba(255,255,255,0.04)" }}>{t.category}</span>}
+                {t.region && <span style={{ fontSize:8, color:T.dim, padding:"2px 8px", borderRadius:10, background:"rgba(255,255,255,0.04)" }}>{t.region}</span>}
+              </div>
+              {t.design_cluster && <div style={{ fontSize:10, color:T.sub, marginBottom:4 }}>{t.design_cluster}</div>}
+              <div style={{ fontSize:8, color:T.dim }}>Güncellendi: {new Date(t.updated_at).toLocaleDateString("tr-TR")}</div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {seciliTrend && (
+        <Modal open={!!seciliTrend} onClose={()=>setSeciliTrend(null)} title={seciliTrend.name} T={T} wide>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
+            <div>
+              <div style={{ fontSize:9, fontWeight:700, color:T.dim, marginBottom:6, textTransform:"uppercase" }}>Aşama</div>
+              <select value={duzenle.stage} onChange={e=>setDuzenle(d=>({...d, stage:e.target.value}))} style={{...IS, marginBottom:10}}>
+                {["watch","concept","sample","archive"].map(a=><option key={a} value={a}>{ASAMA_ETIKET[a]}</option>)}
+              </select>
+              <div style={{ fontSize:9, fontWeight:700, color:T.dim, marginBottom:6, textTransform:"uppercase" }}>Uygunluk Puanları (0-5)</div>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:6, marginBottom:10, fontSize:10, color:T.sub }}>
+                <div>ABD Pazarı: <b style={{color:T.text}}>{seciliTrend.usa_fit}</b></div>
+                <div>Üretim Uygunluğu: <b style={{color:T.text}}>{seciliTrend.manufacturing_fit}</b></div>
+                <div>Kâr Marjı: <b style={{color:T.text}}>{seciliTrend.margin_fit}</b></div>
+                <div>Kalıcılık: <b style={{color:T.text}}>{seciliTrend.longevity_fit}</b></div>
+                <div>Katalog Boşluğu: <b style={{color:T.text}}>{seciliTrend.catalog_gap}</b></div>
+                <div>Toplam Skor: <b style={{color:"#4fd1c5"}}>{skor(seciliTrend)}/100</b></div>
+              </div>
+              <div style={{ fontSize:9, fontWeight:700, color:T.dim, marginBottom:6, textTransform:"uppercase" }}>Üretim Notları</div>
+              <textarea value={duzenle.production_notes} onChange={e=>setDuzenle(d=>({...d, production_notes:e.target.value}))} rows={4} style={{...IS, marginBottom:10, resize:"vertical", fontFamily:"inherit"}} />
+              <div style={{ fontSize:9, fontWeight:700, color:T.dim, marginBottom:6, textTransform:"uppercase" }}>Eşleşen Model Kodları (virgülle ayır)</div>
+              <input value={duzenle.matched_model_ids} onChange={e=>setDuzenle(d=>({...d, matched_model_ids:e.target.value}))} style={{...IS, marginBottom:10}} placeholder="örn. MC-001, MC-014" />
+              <div style={{ display:"flex", gap:8 }}>
+                <button onClick={kaydet} disabled={kaydediliyor} style={{ flex:1, background:"var(--vurgu)", border:"none", borderRadius:8, padding:"9px", color:"#1d1d1f", fontSize:11, fontWeight:700, cursor:"pointer" }}>{kaydediliyor?"Kaydediliyor...":"Kaydet"}</button>
+                <button onClick={()=>sil(seciliTrend)} style={{ background:"rgba(232,90,79,0.1)", border:"1px solid rgba(232,90,79,0.3)", borderRadius:8, padding:"9px 14px", color:"#e85a4f", fontSize:11, fontWeight:700, cursor:"pointer" }}>Sil</button>
+              </div>
+              {mesaj && <div style={{ marginTop:8, fontSize:10, color: mesaj.ok?"#4fd1c5":"#e85a4f" }}>{mesaj.txt}</div>}
+            </div>
+            <div>
+              <div style={{ fontSize:9, fontWeight:700, color:T.dim, marginBottom:8, textTransform:"uppercase" }}>Kanıt Geçmişi ({kanitlar.length})</div>
+              <div style={{ display:"flex", flexDirection:"column", gap:8, maxHeight:420, overflowY:"auto" }}>
+                {kanitlar.length===0 && <div style={{ fontSize:10, color:T.dim }}>Henüz kanıt yok.</div>}
+                {kanitlar.map(k=>(
+                  <div key={k.id} style={{ background:T.card, border:"1px solid "+T.border, borderRadius:8, padding:"8px 10px" }}>
+                    <div style={{ display:"flex", justifyContent:"space-between", fontSize:9, marginBottom:3 }}>
+                      <span style={{ fontWeight:700, color:T.text }}>{k.radar_sources?.name || "?"}</span>
+                      <span style={{ color:T.dim }}>{k.observed_at}</span>
+                    </div>
+                    <div style={{ fontSize:8, color:T.dim, marginBottom:3 }}>{k.signal} {k.radar_sources?.platform ? "· "+k.radar_sources.platform : ""}</div>
+                    {k.note && <div style={{ fontSize:9, color:T.sub, marginBottom:3 }}>{k.note}</div>}
+                    {k.url && <a href={k.url} target="_blank" rel="noreferrer" style={{ fontSize:8, color:"var(--vurgu)" }}>{k.url}</a>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {manuelAcik && (
+        <Modal open={manuelAcik} onClose={()=>setManuelAcik(false)} title="Manuel Kanıt Ekle" T={T}>
+          <div style={{ display:"flex", flexDirection:"column", gap:8, maxWidth:360 }}>
+            <input value={manuelForm.kaynakAd} onChange={e=>setManuelForm(f=>({...f, kaynakAd:e.target.value}))} placeholder="Kaynak adı (ör. @hesap veya site)" style={IS} />
+            <select value={manuelForm.platform} onChange={e=>setManuelForm(f=>({...f, platform:e.target.value}))} style={IS}>
+              {["instagram","pinterest","tiktok","retailer","wholesale","editorial","fair","marketplace","search","other"].map(p=><option key={p} value={p}>{p}</option>)}
+            </select>
+            <input value={manuelForm.trendAd} onChange={e=>setManuelForm(f=>({...f, trendAd:e.target.value}))} placeholder="Trend adı" style={IS} />
+            <input value={manuelForm.kategori} onChange={e=>setManuelForm(f=>({...f, kategori:e.target.value}))} placeholder="Kategori (ör. ring, pendant)" style={IS} />
+            <input value={manuelForm.url} onChange={e=>setManuelForm(f=>({...f, url:e.target.value}))} placeholder="Link (opsiyonel)" style={IS} />
+            <select value={manuelForm.sinyal} onChange={e=>setManuelForm(f=>({...f, sinyal:e.target.value}))} style={IS}>
+              {["new_arrival","restock","repeat","variation","customer","editorial","search","other"].map(s=><option key={s} value={s}>{s}</option>)}
+            </select>
+            <textarea value={manuelForm.not} onChange={e=>setManuelForm(f=>({...f, not:e.target.value}))} placeholder="Not (opsiyonel)" rows={3} style={{...IS, resize:"vertical", fontFamily:"inherit"}} />
+            <button onClick={manuelKaydet} disabled={kaydediliyor} style={{ background:"var(--vurgu)", border:"none", borderRadius:8, padding:"9px", color:"#1d1d1f", fontSize:11, fontWeight:700, cursor:"pointer" }}>{kaydediliyor?"Kaydediliyor...":"Kaydet"}</button>
+            {mesaj && <div style={{ fontSize:10, color: mesaj.ok?"#4fd1c5":"#e85a4f" }}>{mesaj.txt}</div>}
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
 export default function Root() {
   // ═══ MÜŞTERİ VİTRİN MODU ═══
   // URL'de ?vitrin=KOD varsa müşteri showroom modu açılır (şifre yok, salt okunur, mahrem veri yok)
@@ -4338,7 +4530,7 @@ function Atolye({ onSirketDegis }) {
               <button onClick={()=>{ if (onSirketDegis) onSirketDegis(); }} title="Şirket değiştir" style={{ fontSize:9, fontWeight:800, padding:"3px 10px", borderRadius:20, background: AKTIF_SIRKET_ONEK==="bsp2_" ? "rgba(167,139,250,0.15)" : "rgba(var(--vurgu-rgb),0.15)", border:"1px solid "+(AKTIF_SIRKET_ONEK==="bsp2_" ? "rgba(167,139,250,0.4)" : "rgba(var(--vurgu-rgb),0.4)"), color: AKTIF_SIRKET_ONEK==="bsp2_" ? "#a78bfa" : GOLD, whiteSpace:"nowrap", cursor:"pointer", display:"inline-flex", alignItems:"center", gap:4 }}>{AKTIF_SIRKET_ONEK==="bsp2_" ? "✨ BSP" : "💎 MSK"} <span style={{ fontSize:8, opacity:0.7 }}>⇄</span></button>
             </h1>
             <div style={{ display:"flex", gap:3, flexWrap:"wrap" }}>
-              {["koleksiyonlar","modeller","konfirmasyon","siparisler","iadeler","musteriler","vitrin","kasa","analiz","asistan","tasarim","ayarlar"].map(n => {
+              {["koleksiyonlar","modeller","konfirmasyon","siparisler","iadeler","musteriler","vitrin","kasa","analiz","asistan","tasarim","radar","ayarlar"].map(n => {
                 let badgeSayi = 0;
                 if (n === "iadeler") {
                   siparisler.forEach(s => {
@@ -4349,7 +4541,7 @@ function Atolye({ onSirketDegis }) {
                 return (
                 <button key={n} onClick={() => { setSayfa(n); if (n==="koleksiyonlar") setAktifKol(null); if (n!=="kasa") setKasaKilitli(true); if (n!=="asistan") setAjanSoru(""); }}
                   style={{ ...GH, color:sayfa===n?T.gold:T.sub, background:sayfa===n?T.btnBg:"transparent", borderColor:sayfa===n?T.btnBorder:T.border, fontSize:9, padding:"5px 9px", position:"relative" }}>
-                  {{"koleksiyonlar":"Koleksiyonlar","modeller":"Modeller","konfirmasyon":"Konfirmasyon","siparisler":"Siparişler","iadeler":"İadeler","musteriler":"Müşteriler","vitrin":"🛍 Vitrin","kasa":"Kasa","analiz":"Keşfet","asistan":"🤖 Asistan","tasarim":"✨ Gümüş","ayarlar":"Ayarlar"}[n]||n.charAt(0).toUpperCase()+n.slice(1)}
+                  {{"koleksiyonlar":"Koleksiyonlar","modeller":"Modeller","konfirmasyon":"Konfirmasyon","siparisler":"Siparişler","iadeler":"İadeler","musteriler":"Müşteriler","vitrin":"🛍 Vitrin","kasa":"Kasa","analiz":"Keşfet","asistan":"🤖 Asistan","tasarim":"✨ Gümüş","radar":"📡 Trend Radar","ayarlar":"Ayarlar"}[n]||n.charAt(0).toUpperCase()+n.slice(1)}
                   {n==="konfirmasyon" && konfList.length>0 && <span style={{ position:"absolute", top:-4, right:-4, background:GOLD, color:DARK, width:13, height:13, borderRadius:7, fontSize:7, fontWeight:800, display:"flex", alignItems:"center", justifyContent:"center" }}>{konfList.length}</span>}
                   {n==="iadeler" && badgeSayi>0 && <span style={{ position:"absolute", top:-4, right:-4, background:"#a78bfa", color:"#fff", width:13, height:13, borderRadius:7, fontSize:7, fontWeight:800, display:"flex", alignItems:"center", justifyContent:"center" }}>{badgeSayi}</span>}
                 </button>
@@ -8109,6 +8301,9 @@ ${gbOzet}`;
             </div>
           </div>
         )}
+
+        {/* TREND RADAR */}
+        {sayfa==="radar" && <TrendRadarSayfasi T={T} />}
       </div>
 
       {/* TOPLU KOPYALA MODAL */}
