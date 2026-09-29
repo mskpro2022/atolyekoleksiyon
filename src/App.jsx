@@ -1,4 +1,4 @@
-import { dbLoad, dbSave, fotoYukleStorage, yedekKaydet, yedekListesi, yedekGetir, bugunYedekVarMi, tabloModelleriSenkron, tabloModelleriToplu, tabloModelSil, tabloSiparisleriSenkron, tabloSiparisleriToplu, tabloMusterileriYaz, akilliModelOku, akilliSiparisOku, akilliMusteriOku, islemKaydet, islemGecmisiGetir, realtimeBaslat, tabloKoleksiyonlariYaz, tabloKasaYaz, akilliKoleksiyonOku, akilliKasaOku, tabloKoleksiyonlariOku, tabloKasaOku, saglikDenetimi, ekranSunucuFarki, toptanciKaydet, toptancilariGetir, toptanciSil, vitrinAktiviteKaydet, vitrinGecmisiGetir, vitrinEnCokBakilan, vitrinOzetGetir, vitrinAnaliz } from "./supabase.js";
+import { dbLoad, dbSave, fotoYukleStorage, yedekKaydet, yedekListesi, yedekGetir, bugunYedekVarMi, tabloModelleriSenkron, tabloModelleriToplu, tabloModelSil, tabloSiparisleriSenkron, tabloSiparisleriToplu, tabloMusterileriYaz, akilliModelOku, akilliSiparisOku, akilliMusteriOku, islemKaydet, islemGecmisiGetir, realtimeBaslat, tabloKoleksiyonlariYaz, tabloKasaYaz, akilliKoleksiyonOku, akilliKasaOku, tabloKoleksiyonlariOku, tabloKasaOku, saglikDenetimi, ekranSunucuFarki, toptanciKaydet, toptancilariGetir, toptanciSil, vitrinGecmisiGetir, vitrinEnCokBakilan, vitrinOzetGetir, vitrinAnaliz, vitrinGetirGuvenli, siparisOlusturGuvenli, vitrinAktiviteKaydetGuvenli } from "./supabase.js";
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 
 const uid = () => "x" + Date.now() + Math.random().toString(36).substr(2, 5);
@@ -2043,36 +2043,17 @@ function VitrinModu({ kod, onizleme }) {
 
   useEffect(() => { (async () => {
     try {
-      // Kodu çöz: önce MÜŞTERİ kodu olarak ara (yeni sistem), sonra eski v7vitrin kodları (geriye dönük)
-      let musteriAd = null, musteriKod = null, onek = "", oncekiZiyaret = 0;
-
-      // 1. Müşteri kodu mu? Her iki şirkette müşteri listesinde ara
+      // Kodu çöz: RPC üzerinden her iki şirkette de dene (hangi şirkete ait bilinmiyor).
+      // Görünürlük/gizlilik/maliyet-alanı-çıkarma artık SUNUCU tarafında (vitrin_getir) yapılıyor.
+      let musteriAd = null, musteriKod = kod, onek = "", oncekiZiyaret = 0, veri = null;
       for (const o of ["", "bsp2_"]) {
-        const eski = AKTIF_SIRKET_ONEK;
-        AKTIF_SIRKET_ONEK = o;
-        const mus = await ld("v7u", {});
-        AKTIF_SIRKET_ONEK = eski;
-        // musteriler: { "Ahmet": "MUS-001" } — kod eşleşen müşteriyi bul
-        const bulunanAd = Object.keys(mus || {}).find(ad => mus[ad] === kod);
-        if (bulunanAd) { musteriAd = bulunanAd; musteriKod = kod; onek = o; break; }
+        const r = await vitrinGetirGuvenli(kod, o);
+        if (r && r.gecerli) { veri = r; musteriAd = r.musteriAd; onek = o; break; }
       }
 
-      // 2. Müşteri kodu değilse eski v7vitrin kodlarına bak (geriye dönük uyumluluk)
-      if (!musteriKod) {
-        for (const o of ["", "bsp2_"]) {
-          const eski = AKTIF_SIRKET_ONEK;
-          AKTIF_SIRKET_ONEK = o;
-          const kodlar = await ld("v7vitrin", []);
-          AKTIF_SIRKET_ONEK = eski;
-          const bulunan = (kodlar || []).find(k => k.kod === kod && k.aktif);
-          if (bulunan) { musteriAd = bulunan.musteriAd || "Katalog"; musteriKod = kod; onek = o; break; }
-        }
-      }
-
-      if (!musteriKod) { setDurum("gecersiz"); return; }
+      if (!veri) { setDurum("gecersiz"); return; }
 
       // Önceki ziyareti localStorage'dan al (yeni model tespiti için) — cihaz bazlı
-      // NOT: Global AKTIF_SIRKET_ONEK'i KALICI değiştirmiyoruz (ana sistemi kirletmemek için)
       try {
         const ziyaretKey = "vitrin_ziyaret_" + kod;
         oncekiZiyaret = Number(localStorage.getItem(ziyaretKey)) || 0;
@@ -2083,44 +2064,21 @@ function VitrinModu({ kod, onizleme }) {
 
       setVitrinAd(musteriAd || "Katalog");
       // Giriş aktivitesi kaydet
-      if (!onizleme) { try { vitrinAktiviteKaydet(onek, musteriKod, musteriAd, "giris", null, null, null); } catch {} }
-      // Veriyi çek — TABLODAN. Global öneği GEÇİCİ değiştir, HEMEN geri al (kirlenmesin)
-      const oncekiGlobalOnek = AKTIF_SIRKET_ONEK;
-      let k, m;
-      try {
-        AKTIF_SIRKET_ONEK = onek;
-        [k, m] = await Promise.all([
-          akilliKoleksiyonOku(onek),
-          akilliModelOku(onek)
-        ]);
-      } finally {
-        AKTIF_SIRKET_ONEK = oncekiGlobalOnek; // HER durumda geri al
-      }
-      // MÜŞTERİ BAZLI: sadece bu müşteriye AÇIK koleksiyonlar (vitrinMus listesinde kodu varsa)
-      // Varsayılan güvenli: liste yoksa/boşsa o koleksiyon kimseye görünmez
-      const aktifKollar = (k || []).filter(kol =>
-        Array.isArray(kol.vitrinMus) && kol.vitrinMus.includes(musteriKod)
-      );
-      const aktifKolIdler = new Set(aktifKollar.map(kol => kol.id));
-      // Mahrem alanları ÇIKAR + bu müşteriye GİZLENEN modelleri filtrele
-      const guvenliModeller = (m || [])
-        .filter(mod => aktifKolIdler.has(mod.ki))
-        .filter(mod => !(Array.isArray(mod.gizliMus) && mod.gizliMus.includes(musteriKod))) // bu müşteriye gizli mi?
-        .map(mod => {
-          const kaynakId = mod.kaynakKi || mod.ki;
-          const kaynakKolObj = (k || []).find(kk => kk.id === kaynakId);
-          // Hassas (fiyat/maliyet) alanları HARİÇ, geri kalan HER ŞEYİ olduğu gibi geçir —
-          // böylece yeni eklenen alanlar (setParcalari, detayNoktalari vs.) otomatik gelir, unutulmaz.
-          const { iscilikDolar, iscilikBirim, iscilikAyarlar, ekMaliyet, madenCarpan, gizliMus, ...guvenliKalan } = mod;
-          return {
-            ...guvenliKalan,
-            kaynakKi: kaynakId,
-            kaynakAd: kaynakKolObj ? kaynakKolObj.ad : "Diğer",
-            foto: mod.foto || "", kod: mod.kod || "", ad: mod.ad || "",
-            gram: mod.gram || "", refAyar: mod.refAyar || "14K", kategori: mod.kategori || "",
-            tasGram: mod.tasGram || 0, t: mod.t || 0,
-          };
-        });
+      if (!onizleme) { try { vitrinAktiviteKaydetGuvenli(musteriKod, onek, "giris", null, null, null); } catch {} }
+
+      const aktifKollar = veri.koleksiyonlar || [];
+      const guvenliModeller = (veri.modeller || []).map(mod => {
+        const kaynakId = mod.kaynakKi || mod.ki;
+        const kaynakKolObj = aktifKollar.find(kk => kk.id === kaynakId);
+        return {
+          ...mod,
+          kaynakKi: kaynakId,
+          kaynakAd: kaynakKolObj ? kaynakKolObj.ad : "Diğer",
+          foto: mod.foto || "", kod: mod.kod || "", ad: mod.ad || "",
+          gram: mod.gram || "", refAyar: mod.refAyar || "14K", kategori: mod.kategori || "",
+          tasGram: mod.tasGram || 0, t: mod.t || 0,
+        };
+      });
       setKollar(aktifKollar);
       setModeller(guvenliModeller);
       setAktifOnek(onek);
@@ -2139,33 +2097,23 @@ function VitrinModu({ kod, onizleme }) {
     if (durum !== "hazir" || !vitrinMusteri) return;
     const tazele = async () => {
       if (document.hidden) return; // sekme arkadaysa boşuna sorgu atma
-      const oncekiGlobalOnek = AKTIF_SIRKET_ONEK;
       try {
-        AKTIF_SIRKET_ONEK = vitrinMusteri.onek;
-        const [k, m] = await Promise.all([
-          akilliKoleksiyonOku(vitrinMusteri.onek),
-          akilliModelOku(vitrinMusteri.onek)
-        ]);
-        const aktifKollar = (k || []).filter(kol =>
-          Array.isArray(kol.vitrinMus) && kol.vitrinMus.includes(vitrinMusteri.kod)
-        );
+        const veri = await vitrinGetirGuvenli(vitrinMusteri.kod, vitrinMusteri.onek);
+        if (!veri || !veri.gecerli) return;
+        const aktifKollar = veri.koleksiyonlar || [];
         const aktifKolIdler = new Set(aktifKollar.map(kol => kol.id));
-        const guvenli = (m || [])
-          .filter(mod => aktifKolIdler.has(mod.ki))
-          .filter(mod => !(Array.isArray(mod.gizliMus) && mod.gizliMus.includes(vitrinMusteri.kod)))
-          .map(mod => {
-            const kaynakId = mod.kaynakKi || mod.ki;
-            const kaynakKolObj = (k || []).find(kk => kk.id === kaynakId);
-            const { iscilikDolar, iscilikBirim, iscilikAyarlar, ekMaliyet, madenCarpan, gizliMus, ...guvenliKalan } = mod;
-            return {
-              ...guvenliKalan,
-              kaynakKi: kaynakId,
-              kaynakAd: kaynakKolObj ? kaynakKolObj.ad : "Diğer",
-              foto: mod.foto || "", kod: mod.kod || "", ad: mod.ad || "",
-              gram: mod.gram || "", refAyar: mod.refAyar || "14K", kategori: mod.kategori || "",
-              tasGram: mod.tasGram || 0, t: mod.t || 0,
-            };
-          });
+        const guvenli = (veri.modeller || []).map(mod => {
+          const kaynakId = mod.kaynakKi || mod.ki;
+          const kaynakKolObj = aktifKollar.find(kk => kk.id === kaynakId);
+          return {
+            ...mod,
+            kaynakKi: kaynakId,
+            kaynakAd: kaynakKolObj ? kaynakKolObj.ad : "Diğer",
+            foto: mod.foto || "", kod: mod.kod || "", ad: mod.ad || "",
+            gram: mod.gram || "", refAyar: mod.refAyar || "14K", kategori: mod.kategori || "",
+            tasGram: mod.tasGram || 0, t: mod.t || 0,
+          };
+        });
         setKollar(aktifKollar);
         setModeller(guvenli);
         // Açık olan koleksiyon artık erişilemiyorsa (kapatıldıysa) başa dön
@@ -2177,8 +2125,6 @@ function VitrinModu({ kod, onizleme }) {
         setSeciliKlasorler(p => p.filter(id => aktifKolIdler.has(id)));
       } catch (e) {
         console.warn("Vitrin tazeleme atlandı:", e.message);
-      } finally {
-        AKTIF_SIRKET_ONEK = oncekiGlobalOnek;
       }
     };
     const iv = setInterval(tazele, 60000);          // 60 saniyede bir
@@ -2327,8 +2273,9 @@ function VitrinModu({ kod, onizleme }) {
         kaynak: "vitrin", // ana sistemde "🛍️ Vitrinden" rozetiyle ayırt edilir
         kalemler,
       };
-      await tabloSiparisleriToplu(vitrinMusteri.onek, [yeniSiparis]);
-      if (!onizleme) { try { vitrinAktiviteKaydet(vitrinMusteri.onek, vitrinMusteri.kod, vitrinMusteri.ad, "siparis", null, null, null); } catch {} }
+      const sonuc = await siparisOlusturGuvenli(vitrinMusteri.kod, vitrinMusteri.onek, yeniSiparis);
+      if (!sonuc || !sonuc.basarili) throw new Error("Sipariş kaydedilemedi");
+      if (!onizleme) { try { vitrinAktiviteKaydetGuvenli(vitrinMusteri.kod, vitrinMusteri.onek, "siparis", null, null, null); } catch {} }
       setSiparisBasarili(true);
       setSecili(new Set());
       setSiparisAdetler({});
@@ -2351,7 +2298,7 @@ function VitrinModu({ kod, onizleme }) {
   // Koleksiyona gir
   const kolAc = (k) => {
     setAktifKol(k); setTumGorunum(false); setArama(""); setGramFiltre({ min:"", max:"" });
-    if (vitrinMusteri && !onizleme) vitrinAktiviteKaydet(vitrinMusteri.onek, vitrinMusteri.kod, vitrinMusteri.ad, "koleksiyon", k.ad, null, null);
+    if (vitrinMusteri && !onizleme) vitrinAktiviteKaydetGuvenli(vitrinMusteri.kod, vitrinMusteri.onek, "koleksiyon", k.ad, null, null);
   };
 
   // Model ızgarası stili — sütun sayısı sağ alttaki büyüt/küçült kontrolüyle değişir
@@ -2369,7 +2316,7 @@ function VitrinModu({ kod, onizleme }) {
     const kodBoyut = cokKucuk ? 9 : kucuk ? 10 : 12;
     return (
     <div key={m.id} className="vm-card">
-      <div onClick={()=>{ setDetayModel(m); if(vitrinMusteri && !onizleme) vitrinAktiviteKaydet(vitrinMusteri.onek, vitrinMusteri.kod, vitrinMusteri.ad, "model", kolAdi, m.kod, m.ad); }}
+      <div onClick={()=>{ setDetayModel(m); if(vitrinMusteri && !onizleme) vitrinAktiviteKaydetGuvenli(vitrinMusteri.kod, vitrinMusteri.onek, "model", kolAdi, m.kod, m.ad); }}
         style={{ aspectRatio:"4/3", background:"#f7f7f8", borderRadius: kucuk?9:12, position:"relative", overflow:"hidden", boxShadow: sec?"0 0 0 1px rgba(0,0,0,0.4), 0 0 0 3px var(--vurgu), 0 0 0 5px rgba(var(--vurgu-rgb),0.35)":"none" }}>
         {m.foto
           ? <img className="vm-ph" src={m.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"contain", display:"block" }}/>
@@ -2529,7 +2476,7 @@ function VitrinModu({ kod, onizleme }) {
           {/* TÜM KOLEKSİYONLARI GÖR */}
           {toplamModel > 0 && (
             <div style={{ padding:"10px 28px 4px" }}>
-              <div onClick={()=>{ setTumGorunum(true); setArama(""); setGramFiltre({ min:"", max:"" }); if(vitrinMusteri && !onizleme) vitrinAktiviteKaydet(vitrinMusteri.onek, vitrinMusteri.kod, vitrinMusteri.ad, "koleksiyon", "Tüm Koleksiyonlar", null, null); }}
+              <div onClick={()=>{ setTumGorunum(true); setArama(""); setGramFiltre({ min:"", max:"" }); if(vitrinMusteri && !onizleme) vitrinAktiviteKaydetGuvenli(vitrinMusteri.kod, vitrinMusteri.onek, "koleksiyon", "Tüm Koleksiyonlar", null, null); }}
                 className="vm-card" style={{ display:"flex", alignItems:"center", gap:16, background:"rgba(var(--voverlay-rgb),0.06)", border:"1.5px solid rgba(var(--voverlay-rgb),0.10)", borderRadius:16, padding:"14px 18px", cursor:"pointer" }}>
                 <div style={{ width:78, height:58, borderRadius:10, overflow:"hidden", background:"#f7f7f8", display:"grid", gridTemplateColumns:"1fr 1fr", gridTemplateRows:"1fr 1fr", gap:1, flexShrink:0 }}>
                   {[0,1,2,3].map(i => (
