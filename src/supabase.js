@@ -781,6 +781,15 @@ export async function radarKanitlariOku(trendId) {
     return data || []
   } catch (e) { console.error('radarKanitlariOku:', e.message); return [] }
 }
+// Tüm kanıtları hafif haliyle okur (id, trend_id, observed_at) — Trend Radar sayfasındaki
+// özet istatistikler (toplam kanıt, bu hafta eklenen, trend başına kanıt sayısı) için.
+export async function radarTumKanitlariOku() {
+  try {
+    const { data, error } = await supabase.from('radar_evidence').select('id, trend_id, source_id, observed_at').order('observed_at', { ascending: false })
+    if (error) { console.error('radarTumKanitlariOku:', error.message); return [] }
+    return data || []
+  } catch (e) { console.error('radarTumKanitlariOku:', e.message); return [] }
+}
 export async function radarTrendGuncelle(id, alanlar) {
   try {
     const { error } = await supabase.from('radar_trends').update({ ...alanlar, updated_at: new Date().toISOString() }).eq('id', id)
