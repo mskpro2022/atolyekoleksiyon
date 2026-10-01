@@ -5262,6 +5262,11 @@ function Atolye({ onSirketDegis }) {
               <button onClick={() => { rmf(); setFKolId(aktifKol?aktifKol.id:""); setEditM(null); setShowMM(true); }} style={{ ...BG, padding:"10px 20px", fontSize:12, flexShrink:0 }}>+ Model Ekle</button>
             </div>
 
+            {/* YÜZEN (SABİT) + MODEL BUTONU — sayfayı aşağı/yukarı kaydırırken her zaman görünür kalır */}
+            <button onClick={() => { rmf(); setFKolId(aktifKol?aktifKol.id:""); setEditM(null); setShowMM(true); }}
+              title="Model Ekle"
+              style={{ ...BG, position:"fixed", bottom:24, right:24, zIndex:60, width:52, height:52, borderRadius:"50%", padding:0, fontSize:24, fontWeight:700, display:"flex", alignItems:"center", justifyContent:"center", boxShadow:"0 4px 16px rgba(0,0,0,0.35)" }}>+</button>
+
           </div>
         )}
 
