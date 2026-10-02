@@ -1,4 +1,4 @@
-import { supabase, dbLoad, dbSave, fotoYukleStorage, yedekKaydet, yedekListesi, yedekGetir, bugunYedekVarMi, tabloModelleriSenkron, tabloModelleriToplu, tabloModelSil, tabloSiparisleriSenkron, tabloSiparisleriToplu, tabloMusterileriYaz, akilliModelOku, akilliSiparisOku, akilliMusteriOku, islemKaydet, islemGecmisiGetir, realtimeBaslat, tabloKoleksiyonlariYaz, tabloKasaYaz, akilliKoleksiyonOku, akilliKasaOku, tabloKoleksiyonlariOku, tabloKasaOku, saglikDenetimi, ekranSunucuFarki, toptanciKaydet, toptancilariGetir, toptanciSil, vitrinGecmisiGetir, vitrinEnCokBakilan, vitrinOzetGetir, vitrinAnaliz, vitrinGetirGuvenli, siparisOlusturGuvenli, vitrinAktiviteKaydetGuvenli, radarTrendleriOku, radarKaynaklariOku, radarKanitlariOku, radarTumKanitlariOku, radarTrendGuncelle, radarTrendSil, radarManuelKanitEkle } from "./supabase.js";
+import { supabase, dbLoad, dbSave, fotoYukleStorage, yedekKaydet, yedekListesi, yedekGetir, bugunYedekVarMi, tabloModelleriSenkron, tabloModelleriToplu, tabloModelSil, tabloSiparisleriSenkron, tabloSiparisleriToplu, tabloMusterileriYaz, akilliModelOku, akilliSiparisOku, akilliMusteriOku, islemKaydet, islemGecmisiGetir, realtimeBaslat, tabloKoleksiyonlariYaz, tabloKasaYaz, akilliKoleksiyonOku, akilliKasaOku, tabloKoleksiyonlariOku, tabloKasaOku, saglikDenetimi, ekranSunucuFarki, toptanciKaydet, toptancilariGetir, toptanciSil, vitrinGecmisiGetir, vitrinEnCokBakilan, vitrinOzetGetir, vitrinAnaliz, vitrinGetirGuvenli, siparisOlusturGuvenli, vitrinAktiviteKaydetGuvenli, vitrinSupheliCihazlar, radarTrendleriOku, radarKaynaklariOku, radarKanitlariOku, radarTumKanitlariOku, radarTrendGuncelle, radarTrendSil, radarManuelKanitEkle } from "./supabase.js";
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 
 const uid = () => "x" + Date.now() + Math.random().toString(36).substr(2, 5);
@@ -1878,6 +1878,38 @@ function SirketSecimEkrani({ onSec }) {
   );
 }
 
+// Vitrin linkini açan cihaza kalıcı, rastgele bir kimlik verir (localStorage) —
+// aynı müşteri kodunun birden fazla FARKLI cihazdan girip girmediğini anlamak için.
+// Hiçbir kişisel veri değildir, sadece "bu tarayıcı daha önce de buradaydı" bilgisidir.
+function vitrinCihazIdAl() {
+  try {
+    let id = localStorage.getItem("atolye_vitrin_cihaz_id");
+    if (!id) {
+      id = (window.crypto && window.crypto.randomUUID) ? window.crypto.randomUUID() : ("c-" + Date.now() + "-" + Math.random().toString(36).slice(2));
+      localStorage.setItem("atolye_vitrin_cihaz_id", id);
+    }
+    return id;
+  } catch { return null; }
+}
+// Kaba bir cihaz/tarayıcı etiketi çıkarır (örn. "iPhone/iPad — Safari") — admin tarafında okunabilir olsun diye.
+function vitrinCihazEtiketiAl() {
+  try {
+    const ua = navigator.userAgent || "";
+    let os = "Bilinmeyen cihaz";
+    if (/iPhone|iPad|iPod/.test(ua)) os = "iPhone/iPad";
+    else if (/Android/.test(ua)) os = "Android";
+    else if (/Macintosh/.test(ua)) os = "Mac";
+    else if (/Windows/.test(ua)) os = "Windows";
+    else if (/Linux/.test(ua)) os = "Linux";
+    let tarayici = "Tarayıcı";
+    if (/Edg\//.test(ua)) tarayici = "Edge";
+    else if (/Chrome\//.test(ua)) tarayici = "Chrome";
+    else if (/Safari\//.test(ua) && !/Chrome\//.test(ua)) tarayici = "Safari";
+    else if (/Firefox\//.test(ua)) tarayici = "Firefox";
+    return os + " — " + tarayici;
+  } catch { return "Bilinmeyen cihaz"; }
+}
+
 // ═══ MÜŞTERİ VİTRİN MODU ═══
 // Müşteriye verilen link (?vitrin=KOD) ile açılır. Salt okunur, mahrem veri YOK.
 // Sadece foto + ad + kod + gram + ayar gösterir. Seçtiklerinden PDF yapabilir.
@@ -2076,7 +2108,7 @@ function VitrinModu({ kod, onizleme }) {
 
       setVitrinAd(musteriAd || "Katalog");
       // Giriş aktivitesi kaydet
-      if (!onizleme) { try { vitrinAktiviteKaydetGuvenli(musteriKod, onek, "giris", null, null, null); } catch {} }
+      if (!onizleme) { try { vitrinAktiviteKaydetGuvenli(musteriKod, onek, "giris", null, null, null, vitrinCihazIdAl(), vitrinCihazEtiketiAl()); } catch {} }
 
       const aktifKollar = veri.koleksiyonlar || [];
       const guvenliModeller = (veri.modeller || []).map(mod => {
@@ -3398,6 +3430,7 @@ function Atolye({ onSirketDegis }) {
   const [dragOverHaritaKol, setDragOverHaritaKol] = useState(null);
   const [manuelTarihModal, setManuelTarihModal] = useState(null); // {sipId, gecmisIdx, durum, tarih}
   const [showMM,  setShowMM]  = useState(false);
+  const [modelKaydediliyor, setModelKaydediliyor] = useState(false); // çift kayıt/tekrar tıklama önlemi — saveModel sürerken buton kilitlenir
   const [showYedek, setShowYedek] = useState(false);
   const [katalogSiralaModal, setKatalogSiralaModal] = useState(false);
   const [katalogSiraliModeller, setKatalogSiraliModeller] = useState([]);
@@ -3442,6 +3475,7 @@ function Atolye({ onSirketDegis }) {
   const [detayModel, setDetayModel] = useState(null); // model detay/büyük foto modalı
   const [vitrinGecmis, setVitrinGecmis] = useState(null); // { musteriAd, kod, kayitlar, encok } — müşteri vitrin geçmişi modalı
   const [vitrinOzet, setVitrinOzet] = useState({}); // { MUSKOD: {giris, model, son} } — vitrin sayfasi ozeti
+  const [vitrinSupheli, setVitrinSupheli] = useState({}); // { MUSKOD: [{bilgi, ilk, son}, ...] } — birden fazla cihazdan giren müşteriler (link başkasına gitmiş olabilir)
   const [kolMusModal, setKolMusModal] = useState(null); // koleksiyon id → hangi musteriler gorsun
   const [musKolModal, setMusKolModal] = useState(null); // musteri kodu → hangi koleksiyonlari gorsun
   const [vitrinAnalizVeri, setVitrinAnalizVeri] = useState(null); // Kesfet vitrin analizi
@@ -4125,6 +4159,7 @@ function Atolye({ onSirketDegis }) {
   // Müşteri vitrin kodlarını Ayarlar açıldığında yükle
   const vitrinOzetYukle = useCallback(() => {
     vitrinOzetGetir(AKTIF_SIRKET_ONEK).then(setVitrinOzet);
+    vitrinSupheliCihazlar(AKTIF_SIRKET_ONEK).then(setVitrinSupheli);
   }, []);
 
   useEffect(() => {
@@ -4179,6 +4214,8 @@ function Atolye({ onSirketDegis }) {
 
   const saveModel = () => {
     if (!fKod.trim()) return; // Model adı artık zorunlu değil — kod tek zorunlu alan
+    if (modelKaydediliyor) return; // kayıt zaten sürüyor — tekrar tıklanırsa ikinci/üçüncü kopya oluşmasın
+    setModelKaydediliyor(true);
     // Taş listesinden toplam gram hesapla
     const toplamTasGram = fTaslar.reduce((acc, t) => {
       const gr = tasGramHesapla(t.sekil, t.tur, isNaN(Number(t.boyut)) ? t.boyut : Number(t.boyut), Number(t.adet)||1, ozelTaslar, tasGramOverride);
@@ -4221,6 +4258,7 @@ function Atolye({ onSirketDegis }) {
     };
 
     const kaydet = async (onayliSync) => {
+      try {
       if (editM) {
         // Foto base64 ise Storage'a yükle, URL'e çevir
         let fotoURL = obj.foto;
@@ -4259,6 +4297,9 @@ function Atolye({ onSirketDegis }) {
         islemKaydet(AKTIF_SIRKET_ONEK, "ekle", "model", (obj.kod || "") + " · " + (obj.ad || ""));
       }
       setShowMM(false); rmf(); setEditM(null);
+      } finally {
+        setModelKaydediliyor(false); // başarılı da olsa hata da olsa buton kilidi açılsın
+      }
     };
 
     if (ayniKodlular.length > 0) {
@@ -4828,13 +4869,20 @@ function Atolye({ onSirketDegis }) {
                     {Object.entries(musteriler).sort((a,b)=>a[0].localeCompare(b[0],"tr")).map(([ad, kod]) => {
                       const url = window.location.origin + "?vitrin=" + kod;
                       const oz = vitrinOzet[kod] || null;
+                      const supheliCihazlar = vitrinSupheli[kod] || null;
                       return (
-                        <div key={kod} style={{ background:"rgba(0,0,0,0.15)", border:"1px solid "+T.border, borderRadius:9, padding:"10px 12px", display:"flex", alignItems:"center", gap:10, flexWrap:"wrap" }}>
+                        <div key={kod} style={{ background:"rgba(0,0,0,0.15)", border:"1px solid "+(supheliCihazlar?"rgba(232,162,58,0.35)":T.border), borderRadius:9, padding:"10px 12px", display:"flex", alignItems:"center", gap:10, flexWrap:"wrap" }}>
                           {/* Kod + isim */}
                           <div style={{ minWidth:150, flex:"1 1 180px" }}>
-                            <div style={{ display:"flex", alignItems:"center", gap:7 }}>
+                            <div style={{ display:"flex", alignItems:"center", gap:7, flexWrap:"wrap" }}>
                               <span style={{ background:"rgba(255,255,255,0.06)", borderRadius:5, padding:"2px 7px", fontSize:9, fontWeight:800, color:T.sub }}>{kod}</span>
                               <span style={{ fontSize:13, fontWeight:700, color:T.text }}>{ad}</span>
+                              {supheliCihazlar && (
+                                <span title={supheliCihazlar.map(c => c.bilgi + " — son giriş: " + new Date(c.son).toLocaleString("tr-TR",{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"})).join("\n")}
+                                  style={{ background:"rgba(232,162,58,0.14)", border:"1px solid rgba(232,162,58,0.35)", borderRadius:5, padding:"2px 7px", fontSize:9, fontWeight:800, color:"#e8a23a", cursor:"help" }}>
+                                  ⚠️ {supheliCihazlar.length} farklı cihaz
+                                </span>
+                              )}
                             </div>
                             {/* Aktivite özeti */}
                             <div style={{ fontSize:9, color: oz && oz.giris>0 ? "#6abf69" : "#665d4a", marginTop:3 }}>
@@ -4857,12 +4905,12 @@ function Atolye({ onSirketDegis }) {
                             <button onClick={()=>{ navigator.clipboard?.writeText(url); toastGoster("ok","🛍 "+ad+" linki kopyalandı"); }}
                               style={{ background:"rgba(106,191,105,0.1)", border:"1px solid rgba(106,191,105,0.25)", borderRadius:7, padding:"6px 12px", color:"#6abf69", fontSize:10, fontWeight:700, cursor:"pointer" }}>🛍 Linki Kopyala</button>
                             <button onClick={async()=>{
-                              setVitrinGecmis({ musteriAd:ad, kod, kayitlar:null, encok:null });
+                              setVitrinGecmis({ musteriAd:ad, kod, kayitlar:null, encok:null, cihazlar:supheliCihazlar });
                               const [kayitlar, encok] = await Promise.all([
                                 vitrinGecmisiGetir(AKTIF_SIRKET_ONEK, kod, 100),
                                 vitrinEnCokBakilan(AKTIF_SIRKET_ONEK, kod)
                               ]);
-                              setVitrinGecmis({ musteriAd:ad, kod, kayitlar, encok });
+                              setVitrinGecmis({ musteriAd:ad, kod, kayitlar, encok, cihazlar:supheliCihazlar });
                             }} style={{ background:"rgba(91,155,213,0.1)", border:"1px solid rgba(91,155,213,0.25)", borderRadius:7, padding:"6px 12px", color:"#5b9bd5", fontSize:10, fontWeight:700, cursor:"pointer" }}>📊 Analiz</button>
                             <a href={url + "&onizle=1"} target="_blank" rel="noreferrer" title="Önizleme — analize kaydedilmez" style={{ background:"rgba(255,255,255,0.04)", border:"1px solid "+T.border, borderRadius:7, padding:"6px 12px", color:T.sub, fontSize:10, fontWeight:700, textDecoration:"none" }}>Önizle</a>
                           </div>
@@ -8264,6 +8312,22 @@ function Atolye({ onSirketDegis }) {
               {vitrinGecmis.kayitlar !== null && vitrinGecmis.kayitlar.length === 0 && (
                 <div style={{ textAlign:"center", color:T.sub, padding:"30px", fontSize:13 }}>Bu müşteri henüz vitrine girmemiş.<br/><span style={{ fontSize:11, opacity:0.7 }}>Vitrin linkini paylaşın: 🛍 Link butonu</span></div>
               )}
+              {vitrinGecmis.cihazlar && vitrinGecmis.cihazlar.length > 1 && (
+                <div style={{ marginBottom:20, background:"rgba(232,162,58,0.08)", border:"1px solid rgba(232,162,58,0.3)", borderRadius:10, padding:"12px 14px" }}>
+                  <div style={{ fontSize:11, color:"#e8a23a", fontWeight:800, marginBottom:6 }}>⚠️ Bu link {vitrinGecmis.cihazlar.length} farklı cihazdan açılmış</div>
+                  <div style={{ fontSize:10, color:"#c9a86c", marginBottom:8 }}>Müşterinin kendi telefonu+bilgisayarı olabilir, ya da link başkasına iletilmiş olabilir — aşağıdaki cihaz/zaman bilgisine göre siz karar verin.</div>
+                  <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
+                    {vitrinGecmis.cihazlar.map((c,i) => (
+                      <div key={i} style={{ display:"flex", justifyContent:"space-between", gap:8, fontSize:10, color:T.text, background:"rgba(0,0,0,0.15)", borderRadius:6, padding:"5px 9px" }}>
+                        <span>{c.bilgi}</span>
+                        <span style={{ color:T.sub }}>
+                          ilk: {new Date(c.ilk).toLocaleDateString("tr-TR")} · son: {new Date(c.son).toLocaleString("tr-TR",{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"})}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
               {vitrinGecmis.kayitlar !== null && vitrinGecmis.kayitlar.length > 0 && (
                 <>
                   {/* En çok bakılan modeller */}
@@ -9854,7 +9918,7 @@ function Atolye({ onSirketDegis }) {
           </div>
         )}
 
-        <button onClick={saveModel} disabled={!fKod.trim()} style={{ ...BG, width:"100%", marginTop:4, opacity:fKod.trim()?1:0.4 }}>{editM?"Kaydet":"Ekle"}</button>
+        <button onClick={saveModel} disabled={!fKod.trim() || modelKaydediliyor} style={{ ...BG, width:"100%", marginTop:4, opacity:(fKod.trim() && !modelKaydediliyor)?1:0.4, cursor: modelKaydediliyor?"wait":"pointer" }}>{modelKaydediliyor ? "Kaydediliyor..." : (editM?"Kaydet":"Ekle")}</button>
         </div>
       </Modal>
 
