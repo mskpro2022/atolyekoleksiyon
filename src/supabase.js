@@ -663,13 +663,44 @@ export async function siparisOlusturGuvenli(kod, onek, siparis) {
   } catch (e) { console.error('siparisOlusturGuvenli:', e.message); return { basarili: false } }
 }
 // Vitrin aktivite kaydı — sunucu tarafında müşteri kodu doğrulanır
-export async function vitrinAktiviteKaydetGuvenli(kod, onek, eylem, koleksiyon, modelKod, modelAd) {
+export async function vitrinAktiviteKaydetGuvenli(kod, onek, eylem, koleksiyon, modelKod, modelAd, cihazId, cihazBilgi) {
   try {
     await supabase.rpc('vitrin_aktivite_ekle', {
       p_kod: kod, p_onek: onek, p_eylem: eylem,
-      p_koleksiyon: koleksiyon || null, p_model_kod: modelKod || null, p_model_ad: modelAd || null
+      p_koleksiyon: koleksiyon || null, p_model_kod: modelKod || null, p_model_ad: modelAd || null,
+      p_cihaz_id: cihazId || null, p_cihaz_bilgi: cihazBilgi || null
     })
   } catch (e) { /* sessiz */ }
+}
+
+// Aynı müşteri koduna birden fazla CİHAZDAN giriş yapılmış mı? (link başkasına gönderilmiş olabilir şüphesi)
+// Dönen: { MUSKOD: [ {bilgi, ilk, son}, ... ] } — sadece 2+ farklı cihazı olan müşteriler listede yer alır.
+export async function vitrinSupheliCihazlar(onek) {
+  try {
+    const { data, error } = await supabase.from('vitrin_aktivite')
+      .select('musteri_kod, cihaz_id, cihaz_bilgi, zaman')
+      .eq('onek', onek).eq('eylem', 'giris')
+      .not('cihaz_id', 'is', null)
+      .order('zaman', { ascending: false }).limit(3000)
+    if (error || !data) return {}
+    const grup = {}
+    data.forEach(r => {
+      const k = r.musteri_kod
+      if (!k) return
+      if (!grup[k]) grup[k] = {}
+      if (!grup[k][r.cihaz_id]) grup[k][r.cihaz_id] = { bilgi: r.cihaz_bilgi || 'Bilinmeyen cihaz', ilk: r.zaman, son: r.zaman }
+      else {
+        if (new Date(r.zaman) > new Date(grup[k][r.cihaz_id].son)) grup[k][r.cihaz_id].son = r.zaman
+        if (new Date(r.zaman) < new Date(grup[k][r.cihaz_id].ilk)) grup[k][r.cihaz_id].ilk = r.zaman
+      }
+    })
+    const sonuc = {}
+    Object.entries(grup).forEach(([kod, cihazlar]) => {
+      const liste = Object.values(cihazlar)
+      if (liste.length > 1) sonuc[kod] = liste.sort((a, b) => new Date(b.son) - new Date(a.son))
+    })
+    return sonuc
+  } catch { return {} }
 }
 export async function vitrinGecmisiGetir(onek, musteriKod, limit = 100) {
   try {
