@@ -3604,6 +3604,45 @@ function Atolye({ onSirketDegis }) {
   const [konfRenkler, setKonfRenkler] = useState({});     // per-item renk
   const [konfAdet,    setKonfAdet]    = useState({});  // id -> adet
   const [konfNot,     setKonfNot]     = useState({});  // id -> not
+  const [konfTaslikYuklendi, setKonfTaslikYuklendi] = useState(false); // taslak geri yüklendi mi (ilk render'da erken kaydetmeyi önler)
+
+  // Konfirmasyon taslağını sayfa açılışında geri yükle (yarım kalan sepet kaybolmasın)
+  useEffect(() => {
+    if (!loaded) return;
+    ld("v7konfdraft", null).then(d => {
+      if (d && Array.isArray(d.liste) && d.liste.length) {
+        setKonfList(d.liste || []);
+        setKonfMus(d.mus || "");
+        setKonfTeslim(d.teslim || "");
+        setKonfSipAciklama(d.aciklama || "");
+        setKonfAyar(d.ayar || "14K");
+        setKonfAyarlar(d.ayarlar || {});
+        setKonfRenkler(d.renkler || {});
+        setKonfAdet(d.adet || {});
+        setKonfNot(d.not || {});
+        setKonfBoylar(d.boylar || {});
+        setKonfFiyatlar(d.fiyatlar || {});
+      }
+      setKonfTaslikYuklendi(true);
+    });
+  }, [loaded]);
+
+  // Konfirmasyon taslağını değişiklik oldukça otomatik kaydet (yarım kalan sepet artık kaybolmaz)
+  useEffect(() => {
+    if (!konfTaslikYuklendi) return;
+    const zamanlayici = setTimeout(() => {
+      if (konfList.length === 0 && !konfMus && !konfSipAciklama) {
+        sv("v7konfdraft", null);
+      } else {
+        sv("v7konfdraft", {
+          liste: konfList, mus: konfMus, teslim: konfTeslim, aciklama: konfSipAciklama,
+          ayar: konfAyar, ayarlar: konfAyarlar, renkler: konfRenkler, adet: konfAdet,
+          not: konfNot, boylar: konfBoylar, fiyatlar: konfFiyatlar,
+        });
+      }
+    }, 800);
+    return () => clearTimeout(zamanlayici);
+  }, [konfTaslikYuklendi, konfList, konfMus, konfTeslim, konfSipAciklama, konfAyar, konfAyarlar, konfRenkler, konfAdet, konfNot, konfBoylar, konfFiyatlar]);
 
   // Kol form
   const [fkAd, setFkAd] = useState("");
@@ -4639,7 +4678,8 @@ function Atolye({ onSirketDegis }) {
       });
       svKasa({ ...kasa, musteriModelFiyat: yeniFiyatHafiza });
     }
-    setKonfList([]); setKonfAyarlar({}); setKonfRenkler({}); setKonfAdet({}); setKonfNot({}); setKonfFiyatlar({}); setKonfMus(""); setKonfTeslim(""); setKonfAyar("14K"); setKonfSipAciklama("");
+    setKonfList([]); setKonfAyarlar({}); setKonfRenkler({}); setKonfAdet({}); setKonfNot({}); setKonfFiyatlar({}); setKonfBoylar({}); setKonfMus(""); setKonfTeslim(""); setKonfAyar("14K"); setKonfSipAciklama("");
+    sv("v7konfdraft", null);
     alert("Siparis kaydedildi!");
   };
 
