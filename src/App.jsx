@@ -600,7 +600,8 @@ function buildKatalogHTML(kol, modeller, sutun, hedefAyar, kollar, gruplu, tamKa
         const parca = (aramaKatalog || []).find(x => x.kod === refKod);
         if (!parca) return { kod: refKod, gram: 0, bulunamadi: true };
         const g = gramDonustur(Number(parca.gram)||0, parca.refAyar||"14K", gosterAyar, Number(parca.tasGram)||0);
-        return { kod: parca.kod, gram: g, bulunamadi: false };
+        const kat = (KATEGORILER.find(k => k.id === parca.kategori) || {}).l || parca.kategori || "";
+        return { kod: parca.kod, gram: g, kat, bulunamadi: false };
       });
     }
     const setToplamGram = isSet ? setParcaGramlari.reduce((s,p)=>s+(p.gram||0),0) : 0;
@@ -644,7 +645,7 @@ function buildKatalogHTML(kol, modeller, sutun, hedefAyar, kollar, gruplu, tamKa
     if (m.ac) h += "<div class='ac'>" + m.ac + "</div>";
     if (isSet) {
       h += "<div class='set-parcalar'>" + setParcaGramlari.map(p =>
-        p.bulunamadi ? (p.kod + ": —") : (p.kod + ": " + p.gram.toFixed(2) + "gr")
+        p.bulunamadi ? (p.kod + ": —") : (p.kod + " (" + p.kat + "): " + p.gram.toFixed(2) + "gr")
       ).join("  +  ") + "</div>";
     }
     h += "</div></div>";
