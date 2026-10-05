@@ -769,9 +769,17 @@ function buildKonfHTML(siparis, altinKgUSD, mc, fiyatli) {
     "tbody tr:last-child{border-bottom:none}",
     "td{padding:10px 7px;vertical-align:top;font-size:11px;color:#1a1a2e}",
     "td.r{text-align:right}",
-    ".foto-cell{width:78px}",
-    ".foto-wrap{width:74px;height:74px;border-radius:6px;overflow:hidden;background:#f5f7fa;border:1px solid #e8edf2}",
+    ".foto-cell{width:98px}",
+    ".foto-wrap{width:93px;height:93px;border-radius:6px;overflow:hidden;background:#f5f7fa;border:1px solid #e8edf2}",
     ".foto-wrap img{width:100%;height:100%;object-fit:cover;display:block}",
+    // BİLEKLİK satırı — kare kırpma yerine tüm satır genişliğinde yanlamasına (uzun şerit) fotoğraf; bilgiler üstte
+    ".bileklik-row td{border-top:1px solid #eef1f5}",
+    ".bileklik-bilgi{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:7px}",
+    ".bileklik-sol{display:flex;align-items:center;gap:7px}",
+    ".bileklik-sag{display:flex;align-items:center;gap:16px;font-size:10px;color:#4a5568}",
+    ".bileklik-sag b{color:#0f1923}",
+    ".bileklik-foto{width:100%;height:72px;border-radius:6px;overflow:hidden;background:#f5f7fa;border:1px solid #e8edf2}",
+    ".bileklik-foto img{width:100%;height:100%;object-fit:cover;object-position:center;display:block}",
     ".kod{font-size:12px;font-weight:700;color:#0f1923;letter-spacing:.02em}",
     ".model-ad{font-size:10px;color:#4a5568;margin-top:2px}",
     ".model-nt{font-size:9px;color:#0a84ff;margin-top:3px;font-style:italic}",
@@ -923,19 +931,41 @@ function buildKonfHTML(siparis, altinKgUSD, mc, fiyatli) {
       }
     }
 
-    h += "<tr>";
-    h += "<td class='foto-cell'><div class='foto-wrap'>" + (r.foto?"<img src='"+r.foto+"'/>":"") + "</div></td>";
-    h += "<td><div class='kod'>" + (r.kod||"—") + "</div></td>";
-    h += "<td><div class='model-ad'>" + (r.ad||"") + (r.kategori?" <span style='font-size:8px;color:#8a9bb0'>· "+r.kategori+"</span>":"") + "</div>" + (r.sipNot?"<div class='model-nt'>"+r.sipNot+"</div>":"") + boyStr + tasStr + "</td>";
-    h += "<td class='r'><span class='" + renkClass + "'>" + (r.renk||"Sari") + "</span></td>";
-    h += "<td class='r'>" + r.adet + "</td>";
-    h += "<td class='r'><div class='gram-lbl'>birim</div><div class='gram-birim'>" + fN(birimGram,2) + " gr</div></td>";
-    h += "<td class='r'><div class='gram-lbl'>toplam</div><div class='gram-top'>" + fN(topGram,2) + " gr</div></td>";
-    if (fiyatli) {
-      h += "<td class='r'>" + iscBirimStr + "</td>";
-      h += "<td class='r'>" + iscTopStr + "</td>";
+    const kolonSayisi = fiyatli ? 9 : 7;
+    const bileklikMi = String(r.kategori||"").trim().toLowerCase() === "bileklik";
+
+    if (bileklikMi) {
+      // BİLEKLİK — kare kırpma yerine, fotoğrafı tüm satır genişliğinde YANLAMASINA (uzun şerit) gösterir;
+      // kod/ürün/renk/adet/gram bilgileri fotoğrafın ÜSTÜNDE tek satırda, bilgiler ALTINDA değil üstte yer alır.
+      h += "<tr class='bileklik-row'><td colspan='" + kolonSayisi + "' style='padding:10px 14px'>";
+      h += "<div class='bileklik-bilgi'>";
+      h += "<div class='bileklik-sol'><span class='kod'>" + (r.kod||"—") + "</span> <span class='model-ad'>" + (r.ad||"") + (r.kategori?" <span style='font-size:8px;color:#8a9bb0'>· "+r.kategori+"</span>":"") + "</span></div>";
+      h += "<div class='bileklik-sag'>";
+      h += "<span class='" + renkClass + "'>" + (r.renk||"Sari") + "</span>";
+      h += "<span>Adet: <b>" + r.adet + "</b></span>";
+      h += "<span>Birim: <b>" + fN(birimGram,2) + " gr</b></span>";
+      h += "<span>Toplam: <b>" + fN(topGram,2) + " gr</b></span>";
+      if (fiyatli && r.iscilikTop > 0) h += "<span>İşçilik: <b>" + iscTopStr.replace(/<[^>]+>/g," ").trim() + "</b></span>";
+      h += "</div></div>";
+      if (r.foto) h += "<div class='bileklik-foto'><img src='" + r.foto + "'/></div>";
+      if (r.sipNot) h += "<div class='model-nt'>" + r.sipNot + "</div>";
+      h += boyStr + tasStr;
+      h += "</td></tr>";
+    } else {
+      h += "<tr>";
+      h += "<td class='foto-cell'><div class='foto-wrap'>" + (r.foto?"<img src='"+r.foto+"'/>":"") + "</div></td>";
+      h += "<td><div class='kod'>" + (r.kod||"—") + "</div></td>";
+      h += "<td><div class='model-ad'>" + (r.ad||"") + (r.kategori?" <span style='font-size:8px;color:#8a9bb0'>· "+r.kategori+"</span>":"") + "</div>" + (r.sipNot?"<div class='model-nt'>"+r.sipNot+"</div>":"") + boyStr + tasStr + "</td>";
+      h += "<td class='r'><span class='" + renkClass + "'>" + (r.renk||"Sari") + "</span></td>";
+      h += "<td class='r'>" + r.adet + "</td>";
+      h += "<td class='r'><div class='gram-lbl'>birim</div><div class='gram-birim'>" + fN(birimGram,2) + " gr</div></td>";
+      h += "<td class='r'><div class='gram-lbl'>toplam</div><div class='gram-top'>" + fN(topGram,2) + " gr</div></td>";
+      if (fiyatli) {
+        h += "<td class='r'>" + iscBirimStr + "</td>";
+        h += "<td class='r'>" + iscTopStr + "</td>";
+      }
+      h += "</tr>";
     }
-    h += "</tr>";
   });
 
   h += "</tbody></table></div>";
