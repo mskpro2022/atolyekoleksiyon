@@ -726,7 +726,17 @@ function buildKonfHTML(siparis, altinKgUSD, mc, fiyatli, modeller) {
   // hâlâ eski kategorisiyle görünebilir) — bu yüzden gösterim için KATALOGDAKİ GÜNCEL kategoriyi tercih ediyoruz.
   const guncelKatMap = new Map();
   (modeller || []).forEach(m => { if (m.kod) guncelKatMap.set(m.kod, m.kategori); });
-  const rows = (siparis.kalemler || []).map(k => {
+
+  // Kalemleri KOLEKSİYONA göre grupla — aynı koleksiyondaki modeller PDF'te yan yana çıksın
+  // (eski siparişler, sonradan eklenen kalemler en altta kalmış olabilir; grup sırası ilk görülme anına göre).
+  const _siraMap = new Map();
+  (siparis.kalemler || []).forEach((k, i) => { const kk = k.ki || k.kaynakKi || "_"; if (!_siraMap.has(kk)) _siraMap.set(kk, i); });
+  const _sirali = [...(siparis.kalemler || [])].sort((a, b) => {
+    const ka = a.ki || a.kaynakKi || "_", kb = b.ki || b.kaynakKi || "_";
+    return _siraMap.get(ka) - _siraMap.get(kb);
+  });
+
+  const rows = _sirali.map(k => {
     const hc = hesapla(k, k.secilenAyar || k.refAyar, altinKgUSD, mc);
     const adet = k.adet || 1;
     tGram += hc.mamulGram * adet;
@@ -4539,7 +4549,18 @@ function Atolye({ onSirketDegis }) {
     return () => window.removeEventListener("keydown", dinle);
   }, [showMM, editM, gorunen]);
 
-  const togKonf     = m => setKonfList(p => p.find(x => x.id === m.id) ? p.filter(x => x.id !== m.id) : [...p, m]);
+  // Konfirmasyon listesini KOLEKSİYONA göre gruplar — aynı koleksiyondaki modeller sonradan eklense de birbiriyle
+  // yan yana sıralanır. Grupların kendi sırası, o koleksiyonun listeye İLK girdiği ana göre belirlenir;
+  // aynı koleksiyon içindeki modellerin kendi ekleniş sırası korunur (stabil sıralama).
+  const siraliKonfListe = (liste) => {
+    const siraMap = new Map();
+    liste.forEach((m, i) => { const k = m.ki || m.kaynakKi || "_"; if (!siraMap.has(k)) siraMap.set(k, i); });
+    return [...liste].sort((a, b) => {
+      const ka = a.ki || a.kaynakKi || "_", kb = b.ki || b.kaynakKi || "_";
+      return siraMap.get(ka) - siraMap.get(kb);
+    });
+  };
+  const togKonf     = m => setKonfList(p => p.find(x => x.id === m.id) ? p.filter(x => x.id !== m.id) : siraliKonfListe([...p, m]));
   const konfAyarSec  = (id, ayar) => setKonfAyarlar(p => ({ ...p, [id]: ayar }));
   const konfRenkSec  = (id, renk) => setKonfRenkler(p => ({ ...p, [id]: renk }));
   const konfAdetSec  = (id, val) => setKonfAdet(p => ({ ...p, [id]: Math.max(1, Number(val)||1) }));
@@ -5190,7 +5211,7 @@ function Atolye({ onSirketDegis }) {
                   // Tüm filtrelenenleri konfirmasyona ekle
                   const eklenecekler = gorunen.filter(m => !konfList.find(k=>k.id===m.id));
                   if (eklenecekler.length === 0) return;
-                  setKonfList(prev => [...prev, ...eklenecekler]);
+                  setKonfList(prev => siraliKonfListe([...prev, ...eklenecekler]));
                   setSayfa("konfirmasyon");
                 }} style={{ ...BG, fontSize:9, padding:"5px 12px", marginLeft:"auto", whiteSpace:"nowrap" }}>
                   ✓ Tümünü Konfirmasyona Ekle ({gorunen.filter(m=>!konfList.find(k=>k.id===m.id)).length})
@@ -5835,7 +5856,7 @@ function Atolye({ onSirketDegis }) {
                                   benzersizModeller.push(k);
                                 }
                               });
-                              setKonfList(benzersizModeller);
+                              setKonfList(siraliKonfListe(benzersizModeller));
                               setKonfMus(s.musteri||"");
                               setKonfTeslim(s.teslimTarihi||"");
                               setKonfSipAciklama(s.aciklama||"");
@@ -5965,7 +5986,7 @@ function Atolye({ onSirketDegis }) {
                           </div>
                         )}
 
-                        {(s.kalemler||[]).map(k => {
+                        {siraliKonfListe(s.kalemler||[]).map(k => {
                           const mevcDurum = kalemDurumlar[k.id] || k.durum || "baslanmadi";
                           const dur = DURUMLAR.find(d => d.id===mevcDurum) || DURUMLAR[0];
                           const buyukFoto = k.kategori==="bileklik" || k.kategori==="kolye"; // bileklik/kolye — kare kırpma yerine üstte yanlamasına uzun şerit
