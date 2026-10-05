@@ -582,7 +582,7 @@ function buildKatalogHTML(kol, modeller, sutun, hedefAyar, kollar, gruplu, tamKa
     + ".kod{font-size:13px;color:#1a1a1a;font-weight:700;letter-spacing:.04em}"
     + ".gram{font-size:10px;font-weight:700;color:#333}"
     + ".ac{font-size:8px;color:#aaa;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}"
-    + ".set-parcalar{font-size:7px;color:#888;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}"
+    + ".set-parcalar{font-size:7.5px;font-weight:700;color:#444;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}"
     + ".ft{display:flex;justify-content:space-between;align-items:center;padding:5px 3px 0;border-top:1px solid #e0e0e0;flex-shrink:0}"
     + ".ft span{font-size:7px;color:#666;font-weight:700;letter-spacing:.08em;text-transform:uppercase}"
     + ".ft small{font-size:7px;color:#ccc}"
@@ -601,8 +601,10 @@ function buildKatalogHTML(kol, modeller, sutun, hedefAyar, kollar, gruplu, tamKa
         if (!parca) return { kod: refKod, gram: 0, bulunamadi: true };
         const g = gramDonustur(Number(parca.gram)||0, parca.refAyar||"14K", gosterAyar, Number(parca.tasGram)||0);
         const kat = (KATEGORILER.find(k => k.id === parca.kategori) || {}).l || parca.kategori || "";
-        return { kod: parca.kod, gram: g, kat, bulunamadi: false };
+        return { kod: parca.kod, gram: g, kat, katId: parca.kategori, bulunamadi: false };
       });
+      // Yüzük her zaman solda görünsün (pendant/kolye sağda) — kullanıcı tercihi
+      setParcaGramlari.sort((a, b) => (a.katId === "yuzuk" ? -1 : 0) - (b.katId === "yuzuk" ? -1 : 0));
     }
     const setToplamGram = isSet ? setParcaGramlari.reduce((s,p)=>s+(p.gram||0),0) : 0;
     const gosterGram = isSet
