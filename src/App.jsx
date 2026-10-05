@@ -547,7 +547,10 @@ function dogalSirala(a, b, ters) {
   return ka.localeCompare(kb, "tr") * (ters ? -1 : 1);
 }
 
-function buildKatalogHTML(kol, modeller, sutun, hedefAyar, kollar, gruplu) {
+function buildKatalogHTML(kol, modeller, sutun, hedefAyar, kollar, gruplu, tamKatalog) {
+  // tamKatalog: SET modellerinin parçalarını (setParcalari) bulmak için TÜM katalog — "modeller" parametresi
+  // sadece PDF'e seçilmiş/gösterilecek alt küme olabileceğinden, parça araması bu tam listede yapılır.
+  const aramaKatalog = (tamKatalog && tamKatalog.length) ? tamKatalog : modeller;
   const cols = sutun || 3;
   const perPage = cols === 4 ? 16 : 12;
 
@@ -579,6 +582,7 @@ function buildKatalogHTML(kol, modeller, sutun, hedefAyar, kollar, gruplu) {
     + ".kod{font-size:13px;color:#1a1a1a;font-weight:700;letter-spacing:.04em}"
     + ".gram{font-size:10px;font-weight:700;color:#333}"
     + ".ac{font-size:8px;color:#aaa;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}"
+    + ".set-parcalar{font-size:7px;color:#888;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}"
     + ".ft{display:flex;justify-content:space-between;align-items:center;padding:5px 3px 0;border-top:1px solid #e0e0e0;flex-shrink:0}"
     + ".ft span{font-size:7px;color:#666;font-weight:700;letter-spacing:.08em;text-transform:uppercase}"
     + ".ft small{font-size:7px;color:#ccc}"
@@ -588,9 +592,23 @@ function buildKatalogHTML(kol, modeller, sutun, hedefAyar, kollar, gruplu) {
 
   const kartHTML = (m) => {
     const gosterAyar = hedefAyar || m.refAyar || "14K";
-    const gosterGram = hedefAyar && hedefAyar !== m.refAyar
-      ? gramDonustur(Number(m.gram)||0, m.refAyar||"14K", hedefAyar, m.tasGram||0).toFixed(2)
-      : (m.gram || "—");
+    // SET modelleri kendi gram alanını taşımaz — gram, bağlı olduğu 2 üründen (setParcalari) otomatik gelir.
+    const isSet = m.kategori === "set" && Array.isArray(m.setParcalari) && m.setParcalari.length > 0;
+    let setParcaGramlari = [];
+    if (isSet) {
+      setParcaGramlari = m.setParcalari.map(refKod => {
+        const parca = (aramaKatalog || []).find(x => x.kod === refKod);
+        if (!parca) return { kod: refKod, gram: 0, bulunamadi: true };
+        const g = gramDonustur(Number(parca.gram)||0, parca.refAyar||"14K", gosterAyar, Number(parca.tasGram)||0);
+        return { kod: parca.kod, gram: g, bulunamadi: false };
+      });
+    }
+    const setToplamGram = isSet ? setParcaGramlari.reduce((s,p)=>s+(p.gram||0),0) : 0;
+    const gosterGram = isSet
+      ? (setToplamGram > 0 ? setToplamGram.toFixed(2) : "—")
+      : (hedefAyar && hedefAyar !== m.refAyar
+        ? gramDonustur(Number(m.gram)||0, m.refAyar||"14K", hedefAyar, m.tasGram||0).toFixed(2)
+        : (m.gram || "—"));
 
     const isBileklik = m.kategori === "bileklik";
     const isKolye = m.kategori === "kolye";
@@ -624,6 +642,11 @@ function buildKatalogHTML(kol, modeller, sutun, hedefAyar, kollar, gruplu) {
     h += "<span class='gram'>" + gosterGram + "gr · " + gosterAyar + "</span>";
     h += "</div>";
     if (m.ac) h += "<div class='ac'>" + m.ac + "</div>";
+    if (isSet) {
+      h += "<div class='set-parcalar'>" + setParcaGramlari.map(p =>
+        p.bulunamadi ? (p.kod + ": —") : (p.kod + ": " + p.gram.toFixed(2) + "gr")
+      ).join("  +  ") + "</div>";
+    }
     h += "</div></div>";
     return h;
   };
@@ -2365,7 +2388,7 @@ function VitrinModu({ kod, onizleme }) {
     // ANA SİSTEMİN KATALOG MOTORU — kapak, kategori bazlı kart boyutları, sayfa düzeni
     // (fiyat/kâr bilgisi zaten içermiyor — sadece kod + gram + ayar)
     const sahteKol = { ad: vitrinAd, on: "", id: aktifKol?.id || "" };
-    const html = buildKatalogHTML(sahteKol, liste, sutun || 3, aktifAyar, kollar, true); // gruplu=true → koleksiyon başlıkları
+    const html = buildKatalogHTML(sahteKol, liste, sutun || 3, aktifAyar, kollar, true, modeller); // gruplu=true → koleksiyon başlıkları
     downloadPDF(html, (vitrinAd || "katalog") + "-" + aktifAyar);
   };
 
@@ -2384,7 +2407,7 @@ function VitrinModu({ kod, onizleme }) {
     });
     if (liste.length === 0) { alert(ce("secili_kol_model_yok")); return; }
     const sahteKol = { ad: vitrinAd, on: "", id: "" };
-    const html = buildKatalogHTML(sahteKol, liste, sutun || 3, aktifAyar, kollar, true); // gruplu=true (sıra korunur + başlıklar)
+    const html = buildKatalogHTML(sahteKol, liste, sutun || 3, aktifAyar, kollar, true, modeller); // gruplu=true (sıra korunur + başlıklar)
     downloadPDF(html, (vitrinAd || "katalog") + "-" + aktifAyar);
   };
 
@@ -9065,7 +9088,7 @@ function Atolye({ onSirketDegis }) {
         {/* PDF AL */}
         <button onClick={() => {
           if (katalogSiraliModeller.length === 0) { alert("Hiç model seçilmedi!"); return; }
-          downloadPDF(buildKatalogHTML(katalogKol, katalogSiraliModeller, katalogSutun, katalogAyar, kollar), katalogKol.ad+"-"+katalogAyar+"-katalog");
+          downloadPDF(buildKatalogHTML(katalogKol, katalogSiraliModeller, katalogSutun, katalogAyar, kollar, false, modeller), katalogKol.ad+"-"+katalogAyar+"-katalog");
           setKatalogSiralaModal(false);
         }} style={{ background:T.gold, border:"none", borderRadius:8, padding:"8px 0", color:T.bg2, fontSize:12, fontWeight:800, cursor:"pointer", width:"100%" }}>
           📄 PDF Al — {katalogSutun}'lü · {katalogAyar} · {katalogSiraliModeller.length} model
