@@ -717,11 +717,15 @@ function buildKatalogHTML(kol, modeller, sutun, hedefAyar, kollar, gruplu) {
 }
 
 
-function buildKonfHTML(siparis, altinKgUSD, mc, fiyatli) {
+function buildKonfHTML(siparis, altinKgUSD, mc, fiyatli, modeller) {
   // fiyatli=true  → Müşteri PDF: işçilik/fiyat VAR, taş detayı YOK
   // fiyatli=false → İç PDF:      işçilik/fiyat YOK, taş detayı VAR
   const hasGramUSD = altinKgUSD / 1000;
   let tGram = 0, tIscilik = 0, tIscilikHas = 0;
+  // Sipariş kalemi eklendiği ANDAKİ kategoriyi taşır (örn. sonradan "bileklik" olarak düzeltilmiş bir model
+  // hâlâ eski kategorisiyle görünebilir) — bu yüzden gösterim için KATALOGDAKİ GÜNCEL kategoriyi tercih ediyoruz.
+  const guncelKatMap = new Map();
+  (modeller || []).forEach(m => { if (m.kod) guncelKatMap.set(m.kod, m.kategori); });
   const rows = (siparis.kalemler || []).map(k => {
     const hc = hesapla(k, k.secilenAyar || k.refAyar, altinKgUSD, mc);
     const adet = k.adet || 1;
@@ -735,7 +739,8 @@ function buildKonfHTML(siparis, altinKgUSD, mc, fiyatli) {
       : iscilikTop / (hc.hasGramUSD || 1);
     tIscilik += iscilikTop;
     tIscilikHas += iscilikTopHas;
-    return { ...k, hc, adet, iscilikTop, iscilikTopHas, isMilyem };
+    const guncelKategori = (k.kod && guncelKatMap.has(k.kod)) ? guncelKatMap.get(k.kod) : k.kategori;
+    return { ...k, hc, adet, iscilikTop, iscilikTopHas, isMilyem, kategori: guncelKategori };
   });
   const tAdet = rows.reduce((s,r)=>s+r.adet,0);
   const sipNo = "SIP-" + new Date(siparis.tarih).getFullYear() + "-" + String(siparis.tarih).slice(-5);
@@ -932,7 +937,8 @@ function buildKonfHTML(siparis, altinKgUSD, mc, fiyatli) {
     }
 
     const kolonSayisi = fiyatli ? 9 : 7;
-    const bileklikMi = String(r.kategori||"").trim().toLowerCase() === "bileklik";
+    const _katTemiz = String(r.kategori||"").trim().toLowerCase();
+    const bileklikMi = _katTemiz === "bileklik" || _katTemiz === "kolye";
 
     if (bileklikMi) {
       // BİLEKLİK — kare kırpma yerine, fotoğrafı tüm satır genişliğinde YANLAMASINA (uzun şerit) gösterir;
@@ -1811,27 +1817,78 @@ function SifreDegistir({ T }) {
   const [yeniSifre,  setYeniSifre]  = useState("");
   const [yeniSifre2, setYeniSifre2] = useState("");
   const [mesaj,      setMesaj]      = useState(null);
-  const kaydet = () => {
+  const [adim,       setAdim]       = useState("form"); // form → kod_gonderiliyor → kod_bekleniyor
+  const [onayKodu,   setOnayKodu]   = useState("");
+  const [kodToken,   setKodToken]   = useState(null);
+  const [gonderiliyor, setGonderiliyor] = useState(false);
+  const [dogrulaniyor, setDogrulaniyor] = useState(false);
+
+  // 1. ADIM — mevcut şifre + yeni şifre kontrolleri geçerse, e-postaya 6 haneli kod gönder
+  const kodGonder = async () => {
     const aktif = localStorage.getItem("atolye_sifre") || "19671967*Mm";
     if (eskiSifre !== aktif) { setMesaj({ok:false,txt:"Mevcut şifre yanlış!"}); return; }
     if (yeniSifre.length < 6) { setMesaj({ok:false,txt:"En az 6 karakter olmalı!"}); return; }
     if (yeniSifre !== yeniSifre2) { setMesaj({ok:false,txt:"Şifreler eşleşmiyor!"}); return; }
-    localStorage.setItem("atolye_sifre", yeniSifre);
-    try { localStorage.removeItem("atolye_oturum"); } catch {} // şifre değişti, oturum sıfırlansın
-    setEskiSifre(""); setYeniSifre(""); setYeniSifre2("");
-    setMesaj({ok:true,txt:"Şifre değiştirildi!"});
-    setTimeout(()=>setMesaj(null), 3000);
+    setMesaj(null); setGonderiliyor(true);
+    try {
+      const r = await fetch("/api/sifre-kod-gonder", { method:"POST" });
+      const j = await r.json();
+      if (!j.basarili) { setMesaj({ok:false,txt:j.hata||"Kod gönderilemedi"}); setGonderiliyor(false); return; }
+      setKodToken(j.token);
+      setAdim("kod_bekleniyor");
+      setMesaj({ok:true,txt:"Kayıtlı e-postanıza 6 haneli bir kod gönderildi."});
+    } catch (e) {
+      setMesaj({ok:false,txt:"Kod gönderilemedi: "+e.message});
+    }
+    setGonderiliyor(false);
   };
+
+  // 2. ADIM — kullanıcı e-postadaki kodu girer, sunucu doğrular, ancak ONDAN SONRA şifre kaydedilir
+  const kodDogrulaVeKaydet = async () => {
+    if (!onayKodu.trim()) { setMesaj({ok:false,txt:"Kodu girin"}); return; }
+    setMesaj(null); setDogrulaniyor(true);
+    try {
+      const r = await fetch("/api/sifre-kod-dogrula", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ token: kodToken, kod: onayKodu.trim() }) });
+      const j = await r.json();
+      if (!j.basarili) { setMesaj({ok:false,txt:j.hata||"Kod doğrulanamadı"}); setDogrulaniyor(false); return; }
+      localStorage.setItem("atolye_sifre", yeniSifre);
+      try { localStorage.removeItem("atolye_oturum"); } catch {} // şifre değişti, oturum sıfırlansın
+      setEskiSifre(""); setYeniSifre(""); setYeniSifre2(""); setOnayKodu(""); setKodToken(null);
+      setAdim("form");
+      setMesaj({ok:true,txt:"Şifre değiştirildi!"});
+      setTimeout(()=>setMesaj(null), 4000);
+    } catch (e) {
+      setMesaj({ok:false,txt:"Doğrulama hatası: "+e.message});
+    }
+    setDogrulaniyor(false);
+  };
+
+  const vazgec = () => { setAdim("form"); setOnayKodu(""); setKodToken(null); setMesaj(null); };
+
   return (
     <div style={{ background:"rgba(232,90,79,0.06)", border:"1px solid rgba(232,90,79,0.18)", borderRadius:12, padding:"14px 16px", marginBottom:14 }}>
-      <div style={{ fontSize:10, fontWeight:700, color:"#e85a4f", marginBottom:12 }}>🔒 ŞİFRE DEĞİŞTİR</div>
-      <div style={{ display:"flex", flexDirection:"column", gap:8, maxWidth:320 }}>
-        <input type="password" value={eskiSifre}  onChange={e=>setEskiSifre(e.target.value)}  placeholder="Mevcut şifre"      style={IS2}/>
-        <input type="password" value={yeniSifre}  onChange={e=>setYeniSifre(e.target.value)}  placeholder="Yeni şifre"         style={IS2}/>
-        <input type="password" value={yeniSifre2} onChange={e=>setYeniSifre2(e.target.value)} placeholder="Yeni şifre (tekrar)" style={IS2}/>
-        {mesaj && <div style={{ fontSize:9, color:mesaj.ok?"#6abf69":"#e85a4f", fontWeight:700 }}>{mesaj.txt}</div>}
-        <button onClick={kaydet} style={{ background:"rgba(var(--vurgu-rgb),0.16)", border:"1px solid rgba(var(--vurgu-rgb),0.32)", borderRadius:7, padding:"7px 14px", color:tema.text, fontSize:10, fontWeight:700, cursor:"pointer" }}>Şifreyi Değiştir</button>
-      </div>
+      <div style={{ fontSize:10, fontWeight:700, color:"#e85a4f", marginBottom:12 }}>🔒 ŞİFRE DEĞİŞTİR <span style={{ color:tema.sub, fontWeight:600 }}>— e-posta onayı gerekir</span></div>
+      {adim === "form" && (
+        <div style={{ display:"flex", flexDirection:"column", gap:8, maxWidth:320 }}>
+          <input type="password" value={eskiSifre}  onChange={e=>setEskiSifre(e.target.value)}  placeholder="Mevcut şifre"      style={IS2}/>
+          <input type="password" value={yeniSifre}  onChange={e=>setYeniSifre(e.target.value)}  placeholder="Yeni şifre"         style={IS2}/>
+          <input type="password" value={yeniSifre2} onChange={e=>setYeniSifre2(e.target.value)} placeholder="Yeni şifre (tekrar)" style={IS2}/>
+          {mesaj && <div style={{ fontSize:9, color:mesaj.ok?"#6abf69":"#e85a4f", fontWeight:700 }}>{mesaj.txt}</div>}
+          <button onClick={kodGonder} disabled={gonderiliyor} style={{ background:"rgba(var(--vurgu-rgb),0.16)", border:"1px solid rgba(var(--vurgu-rgb),0.32)", borderRadius:7, padding:"7px 14px", color:tema.text, fontSize:10, fontWeight:700, cursor: gonderiliyor?"wait":"pointer", opacity: gonderiliyor?0.6:1 }}>{gonderiliyor ? "Kod gönderiliyor..." : "Devam Et — E-postama Kod Gönder"}</button>
+        </div>
+      )}
+      {adim === "kod_bekleniyor" && (
+        <div style={{ display:"flex", flexDirection:"column", gap:8, maxWidth:320 }}>
+          <div style={{ fontSize:10, color:tema.sub }}>Kayıtlı e-postanıza gönderilen 6 haneli kodu girin.</div>
+          <input type="text" inputMode="numeric" maxLength={6} value={onayKodu} onChange={e=>setOnayKodu(e.target.value.replace(/\D/g,""))} placeholder="••••••" style={{ ...IS2, letterSpacing:"0.3em", fontSize:16, fontWeight:700, textAlign:"center" }}/>
+          {mesaj && <div style={{ fontSize:9, color:mesaj.ok?"#6abf69":"#e85a4f", fontWeight:700 }}>{mesaj.txt}</div>}
+          <div style={{ display:"flex", gap:8 }}>
+            <button onClick={kodDogrulaVeKaydet} disabled={dogrulaniyor} style={{ flex:1, background:"rgba(var(--vurgu-rgb),0.16)", border:"1px solid rgba(var(--vurgu-rgb),0.32)", borderRadius:7, padding:"7px 14px", color:tema.text, fontSize:10, fontWeight:700, cursor: dogrulaniyor?"wait":"pointer", opacity: dogrulaniyor?0.6:1 }}>{dogrulaniyor ? "Doğrulanıyor..." : "Kodu Onayla ve Şifreyi Değiştir"}</button>
+            <button onClick={vazgec} style={{ background:"rgba(255,255,255,0.04)", border:"1px solid "+tema.border, borderRadius:7, padding:"7px 14px", color:tema.sub, fontSize:10, fontWeight:700, cursor:"pointer" }}>Vazgeç</button>
+          </div>
+          <button onClick={kodGonder} disabled={gonderiliyor} style={{ background:"none", border:"none", color:tema.sub, fontSize:9, textDecoration:"underline", cursor:"pointer", padding:0, textAlign:"left" }}>{gonderiliyor ? "Gönderiliyor..." : "Kodu tekrar gönder"}</button>
+        </div>
+      )}
     </div>
   );
 }
@@ -5379,8 +5436,8 @@ function Atolye({ onSirketDegis }) {
                 <input type="date" value={konfTeslim} onChange={e=>setKonfTeslim(e.target.value)} style={{ ...IS, width:130, padding:"5px 8px", fontSize:11 }} />
                 <input value={konfSipAciklama} onChange={e=>setKonfSipAciklama(e.target.value)} placeholder="Sipariş açıklaması..." style={{ ...IS, width:180, padding:"5px 8px", fontSize:11 }} />
                 {konfList.length>0 && <>
-                  <button onClick={()=>downloadPDF(buildKonfHTML({musteri:konfMus,musKod:(musteriler[konfMus]||""),tarih:Date.now(),kalemler:konfKalemler},altinKgUSD,madenCarpan,true),(konfMus||"siparis")+"-musteri")} style={{ ...GH, fontSize:9, padding:"5px 9px" }}>PDF Fiyatli</button>
-                  <button onClick={()=>downloadPDF(buildKonfHTML({musteri:konfMus,musKod:(musteriler[konfMus]||""),tarih:Date.now(),kalemler:konfKalemler},altinKgUSD,madenCarpan,false),(konfMus||"siparis")+"-ic")} style={{ background:"rgba(232,90,79,0.08)", border:"1px solid rgba(232,90,79,0.2)", borderRadius:9, padding:"5px 9px", color:"#e85a4f", fontSize:9, fontWeight:700, cursor:"pointer" }}>PDF Fiyatsiz</button>
+                  <button onClick={()=>downloadPDF(buildKonfHTML({musteri:konfMus,musKod:(musteriler[konfMus]||""),tarih:Date.now(),kalemler:konfKalemler},altinKgUSD,madenCarpan,true,modeller),(konfMus||"siparis")+"-musteri")} style={{ ...GH, fontSize:9, padding:"5px 9px" }}>PDF Fiyatli</button>
+                  <button onClick={()=>downloadPDF(buildKonfHTML({musteri:konfMus,musKod:(musteriler[konfMus]||""),tarih:Date.now(),kalemler:konfKalemler},altinKgUSD,madenCarpan,false,modeller),(konfMus||"siparis")+"-ic")} style={{ background:"rgba(232,90,79,0.08)", border:"1px solid rgba(232,90,79,0.2)", borderRadius:9, padding:"5px 9px", color:"#e85a4f", fontSize:9, fontWeight:700, cursor:"pointer" }}>PDF Fiyatsiz</button>
                   <button onClick={konfKaydet} style={{ ...BG, padding:"6px 12px", fontSize:10 }}>Kaydet</button>
                 </>}
               </div>
@@ -5455,10 +5512,21 @@ function Atolye({ onSirketDegis }) {
                     const renkRenk = renk==="Rose"?"#e8833a":renk==="Beyaz"?"#aaa":"var(--vurgu)";
                     const fiyatDegisti = fiyatOverride !== undefined;
                     const hafizaVarMi = musHafiza && !fiyatOverride;
+                    const buyukFoto = m.kategori==="bileklik" || m.kategori==="kolye"; // bileklik/kolye — kare kırpma yerine üstte yanlamasına uzun şerit
                     return (
-                      <div key={m.id} style={{ display:"grid", gridTemplateColumns:"120px 100px 1fr 160px 100px 60px 70px 50px", gap:0, padding:"8px 10px", borderBottom: idx < konfList.length-1 ? "1px solid rgba(var(--vurgu-rgb),0.06)" : "none", alignItems:"start" }}>
-                        {/* Foto */}
-                        <div className="model-foto-wrap" style={{ width:116, height:116, borderRadius:8, overflow:"hidden", flexShrink:0, background:"rgba(0,0,0,0.2)" }}>{m.foto ? <img src={m.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"cover", objectPosition:"center center", display:"block" }}/> : <div style={{ width:"100%", height:"100%", background:"rgba(var(--vurgu-rgb),0.08)", display:"flex", alignItems:"center", justifyContent:"center", color:"rgba(var(--vurgu-rgb),0.3)", fontSize:20 }}>-</div>}</div>
+                      <div key={m.id} style={{ borderBottom: idx < konfList.length-1 ? "1px solid rgba(var(--vurgu-rgb),0.06)" : "none" }}>
+                      {buyukFoto && m.foto && (
+                        <div style={{ padding:"8px 10px 0" }}>
+                          <div className="model-foto-wrap" style={{ width:"100%", height:100, borderRadius:8, overflow:"hidden", background:"rgba(0,0,0,0.2)" }}>
+                            <img src={m.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"cover", objectPosition:"center center", display:"block" }}/>
+                          </div>
+                        </div>
+                      )}
+                      <div style={{ display:"grid", gridTemplateColumns:"120px 100px 1fr 160px 100px 60px 70px 50px", gap:0, padding:"8px 10px", alignItems:"start" }}>
+                        {/* Foto — bileklik/kolyede üstte zaten geniş gösterildiği için burada küçük hali atlanır */}
+                        {buyukFoto ? <div/> : (
+                          <div className="model-foto-wrap" style={{ width:116, height:116, borderRadius:8, overflow:"hidden", flexShrink:0, background:"rgba(0,0,0,0.2)" }}>{m.foto ? <img src={m.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"cover", objectPosition:"center center", display:"block" }}/> : <div style={{ width:"100%", height:"100%", background:"rgba(var(--vurgu-rgb),0.08)", display:"flex", alignItems:"center", justifyContent:"center", color:"rgba(var(--vurgu-rgb),0.3)", fontSize:20 }}>-</div>}</div>
+                        )}
                         {/* Kod + fiyat hafızası */}
                         <div style={{ paddingTop:4 }}>
                           <div style={{ fontSize:11, fontWeight:800, color:GOLD }}>{m.kod||"—"}</div>
@@ -5592,6 +5660,7 @@ function Atolye({ onSirketDegis }) {
                         <div style={{ textAlign:"center" }}>
                           <button onClick={()=>togKonf(m)} style={{ background:"rgba(232,90,79,0.08)", border:"1px solid rgba(232,90,79,0.15)", borderRadius:6, padding:"3px 8px", color:"#e85a4f", fontSize:9, cursor:"pointer" }}>X</button>
                         </div>
+                      </div>
                       </div>
                     );
                   })}
@@ -5753,8 +5822,8 @@ function Atolye({ onSirketDegis }) {
                                 </div>
                               );
                             })()}
-                            <button onClick={()=>downloadPDF(buildKonfHTML(s,s.altinKgUSD||altinKgUSD,s.mc||madenCarpan,true),(s.musteri||"siparis")+"-fiyatli")} style={{ ...GH, fontSize:8, padding:"3px 7px" }}>Fiyatlı</button>
-                            <button onClick={()=>downloadPDF(buildKonfHTML(s,s.altinKgUSD||altinKgUSD,s.mc||madenCarpan,false),(s.musteri||"siparis")+"-fiyatsiz")} style={{ background:"rgba(232,90,79,0.08)", border:"1px solid rgba(232,90,79,0.2)", borderRadius:9, padding:"3px 7px", color:"#e85a4f", fontSize:8, fontWeight:700, cursor:"pointer" }}>Fiyatsız</button>
+                            <button onClick={()=>downloadPDF(buildKonfHTML(s,s.altinKgUSD||altinKgUSD,s.mc||madenCarpan,true,modeller),(s.musteri||"siparis")+"-fiyatli")} style={{ ...GH, fontSize:8, padding:"3px 7px" }}>Fiyatlı</button>
+                            <button onClick={()=>downloadPDF(buildKonfHTML(s,s.altinKgUSD||altinKgUSD,s.mc||madenCarpan,false,modeller),(s.musteri||"siparis")+"-fiyatsiz")} style={{ background:"rgba(232,90,79,0.08)", border:"1px solid rgba(232,90,79,0.2)", borderRadius:9, padding:"3px 7px", color:"#e85a4f", fontSize:8, fontWeight:700, cursor:"pointer" }}>Fiyatsız</button>
                             <button onClick={()=>{
                               if (!window.confirm("Sipariş silinip konfirmasyona geri alınacak. Emin misiniz?")) return;
                               // Kalemlerden benzersiz modelleri konfirmasyona al
@@ -5899,9 +5968,18 @@ function Atolye({ onSirketDegis }) {
                         {(s.kalemler||[]).map(k => {
                           const mevcDurum = kalemDurumlar[k.id] || k.durum || "baslanmadi";
                           const dur = DURUMLAR.find(d => d.id===mevcDurum) || DURUMLAR[0];
+                          const buyukFoto = k.kategori==="bileklik" || k.kategori==="kolye"; // bileklik/kolye — kare kırpma yerine üstte yanlamasına uzun şerit
                           return (
-                            <div key={k.id} style={{ display:"flex", alignItems:"center", gap:8, padding:"6px 0", borderBottom:"1px solid rgba(var(--vurgu-rgb),0.04)" }}>
-                              <div className="model-foto-wrap" style={{ width:120, height:120, borderRadius:8, overflow:"hidden", flexShrink:0, background:"rgba(0,0,0,0.2)" }}>{k.foto ? <img src={k.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"cover", objectPosition:"center center", display:"block" }}/> : <div style={{ width:"100%", height:"100%", background:"rgba(var(--vurgu-rgb),0.06)" }}/>}</div>
+                            <div key={k.id} style={{ padding:"6px 0", borderBottom:"1px solid rgba(var(--vurgu-rgb),0.04)" }}>
+                            {buyukFoto && k.foto && (
+                              <div className="model-foto-wrap" style={{ width:"100%", height:90, borderRadius:8, overflow:"hidden", marginBottom:6, background:"rgba(0,0,0,0.2)" }}>
+                                <img src={k.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"cover", objectPosition:"center center", display:"block" }}/>
+                              </div>
+                            )}
+                            <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                              {!buyukFoto && (
+                                <div className="model-foto-wrap" style={{ width:120, height:120, borderRadius:8, overflow:"hidden", flexShrink:0, background:"rgba(0,0,0,0.2)" }}>{k.foto ? <img src={k.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"cover", objectPosition:"center center", display:"block" }}/> : <div style={{ width:"100%", height:"100%", background:"rgba(var(--vurgu-rgb),0.06)" }}/>}</div>
+                              )}
                               <div style={{ flex:1, minWidth:0 }}>
                                 <div style={{ fontSize:10, fontWeight:700, color:"var(--goldtext)" }}>
                                   <span style={{ color:GOLD, marginRight:4 }}>{k.kod||""}</span>{k.ad}
@@ -5946,6 +6024,7 @@ function Atolye({ onSirketDegis }) {
                                   );
                                 })()}
                               </div>
+                            </div>
                             </div>
                           );
                         })}
