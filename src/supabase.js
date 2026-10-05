@@ -93,23 +93,45 @@ export async function bugunYedekVarMi(onek) {
 // Tüm modelleri tablodan oku (sayfalama ile, 1000'er) 
 export async function tabloModelleriOku(onek) {
   try {
-    // Önce toplam sayıyı öğren (doğrulama için)
+    // Önce toplam sayıyı öğren (doğrulama için + sayfaları paralel çekmek için)
     const beklenen = await tabloModelSayisi(onek)
-    const hepsi = []
-    let bas = 0
     const ADIM = 1000
-    for (let tur = 0; tur < 100; tur++) { // max 100k güvenlik
-      const { data, error } = await supabase.from('modeller')
-        .select('veri')
-        .eq('onek', onek)
-        .order('id', { ascending: true })
-        .range(bas, bas + ADIM - 1)
-      if (error) throw new Error('Model okuma: ' + error.message)
-      if (!data || data.length === 0) break
-      data.forEach(r => { if (r.veri) hepsi.push(r.veri) })
-      if (data.length < ADIM) break
-      bas += ADIM
+    const hepsi = []
+
+    if (beklenen > 0) {
+      // Toplam sayı biliniyor — tüm sayfaları TEK SEFERDE paralel çek (sırayla beklemek yerine)
+      const sayfaSayisi = Math.ceil(beklenen / ADIM)
+      const sayfalar = await Promise.all(
+        Array.from({ length: sayfaSayisi }, (_, i) => {
+          const bas = i * ADIM
+          return supabase.from('modeller')
+            .select('veri')
+            .eq('onek', onek)
+            .order('id', { ascending: true })
+            .range(bas, bas + ADIM - 1)
+        })
+      )
+      for (const { data, error } of sayfalar) {
+        if (error) throw new Error('Model okuma: ' + error.message)
+        if (data) data.forEach(r => { if (r.veri) hepsi.push(r.veri) })
+      }
+    } else {
+      // Sayı öğrenilemedi (beklenen <= 0) — güvenli sıralı okumaya düş
+      let bas = 0
+      for (let tur = 0; tur < 100; tur++) { // max 100k güvenlik
+        const { data, error } = await supabase.from('modeller')
+          .select('veri')
+          .eq('onek', onek)
+          .order('id', { ascending: true })
+          .range(bas, bas + ADIM - 1)
+        if (error) throw new Error('Model okuma: ' + error.message)
+        if (!data || data.length === 0) break
+        data.forEach(r => { if (r.veri) hepsi.push(r.veri) })
+        if (data.length < ADIM) break
+        bas += ADIM
+      }
     }
+
     // DOĞRULAMA: okunan sayı beklenenle uyuşmuyorsa hata fırlat (eksik veri döndürme!)
     if (beklenen > 0 && hepsi.length < beklenen) {
       throw new Error('Eksik okuma: ' + hepsi.length + '/' + beklenen + ' — tekrar denenecek')
