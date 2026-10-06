@@ -5297,8 +5297,9 @@ function Atolye({ onSirketDegis }) {
                         <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
                           <span style={{ fontSize:10, color:T.sub, fontWeight:500 }}>{km.length} model</span>
                           {altinKgUSD > 0 && km.length > 0 && (() => {
-                            const topGram = km.reduce((s,m) => s + (Number(m.gram)||0), 0);
-                            const topKar  = km.reduce((s,m) => { const h = hesapla(m, m.refAyar, altinKgUSD, madenCarpan); return s + h.karHas; }, 0);
+                            // Ortalama ürün gramı — her modelin gramı 14K'ya çevrilip ortalaması alınır (gramı olmayan set vb. hariç)
+                            const gramlar14 = km.filter(m => Number(m.gram) > 0).map(m => gramDonustur(Number(m.gram), m.refAyar||"14K", "14K", Number(m.tasGram)||0));
+                            const ortGram14 = gramlar14.length > 0 ? gramlar14.reduce((s,x)=>s+x,0)/gramlar14.length : 0;
                             const milyemler = km.map(m => {
                               const h = hesapla(m, m.refAyar, altinKgUSD, madenCarpan);
                               return h.mamulGram > 0 ? h.karHas / h.mamulGram : 0;
@@ -5308,9 +5309,10 @@ function Atolye({ onSirketDegis }) {
                             const maxMly = milyemler.length > 0 ? Math.max(...milyemler) : 0;
                             return (
                               <div style={{ display:"flex", flexDirection:"column", gap:3 }}>
-                                <div style={{ display:"flex", gap:8 }}>
-                                  <span style={{ fontSize:9, color:"#5b9bd5", fontWeight:600 }}>{fN(topGram,1)} gr</span>
-                                  <span style={{ fontSize:9, color:"#6abf69", fontWeight:600 }}>{fN(topKar,3)} has kar</span>
+                                <div style={{ display:"flex", gap:4, alignItems:"center" }}>
+                                  <span style={{ fontSize:8, color:T.dim }}>Ort. ürün gramı:</span>
+                                  <span style={{ fontSize:10, color:"#5b9bd5", fontWeight:800 }}>{fN(ortGram14,2)} gr</span>
+                                  <span style={{ fontSize:7, color:T.dim }}>(14K)</span>
                                 </div>
                                 <div style={{ display:"flex", gap:4, alignItems:"center" }}>
                                   <span style={{ fontSize:8, color:T.dim }}>Ort. karlılık:</span>
