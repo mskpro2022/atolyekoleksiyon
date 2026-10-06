@@ -300,6 +300,20 @@ function karKoruyanFiyat(m, aktifAyar, altinKgUSD, varsayilanMly) {
   };
 }
 
+// ═══ AYAR KARŞILAŞTIRMA — aynı ürün 10K / 14K / 18K'da (hem model formunda hem ürün kartında kullanılır) ═══
+// Taş gramı sabit kalır; sadece maden gramı ayarın yoğunluğuyla ölçeklenir. Kâr HAS cinsinden 14K'ya göre karşılaştırılır.
+function ayarKarsilastir(m, altinKgUSD, mc, ayarlar) {
+  const tl = Number(m.tasGram) || 0;
+  const rows = (ayarlar || ["10K", "14K", "18K"]).map(ay => {
+    const h = hesapla(m, ay, altinKgUSD, mc);
+    const maden = Math.max(0, h.mamulGram - tl);
+    return { ay, h, maden, tl, adetMaden: maden > 0 ? 1000 / maden : 0, adetMamul: h.mamulGram > 0 ? 1000 / h.mamulGram : 0 };
+  });
+  const ref = rows.find(r => r.ay === "14K");
+  rows.forEach(r => { r.fark = ref ? r.h.karHas - ref.h.karHas : 0; r.kayip = r.fark < -0.0005; });
+  return rows;
+}
+
 // ═══ ŞİRKET (MULTI-COMPANY) ═══
 // Aktif şirketin Supabase anahtar öneki. MSK = "" (mevcut veriler korunur), BSP = "bsp2_".
 // Şirket bağımsız anahtarlar (önek almayan): şifre, ayarlar gibi global olanlar burada listelenir.
@@ -5529,6 +5543,26 @@ function Atolye({ onSirketDegis }) {
                             );
                           })}
                         </div>
+                      ) : h && (altinKgUSD>0 && m.gram>0 && m.refAyar!=="925") ? (
+                        <div style={{ background:T.header, border:"1px solid "+T.border, borderRadius:6, padding:"4px 6px", marginTop:2 }}>
+                          <div style={{ display:"grid", gridTemplateColumns:"22px 1.1fr .8fr .8fr .8fr 1.3fr 1.1fr", gap:"1px 3px", alignItems:"center" }}>
+                            {["AYAR","GR","TAŞ","İŞÇ","MAL","KÂR HAS","MLY/GR"].map((b,bi) => <div key={b} style={{ fontSize:5, color:T.dim, fontWeight:700, textAlign: bi===0?"left":"right" }}>{b}</div>)}
+                            {ayarKarsilastir(m, altinKgUSD, madenCarpan).map(r => {
+                              const renk = r.kayip ? "#e85a4f" : "#6abf69";
+                              return (
+                                <Fragment key={r.ay}>
+                                  <div style={{ fontSize:8, fontWeight:800, color:GOLD, opacity: r.ay===m.refAyar?1:0.85 }}>{r.ay}</div>
+                                  <div title={"Maden "+fN(r.maden,3)+" gr · taş "+fN(r.tl,3)+" · toplam "+fN(r.h.mamulGram,3)+" gr"} style={{ fontSize:7, color:T.text, textAlign:"right", lineHeight:1.15 }}>{fN(r.h.mamulGram,2)}<div style={{ fontSize:5, color:T.dim }} title="1 kg maden = adet (taşsız maden gramına göre)">{Math.round(r.adetMaden)}/kg</div></div>
+                                  <div style={{ fontSize:7, color:"#5b9bd5", textAlign:"right" }}>{fN(r.h.tasHas,3)}</div>
+                                  <div style={{ fontSize:7, color:"#e8833a", textAlign:"right" }}>{fN(r.h.iscilikHas,3)}</div>
+                                  <div style={{ fontSize:7, color:"#e85a4f", textAlign:"right" }}>{fN(r.h.topMaliyetHas,3)}</div>
+                                  <div style={{ fontSize:7, fontWeight:800, color:renk, textAlign:"right", lineHeight:1.15 }}>{fN(r.h.karHas,3)}{r.ay!=="14K" && <div style={{ fontSize:5, fontWeight:600 }}>({r.fark>=0?"+":""}{fN(r.fark,3)})</div>}</div>
+                                  <div style={{ fontSize:9, fontWeight:800, color: r.h.karUyari?"#e85a4f":"#6abf69", textAlign:"right" }}>{fN(r.h.karMly,3)}</div>
+                                </Fragment>
+                              );
+                            })}
+                          </div>
+                        </div>
                       ) : h && (
                         <div style={{ background:T.header, border:"1px solid "+T.border, borderRadius:6, padding:"4px 6px", marginTop:2 }}>
                           <div style={{ display:"flex", justifyContent:"space-between", fontSize:7, color:T.sub, marginBottom:1 }}>
@@ -10215,51 +10249,48 @@ function Atolye({ onSirketDegis }) {
           </Fl>
         </div>
 
-        {/* AYAR KARŞILAŞTIRMA — aynı ürün 10K / 14K / 18K'da: gram, taş has değeri, işçilik, kâr ve 1 kg'daki adet */}
-        {Number(fGram)>0 && (() => {
+        {/* AYAR KARŞILAŞTIRMA — ANA HESAP: aynı ürün 10K / 14K / 18K'da gram, taş, işçilik, maliyet, kâr ve 1 kg'daki adet */}
+        {Number(fGram)>0 && fRefAyar!=="925" && (() => {
           const tl = (() => { const t = fTaslar.reduce((acc,x)=>{const gr=tasGramHesapla(x.sekil,x.tur,isNaN(Number(x.boyut))?x.boyut:Number(x.boyut),Number(x.adet)||1,ozelTaslar,tasGramOverride);return acc+(gr>0?gr:(Number(x.gram)||0));},0); return (fTaslar.length>0&&t>0)?t:(Number(fTasGram)||0); })();
           const mf = { gram:Number(fGram), refAyar:fRefAyar, tasGram:tl, madenCarpan:Number(fMadenC)||0, iscilikDolar:Number(fIscilikDolar)||0, iscilikBirim:fIscilikBirim, iscilikAyarlar:fIscilikAyarlar, ekMaliyet:Number(fEkMaliyet)||0 };
           const kar = altinKgUSD>0;
-          const satirlar = ["10K","14K","18K"].map(ay => {
-            const h = hesapla(mf, ay, altinKgUSD, madenCarpan);
-            const maden = Math.max(0, h.mamulGram - tl);
-            return { ay, h, adetMaden: maden>0 ? 1000/maden : 0, adetMamul: h.mamulGram>0 ? 1000/h.mamulGram : 0 };
-          });
-          const ref = satirlar.find(r => r.ay==="14K");
-          const kol = kar ? "34px 1fr 1fr 1fr 1.1fr 1.2fr" : "34px 1fr 1fr 1.2fr";
+          const satirlar = ayarKarsilastir(mf, altinKgUSD, madenCarpan);
+          const kol = kar ? "34px 1.35fr .8fr .9fr .9fr 1.25fr .95fr 1fr" : "34px 1.3fr 1.2fr";
           const hucre = { fontSize:9, textAlign:"right" };
+          const bas = { ...hucre, fontSize:7, color:"#665d4a", fontWeight:700 };
           return (
-            <div style={{ background:"rgba(91,155,213,0.04)", border:"1px solid rgba(91,155,213,0.15)", borderRadius:10, padding:"10px 12px", marginBottom:10 }}>
-              <div style={{ fontSize:9, fontWeight:700, color:"#5b9bd5", marginBottom:2 }}>AYAR KARŞILAŞTIRMA</div>
-              <div style={{ fontSize:8, color:"#8a7d64", marginBottom:7 }}>Taş has değeri ayarla değişir (taş gr × ayar oranı: 10K 0.417 · 14K 0.585 · 18K 0.750). Kırmızı = 14K'ya göre kâr kaybı → o ayara ayrı işçilik girin.</div>
+            <div style={{ background:"rgba(91,155,213,0.05)", border:"1px solid rgba(91,155,213,0.22)", borderRadius:10, padding:"10px 12px", marginBottom:10 }}>
+              <div style={{ fontSize:10, fontWeight:800, color:"#5b9bd5", marginBottom:2 }}>HESAP · AYAR KARŞILAŞTIRMA (has gram cinsinden)</div>
+              <div style={{ fontSize:8, color:"#8a7d64", marginBottom:7 }}>Taş gramı sabit, maden gramı ayarla değişir; taş has değeri = taş gr × ayar oranı (10K 0.417 · 14K 0.585 · 18K 0.750). Kırmızı = 14K'ya göre kâr kaybı → o ayara ayrı işçilik girin.</div>
               <div style={{ display:"grid", gridTemplateColumns:kol, gap:"3px 6px", alignItems:"center" }}>
                 <div style={{ fontSize:7, color:"#665d4a", fontWeight:700 }}>AYAR</div>
-                <div style={{ ...hucre, fontSize:7, color:"#665d4a", fontWeight:700 }}>MADEN GR (TAŞSIZ)</div>
-                {kar && <div style={{ ...hucre, fontSize:7, color:"#665d4a", fontWeight:700 }}>TAŞ HAS</div>}
-                {kar && <div style={{ ...hucre, fontSize:7, color:"#665d4a", fontWeight:700 }}>İŞÇİLİK HAS</div>}
-                {kar && <div style={{ ...hucre, fontSize:7, color:"#665d4a", fontWeight:700 }}>KÂR HAS (14K'ya fark)</div>}
-                <div style={{ ...hucre, fontSize:7, color:"#665d4a", fontWeight:700 }}>1 KG'DA ADET</div>
-                {satirlar.map(r => {
-                  const fark = kar ? r.h.karHas - ref.h.karHas : 0;
-                  const kayip = kar && fark < -0.0005;
-                  return (
-                    <Fragment key={r.ay}>
-                      <div style={{ fontSize:10, fontWeight:800, color:GOLD }}>{r.ay}</div>
-                      <div style={{ ...hucre, color:T.text, lineHeight:1.25 }}><b>{fN(Math.max(0, r.h.mamulGram - tl),3)}</b> gr<div style={{ fontSize:7, color:"#8a7d64" }}>taş {fN(tl,3)} · toplam {fN(r.h.mamulGram,3)}</div></div>
-                      {kar && <div style={{ ...hucre, color:"#5b9bd5" }}>{fN(r.h.tasHas,3)}</div>}
-                      {kar && <div style={{ ...hucre, color:"#e8833a" }}>{fN(r.h.iscilikHas,3)}</div>}
-                      {kar && <div style={{ ...hucre, fontWeight:800, color: kayip?"#e85a4f":"#6abf69" }}>{fN(r.h.karHas,3)}{r.ay!=="14K" && <span style={{ fontWeight:600 }}> ({fark>=0?"+":""}{fN(fark,3)})</span>}</div>}
-                      <div style={{ ...hucre, color:T.text }} title={"Taşsız maden gramına göre: "+Math.round(r.adetMaden)+" adet · Taş dahil mamul gramına göre: "+Math.round(r.adetMamul)+" adet"}>{r.adetMaden>0 ? Math.round(r.adetMaden) : "—"} <span style={{ color:"#665d4a", fontSize:7 }}>({r.adetMamul>0 ? Math.round(r.adetMamul) : "—"})</span></div>
-                    </Fragment>
-                  );
-                })}
+                <div style={bas}>MADEN GR (TAŞSIZ)</div>
+                {kar && <div style={bas}>TAŞ HAS</div>}
+                {kar && <div style={bas}>İŞÇİLİK HAS</div>}
+                {kar && <div style={bas}>MALİYET HAS</div>}
+                {kar && <div style={bas}>KÂR HAS (14K'YA FARK)</div>}
+                {kar && <div style={bas}>NET MLY/GR</div>}
+                <div style={bas}>1 KG'DA ADET</div>
+                {satirlar.map(r => (
+                  <Fragment key={r.ay}>
+                    <div style={{ fontSize:10, fontWeight:800, color:GOLD }}>{r.ay}</div>
+                    <div style={{ ...hucre, color:T.text, lineHeight:1.25 }}><b>{fN(r.maden,3)}</b> gr<div style={{ fontSize:7, color:"#8a7d64" }}>taş {fN(r.tl,3)} · toplam {fN(r.h.mamulGram,3)}</div></div>
+                    {kar && <div style={{ ...hucre, color:"#5b9bd5" }}>{fN(r.h.tasHas,3)}</div>}
+                    {kar && <div style={{ ...hucre, color:"#e8833a" }}>{fN(r.h.iscilikHas,3)}</div>}
+                    {kar && <div style={{ ...hucre, color:"#e85a4f" }}>{fN(r.h.topMaliyetHas,3)}</div>}
+                    {kar && <div style={{ ...hucre, fontWeight:800, color: r.kayip?"#e85a4f":"#6abf69" }}>{fN(r.h.karHas,3)}{r.ay!=="14K" && <span style={{ fontWeight:600 }}> ({r.fark>=0?"+":""}{fN(r.fark,3)})</span>}</div>}
+                    {kar && <div style={{ ...hucre, color: r.h.karUyari?"#e85a4f":"#6abf69", fontWeight:700 }}>{fN(r.h.karMly,3)}</div>}
+                    <div style={{ ...hucre, color:T.text }} title={"Taşsız maden gramına göre: "+Math.round(r.adetMaden)+" adet · Taş dahil mamul gramına göre: "+Math.round(r.adetMamul)+" adet"}>{r.adetMaden>0 ? Math.round(r.adetMaden) : "—"} <span style={{ color:"#665d4a", fontSize:7 }}>({r.adetMamul>0 ? Math.round(r.adetMamul) : "—"})</span></div>
+                  </Fragment>
+                ))}
               </div>
-              <div style={{ fontSize:7, color:"#665d4a", marginTop:6 }}>1 kg'da adet = 1000 ÷ taşsız maden gramı (parantez: taş dahil mamul gramına göre). {!kar && "Kâr sütunları için altın fiyatını girin."}</div>
+              <div style={{ fontSize:7, color:"#665d4a", marginTop:6 }}>Maliyet = üretim maliyeti + ek maliyet. 1 kg'da adet = 1000 ÷ taşsız maden gramı (parantez: taş dahil mamul gramına göre). {!kar && "Kâr sütunları için altın fiyatını girin."}</div>
             </div>
           );
         })()}
 
-        {altinKgUSD>0 && Number(fGram)>0 && (
+        {/* Gümüş (925) için eski tek ayarlı hesap kutusu */}
+        {altinKgUSD>0 && Number(fGram)>0 && fRefAyar==="925" && (
           <OnizlemeBox m={{ gram:Number(fGram), refAyar:fRefAyar, tasGram: (() => { const tl = fTaslar.reduce((acc,t)=>{const gr=tasGramHesapla(t.sekil,t.tur,isNaN(Number(t.boyut))?t.boyut:Number(t.boyut),Number(t.adet)||1,ozelTaslar,tasGramOverride);return acc+(gr>0?gr:(Number(t.gram)||0));},0); return (fTaslar.length>0&&tl>0)?tl:(Number(fTasGram)||0); })(), madenCarpan:Number(fMadenC)||0, iscilikDolar:Number(fIscilikDolar)||0, iscilikBirim:fIscilikBirim, ekMaliyet:Number(fEkMaliyet)||0 }} altinKgUSD={altinKgUSD} mc={madenCarpan} />
         )}
 
