@@ -1,4 +1,4 @@
-import { supabase, dbLoad, dbSave, fotoYukleStorage, yedekKaydet, yedekListesi, yedekGetir, bugunYedekVarMi, tabloModelleriSenkron, tabloModelleriToplu, tabloModelSil, tabloSiparisleriSenkron, tabloSiparisleriToplu, tabloMusterileriYaz, akilliModelOku, akilliSiparisOku, akilliMusteriOku, islemKaydet, islemGecmisiGetir, realtimeBaslat, tabloKoleksiyonlariYaz, tabloKasaYaz, akilliKoleksiyonOku, akilliKasaOku, tabloKoleksiyonlariOku, tabloKasaOku, saglikDenetimi, ekranSunucuFarki, toptanciKaydet, toptancilariGetir, toptanciSil, vitrinGecmisiGetir, vitrinEnCokBakilan, vitrinOzetGetir, vitrinAnaliz, vitrinGetirGuvenli, siparisOlusturGuvenli, vitrinAktiviteKaydetGuvenli, vitrinSupheliCihazlar, radarTrendleriOku, radarKaynaklariOku, radarKanitlariOku, radarTumKanitlariOku, radarTrendGuncelle, radarTrendSil, radarManuelKanitEkle } from "./supabase.js";
+import { supabase, dbLoad, dbSave, fotoYukleStorage, yedekKaydet, yedekListesi, yedekGetir, bugunYedekVarMi, tabloModelleriSenkron, tabloModelleriToplu, tabloModelSil, tabloSiparisleriSenkron, tabloSiparisleriToplu, tabloMusterileriYaz, akilliModelOku, akilliSiparisOku, akilliMusteriOku, islemKaydet, islemGecmisiGetir, realtimeBaslat, tabloKoleksiyonlariYaz, tabloKasaYaz, akilliKoleksiyonOku, akilliKasaOku, tabloKoleksiyonlariOku, tabloKasaOku, saglikDenetimi, ekranSunucuFarki, toptanciKaydet, toptancilariGetir, toptanciSil, vitrinGecmisiGetir, vitrinEnCokBakilan, vitrinOzetGetir, vitrinAnaliz, vitrinGetirGuvenli, siparisOlusturGuvenli, vitrinAktiviteKaydetGuvenli, vitrinSupheliCihazlar, vitrinCevrimiciMusteriler, radarTrendleriOku, radarKaynaklariOku, radarKanitlariOku, radarTumKanitlariOku, radarTrendGuncelle, radarTrendSil, radarManuelKanitEkle } from "./supabase.js";
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 
 const uid = () => "x" + Date.now() + Math.random().toString(36).substr(2, 5);
@@ -522,6 +522,35 @@ function downloadPDF(html, filename) {
 }
 
 // Sıralama: SADECE koddaki rakam (sayısal)
+// Konfirmasyon / Sipariş kalem sıralaması — ortak (ekran + PDF aynı fonksiyonu kullanır)
+// mod: "koleksiyon" (varsayılan: koleksiyonlar gruplu, grup içi ekleniş sırası) | "koleksiyonKod" (gruplu, grup içi en yeni koddan eskiye)
+//      | "kodTers" (en yeni kod üstte) | "kod" (eskiden yeniye) | "gramAzalan" | "gramArtan"
+const KONF_SIRA_SECENEKLERI = [
+  { id: "koleksiyon",    l: "Koleksiyona göre (ekleniş sırası)" },
+  { id: "koleksiyonKod", l: "Koleksiyona göre · yeni kod → eski" },
+  { id: "kodTers",       l: "Kod: yeni → eski" },
+  { id: "kod",           l: "Kod: eski → yeni" },
+  { id: "gramAzalan",    l: "Gram: yüksek → düşük" },
+  { id: "gramArtan",     l: "Gram: düşük → yüksek" },
+];
+function konfSiralaListe(liste, mod, ayarFn) {
+  const arr = [...(liste || [])];
+  const kolId = m => m.ki || m.kaynakKi || "_";
+  const gramDeger = m => gramDonustur(Number(m.gram)||0, m.refAyar||"14K", (ayarFn ? ayarFn(m) : (m.secilenAyar||m.refAyar)) || "14K", Number(m.tasGram)||0);
+  if (mod === "kodTers") return arr.sort((a, b) => dogalSirala(a, b, true));
+  if (mod === "kod") return arr.sort((a, b) => dogalSirala(a, b, false));
+  if (mod === "gramAzalan") return arr.sort((a, b) => gramDeger(b) - gramDeger(a));
+  if (mod === "gramArtan") return arr.sort((a, b) => gramDeger(a) - gramDeger(b));
+  // koleksiyon grupları — grup sırası: koleksiyonun listeye ilk girdiği an
+  const siraMap = new Map();
+  arr.forEach((m, i) => { const k = kolId(m); if (!siraMap.has(k)) siraMap.set(k, i); });
+  return arr.sort((a, b) => {
+    const fark = siraMap.get(kolId(a)) - siraMap.get(kolId(b));
+    if (fark !== 0) return fark;
+    return mod === "koleksiyonKod" ? dogalSirala(a, b, true) : 0; // 0 → stabil, ekleniş sırası korunur
+  });
+}
+
 // Kodun harf ön ekini çıkarır ("ALT185" → "ALT", "01GS21" → "GS", "KDN003" → "KDN")
 function kodOnEk(kod) {
   if (!kod) return "—";
@@ -743,7 +772,7 @@ function buildKatalogHTML(kol, modeller, sutun, hedefAyar, kollar, gruplu, tamKa
 }
 
 
-function buildKonfHTML(siparis, altinKgUSD, mc, fiyatli, modeller) {
+function buildKonfHTML(siparis, altinKgUSD, mc, fiyatli, modeller, siraModu) {
   // fiyatli=true  → Müşteri PDF: işçilik/fiyat VAR, taş detayı YOK
   // fiyatli=false → İç PDF:      işçilik/fiyat YOK, taş detayı VAR
   const hasGramUSD = altinKgUSD / 1000;
@@ -755,12 +784,7 @@ function buildKonfHTML(siparis, altinKgUSD, mc, fiyatli, modeller) {
 
   // Kalemleri KOLEKSİYONA göre grupla — aynı koleksiyondaki modeller PDF'te yan yana çıksın
   // (eski siparişler, sonradan eklenen kalemler en altta kalmış olabilir; grup sırası ilk görülme anına göre).
-  const _siraMap = new Map();
-  (siparis.kalemler || []).forEach((k, i) => { const kk = k.ki || k.kaynakKi || "_"; if (!_siraMap.has(kk)) _siraMap.set(kk, i); });
-  const _sirali = [...(siparis.kalemler || [])].sort((a, b) => {
-    const ka = a.ki || a.kaynakKi || "_", kb = b.ki || b.kaynakKi || "_";
-    return _siraMap.get(ka) - _siraMap.get(kb);
-  });
+  const _sirali = konfSiralaListe(siparis.kalemler || [], siraModu || siparis.sira || "koleksiyon");
 
   const rows = _sirali.map(k => {
     const hc = hesapla(k, k.secilenAyar || k.refAyar, altinKgUSD, mc);
@@ -2300,6 +2324,22 @@ function VitrinModu({ kod, onizleme }) {
     return () => { clearInterval(iv); document.removeEventListener("visibilitychange", gorunur); };
   }, [durum, vitrinMusteri]);
 
+  // ═══ NABIZ (heartbeat) — müşteri vitrinde kaldığı sürece periyodik "hâlâ buradayım" sinyali ═══
+  // Admin tarafta "şu an sistemde" + "kaç dakikadır orada" hesaplamak için kullanılır (giris olayı tek seferlik).
+  useEffect(() => {
+    if (durum !== "hazir" || !vitrinMusteri || onizleme) return;
+    const NABIZ_ARALIK = 25000; // 25 sn
+    const nabizAt = () => {
+      if (document.hidden) return; // sekme arkadaysa müşteri orada sayılmasın
+      try { vitrinAktiviteKaydetGuvenli(vitrinMusteri.kod, vitrinMusteri.onek, "nabiz", null, null, null, vitrinCihazIdAl(), vitrinCihazEtiketiAl()); } catch {}
+    };
+    nabizAt(); // hemen bir tane at
+    const iv = setInterval(nabizAt, NABIZ_ARALIK);
+    const gorunur = () => { if (!document.hidden) nabizAt(); };
+    document.addEventListener("visibilitychange", gorunur); // sekmeye dönünce hemen nabız at
+    return () => { clearInterval(iv); document.removeEventListener("visibilitychange", gorunur); };
+  }, [durum, vitrinMusteri, onizleme]);
+
   // Modelin seçili ayara göre gramını hesapla
   const ayarliGram = (m) => {
     const g = gramDonustur(Number(m.gram) || 0, m.refAyar || "14K", aktifAyar, Number(m.tasGram) || 0);
@@ -3599,6 +3639,7 @@ function Atolye({ onSirketDegis }) {
   const [vitrinGecmis, setVitrinGecmis] = useState(null); // { musteriAd, kod, kayitlar, encok } — müşteri vitrin geçmişi modalı
   const [vitrinOzet, setVitrinOzet] = useState({}); // { MUSKOD: {giris, model, son} } — vitrin sayfasi ozeti
   const [vitrinSupheli, setVitrinSupheli] = useState({}); // { MUSKOD: [{bilgi, ilk, son}, ...] } — birden fazla cihazdan giren müşteriler (link başkasına gitmiş olabilir)
+  const [vitrinCevrimici, setVitrinCevrimici] = useState({}); // { MUSKOD: {dakika} } — şu an vitrinde olan (nabız sinyaliyle) müşteriler
   const [kolMusModal, setKolMusModal] = useState(null); // koleksiyon id → hangi musteriler gorsun
   const [musKolModal, setMusKolModal] = useState(null); // musteri kodu → hangi koleksiyonlari gorsun
   const [vitrinAnalizVeri, setVitrinAnalizVeri] = useState(null); // Kesfet vitrin analizi
@@ -3630,6 +3671,8 @@ function Atolye({ onSirketDegis }) {
   const [konfRenkler, setKonfRenkler] = useState({});     // per-item renk
   const [konfAdet,    setKonfAdet]    = useState({});  // id -> adet
   const [konfNot,     setKonfNot]     = useState({});  // id -> not
+  const [konfSira, setKonfSira] = useState("koleksiyon"); // Konfirmasyon sıralama modu (bkz. KONF_SIRA_SECENEKLERI)
+  const [sipSira, setSipSira] = useState("koleksiyon");   // Sipariş geçmişi kalem sıralama modu (görünüm + PDF)
   const [konfTaslikYuklendi, setKonfTaslikYuklendi] = useState(false); // taslak geri yüklendi mi (ilk render'da erken kaydetmeyi önler)
 
   // Konfirmasyon taslağını sayfa açılışında geri yükle (yarım kalan sepet kaybolmasın)
@@ -4322,7 +4365,15 @@ function Atolye({ onSirketDegis }) {
   const vitrinOzetYukle = useCallback(() => {
     vitrinOzetGetir(AKTIF_SIRKET_ONEK).then(setVitrinOzet);
     vitrinSupheliCihazlar(AKTIF_SIRKET_ONEK).then(setVitrinSupheli);
+    vitrinCevrimiciMusteriler(AKTIF_SIRKET_ONEK).then(setVitrinCevrimici);
   }, []);
+
+  // "Şu an sistemde" rozetinin güncel kalması için Müşterilerim ekranındayken periyodik tazele
+  useEffect(() => {
+    if (sayfa !== "vitrin" || !loaded) return;
+    const iv = setInterval(() => { vitrinCevrimiciMusteriler(AKTIF_SIRKET_ONEK).then(setVitrinCevrimici); }, 20000);
+    return () => clearInterval(iv);
+  }, [sayfa, loaded]);
 
   useEffect(() => {
     if ((sayfa === "ayarlar" || sayfa === "vitrin") && loaded) {
@@ -4617,14 +4668,8 @@ function Atolye({ onSirketDegis }) {
   // Konfirmasyon listesini KOLEKSİYONA göre gruplar — aynı koleksiyondaki modeller sonradan eklense de birbiriyle
   // yan yana sıralanır. Grupların kendi sırası, o koleksiyonun listeye İLK girdiği ana göre belirlenir;
   // aynı koleksiyon içindeki modellerin kendi ekleniş sırası korunur (stabil sıralama).
-  const siraliKonfListe = (liste) => {
-    const siraMap = new Map();
-    liste.forEach((m, i) => { const k = m.ki || m.kaynakKi || "_"; if (!siraMap.has(k)) siraMap.set(k, i); });
-    return [...liste].sort((a, b) => {
-      const ka = a.ki || a.kaynakKi || "_", kb = b.ki || b.kaynakKi || "_";
-      return siraMap.get(ka) - siraMap.get(kb);
-    });
-  };
+  const siraliKonfListe = (liste, mod) => konfSiralaListe(liste, mod || konfSira, m => konfAyarlar[m.id] || konfAyar);
+  const konfSiraDegistir = (yeniMod) => { setKonfSira(yeniMod); setKonfList(p => konfSiralaListe(p, yeniMod, m => konfAyarlar[m.id] || konfAyar)); };
   const togKonf     = m => setKonfList(p => p.find(x => x.id === m.id) ? p.filter(x => x.id !== m.id) : siraliKonfListe([...p, m]));
   const konfAyarSec  = (id, ayar) => setKonfAyarlar(p => ({ ...p, [id]: ayar }));
   const konfRenkSec  = (id, renk) => setKonfRenkler(p => ({ ...p, [id]: renk }));
@@ -5044,13 +5089,20 @@ function Atolye({ onSirketDegis }) {
                       const url = window.location.origin + "?vitrin=" + kod;
                       const oz = vitrinOzet[kod] || null;
                       const supheliCihazlar = vitrinSupheli[kod] || null;
+                      const cevrimici = vitrinCevrimici[kod] || null;
                       return (
-                        <div key={kod} style={{ background:"rgba(0,0,0,0.15)", border:"1px solid "+(supheliCihazlar?"rgba(232,162,58,0.35)":T.border), borderRadius:9, padding:"10px 12px", display:"flex", alignItems:"center", gap:10, flexWrap:"wrap" }}>
+                        <div key={kod} style={{ background:"rgba(0,0,0,0.15)", border:"1px solid "+(cevrimici?"rgba(106,191,105,0.4)":supheliCihazlar?"rgba(232,162,58,0.35)":T.border), borderRadius:9, padding:"10px 12px", display:"flex", alignItems:"center", gap:10, flexWrap:"wrap" }}>
                           {/* Kod + isim */}
                           <div style={{ minWidth:150, flex:"1 1 180px" }}>
                             <div style={{ display:"flex", alignItems:"center", gap:7, flexWrap:"wrap" }}>
                               <span style={{ background:"rgba(255,255,255,0.06)", borderRadius:5, padding:"2px 7px", fontSize:9, fontWeight:800, color:T.sub }}>{kod}</span>
                               <span style={{ fontSize:13, fontWeight:700, color:T.text }}>{ad}</span>
+                              {cevrimici && (
+                                <span title={"Son sinyal az önce"} style={{ background:"rgba(106,191,105,0.14)", border:"1px solid rgba(106,191,105,0.4)", borderRadius:5, padding:"2px 7px", fontSize:9, fontWeight:800, color:"#6abf69", display:"flex", alignItems:"center", gap:4 }}>
+                                  <span style={{ width:6, height:6, borderRadius:"50%", background:"#6abf69", display:"inline-block", boxShadow:"0 0 0 2px rgba(106,191,105,0.25)" }}/>
+                                  Şu an vitrinde · {cevrimici.dakika < 1 ? "yeni girdi" : cevrimici.dakika + " dk"}
+                                </span>
+                              )}
                               {supheliCihazlar && (
                                 <span title={supheliCihazlar.map(c => c.bilgi + " — son giriş: " + new Date(c.son).toLocaleString("tr-TR",{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"})).join("\n")}
                                   style={{ background:"rgba(232,162,58,0.14)", border:"1px solid rgba(232,162,58,0.35)", borderRadius:5, padding:"2px 7px", fontSize:9, fontWeight:800, color:"#e8a23a", cursor:"help" }}>
