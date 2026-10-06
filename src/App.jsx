@@ -10237,60 +10237,88 @@ function Atolye({ onSirketDegis }) {
               </select>
               <input type="number" value={fIscilikDolar} onChange={e=>setFIscilikDolar(e.target.value)} placeholder={fIscilikBirim==="milyem"?"0.30":"2.75"} style={IS}/>
             </div>
-            {/* Ayar bazlı işçilik */}
-            <div style={{ marginTop:8, borderTop:"1px solid rgba(var(--vurgu-rgb),0.1)", paddingTop:8 }}>
-              <div style={{ fontSize:8, color:"#8a7d64", fontWeight:700, marginBottom:6 }}>AYAR BAZLI İŞÇİLİK (opsiyonel)</div>
-              {Object.entries(fIscilikAyarlar).map(([ayar, val]) => {
-                // Taşlı üründe düşük ayarda (10K) taş has değeri düşer → o ayarın kârını ve "14K kârını koruyan" işçiliği göster
-                const tlForm = (() => { const tl = fTaslar.reduce((acc,t)=>{const gr=tasGramHesapla(t.sekil,t.tur,isNaN(Number(t.boyut))?t.boyut:Number(t.boyut),Number(t.adet)||1,ozelTaslar,tasGramOverride);return acc+(gr>0?gr:(Number(t.gram)||0));},0); return (fTaslar.length>0&&tl>0)?tl:(Number(fTasGram)||0); })();
-                let karBilgi = null;
-                if (altinKgUSD>0 && Number(fGram)>0 && ayar!=="14K" && ayar!=="925") {
-                  const mf = { gram:Number(fGram), refAyar:fRefAyar, tasGram:tlForm, madenCarpan:Number(fMadenC)||0, iscilikDolar:Number(fIscilikDolar)||0, iscilikBirim:fIscilikBirim, iscilikAyarlar:fIscilikAyarlar, ekMaliyet:Number(fEkMaliyet)||0 };
-                  const hA = hesapla(mf, ayar, altinKgUSD, madenCarpan);
-                  const h14 = hesapla(mf, "14K", altinKgUSD, madenCarpan);
-                  const kk = karKoruyanFiyat(mf, ayar, altinKgUSD, madenCarpan);
-                  let oneri = null;
-                  if (kk && kk.farkli && hA.mamulGram>0 && kk.ekHas>0) {
-                    const gerekHas = hA.iscilikHas + kk.ekHas;
-                    const birim = val.birim || "dolar";
-                    const ham = birim==="milyem" ? gerekHas/hA.mamulGram : (gerekHas*hA.hasGramUSD)/hA.mamulGram;
-                    const k = birim==="milyem" ? 1000 : 100;
-                    oneri = { deger: Math.ceil(ham*k)/k, birim }; // yukarı yuvarla — 14K kârının altına düşmesin
-                  }
-                  karBilgi = { kar: hA.karHas, kar14: h14.karHas, tasli: tlForm>0, oneri }; // kâr HAS cinsinden karşılaştırılır (düşük ayarda gram azaldığı için mly/gr yanıltır)
+            {/* Ayar bazlı işçilik — 10K / 14K / 18K kutuları her zaman görünür; boş bırakılan kutu varsayılanı kullanır */}
+            {(() => {
+              const KUTU = ["10K","14K","18K"];
+              const stdMevcut = (ISCILIK_STANDART||{})["10K"];
+              const varsayilan = (ay) => {
+                if (ay==="10K" && stdMevcut && stdMevcut.dolar!==""&&stdMevcut.dolar!==undefined) return { dolar:String(stdMevcut.dolar), birim:stdMevcut.birim||"dolar", std:true };
+                return { dolar: fIscilikDolar!=="" ? String(fIscilikDolar) : (fIscilikBirim==="milyem"?"0.30":"2.75"), birim:fIscilikBirim, std:false };
+              };
+              const tlForm = (() => { const tl = fTaslar.reduce((acc,t)=>{const gr=tasGramHesapla(t.sekil,t.tur,isNaN(Number(t.boyut))?t.boyut:Number(t.boyut),Number(t.adet)||1,ozelTaslar,tasGramOverride);return acc+(gr>0?gr:(Number(t.gram)||0));},0); return (fTaslar.length>0&&tl>0)?tl:(Number(fTasGram)||0); })();
+              const kutuYaz = (ay, v) => setFIscilikAyarlar(p=>{ const y={...p}; if (v==="") { delete y[ay]; } else { y[ay]={ dolar:v, birim:(p[ay]&&p[ay].birim)||varsayilan(ay).birim }; } return y; });
+              const karBilgiHesapla = (ayar, val) => {
+                if (!(altinKgUSD>0 && Number(fGram)>0) || ayar==="14K" || ayar==="925") return null;
+                const mf = iscilikStandartUygula({ gram:Number(fGram), refAyar:fRefAyar, tasGram:tlForm, madenCarpan:Number(fMadenC)||0, iscilikDolar:Number(fIscilikDolar)||0, iscilikBirim:fIscilikBirim, iscilikAyarlar:fIscilikAyarlar, ekMaliyet:Number(fEkMaliyet)||0 });
+                const hA = hesapla(mf, ayar, altinKgUSD, madenCarpan);
+                const h14 = hesapla(mf, "14K", altinKgUSD, madenCarpan);
+                const kk = karKoruyanFiyat(mf, ayar, altinKgUSD, madenCarpan);
+                let oneri = null;
+                if (kk && kk.farkli && hA.mamulGram>0 && kk.ekHas>0) {
+                  const gerekHas = hA.iscilikHas + kk.ekHas;
+                  const birim = (val&&val.birim) || varsayilan(ayar).birim;
+                  const ham = birim==="milyem" ? gerekHas/hA.mamulGram : (gerekHas*hA.hasGramUSD)/hA.mamulGram;
+                  const k = birim==="milyem" ? 1000 : 100;
+                  oneri = { deger: Math.ceil(ham*k)/k, birim };
                 }
-                return (
-                <div key={ayar} style={{ marginBottom:7 }}>
-                <div style={{ display:"flex", gap:5, alignItems:"center", marginBottom:3 }}>
-                  <span style={{ fontSize:9, fontWeight:700, color:GOLD, width:30, flexShrink:0 }}>{ayar}</span>
-                  <select value={val.birim||"dolar"} onChange={e=>setFIscilikAyarlar(p=>({...p,[ayar]:{...p[ayar],birim:e.target.value}}))} style={{ ...IS, width:100, padding:"4px 5px", fontSize:10 }}>
-                    <option value="dolar">$ / gr</option>
-                    <option value="milyem">milyem / gr</option>
-                  </select>
-                  <input type="number" value={val.dolar||""} onChange={e=>setFIscilikAyarlar(p=>({...p,[ayar]:{...p[ayar],dolar:e.target.value}}))} placeholder="değer" style={{ ...IS, flex:1, padding:"4px 6px", fontSize:10 }}/>
-                  <button onClick={()=>setFIscilikAyarlar(p=>{ const y={...p}; delete y[ayar]; return y; })} style={{ ...RD, fontSize:9, padding:"3px 7px" }}>✕</button>
+                return { kar: hA.karHas, kar14: h14.karHas, oneri };
+              };
+              const digerler = Object.entries(fIscilikAyarlar).filter(([ay])=>!KUTU.includes(ay));
+              return (
+              <div style={{ marginTop:8, borderTop:"1px solid rgba(var(--vurgu-rgb),0.1)", paddingTop:8 }}>
+                <div style={{ fontSize:8, color:"#8a7d64", fontWeight:700, marginBottom:6 }}>AYAR BAZLI İŞÇİLİK · boş bırakırsan varsayılan geçerli</div>
+                <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:6, marginBottom:6 }}>
+                  {KUTU.map(ay => {
+                    const val = fIscilikAyarlar[ay]; const vr = varsayilan(ay);
+                    const ozel = !!(val && val.dolar!=="" && val.dolar!==undefined);
+                    const birim = (val&&val.birim)||vr.birim;
+                    return (
+                      <div key={ay} style={{ border:"1px solid "+(ozel?"rgba(232,131,58,0.55)":"rgba(var(--vurgu-rgb),0.15)"), borderRadius:8, padding:"5px 7px", background: ozel?"rgba(232,131,58,0.08)":"transparent" }}>
+                        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:3 }}>
+                          <span style={{ fontSize:10, fontWeight:800, color:GOLD }}>{ay}</span>
+                          <span style={{ fontSize:7, fontWeight:700, color: ozel?"#e8833a":"#8a7d64" }}>{ozel?"ÖZEL":(vr.std?"STANDART":"VARSAYILAN")}</span>
+                        </div>
+                        <input type="number" value={ozel?val.dolar:""} onChange={e=>kutuYaz(ay,e.target.value)} placeholder={vr.dolar} style={{ ...IS, width:"100%", boxSizing:"border-box", padding:"5px 6px", fontSize:12, fontWeight:700 }}/>
+                        <div style={{ fontSize:7, color:"#8a7d64", marginTop:2 }}>{birim==="milyem"?"milyem / gr":"$ / gr"}</div>
+                      </div>
+                    );
+                  })}
                 </div>
-                {karBilgi && (
-                  <div style={{ marginLeft:35, fontSize:8, color: karBilgi.kar < karBilgi.kar14 - 0.0005 ? "#e85a4f" : "#6abf69", fontWeight:600, display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}>
-                    <span>{ayar} kârı: {fN(karBilgi.kar,3)} has · 14K kârı: {fN(karBilgi.kar14,3)} has</span>
-                    {karBilgi.oneri && (
-                      <button type="button" onClick={()=>setFIscilikAyarlar(p=>({...p,[ayar]:{...p[ayar],dolar:String(karBilgi.oneri.deger)}}))}
-                        style={{ background:"rgba(106,191,105,0.12)", border:"1px solid rgba(106,191,105,0.35)", borderRadius:5, padding:"2px 7px", color:"#6abf69", fontSize:8, fontWeight:700, cursor:"pointer" }}>
-                        14K kârını koru → {karBilgi.oneri.birim==="milyem" ? fN(karBilgi.oneri.deger,3)+" mly" : fUSD(karBilgi.oneri.deger)+"/gr"}
-                      </button>
-                    )}
+                {["10K","18K"].map(ay => {
+                  const kb = karBilgiHesapla(ay, fIscilikAyarlar[ay]);
+                  if (!kb) return null;
+                  return (
+                    <div key={ay} style={{ fontSize:8, color: kb.kar < kb.kar14 - 0.0005 ? "#e85a4f" : "#6abf69", fontWeight:600, display:"flex", gap:8, alignItems:"center", flexWrap:"wrap", marginBottom:4 }}>
+                      <span>{ay} kârı: {fN(kb.kar,3)} has · 14K kârı: {fN(kb.kar14,3)} has</span>
+                      {kb.oneri && kb.kar < kb.kar14 - 0.0005 && (
+                        <button type="button" onClick={()=>kutuYaz(ay,String(kb.oneri.deger))}
+                          style={{ background:"rgba(106,191,105,0.12)", border:"1px solid rgba(106,191,105,0.35)", borderRadius:5, padding:"2px 7px", color:"#6abf69", fontSize:8, fontWeight:700, cursor:"pointer" }}>
+                          14K kârını koru → {kb.oneri.birim==="milyem" ? fN(kb.oneri.deger,3)+" mly" : fUSD(kb.oneri.deger)+"/gr"}
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+                {digerler.map(([ayar,val]) => (
+                  <div key={ayar} style={{ display:"flex", gap:5, alignItems:"center", marginBottom:5 }}>
+                    <span style={{ fontSize:9, fontWeight:700, color:GOLD, width:30, flexShrink:0 }}>{ayar}</span>
+                    <select value={val.birim||"dolar"} onChange={e=>setFIscilikAyarlar(p=>({...p,[ayar]:{...p[ayar],birim:e.target.value}}))} style={{ ...IS, width:100, padding:"4px 5px", fontSize:10 }}>
+                      <option value="dolar">$ / gr</option>
+                      <option value="milyem">milyem / gr</option>
+                    </select>
+                    <input type="number" value={val.dolar||""} onChange={e=>setFIscilikAyarlar(p=>({...p,[ayar]:{...p[ayar],dolar:e.target.value}}))} placeholder="değer" style={{ ...IS, flex:1, padding:"4px 6px", fontSize:10 }}/>
+                    <button onClick={()=>setFIscilikAyarlar(p=>{ const y={...p}; delete y[ayar]; return y; })} style={{ ...RD, fontSize:9, padding:"3px 7px" }}>✕</button>
                   </div>
-                )}
+                ))}
+                <div style={{ display:"flex", gap:5, marginTop:4 }}>
+                  <select onChange={e=>{ if(!e.target.value) return; const ayar=e.target.value; if(!fIscilikAyarlar[ayar]) setFIscilikAyarlar(p=>({...p,[ayar]:{dolar:"",birim:fIscilikBirim}})); e.target.value=""; }} style={{ ...IS, flex:1, padding:"4px 6px", fontSize:10 }}>
+                    <option value="">+ Diğer ayar ekle (8K, 9K, 21K...)</option>
+                    {["8K","9K","21K","22K","24K","925"].filter(a=>!fIscilikAyarlar[a]).map(a=><option key={a} value={a}>{a}</option>)}
+                  </select>
                 </div>
-                );
-              })}
-              <div style={{ display:"flex", gap:5, marginTop:4 }}>
-                <select onChange={e=>{ if(!e.target.value) return; const ayar=e.target.value; if(!fIscilikAyarlar[ayar]) setFIscilikAyarlar(p=>({...p,[ayar]:{dolar:"",birim:fIscilikBirim}})); e.target.value=""; }} style={{ ...IS, flex:1, padding:"4px 6px", fontSize:10 }}>
-                  <option value="">+ Ayar ekle...</option>
-                  {["8K","9K","10K","14K","18K","21K","22K","24K","925"].filter(a=>!fIscilikAyarlar[a]).map(a=><option key={a} value={a}>{a}</option>)}
-                </select>
               </div>
-            </div>
+              );
+            })()}
           </Fl>
         </div>
 
