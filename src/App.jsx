@@ -228,7 +228,7 @@ function hesapla(m, secilenAyar, altinKgUSD, varsayilanMly) {
 
   // İşçilik — ayar bazlı fallback: seçilen ayar → girilmişse o, yoksa varsayılan
   const iscilikAyarlar = m.iscilikAyarlar || {};
-  const ayarIscilik = iscilikAyarlar[aktifAyar];
+  const ayarIscilik = (iscilikAyarlar[aktifAyar] && iscilikAyarlar[aktifAyar].dolar !== "" && iscilikAyarlar[aktifAyar].dolar != null) ? iscilikAyarlar[aktifAyar] : undefined; // boş (henüz değer girilmemiş) ayar satırı işçiliği 0'lamasın
   const iscilikDolarGr = ayarIscilik ? (Number(ayarIscilik.dolar) || 0) : (Number(m.iscilikDolar) || 0);
   const iscilikBirimKullan = ayarIscilik ? (ayarIscilik.birim || "dolar") : (m.iscilikBirim || "dolar");
   let iscilikHas = 0;
@@ -10306,12 +10306,12 @@ function Atolye({ onSirketDegis }) {
                       <option value="dolar">$ / gr</option>
                       <option value="milyem">milyem / gr</option>
                     </select>
-                    <input type="number" value={val.dolar||""} onChange={e=>setFIscilikAyarlar(p=>({...p,[ayar]:{...p[ayar],dolar:e.target.value}}))} placeholder="değer" style={{ ...IS, flex:1, padding:"4px 6px", fontSize:10 }}/>
+                    <input type="number" value={val.dolar||""} onChange={e=>setFIscilikAyarlar(p=>({...p,[ayar]:{...p[ayar],dolar:e.target.value}}))} placeholder={fIscilikDolar!==""?String(fIscilikDolar):"değer"} autoFocus={val.dolar===""} style={{ ...IS, flex:1, padding:"4px 6px", fontSize:10 }}/>
                     <button onClick={()=>setFIscilikAyarlar(p=>{ const y={...p}; delete y[ayar]; return y; })} style={{ ...RD, fontSize:9, padding:"3px 7px" }}>✕</button>
                   </div>
                 ))}
                 <div style={{ display:"flex", gap:5, marginTop:4 }}>
-                  <select onChange={e=>{ if(!e.target.value) return; const ayar=e.target.value; if(!fIscilikAyarlar[ayar]) setFIscilikAyarlar(p=>({...p,[ayar]:{dolar:"",birim:fIscilikBirim}})); e.target.value=""; }} style={{ ...IS, flex:1, padding:"4px 6px", fontSize:10 }}>
+                  <select value="" onChange={e=>{ const ayar=e.target.value; if(!ayar) return; setFIscilikAyarlar(p=>p[ayar]?p:({...p,[ayar]:{dolar:"",birim:fIscilikBirim}})); }} style={{ ...IS, flex:1, padding:"4px 6px", fontSize:10 }}>
                     <option value="">+ Diğer ayar ekle (8K, 9K, 21K...)</option>
                     {["8K","9K","21K","22K","24K","925"].filter(a=>!fIscilikAyarlar[a]).map(a=><option key={a} value={a}>{a}</option>)}
                   </select>
