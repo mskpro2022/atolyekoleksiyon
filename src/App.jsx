@@ -171,6 +171,16 @@ function gramDonustur(refGram, refAyar, hedefAyar, tasGram) {
 // ═══ AYAR BAZLI İŞÇİLİK ÇÖZÜMÜ (10K / 14K / 18K ayrı fiyat) ═══
 // Öncelik: Konfirmasyondaki elle giriş (o ayar için) > müşteri hafızası (o ayar için) > modelin o ayar için işçiliği > modelin genel işçiliği.
 // Kayıt biçimi: { "10K": {iscilikDolar, iscilikBirim}, "14K": {...} }  (eski tek-fiyat biçimi { iscilikDolar, iscilikBirim } her ayara uygulanır — geriye uyum)
+// Ayar bazlı GENEL STANDART işçilik (örn. tüm modellerde 10K = $3.25/gr). Modelin o ayar için kendi fiyatı varsa o geçerli; yoksa bu standart.
+// Sadece yeni teklif/sipariş hesabında ve kart/form gösteriminde kullanılır — kayıtlı siparişler fiyatı kendi içinde taşıdığı için eskiler değişmez.
+const ISCILIK_STANDART_VARSAYILAN = { "10K": { dolar: 3.25, birim: "dolar" } };
+let ISCILIK_STANDART = ISCILIK_STANDART_VARSAYILAN;
+function setIscilikStandart(o) { ISCILIK_STANDART = (o && typeof o === "object") ? o : ISCILIK_STANDART_VARSAYILAN; }
+function iscilikStandartUygula(m) {
+  const ek = {};
+  Object.entries(ISCILIK_STANDART || {}).forEach(([ay, v]) => { if (!(m.iscilikAyarlar || {})[ay] && v && v.dolar !== "" && v.dolar !== undefined) ek[ay] = { dolar: Number(v.dolar) || 0, birim: v.birim || "dolar" }; });
+  return Object.keys(ek).length ? { ...m, iscilikAyarlar: { ...(m.iscilikAyarlar || {}), ...ek } } : m;
+}
 function iscilikOvrBul(kayit, ayar) {
   if (!kayit || typeof kayit !== "object") return null;
   if (kayit.iscilikDolar !== undefined) return kayit; // eski biçim
@@ -184,6 +194,8 @@ function iscilikCoz(m, ayar, konfKayit, hafizaKayit) {
   if (h) return { dolar: h.iscilikDolar, birim: h.iscilikBirim || "dolar", kaynak: "hafiza" };
   const ma = (m.iscilikAyarlar || {})[ayar];
   if (ma) return { dolar: Number(ma.dolar) || 0, birim: ma.birim || "dolar", kaynak: "model" };
+  const gs = (ISCILIK_STANDART || {})[ayar];
+  if (gs && gs.dolar !== "" && gs.dolar !== undefined) return { dolar: Number(gs.dolar) || 0, birim: gs.birim || "dolar", kaynak: "standart" };
   return { dolar: m.iscilikDolar, birim: m.iscilikBirim || "dolar", kaynak: "model" };
 }
 // hesapla() ayar bazlı işçiliği (iscilikAyarlar) genel işçiliğe tercih ettiği için, seçilen ayarın çözümlenmiş fiyatı HEM üst alana HEM iscilikAyarlar[ayar]'a yazılır
@@ -302,7 +314,8 @@ function karKoruyanFiyat(m, aktifAyar, altinKgUSD, varsayilanMly) {
 
 // ═══ AYAR KARŞILAŞTIRMA — aynı ürün 10K / 14K / 18K'da (hem model formunda hem ürün kartında kullanılır) ═══
 // Taş gramı sabit kalır; sadece maden gramı ayarın yoğunluğuyla ölçeklenir. Kâr HAS cinsinden 14K'ya göre karşılaştırılır.
-function ayarKarsilastir(m, altinKgUSD, mc, ayarlar) {
+function ayarKarsilastir(m0, altinKgUSD, mc, ayarlar) {
+  const m = iscilikStandartUygula(m0); // kendi 10K fiyatı olmayan modelde genel standart işçilik
   const tl = Number(m.tasGram) || 0;
   const rows = (ayarlar || ["10K", "14K", "18K"]).map(ay => {
     const h = hesapla(m, ay, altinKgUSD, mc);
@@ -3553,6 +3566,8 @@ function Atolye({ onSirketDegis }) {
     serbest: [],
     musteriModelFiyat: {}, // { "MusteriAd": { "MODEL-ID": { iscilikDolar, iscilikBirim } } } — ID bazlı: aynı kod farklı renk/taş varyantı olabileceği için kod DEĞİL, benzersiz model id kullanılır
   });
+  setIscilikStandart(kasa.iscilikStandart); // genel ayar-standart işçilik (render sırasında senkron — kart/form hesapları aynı değeri görür)
+  const [stdIscGirdi, setStdIscGirdi] = useState(null); // Ayarlar: 10K standart işçilik giriş kutusu (null = kayıtlı değeri göster)
   const [kasaSayfa, setKasaSayfa] = useState("ozet");
   // Asistan
   const [ajanSoru, setAjanSoru] = useState("");
@@ -7836,6 +7851,34 @@ function Atolye({ onSirketDegis }) {
           <div style={{ animation:"fadein .3s", maxWidth:1200 }}>
             <h2 style={{ margin:"0 0 16px", fontSize:15, fontWeight:700, color:T.text }}>⚙ Ayarlar</h2>
             <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(320px, 1fr))", gap:12, alignItems:"start" }}>
+
+            {/* AYAR STANDART İŞÇİLİK */}
+            <Akordiyon baslik="💰 Standart İşçilik (10K)" T={T}>
+            <div style={{ background:T.card, border:"1px solid "+T.border, borderRadius:14, padding:"15px 16px" }}>
+              {(() => {
+                const kayitli = ISCILIK_STANDART["10K"] || { dolar:"", birim:"dolar" };
+                const deger = stdIscGirdi ?? { dolar: String(kayitli.dolar ?? ""), birim: kayitli.birim || "dolar" };
+                const degisti = stdIscGirdi !== null;
+                return (
+                  <div>
+                    <div style={{ fontSize:9, color:T.sub, marginBottom:8 }}>10K için kendi ayrı fiyatı girilmemiş TÜM modellerde bu işçilik geçerli olur (kart, model formu, Konfirmasyon). Modelde 10K fiyatı ayrıca girilmişse o kullanılır. Kayıtlı siparişler değişmez.</div>
+                    <div style={{ display:"flex", gap:6, alignItems:"center" }}>
+                      <span style={{ fontSize:11, fontWeight:800, color:GOLD, width:32 }}>10K</span>
+                      <select value={deger.birim} onChange={e=>setStdIscGirdi({ ...deger, birim:e.target.value })} style={{ ...IS, width:110, padding:"5px 6px", fontSize:11 }}>
+                        <option value="dolar">$ / gr</option>
+                        <option value="milyem">milyem / gr</option>
+                      </select>
+                      <input type="number" step="0.01" value={deger.dolar} onChange={e=>setStdIscGirdi({ ...deger, dolar:e.target.value })} placeholder="3.25" style={{ ...IS, flex:1, padding:"5px 8px", fontSize:12, fontWeight:700 }}/>
+                    </div>
+                    <div style={{ display:"flex", gap:6, marginTop:8 }}>
+                      <button disabled={!degisti} onClick={()=>{ const yeni = { ...(kasa.iscilikStandart ?? ISCILIK_STANDART_VARSAYILAN) }; if (String(deger.dolar).trim()==="") delete yeni["10K"]; else yeni["10K"] = { dolar:Number(deger.dolar)||0, birim:deger.birim }; svKasa({ ...kasa, iscilikStandart: yeni }); setStdIscGirdi(null); toastGoster("ok","💰 10K standart işçilik kaydedildi"); }} style={{ ...BG, padding:"6px 14px", fontSize:10, opacity:degisti?1:0.4 }}>Kaydet</button>
+                      {degisti && <button onClick={()=>setStdIscGirdi(null)} style={{ ...GH, fontSize:10, padding:"6px 12px" }}>Vazgeç</button>}
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+            </Akordiyon>
 
             {/* TEMA SEÇİCİ */}
             <Akordiyon baslik="🎨 Tema & Vurgu Rengi" T={T}>
