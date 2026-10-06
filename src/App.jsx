@@ -5573,7 +5573,7 @@ function Atolye({ onSirketDegis }) {
                                   <div style={{ fontSize:7, color:"#5b9bd5", textAlign:"right" }}>{fN(r.h.tasHas,3)}</div>
                                   <div style={{ fontSize:7, color:"#e8833a", textAlign:"right" }}>{fN(r.h.iscilikHas,3)}</div>
                                   <div style={{ fontSize:7, color:"#e85a4f", textAlign:"right" }}>{fN(r.h.topMaliyetHas,3)}</div>
-                                  <div style={{ fontSize:7, fontWeight:800, color:renk, textAlign:"right", lineHeight:1.15 }}>{fN(r.h.karHas,3)}{r.ay!=="14K" && <div style={{ fontSize:5, fontWeight:600 }}>({r.fark>=0?"+":""}{fN(r.fark,3)})</div>}</div>
+                                  <div style={{ fontSize:7, fontWeight:800, color:renk, textAlign:"right", lineHeight:1.15 }}>{fN(r.h.karHas,3)}</div>
                                   <div style={{ fontSize:9, fontWeight:800, color: r.h.karUyari?"#e85a4f":"#6abf69", textAlign:"right" }}>{fN(r.h.karMly,3)}</div>
                                 </Fragment>
                               );
@@ -10313,7 +10313,7 @@ function Atolye({ onSirketDegis }) {
                 {kar && <div style={bas}>TAŞ HAS</div>}
                 {kar && <div style={bas}>İŞÇİLİK HAS</div>}
                 {kar && <div style={bas}>MALİYET HAS</div>}
-                {kar && <div style={bas}>KÂR HAS (14K'YA FARK)</div>}
+                {kar && <div style={bas}>KÂR HAS</div>}
                 {kar && <div style={bas}>NET MLY/GR</div>}
                 <div style={bas}>1 KG'DA ADET</div>
                 {satirlar.map(r => (
@@ -10323,7 +10323,7 @@ function Atolye({ onSirketDegis }) {
                     {kar && <div style={{ ...hucre, color:"#5b9bd5" }}>{fN(r.h.tasHas,3)}</div>}
                     {kar && <div style={{ ...hucre, color:"#e8833a" }}>{fN(r.h.iscilikHas,3)}</div>}
                     {kar && <div style={{ ...hucre, color:"#e85a4f" }}>{fN(r.h.topMaliyetHas,3)}</div>}
-                    {kar && <div style={{ ...hucre, fontWeight:800, color: r.kayip?"#e85a4f":"#6abf69" }}>{fN(r.h.karHas,3)}{r.ay!=="14K" && <span style={{ fontWeight:600 }}> ({r.fark>=0?"+":""}{fN(r.fark,3)})</span>}</div>}
+                    {kar && <div style={{ ...hucre, fontWeight:800, color: r.kayip?"#e85a4f":"#6abf69" }}>{fN(r.h.karHas,3)}</div>}
                     {kar && <div style={{ ...hucre, color: r.h.karUyari?"#e85a4f":"#6abf69", fontWeight:700 }}>{fN(r.h.karMly,3)}</div>}
                     <div style={{ ...hucre, color:T.text }} title={"Taşsız maden gramına göre: "+Math.round(r.adetMaden)+" adet · Taş dahil mamul gramına göre: "+Math.round(r.adetMamul)+" adet"}>{r.adetMaden>0 ? Math.round(r.adetMaden) : "—"} <span style={{ color:"#665d4a", fontSize:7 }}>({r.adetMamul>0 ? Math.round(r.adetMamul) : "—"})</span></div>
                   </Fragment>
