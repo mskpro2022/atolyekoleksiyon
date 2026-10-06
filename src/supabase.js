@@ -749,6 +749,45 @@ export async function vitrinEnCokBakilan(onek, musteriKod) {
   } catch { return [] }
 }
 
+// Şu an vitrinde olan müşteriler (nabız/giriş olaylarına bakarak) → { MUSKOD: { dakika, cihazSayisi } }
+// Müşterinin tarayıcısı her ~25sn'de bir "nabiz" eylemi gönderir (bkz. VitrinModu). Son nabız, eşik süreden
+// (NABIZ_ESIK_SN) daha eskiyse müşteri artık orada sayılmaz. "Kaç dakikadır orada" için art arda gelen
+// nabızlar arasında eşik süreden büyük boşluk yoksa aynı "oturum" sayılır; en eski noktadan şimdiye kadar geçen süre alınır.
+const NABIZ_ESIK_SN = 70; // 25sn aralıkla atılan nabız için güvenli tolerans
+export async function vitrinCevrimiciMusteriler(onek) {
+  try {
+    const simdi = Date.now()
+    const esikMs = NABIZ_ESIK_SN * 1000
+    const { data, error } = await supabase.from('vitrin_aktivite')
+      .select('musteri_kod, eylem, zaman')
+      .eq('onek', onek).in('eylem', ['giris', 'nabiz'])
+      .gte('zaman', new Date(simdi - 30 * 60 * 1000).toISOString()) // son 30 dk ile sınırla (yeterli ve hafif)
+      .order('zaman', { ascending: true }).limit(5000)
+    if (error || !data) return {}
+    const grup = {}
+    data.forEach(r => {
+      const k = r.musteri_kod
+      if (!k) return
+      if (!grup[k]) grup[k] = []
+      grup[k].push(new Date(r.zaman).getTime())
+    })
+    const sonuc = {}
+    Object.entries(grup).forEach(([kod, zamanlar]) => {
+      const sonZaman = zamanlar[zamanlar.length - 1]
+      if (simdi - sonZaman > esikMs) return // artık orada değil
+      // Geriye doğru yürü: ardışık boşluk eşik üzerindeyse oturum başlangıcı orada kesilir
+      let baslangic = sonZaman
+      for (let i = zamanlar.length - 1; i > 0; i--) {
+        if (zamanlar[i] - zamanlar[i - 1] > esikMs) break
+        baslangic = zamanlar[i - 1]
+      }
+      const dakika = Math.max(0, Math.round((simdi - baslangic) / 60000))
+      sonuc[kod] = { dakika, sonNabiz: sonZaman }
+    })
+    return sonuc
+  } catch { return {} }
+}
+
 // Tüm müşterilerin vitrin özeti (tek sorgu) → { MUSKOD: {giris, model, koleksiyon, son} }
 export async function vitrinOzetGetir(onek) {
   try {
