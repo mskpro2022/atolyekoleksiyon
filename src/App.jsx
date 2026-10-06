@@ -1,5 +1,5 @@
 import { supabase, dbLoad, dbSave, fotoYukleStorage, yedekKaydet, yedekListesi, yedekGetir, bugunYedekVarMi, tabloModelleriSenkron, tabloModelleriToplu, tabloModelSil, tabloSiparisleriSenkron, tabloSiparisleriToplu, tabloMusterileriYaz, akilliModelOku, akilliSiparisOku, akilliMusteriOku, islemKaydet, islemGecmisiGetir, realtimeBaslat, tabloKoleksiyonlariYaz, tabloKasaYaz, akilliKoleksiyonOku, akilliKasaOku, tabloKoleksiyonlariOku, tabloKasaOku, saglikDenetimi, ekranSunucuFarki, toptanciKaydet, toptancilariGetir, toptanciSil, vitrinGecmisiGetir, vitrinEnCokBakilan, vitrinOzetGetir, vitrinAnaliz, vitrinGetirGuvenli, siparisOlusturGuvenli, vitrinAktiviteKaydetGuvenli, vitrinSupheliCihazlar, vitrinCevrimiciMusteriler, radarTrendleriOku, radarKaynaklariOku, radarKanitlariOku, radarTumKanitlariOku, radarTrendGuncelle, radarTrendSil, radarManuelKanitEkle } from "./supabase.js";
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef, Fragment } from "react";
 
 const uid = () => "x" + Date.now() + Math.random().toString(36).substr(2, 5);
 // ═══ ÇALIŞAN AUTH OTURUMU — yerel şifre kontrolünün ardından gerçek Supabase Auth oturumu açar ═══
@@ -166,6 +166,31 @@ function gramDonustur(refGram, refAyar, hedefAyar, tasGram) {
   const yeniMadenGram = madenGram * (yeniY / eskiY);
   // Taşı geri ekle
   return yeniMadenGram + tas;
+}
+
+// ═══ AYAR BAZLI İŞÇİLİK ÇÖZÜMÜ (10K / 14K / 18K ayrı fiyat) ═══
+// Öncelik: Konfirmasyondaki elle giriş (o ayar için) > müşteri hafızası (o ayar için) > modelin o ayar için işçiliği > modelin genel işçiliği.
+// Kayıt biçimi: { "10K": {iscilikDolar, iscilikBirim}, "14K": {...} }  (eski tek-fiyat biçimi { iscilikDolar, iscilikBirim } her ayara uygulanır — geriye uyum)
+function iscilikOvrBul(kayit, ayar) {
+  if (!kayit || typeof kayit !== "object") return null;
+  if (kayit.iscilikDolar !== undefined) return kayit; // eski biçim
+  const v = kayit[ayar];
+  return (v && v.iscilikDolar !== undefined) ? v : null;
+}
+function iscilikCoz(m, ayar, konfKayit, hafizaKayit) {
+  const o = iscilikOvrBul(konfKayit, ayar);
+  if (o) return { dolar: o.iscilikDolar, birim: o.iscilikBirim || "dolar", kaynak: "konf" };
+  const h = iscilikOvrBul(hafizaKayit, ayar);
+  if (h) return { dolar: h.iscilikDolar, birim: h.iscilikBirim || "dolar", kaynak: "hafiza" };
+  const ma = (m.iscilikAyarlar || {})[ayar];
+  if (ma) return { dolar: Number(ma.dolar) || 0, birim: ma.birim || "dolar", kaynak: "model" };
+  return { dolar: m.iscilikDolar, birim: m.iscilikBirim || "dolar", kaynak: "model" };
+}
+// hesapla() ayar bazlı işçiliği (iscilikAyarlar) genel işçiliğe tercih ettiği için, seçilen ayarın çözümlenmiş fiyatı HEM üst alana HEM iscilikAyarlar[ayar]'a yazılır
+// (böylece ekran, toplamlar, kayıtlı sipariş ve PDF hepsi aynı fiyatı kullanır).
+function iscilikliModel(m, ayar, konfKayit, hafizaKayit) {
+  const c = iscilikCoz(m, ayar, konfKayit, hafizaKayit);
+  return { ...m, iscilikDolar: c.dolar, iscilikBirim: c.birim, iscilikAyarlar: { ...(m.iscilikAyarlar || {}), [ayar]: { dolar: c.dolar, birim: c.birim } } };
 }
 
 // ═══ HESAPLAMA — Tüm sonuçlar HAS GRAM cinsinden ═══
@@ -604,7 +629,7 @@ function buildKatalogHTML(kol, modeller, sutun, hedefAyar, kollar, gruplu, tamKa
     + ".dn{position:absolute;width:56px;height:56px;border-radius:50%;border:3px solid #fff;box-shadow:0 3px 12px rgba(0,0,0,0.55);background-color:#fff;overflow:hidden;z-index:2}"
     + ".dn img{width:100%;height:100%;object-fit:cover}"
     + ".dn-ico{display:flex;align-items:center;justify-content:center;font-size:20px;background:#1a1a1a}"
-    + ".cd-bileklik .ph img{object-fit:cover;transform:none;top:0;left:0}"
+    + ".cd-bileklik .ph img{object-fit:contain;transform:translate(-50%,-50%);width:100%;height:100%}" // vitrindeki gibi: foto KIRPILMADAN tamamı görünür, kart tüm satır genişliğinde
     + ".cd-kolye-3 .ph img,.cd-kolye-4 .ph img{width:105%;height:105%;object-fit:contain}"
     + ".inf{padding:6px 9px 7px 10px;flex-shrink:0;background:#fff;border-top:1px solid #f0f0f0;border-left:3px solid #1a1a1a}"
     + ".r1{display:flex;justify-content:space-between;align-items:baseline}"
@@ -3691,6 +3716,7 @@ function Atolye({ onSirketDegis }) {
         setKonfNot(d.not || {});
         setKonfBoylar(d.boylar || {});
         setKonfFiyatlar(d.fiyatlar || {});
+        setKonfSira(d.sira || "koleksiyon");
       }
       setKonfTaslikYuklendi(true);
     });
@@ -3701,17 +3727,17 @@ function Atolye({ onSirketDegis }) {
     if (!konfTaslikYuklendi) return;
     const zamanlayici = setTimeout(() => {
       if (konfList.length === 0 && !konfMus && !konfSipAciklama) {
-        sv("v7konfdraft", null);
+        sv("v7konfdraft", { liste: [] });
       } else {
         sv("v7konfdraft", {
           liste: konfList, mus: konfMus, teslim: konfTeslim, aciklama: konfSipAciklama,
           ayar: konfAyar, ayarlar: konfAyarlar, renkler: konfRenkler, adet: konfAdet,
-          not: konfNot, boylar: konfBoylar, fiyatlar: konfFiyatlar,
+          not: konfNot, boylar: konfBoylar, fiyatlar: konfFiyatlar, sira: konfSira,
         });
       }
     }, 800);
     return () => clearTimeout(zamanlayici);
-  }, [konfTaslikYuklendi, konfList, konfMus, konfTeslim, konfSipAciklama, konfAyar, konfAyarlar, konfRenkler, konfAdet, konfNot, konfBoylar, konfFiyatlar]);
+  }, [konfTaslikYuklendi, konfList, konfMus, konfTeslim, konfSipAciklama, konfAyar, konfAyarlar, konfRenkler, konfAdet, konfNot, konfBoylar, konfFiyatlar, konfSira]);
 
   // Kol form
   const [fkAd, setFkAd] = useState("");
@@ -4670,7 +4696,32 @@ function Atolye({ onSirketDegis }) {
   // aynı koleksiyon içindeki modellerin kendi ekleniş sırası korunur (stabil sıralama).
   const siraliKonfListe = (liste, mod) => konfSiralaListe(liste, mod || konfSira, m => konfAyarlar[m.id] || konfAyar);
   const konfSiraDegistir = (yeniMod) => { setKonfSira(yeniMod); setKonfList(p => konfSiralaListe(p, yeniMod, m => konfAyarlar[m.id] || konfAyar)); };
+  // Listedeki bir modeli, YERİNİ ve ayar/renk/adet/not/boy seçimlerini koruyarak başka bir modelle değiştirir
+  const konfModelDegistir = (eski) => {
+    const girilen = (prompt("'" + (eski.kod||"") + "' yerine geçecek model kodu:") || "").trim().toUpperCase();
+    if (!girilen) return;
+    const yeni = modeller.find(x => (x.kod||"").toUpperCase() === girilen);
+    if (!yeni) { alert("'" + girilen + "' kodlu model bulunamadı."); return; }
+    if (yeni.id === eski.id) return;
+    if (konfList.find(x => x.id === yeni.id)) { alert(yeni.kod + " zaten listede."); return; }
+    setKonfList(p => p.map(x => x.id === eski.id ? yeni : x));
+    const tasi = (setter) => setter(p => { if (!(eski.id in p)) return p; const { [eski.id]: v, ...kalan } = p; return { ...kalan, [yeni.id]: v }; });
+    tasi(setKonfAyarlar); tasi(setKonfRenkler); tasi(setKonfAdet); tasi(setKonfNot); tasi(setKonfBoylar);
+    setKonfFiyatlar(p => { if (!(eski.id in p)) return p; const { [eski.id]: _at, ...kalan } = p; return kalan; }); // fiyat yeni modelin kendi işçiliğinden gelsin
+  };
   const togKonf     = m => setKonfList(p => p.find(x => x.id === m.id) ? p.filter(x => x.id !== m.id) : siraliKonfListe([...p, m]));
+  // Ayar bazlı işçilik girişi — sadece SEÇİLİ ayar için yazar (10K/14K/18K birbirini ezmez)
+  const konfFiyatYaz = (id, ayar, dolar, birim) => setKonfFiyatlar(p => {
+    const eski = p[id];
+    const taban = (eski && eski.iscilikDolar === undefined) ? eski : {}; // eski tek-fiyat biçimi atılır, yeni biçime geçilir
+    return { ...p, [id]: { ...taban, [ayar]: { iscilikDolar: dolar, iscilikBirim: birim } } };
+  });
+  const konfFiyatSifirla = (id, ayar) => setKonfFiyatlar(p => {
+    const y = { ...p }; const e = y[id];
+    if (e && e.iscilikDolar === undefined) { const { [ayar]: _at, ...kalan } = e; if (Object.keys(kalan).length) y[id] = kalan; else delete y[id]; }
+    else delete y[id];
+    return y;
+  });
   const konfAyarSec  = (id, ayar) => setKonfAyarlar(p => ({ ...p, [id]: ayar }));
   const konfRenkSec  = (id, renk) => setKonfRenkler(p => ({ ...p, [id]: renk }));
   const konfAdetSec  = (id, val) => setKonfAdet(p => ({ ...p, [id]: Math.max(1, Number(val)||1) }));
@@ -4694,10 +4745,7 @@ function Atolye({ onSirketDegis }) {
       const genelBoyAktif = konfGenelBoy.aktif && konfGenelBoy.deger;
       // Fiyat override — konfFiyatlar > müşteri hafızası > model varsayılanı
       const musHafiza = konfMus ? (kasa.musteriModelFiyat||{})[konfMus]?.[m.id] : null;
-      const fiyatOvr = konfFiyatlar[m.id];
-      const aktifIscilik = fiyatOvr?.iscilikDolar ?? musHafiza?.iscilikDolar ?? m.iscilikDolar;
-      const aktifBirim   = fiyatOvr?.iscilikBirim ?? musHafiza?.iscilikBirim ?? m.iscilikBirim ?? "dolar";
-      const temel = { ...m, secilenAyar: konfAyar, renk: konfRenkler[m.id]||"Sari", sipNot: konfNot[m.id]||"", iscilikDolar: aktifIscilik, iscilikBirim: aktifBirim };
+      const temel = { ...iscilikliModel(m, konfAyar, konfFiyatlar[m.id], musHafiza), secilenAyar: konfAyar, renk: konfRenkler[m.id]||"Sari", sipNot: konfNot[m.id]||"" };
       
       // Kolye ve bileklik: tek satır, boyListesi içeride
       if ((m.kategori==="kolye" || m.kategori==="bileklik") && boylar.length > 0) {
@@ -4735,7 +4783,7 @@ function Atolye({ onSirketDegis }) {
       svMus(yeniMusteriler);
     }
     const musKod = yeniMusteriler[musAd];
-    const yeni = { id: uid(), musteri: musAd, musKod, tarih: Date.now(), teslimTarihi: konfTeslim||"", aciklama: konfSipAciklama.trim(), altinKgUSD, mc: madenCarpan, kalemler: konfKalemler, gelir: kTop.gelir, maliyet: kTop.maliyet, kar: kTop.kar };
+    const yeni = { id: uid(), musteri: musAd, musKod, tarih: Date.now(), teslimTarihi: konfTeslim||"", aciklama: konfSipAciklama.trim(), altinKgUSD, mc: madenCarpan, kalemler: konfKalemler, sira: konfSira, gelir: kTop.gelir, maliyet: kTop.maliyet, kar: kTop.kar };
     svS([...siparisler, yeni]);
     islemKaydet(AKTIF_SIRKET_ONEK, "ekle", "sipariş", (musAd || "") + " · " + (konfKalemler?.length || 0) + " kalem");
     svMUpsert(modeller.filter(m => konfKalemler.find(x => x.id === m.id)).map(m => ({ ...m, satisSayisi: (m.satisSayisi||0)+1 })));
@@ -4743,14 +4791,18 @@ function Atolye({ onSirketDegis }) {
     if (musAd && Object.keys(konfFiyatlar).length > 0) {
       const yeniFiyatHafiza = { ...(kasa.musteriModelFiyat||{}), [musAd]: { ...((kasa.musteriModelFiyat||{})[musAd]||{}) } };
       konfList.forEach(m => {
-        if (konfFiyatlar[m.id]) {
-          yeniFiyatHafiza[musAd][m.id] = { iscilikDolar: konfFiyatlar[m.id].iscilikDolar, iscilikBirim: konfFiyatlar[m.id].iscilikBirim };
+        const fk = konfFiyatlar[m.id];
+        if (fk) {
+          const eskiH = yeniFiyatHafiza[musAd][m.id];
+          const taban = (eskiH && eskiH.iscilikDolar === undefined) ? eskiH : {}; // eski tek-fiyat hafızası yeni biçime geçerken atılır
+          if (fk.iscilikDolar !== undefined) yeniFiyatHafiza[musAd][m.id] = { ...taban, [konfAyar]: { iscilikDolar: fk.iscilikDolar, iscilikBirim: fk.iscilikBirim || "dolar" } };
+          else yeniFiyatHafiza[musAd][m.id] = { ...taban, ...fk };
         }
       });
       svKasa({ ...kasa, musteriModelFiyat: yeniFiyatHafiza });
     }
     setKonfList([]); setKonfAyarlar({}); setKonfRenkler({}); setKonfAdet({}); setKonfNot({}); setKonfFiyatlar({}); setKonfBoylar({}); setKonfMus(""); setKonfTeslim(""); setKonfAyar("14K"); setKonfSipAciklama("");
-    sv("v7konfdraft", null);
+    sv("v7konfdraft", { liste: [] });
     alert("Siparis kaydedildi!");
   };
 
@@ -5449,7 +5501,10 @@ function Atolye({ onSirketDegis }) {
                         {m.tasGram>0 && <span style={{ fontSize:6, color:"#5b9bd5", background:"rgba(91,155,213,0.08)", padding:"1px 3px", borderRadius:2, fontWeight:600 }}>
                           {m.taslar?.length>0 ? m.taslar.map(t=>t.sekil+" "+t.boyut+"×"+t.adet).join(" + ")+" = "+fN(m.tasGram,4)+"gr" : (m.tasSekil&&m.tasBoyut&&m.tasAdet ? m.tasSekil+" "+m.tasBoyut+"mm ×"+m.tasAdet+" = "+fN(m.tasGram,4)+"gr" : "Tas:"+fN(m.tasGram,4)+"gr")}
                         </span>}
-                        {m.iscilikDolar>0 && <span style={{ fontSize:6, color:"#e8833a", background:"rgba(232,131,58,0.08)", padding:"1px 3px", borderRadius:2, fontWeight:600 }}>{fUSD(m.iscilikDolar)}/gr</span>}
+                        {m.iscilikDolar>0 && <span title="Genel işçilik (ayar bazlı fiyatı olmayan ayarlarda bu geçerli)" style={{ fontSize:6, color:"#e8833a", background:"rgba(232,131,58,0.08)", padding:"1px 3px", borderRadius:2, fontWeight:600 }}>{m.iscilikBirim==="milyem" ? fN(m.iscilikDolar,3)+" mly" : fUSD(m.iscilikDolar)+"/gr"}</span>}
+                        {Object.entries(m.iscilikAyarlar||{}).sort((a,b)=>(parseInt(a[0])||0)-(parseInt(b[0])||0)).map(([ay,v]) => (
+                          <span key={ay} title={ay+" için ayrı işçilik"} style={{ fontSize:6, color:"#e8833a", background:"rgba(232,131,58,0.14)", border:"1px solid rgba(232,131,58,0.3)", padding:"0px 3px", borderRadius:2, fontWeight:700 }}>{ay}: {(v.birim==="milyem") ? fN(Number(v.dolar)||0,3)+" mly" : fUSD(Number(v.dolar)||0)+"/gr"}</span>
+                        ))}
                         {(m.etiketler||[]).slice(0,2).map(e => <span key={e} style={{ fontSize:6, color:"#a78bfa", background:"rgba(167,139,250,0.08)", padding:"1px 3px", borderRadius:2, fontWeight:600 }}>#{e}</span>)}
                       </div>
                       {Array.isArray(m.setParcalari) && m.setParcalari.length > 0 ? (
@@ -5574,9 +5629,12 @@ function Atolye({ onSirketDegis }) {
                 </div>
                 <input type="date" value={konfTeslim} onChange={e=>setKonfTeslim(e.target.value)} style={{ ...IS, width:130, padding:"5px 8px", fontSize:11 }} />
                 <input value={konfSipAciklama} onChange={e=>setKonfSipAciklama(e.target.value)} placeholder="Sipariş açıklaması..." style={{ ...IS, width:180, padding:"5px 8px", fontSize:11 }} />
+                <select value={konfSira} onChange={e=>konfSiraDegistir(e.target.value)} title="Listeyi sırala" style={{ ...IS, width:"auto", padding:"5px 8px", fontSize:10 }}>
+                  {KONF_SIRA_SECENEKLERI.map(o => <option key={o.id} value={o.id}>↕ {o.l}</option>)}
+                </select>
                 {konfList.length>0 && <>
-                  <button onClick={()=>downloadPDF(buildKonfHTML({musteri:konfMus,musKod:(musteriler[konfMus]||""),tarih:Date.now(),kalemler:konfKalemler},altinKgUSD,madenCarpan,true,modeller),(konfMus||"siparis")+"-musteri")} style={{ ...GH, fontSize:9, padding:"5px 9px" }}>PDF Fiyatli</button>
-                  <button onClick={()=>downloadPDF(buildKonfHTML({musteri:konfMus,musKod:(musteriler[konfMus]||""),tarih:Date.now(),kalemler:konfKalemler},altinKgUSD,madenCarpan,false,modeller),(konfMus||"siparis")+"-ic")} style={{ background:"rgba(232,90,79,0.08)", border:"1px solid rgba(232,90,79,0.2)", borderRadius:9, padding:"5px 9px", color:"#e85a4f", fontSize:9, fontWeight:700, cursor:"pointer" }}>PDF Fiyatsiz</button>
+                  <button onClick={()=>downloadPDF(buildKonfHTML({musteri:konfMus,musKod:(musteriler[konfMus]||""),tarih:Date.now(),kalemler:konfKalemler},altinKgUSD,madenCarpan,true,modeller,konfSira),(konfMus||"siparis")+"-musteri")} style={{ ...GH, fontSize:9, padding:"5px 9px" }}>PDF Fiyatli</button>
+                  <button onClick={()=>downloadPDF(buildKonfHTML({musteri:konfMus,musKod:(musteriler[konfMus]||""),tarih:Date.now(),kalemler:konfKalemler},altinKgUSD,madenCarpan,false,modeller,konfSira),(konfMus||"siparis")+"-ic")} style={{ background:"rgba(232,90,79,0.08)", border:"1px solid rgba(232,90,79,0.2)", borderRadius:9, padding:"5px 9px", color:"#e85a4f", fontSize:9, fontWeight:700, cursor:"pointer" }}>PDF Fiyatsiz</button>
                   <button onClick={konfKaydet} style={{ ...BG, padding:"6px 12px", fontSize:10 }}>Kaydet</button>
                 </>}
               </div>
@@ -5642,15 +5700,17 @@ function Atolye({ onSirketDegis }) {
                     const renk    = konfRenkler[m.id]||"Sari";
                     // Fiyat override — konfFiyatlar > müşteri hafızası > model varsayılanı
                     const musHafiza = konfMus ? (kasa.musteriModelFiyat||{})[konfMus]?.[m.id] : null;
-                    const fiyatOverride = konfFiyatlar[m.id];
-                    const aktifIscilik = fiyatOverride?.iscilikDolar ?? musHafiza?.iscilikDolar ?? m.iscilikDolar;
-                    const aktifBirim   = fiyatOverride?.iscilikBirim ?? musHafiza?.iscilikBirim ?? m.iscilikBirim ?? "dolar";
-                    const mOverride = { ...m, iscilikDolar: aktifIscilik, iscilikBirim: aktifBirim };
+                    const fiyatOverride = iscilikOvrBul(konfFiyatlar[m.id], konfAyar);
+                    const hafizaAyar = iscilikOvrBul(musHafiza, konfAyar);
+                    const iscCoz = iscilikCoz(m, konfAyar, konfFiyatlar[m.id], musHafiza);
+                    const aktifIscilik = iscCoz.dolar;
+                    const aktifBirim   = iscCoz.birim;
+                    const mOverride = iscilikliModel(m, konfAyar, konfFiyatlar[m.id], musHafiza);
                     const hc      = hesapla(mOverride, konfAyar, altinKgUSD, madenCarpan);
                     const topGram = hc.mamulGram * adet;
                     const renkRenk = renk==="Rose"?"#e8833a":renk==="Beyaz"?"#aaa":"var(--vurgu)";
-                    const fiyatDegisti = fiyatOverride !== undefined;
-                    const hafizaVarMi = musHafiza && !fiyatOverride;
+                    const fiyatDegisti = !!fiyatOverride;
+                    const hafizaVarMi = !!hafizaAyar && !fiyatOverride;
                     const buyukFoto = m.kategori==="bileklik" || m.kategori==="kolye"; // bileklik/kolye — kare kırpma yerine üstte yanlamasına uzun şerit
                     return (
                       <div key={m.id} style={{ borderBottom: idx < konfList.length-1 ? "1px solid rgba(var(--vurgu-rgb),0.06)" : "none" }}>
@@ -5669,7 +5729,8 @@ function Atolye({ onSirketDegis }) {
                         {/* Kod + fiyat hafızası */}
                         <div style={{ paddingTop:4 }}>
                           <div style={{ fontSize:11, fontWeight:800, color:GOLD }}>{m.kod||"—"}</div>
-                          {hafizaVarMi && <div style={{ fontSize:7, color:"#6abf69", marginTop:2, background:"rgba(106,191,105,0.1)", padding:"1px 5px", borderRadius:3 }}>📌 {musHafiza.iscilikDolar} {musHafiza.iscilikBirim==="milyem"?"mly":"$/gr"}</div>}
+                          <button onClick={()=>konfModelDegistir(m)} title="Bu modeli başka bir modelle değiştir (yeri ve seçimleri korunur)" style={{ marginTop:5, background:"rgba(91,155,213,0.12)", border:"1px solid rgba(91,155,213,0.35)", borderRadius:6, padding:"3px 7px", color:"#5b9bd5", fontSize:9, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap" }}>⇄ Değiştir</button>
+                          {hafizaVarMi && <div style={{ fontSize:7, color:"#6abf69", marginTop:2, background:"rgba(106,191,105,0.1)", padding:"1px 5px", borderRadius:3 }}>📌 {hafizaAyar.iscilikDolar} {hafizaAyar.iscilikBirim==="milyem"?"mly":"$/gr"}</div>}
                         </div>
                         {/* Ürün + not */}
                         <div>
@@ -5744,9 +5805,9 @@ function Atolye({ onSirketDegis }) {
                         </div>
                         {/* Fiyat override */}
                         <div style={{ paddingTop:2 }}>
-                          <div style={{ fontSize:7, color:"#665d4a", fontWeight:700, marginBottom:3 }}>İŞÇİLİK</div>
+                          <div style={{ fontSize:7, color:"#665d4a", fontWeight:700, marginBottom:3 }}>İŞÇİLİK · {konfAyar}</div>
                           <div style={{ display:"flex", gap:3, marginBottom:3 }}>
-                            <select value={aktifBirim} onChange={e=>setKonfFiyatlar(p=>({...p,[m.id]:{iscilikDolar:aktifIscilik,iscilikBirim:e.target.value}}))}
+                            <select value={aktifBirim} onChange={e=>konfFiyatYaz(m.id, konfAyar, aktifIscilik, e.target.value)}
                               style={{ ...IS, width:58, padding:"2px 3px", fontSize:8 }}>
                               <option value="dolar">$/gr</option>
                               <option value="milyem">mly</option>
@@ -5754,7 +5815,7 @@ function Atolye({ onSirketDegis }) {
                             <input type="number" step="0.001" value={aktifIscilik===0?0:(aktifIscilik??"")} placeholder={String(m.iscilikDolar||"")}
                               onChange={e=>{
                                 const v = e.target.value;
-                                setKonfFiyatlar(p=>({...p,[m.id]:{iscilikDolar: v===""?0:Number(v), iscilikBirim:aktifBirim}}));
+                                konfFiyatYaz(m.id, konfAyar, v===""?0:Number(v), aktifBirim);
                               }}
                               style={{ ...IS, width:72, padding:"2px 4px", fontSize:9, fontWeight:700,
                                 borderColor: fiyatDegisti?"rgba(var(--vurgu-rgb),0.5)":"rgba(var(--vurgu-rgb),0.12)",
@@ -5764,12 +5825,12 @@ function Atolye({ onSirketDegis }) {
                           <div style={{ display:"flex", gap:3 }}>
                             {konfMus && (fiyatDegisti || hafizaVarMi) && (
                               <button onClick={()=>{
-                                const yeniKasa = { ...kasa, musteriModelFiyat: { ...(kasa.musteriModelFiyat||{}), [konfMus]: { ...((kasa.musteriModelFiyat||{})[konfMus]||{}), [m.id]: { iscilikDolar:aktifIscilik, iscilikBirim:aktifBirim } } } };
+                                const yeniKasa = { ...kasa, musteriModelFiyat: { ...(kasa.musteriModelFiyat||{}), [konfMus]: { ...((kasa.musteriModelFiyat||{})[konfMus]||{}), [m.id]: { ...(((kasa.musteriModelFiyat||{})[konfMus]||{})[m.id]?.iscilikDolar === undefined ? (((kasa.musteriModelFiyat||{})[konfMus]||{})[m.id]||{}) : {}), [konfAyar]: { iscilikDolar:aktifIscilik, iscilikBirim:aktifBirim } } } } };
                                 svKasa(yeniKasa);
                               }} style={{ fontSize:7, background:"rgba(106,191,105,0.1)", border:"1px solid rgba(106,191,105,0.2)", borderRadius:4, padding:"2px 5px", color:"#6abf69", cursor:"pointer", whiteSpace:"nowrap" }}>💾 Kaydet</button>
                             )}
                             {fiyatDegisti && (
-                              <button onClick={()=>setKonfFiyatlar(p=>{ const y={...p}; delete y[m.id]; return y; })}
+                              <button onClick={()=>konfFiyatSifirla(m.id, konfAyar)}
                                 style={{ fontSize:7, background:"rgba(232,90,79,0.1)", border:"1px solid rgba(232,90,79,0.2)", borderRadius:4, padding:"2px 5px", color:"#e85a4f", cursor:"pointer" }}>↺</button>
                             )}
                           </div>
@@ -5796,7 +5857,8 @@ function Atolye({ onSirketDegis }) {
                         {/* Top gram */}
                         <div style={{ textAlign:"center", fontSize:11, fontWeight:800, color:"var(--goldtext)" }}>{fN(topGram)} gr</div>
                         {/* Sil */}
-                        <div style={{ textAlign:"center" }}>
+                        <div style={{ textAlign:"center", display:"flex", flexDirection:"column", alignItems:"center", gap:4 }}>
+                          
                           <button onClick={()=>togKonf(m)} style={{ background:"rgba(232,90,79,0.08)", border:"1px solid rgba(232,90,79,0.15)", borderRadius:6, padding:"3px 8px", color:"#e85a4f", fontSize:9, cursor:"pointer" }}>X</button>
                         </div>
                       </div>
@@ -5839,6 +5901,9 @@ function Atolye({ onSirketDegis }) {
               <h2 style={{ margin:0, fontSize:14, fontWeight:700, color:"var(--goldtext)" }}>Siparis Gecmisi ({siparisler.length})</h2>
               <div style={{ display:"flex", gap:6, alignItems:"center", flexWrap:"wrap" }}>
                 <input value={sipMusF} onChange={e=>setSipMusF(e.target.value)} placeholder="Musteri ara..." style={{ ...IS, width:130, padding:"5px 8px", fontSize:10 }}/>
+                <select value={sipSira} onChange={e=>setSipSira(e.target.value)} title="Kalem sıralaması (görünüm + PDF)" style={{ ...IS, width:"auto", padding:"5px 8px", fontSize:10 }}>
+                  {KONF_SIRA_SECENEKLERI.map(o => <option key={o.id} value={o.id}>↕ {o.l}</option>)}
+                </select>
                 <input type="date" value={sipTarih1} onChange={e=>setSipTarih1(e.target.value)} style={{ ...IS, width:120, padding:"5px 8px", fontSize:10 }}/>
                 <span style={{ color:"#665d4a", fontSize:10 }}>—</span>
                 <input type="date" value={sipTarih2} onChange={e=>setSipTarih2(e.target.value)} style={{ ...IS, width:120, padding:"5px 8px", fontSize:10 }}/>
@@ -5961,8 +6026,8 @@ function Atolye({ onSirketDegis }) {
                                 </div>
                               );
                             })()}
-                            <button onClick={()=>downloadPDF(buildKonfHTML(s,s.altinKgUSD||altinKgUSD,s.mc||madenCarpan,true,modeller),(s.musteri||"siparis")+"-fiyatli")} style={{ ...GH, fontSize:8, padding:"3px 7px" }}>Fiyatlı</button>
-                            <button onClick={()=>downloadPDF(buildKonfHTML(s,s.altinKgUSD||altinKgUSD,s.mc||madenCarpan,false,modeller),(s.musteri||"siparis")+"-fiyatsiz")} style={{ background:"rgba(232,90,79,0.08)", border:"1px solid rgba(232,90,79,0.2)", borderRadius:9, padding:"3px 7px", color:"#e85a4f", fontSize:8, fontWeight:700, cursor:"pointer" }}>Fiyatsız</button>
+                            <button onClick={()=>downloadPDF(buildKonfHTML(s,s.altinKgUSD||altinKgUSD,s.mc||madenCarpan,true,modeller,sipSira),(s.musteri||"siparis")+"-fiyatli")} style={{ ...GH, fontSize:8, padding:"3px 7px" }}>Fiyatlı</button>
+                            <button onClick={()=>downloadPDF(buildKonfHTML(s,s.altinKgUSD||altinKgUSD,s.mc||madenCarpan,false,modeller,sipSira),(s.musteri||"siparis")+"-fiyatsiz")} style={{ background:"rgba(232,90,79,0.08)", border:"1px solid rgba(232,90,79,0.2)", borderRadius:9, padding:"3px 7px", color:"#e85a4f", fontSize:8, fontWeight:700, cursor:"pointer" }}>Fiyatsız</button>
                             <button onClick={()=>{
                               if (!window.confirm("Sipariş silinip konfirmasyona geri alınacak. Emin misiniz?")) return;
                               // Kalemlerden benzersiz modelleri konfirmasyona al
@@ -6104,7 +6169,7 @@ function Atolye({ onSirketDegis }) {
                           </div>
                         )}
 
-                        {siraliKonfListe(s.kalemler||[]).map(k => {
+                        {konfSiralaListe(s.kalemler||[], sipSira).map(k => {
                           const mevcDurum = kalemDurumlar[k.id] || k.durum || "baslanmadi";
                           const dur = DURUMLAR.find(d => d.id===mevcDurum) || DURUMLAR[0];
                           const buyukFoto = k.kategori==="bileklik" || k.kategori==="kolye"; // bileklik/kolye — kare kırpma yerine üstte yanlamasına uzun şerit
@@ -10096,8 +10161,28 @@ function Atolye({ onSirketDegis }) {
             {/* Ayar bazlı işçilik */}
             <div style={{ marginTop:8, borderTop:"1px solid rgba(var(--vurgu-rgb),0.1)", paddingTop:8 }}>
               <div style={{ fontSize:8, color:"#8a7d64", fontWeight:700, marginBottom:6 }}>AYAR BAZLI İŞÇİLİK (opsiyonel)</div>
-              {Object.entries(fIscilikAyarlar).map(([ayar, val]) => (
-                <div key={ayar} style={{ display:"flex", gap:5, alignItems:"center", marginBottom:5 }}>
+              {Object.entries(fIscilikAyarlar).map(([ayar, val]) => {
+                // Taşlı üründe düşük ayarda (10K) taş has değeri düşer → o ayarın kârını ve "14K kârını koruyan" işçiliği göster
+                const tlForm = (() => { const tl = fTaslar.reduce((acc,t)=>{const gr=tasGramHesapla(t.sekil,t.tur,isNaN(Number(t.boyut))?t.boyut:Number(t.boyut),Number(t.adet)||1,ozelTaslar,tasGramOverride);return acc+(gr>0?gr:(Number(t.gram)||0));},0); return (fTaslar.length>0&&tl>0)?tl:(Number(fTasGram)||0); })();
+                let karBilgi = null;
+                if (altinKgUSD>0 && Number(fGram)>0 && ayar!=="14K" && ayar!=="925") {
+                  const mf = { gram:Number(fGram), refAyar:fRefAyar, tasGram:tlForm, madenCarpan:Number(fMadenC)||0, iscilikDolar:Number(fIscilikDolar)||0, iscilikBirim:fIscilikBirim, iscilikAyarlar:fIscilikAyarlar, ekMaliyet:Number(fEkMaliyet)||0 };
+                  const hA = hesapla(mf, ayar, altinKgUSD, madenCarpan);
+                  const h14 = hesapla(mf, "14K", altinKgUSD, madenCarpan);
+                  const kk = karKoruyanFiyat(mf, ayar, altinKgUSD, madenCarpan);
+                  let oneri = null;
+                  if (kk && kk.farkli && hA.mamulGram>0 && kk.ekHas>0) {
+                    const gerekHas = hA.iscilikHas + kk.ekHas;
+                    const birim = val.birim || "dolar";
+                    const ham = birim==="milyem" ? gerekHas/hA.mamulGram : (gerekHas*hA.hasGramUSD)/hA.mamulGram;
+                    const k = birim==="milyem" ? 1000 : 100;
+                    oneri = { deger: Math.ceil(ham*k)/k, birim }; // yukarı yuvarla — 14K kârının altına düşmesin
+                  }
+                  karBilgi = { kar: hA.karHas, kar14: h14.karHas, tasli: tlForm>0, oneri }; // kâr HAS cinsinden karşılaştırılır (düşük ayarda gram azaldığı için mly/gr yanıltır)
+                }
+                return (
+                <div key={ayar} style={{ marginBottom:7 }}>
+                <div style={{ display:"flex", gap:5, alignItems:"center", marginBottom:3 }}>
                   <span style={{ fontSize:9, fontWeight:700, color:GOLD, width:30, flexShrink:0 }}>{ayar}</span>
                   <select value={val.birim||"dolar"} onChange={e=>setFIscilikAyarlar(p=>({...p,[ayar]:{...p[ayar],birim:e.target.value}}))} style={{ ...IS, width:100, padding:"4px 5px", fontSize:10 }}>
                     <option value="dolar">$ / gr</option>
@@ -10106,7 +10191,20 @@ function Atolye({ onSirketDegis }) {
                   <input type="number" value={val.dolar||""} onChange={e=>setFIscilikAyarlar(p=>({...p,[ayar]:{...p[ayar],dolar:e.target.value}}))} placeholder="değer" style={{ ...IS, flex:1, padding:"4px 6px", fontSize:10 }}/>
                   <button onClick={()=>setFIscilikAyarlar(p=>{ const y={...p}; delete y[ayar]; return y; })} style={{ ...RD, fontSize:9, padding:"3px 7px" }}>✕</button>
                 </div>
-              ))}
+                {karBilgi && (
+                  <div style={{ marginLeft:35, fontSize:8, color: karBilgi.kar < karBilgi.kar14 - 0.0005 ? "#e85a4f" : "#6abf69", fontWeight:600, display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}>
+                    <span>{ayar} kârı: {fN(karBilgi.kar,3)} has · 14K kârı: {fN(karBilgi.kar14,3)} has</span>
+                    {karBilgi.oneri && (
+                      <button type="button" onClick={()=>setFIscilikAyarlar(p=>({...p,[ayar]:{...p[ayar],dolar:String(karBilgi.oneri.deger)}}))}
+                        style={{ background:"rgba(106,191,105,0.12)", border:"1px solid rgba(106,191,105,0.35)", borderRadius:5, padding:"2px 7px", color:"#6abf69", fontSize:8, fontWeight:700, cursor:"pointer" }}>
+                        14K kârını koru → {karBilgi.oneri.birim==="milyem" ? fN(karBilgi.oneri.deger,3)+" mly" : fUSD(karBilgi.oneri.deger)+"/gr"}
+                      </button>
+                    )}
+                  </div>
+                )}
+                </div>
+                );
+              })}
               <div style={{ display:"flex", gap:5, marginTop:4 }}>
                 <select onChange={e=>{ if(!e.target.value) return; const ayar=e.target.value; if(!fIscilikAyarlar[ayar]) setFIscilikAyarlar(p=>({...p,[ayar]:{dolar:"",birim:fIscilikBirim}})); e.target.value=""; }} style={{ ...IS, flex:1, padding:"4px 6px", fontSize:10 }}>
                   <option value="">+ Ayar ekle...</option>
@@ -10116,6 +10214,50 @@ function Atolye({ onSirketDegis }) {
             </div>
           </Fl>
         </div>
+
+        {/* AYAR KARŞILAŞTIRMA — aynı ürün 10K / 14K / 18K'da: gram, taş has değeri, işçilik, kâr ve 1 kg'daki adet */}
+        {Number(fGram)>0 && (() => {
+          const tl = (() => { const t = fTaslar.reduce((acc,x)=>{const gr=tasGramHesapla(x.sekil,x.tur,isNaN(Number(x.boyut))?x.boyut:Number(x.boyut),Number(x.adet)||1,ozelTaslar,tasGramOverride);return acc+(gr>0?gr:(Number(x.gram)||0));},0); return (fTaslar.length>0&&t>0)?t:(Number(fTasGram)||0); })();
+          const mf = { gram:Number(fGram), refAyar:fRefAyar, tasGram:tl, madenCarpan:Number(fMadenC)||0, iscilikDolar:Number(fIscilikDolar)||0, iscilikBirim:fIscilikBirim, iscilikAyarlar:fIscilikAyarlar, ekMaliyet:Number(fEkMaliyet)||0 };
+          const kar = altinKgUSD>0;
+          const satirlar = ["10K","14K","18K"].map(ay => {
+            const h = hesapla(mf, ay, altinKgUSD, madenCarpan);
+            const maden = Math.max(0, h.mamulGram - tl);
+            return { ay, h, adetMaden: maden>0 ? 1000/maden : 0, adetMamul: h.mamulGram>0 ? 1000/h.mamulGram : 0 };
+          });
+          const ref = satirlar.find(r => r.ay==="14K");
+          const kol = kar ? "34px 1fr 1fr 1fr 1.1fr 1.2fr" : "34px 1fr 1fr 1.2fr";
+          const hucre = { fontSize:9, textAlign:"right" };
+          return (
+            <div style={{ background:"rgba(91,155,213,0.04)", border:"1px solid rgba(91,155,213,0.15)", borderRadius:10, padding:"10px 12px", marginBottom:10 }}>
+              <div style={{ fontSize:9, fontWeight:700, color:"#5b9bd5", marginBottom:2 }}>AYAR KARŞILAŞTIRMA</div>
+              <div style={{ fontSize:8, color:"#8a7d64", marginBottom:7 }}>Taş has değeri ayarla değişir (taş gr × ayar oranı: 10K 0.417 · 14K 0.585 · 18K 0.750). Kırmızı = 14K'ya göre kâr kaybı → o ayara ayrı işçilik girin.</div>
+              <div style={{ display:"grid", gridTemplateColumns:kol, gap:"3px 6px", alignItems:"center" }}>
+                <div style={{ fontSize:7, color:"#665d4a", fontWeight:700 }}>AYAR</div>
+                <div style={{ ...hucre, fontSize:7, color:"#665d4a", fontWeight:700 }}>MADEN GR (TAŞSIZ)</div>
+                {kar && <div style={{ ...hucre, fontSize:7, color:"#665d4a", fontWeight:700 }}>TAŞ HAS</div>}
+                {kar && <div style={{ ...hucre, fontSize:7, color:"#665d4a", fontWeight:700 }}>İŞÇİLİK HAS</div>}
+                {kar && <div style={{ ...hucre, fontSize:7, color:"#665d4a", fontWeight:700 }}>KÂR HAS (14K'ya fark)</div>}
+                <div style={{ ...hucre, fontSize:7, color:"#665d4a", fontWeight:700 }}>1 KG'DA ADET</div>
+                {satirlar.map(r => {
+                  const fark = kar ? r.h.karHas - ref.h.karHas : 0;
+                  const kayip = kar && fark < -0.0005;
+                  return (
+                    <Fragment key={r.ay}>
+                      <div style={{ fontSize:10, fontWeight:800, color:GOLD }}>{r.ay}</div>
+                      <div style={{ ...hucre, color:T.text, lineHeight:1.25 }}><b>{fN(Math.max(0, r.h.mamulGram - tl),3)}</b> gr<div style={{ fontSize:7, color:"#8a7d64" }}>taş {fN(tl,3)} · toplam {fN(r.h.mamulGram,3)}</div></div>
+                      {kar && <div style={{ ...hucre, color:"#5b9bd5" }}>{fN(r.h.tasHas,3)}</div>}
+                      {kar && <div style={{ ...hucre, color:"#e8833a" }}>{fN(r.h.iscilikHas,3)}</div>}
+                      {kar && <div style={{ ...hucre, fontWeight:800, color: kayip?"#e85a4f":"#6abf69" }}>{fN(r.h.karHas,3)}{r.ay!=="14K" && <span style={{ fontWeight:600 }}> ({fark>=0?"+":""}{fN(fark,3)})</span>}</div>}
+                      <div style={{ ...hucre, color:T.text }} title={"Taşsız maden gramına göre: "+Math.round(r.adetMaden)+" adet · Taş dahil mamul gramına göre: "+Math.round(r.adetMamul)+" adet"}>{r.adetMaden>0 ? Math.round(r.adetMaden) : "—"} <span style={{ color:"#665d4a", fontSize:7 }}>({r.adetMamul>0 ? Math.round(r.adetMamul) : "—"})</span></div>
+                    </Fragment>
+                  );
+                })}
+              </div>
+              <div style={{ fontSize:7, color:"#665d4a", marginTop:6 }}>1 kg'da adet = 1000 ÷ taşsız maden gramı (parantez: taş dahil mamul gramına göre). {!kar && "Kâr sütunları için altın fiyatını girin."}</div>
+            </div>
+          );
+        })()}
 
         {altinKgUSD>0 && Number(fGram)>0 && (
           <OnizlemeBox m={{ gram:Number(fGram), refAyar:fRefAyar, tasGram: (() => { const tl = fTaslar.reduce((acc,t)=>{const gr=tasGramHesapla(t.sekil,t.tur,isNaN(Number(t.boyut))?t.boyut:Number(t.boyut),Number(t.adet)||1,ozelTaslar,tasGramOverride);return acc+(gr>0?gr:(Number(t.gram)||0));},0); return (fTaslar.length>0&&tl>0)?tl:(Number(fTasGram)||0); })(), madenCarpan:Number(fMadenC)||0, iscilikDolar:Number(fIscilikDolar)||0, iscilikBirim:fIscilikBirim, ekMaliyet:Number(fEkMaliyet)||0 }} altinKgUSD={altinKgUSD} mc={madenCarpan} />
