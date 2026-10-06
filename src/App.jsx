@@ -9947,6 +9947,23 @@ function Atolye({ onSirketDegis }) {
           <div style={{ flex:1 }}><Fl label="Koleksiyon" T={T}><select value={fKolId} onChange={e=>setFKolId(e.target.value)} style={IS}><option value="">-- Sec --</option>{kollar.map(k=><option key={k.id} value={k.id}>{k.on?"["+k.on+"] ":""}{k.ad}</option>)}</select></Fl></div>
         </div>
 
+        <div style={{ background:"rgba(167,139,250,0.03)", border:"1px solid rgba(167,139,250,0.1)", borderRadius:10, padding:"10px 12px", marginBottom:10 }}>
+          <div style={{ fontSize:9, fontWeight:700, color:"#a78bfa", marginBottom:8 }}>ETIKETLER</div>
+          <div style={{ display:"flex", gap:4, flexWrap:"wrap", marginBottom:6 }}>
+            {fEtiketler.map(e => (
+              <span key={e} style={{ background:"rgba(167,139,250,0.1)", color:"#a78bfa", padding:"2px 7px", borderRadius:4, fontSize:8, fontWeight:600, display:"flex", alignItems:"center", gap:3 }}>
+                #{e}<button onClick={()=>setFEtiketler(fEtiketler.filter(x=>x!==e))} style={{ background:"none", border:"none", color:"#a78bfa", cursor:"pointer", fontSize:9, padding:0, lineHeight:1 }}>x</button>
+              </span>
+            ))}
+          </div>
+          <div style={{ display:"flex", gap:5 }}>
+            <input value={fYeniEtiket} onChange={e=>setFYeniEtiket(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addEtiket()} placeholder="yeni etiket..." style={{ ...IS, flex:1, padding:"5px 8px", fontSize:11 }}/>
+            <button onClick={addEtiket} style={{ ...GH, padding:"5px 10px", fontSize:10 }}>+ Ekle</button>
+          </div>
+        </div>
+
+        <Fl label="Aciklama" T={T}><textarea value={fAc} onChange={e=>setFAc(e.target.value)} placeholder="Detaylar..." rows={2} style={{ ...IS, resize:"vertical" }}/></Fl>
+
         {fSetModu && (
           <div style={{ background:"rgba(64,200,192,0.05)", border:"1px solid rgba(64,200,192,0.2)", borderRadius:12, padding:"12px 14px", marginBottom:12 }}>
             <div style={{ fontSize:9, color:T.sub, marginBottom:10 }}>Setin iki parçasının kodunu girin — gram, taş, fiyat bilgisi mevcut kayıttan otomatik gelir. Hedef koleksiyon yukarıdaki "Koleksiyon" alanından seçilir.</div>
@@ -10367,22 +10384,6 @@ function Atolye({ onSirketDegis }) {
           <OnizlemeBox m={{ gram:Number(fGram), refAyar:fRefAyar, tasGram: (() => { const tl = fTaslar.reduce((acc,t)=>{const gr=tasGramHesapla(t.sekil,t.tur,isNaN(Number(t.boyut))?t.boyut:Number(t.boyut),Number(t.adet)||1,ozelTaslar,tasGramOverride);return acc+(gr>0?gr:(Number(t.gram)||0));},0); return (fTaslar.length>0&&tl>0)?tl:(Number(fTasGram)||0); })(), madenCarpan:Number(fMadenC)||0, iscilikDolar:Number(fIscilikDolar)||0, iscilikBirim:fIscilikBirim, ekMaliyet:Number(fEkMaliyet)||0 }} altinKgUSD={altinKgUSD} mc={madenCarpan} />
         )}
 
-        <div style={{ background:"rgba(167,139,250,0.03)", border:"1px solid rgba(167,139,250,0.1)", borderRadius:10, padding:"10px 12px", marginBottom:10 }}>
-          <div style={{ fontSize:9, fontWeight:700, color:"#a78bfa", marginBottom:8 }}>ETIKETLER</div>
-          <div style={{ display:"flex", gap:4, flexWrap:"wrap", marginBottom:6 }}>
-            {fEtiketler.map(e => (
-              <span key={e} style={{ background:"rgba(167,139,250,0.1)", color:"#a78bfa", padding:"2px 7px", borderRadius:4, fontSize:8, fontWeight:600, display:"flex", alignItems:"center", gap:3 }}>
-                #{e}<button onClick={()=>setFEtiketler(fEtiketler.filter(x=>x!==e))} style={{ background:"none", border:"none", color:"#a78bfa", cursor:"pointer", fontSize:9, padding:0, lineHeight:1 }}>x</button>
-              </span>
-            ))}
-          </div>
-          <div style={{ display:"flex", gap:5 }}>
-            <input value={fYeniEtiket} onChange={e=>setFYeniEtiket(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addEtiket()} placeholder="yeni etiket..." style={{ ...IS, flex:1, padding:"5px 8px", fontSize:11 }}/>
-            <button onClick={addEtiket} style={{ ...GH, padding:"5px 10px", fontSize:10 }}>+ Ekle</button>
-          </div>
-        </div>
-
-        <Fl label="Aciklama" T={T}><textarea value={fAc} onChange={e=>setFAc(e.target.value)} placeholder="Detaylar..." rows={2} style={{ ...IS, resize:"vertical" }}/></Fl>
 
         {/* MÜŞTERİ GİZLEME — sadece mevcut modeli düzenlerken */}
         {editM && Object.keys(musteriler).length > 0 && (
