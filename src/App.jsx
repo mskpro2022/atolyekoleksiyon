@@ -2583,7 +2583,7 @@ function VitrinModu({ kod, onizleme }) {
     return (
     <div key={m.id} className="vm-card" style={{ gridColumn: "span "+(genis ? vitrinSutun : 3) }}>
       <div onClick={()=>{ setDetayModel(m); if(vitrinMusteri && !onizleme) vitrinAktiviteKaydetGuvenli(vitrinMusteri.kod, vitrinMusteri.onek, "model", kolAdi, m.kod, m.ad); }}
-        style={{ aspectRatio: genis ? String(5*vitrinSutun)+"/12" : "5/4", background:"#f0f0f0", borderRadius: kucuk?9:12, position:"relative", overflow:"hidden", boxShadow: sec?"0 0 0 1px rgba(0,0,0,0.4), 0 0 0 3px var(--vurgu), 0 0 0 5px rgba(var(--vurgu-rgb),0.35)":"none" }}>
+        style={{ aspectRatio: genis ? String(5*vitrinSutun)+"/12" : "5/4", background:"#ededed", borderRadius: kucuk?9:12, position:"relative", overflow:"hidden", boxShadow: sec?"0 0 0 1px rgba(0,0,0,0.4), 0 0 0 3px var(--vurgu), 0 0 0 5px rgba(var(--vurgu-rgb),0.35)":"none" }}>
         {m.foto
           ? <img className="vm-ph" src={m.foto} alt="" style={{ ...(genis ? { width:"100%", height:"100%" } : { position:"absolute", top:"8.5%", left:"8.5%", width:"83%", height:"83%", ...FOTO_KENAR_SOLUK }), objectFit: genis ? "cover" : "contain", objectPosition: (genis && m.kategori==="kolye") ? "50% 85%" : "center center", display:"block", ...((genis && m.kategori==="kolye") ? { width:"72%", margin:"0 auto" } : {}) }}/>
           : <div style={{ width:"100%", height:"100%", display:"flex", alignItems:"center", justifyContent:"center", color:"#d2d2d7", fontSize:26 }}>◇</div>}
