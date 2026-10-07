@@ -5582,7 +5582,7 @@ function Atolye({ onSirketDegis }) {
                       ) : h && (altinKgUSD>0 && m.gram>0 && m.refAyar!=="925") ? (
                         <div style={{ background:T.header, border:"1px solid "+T.border, borderRadius:6, padding:"4px 6px", marginTop:2 }}>
                           <div style={{ display:"grid", gridTemplateColumns:"22px 1.1fr .8fr .8fr .8fr 1.3fr 1.1fr", gap:"1px 3px", alignItems:"center" }}>
-                            {["AYAR","GR","TAŞ","İŞÇ","MAL","KÂR HAS","MLY/GR"].map((b,bi) => <div key={b} style={{ fontSize:5, color:T.dim, fontWeight:700, textAlign: bi===0?"left":"right" }}>{b}</div>)}
+                            {["AYAR","GR","TAŞ","İŞÇ","MAL","ÜRÜN KÂRI","GRAM KÂRI"].map((b,bi) => <div key={b} style={{ fontSize:5, color:T.dim, fontWeight:700, textAlign: bi===0?"left":"right" }}>{b}</div>)}
                             {ayarKarsilastir(m, altinKgUSD, madenCarpan).map(r => {
                               const renk = r.kayip ? "#e85a4f" : "#6abf69";
                               return (
@@ -10377,8 +10377,8 @@ function Atolye({ onSirketDegis }) {
                 {kar && <div style={bas}>TAŞ HAS</div>}
                 {kar && <div style={bas}>İŞÇİLİK HAS</div>}
                 {kar && <div style={bas}>MALİYET HAS</div>}
-                {kar && <div style={bas}>KÂR HAS</div>}
-                {kar && <div style={bas}>NET MLY/GR</div>}
+                {kar && <div style={bas}>ÜRÜN KÂRI</div>}
+                {kar && <div style={bas}>GRAM KÂRI</div>}
                 <div style={bas}>1 KG'DA ADET</div>
                 {satirlar.map(r => (
                   <Fragment key={r.ay}>
