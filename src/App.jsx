@@ -3619,6 +3619,18 @@ function Atolye({ onSirketDegis }) {
   const [grupla,     setGrupla]     = useState(false); // kod ön ekine göre grupla
   const [arama,     setArama]     = useState("");
   const [katalogZoom, setKatalogZoom] = useState(() => { try { return Number(localStorage.getItem("atolye_katalog_zoom")) || 220; } catch(e) { return 220; } }); // Ctrl+scroll ile büyüt/küçült — kart min-genişliği (px)
+  const [katGridW, setKatGridW] = useState(0); // model ızgarasının genişliği → bileklik kartı kaç sütun kaplayacak
+  const katGridRO = useRef(null);
+  const katGridRef = useCallback(node => {
+    if (katGridRO.current) { katGridRO.current.disconnect(); katGridRO.current = null; }
+    if (node) {
+      setKatGridW(node.clientWidth || 0);
+      if (typeof ResizeObserver !== "undefined") {
+        const ro = new ResizeObserver(es => { const w = Math.round(es[0].contentRect.width); setKatGridW(prev => Math.abs(prev - w) > 1 ? w : prev); });
+        ro.observe(node); katGridRO.current = ro;
+      }
+    }
+  }, []);
   const katalogZoomTut = useCallback((delta) => {
     setKatalogZoom(prev => {
       const yeni = Math.min(420, Math.max(130, prev - delta * 0.4));
@@ -5488,10 +5500,13 @@ function Atolye({ onSirketDegis }) {
                 const ik  = konfList.find(x=>x.id===m.id);
                 const dur = DURUMLAR.find(d=>d.id===m.durum)||DURUMLAR[0];
                 const h   = altinKgUSD>0 ? hesapla(m, m.refAyar, altinKgUSD, madenCarpan) : null;
+                const bilMi = m.kategori === "bileklik";
+                const katSut = Math.max(1, Math.floor((katGridW + 9) / (katalogZoom + 9)));
+                const bilSpan = katSut >= 4 ? Math.floor(katSut/2) : katSut; // 6 sütunda bileklik 3 sütun kaplar → satırda 2 bileklik
                 return (
-                  <div key={m.id} style={{ background:ik?"rgba(var(--vurgu-rgb),0.07)":"rgba(var(--vurgu-rgb),0.02)", border:"1px solid", borderColor:ik?"rgba(var(--vurgu-rgb),0.28)":"rgba(var(--vurgu-rgb),0.07)", borderRadius:11, overflow:"hidden", animation:"cardin .3s ease "+(i*.03)+"s both" }}>
-                    <div className="model-foto-wrap" style={{ position:"relative", height:180, background:"rgba(0,0,0,0.25)", overflow:"hidden" }}>
-                      {m.foto ? <img onClick={()=>openEM(m)} src={m.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"cover", objectPosition:"center center", display:"block", cursor:"pointer" }}/> : <div onClick={()=>openEM(m)} style={{ width:"100%", height:"100%", display:"flex", alignItems:"center", justifyContent:"center", color:"rgba(var(--vurgu-rgb),0.1)", fontSize:24, cursor:"pointer" }}>-</div>}
+                  <div key={m.id} style={{ background:ik?"rgba(var(--vurgu-rgb),0.07)":"rgba(var(--vurgu-rgb),0.02)", border:"1px solid", borderColor:ik?"rgba(var(--vurgu-rgb),0.28)":"rgba(var(--vurgu-rgb),0.07)", borderRadius:11, overflow:"hidden", animation:"cardin .3s ease "+(i*.03)+"s both", ...(bilMi && bilSpan>1 ? { gridColumn:"span "+bilSpan } : {}) }}>
+                    <div className="model-foto-wrap" style={{ position:"relative", height: bilMi ? 210 : 180, background: bilMi ? "#f7f7f8" : "rgba(0,0,0,0.25)", overflow:"hidden" }}>
+                      {m.foto ? <img onClick={()=>openEM(m)} src={m.foto} alt="" style={{ width:"100%", height:"100%", objectFit: bilMi ? "contain" : "cover", objectPosition:"center center", display:"block", cursor:"pointer" }}/> : <div onClick={()=>openEM(m)} style={{ width:"100%", height:"100%", display:"flex", alignItems:"center", justifyContent:"center", color:"rgba(var(--vurgu-rgb),0.1)", fontSize:24, cursor:"pointer" }}>-</div>}
                       {/* Detay noktaları — KÖŞELERDE, büyük (56px). Sağ üst köşe V butonunun altına kaydırıldı ki çakışmasın. */}
                       {m.foto && Array.isArray(m.detayNoktalari) && m.detayNoktalari.filter(n=>(n.tip!=="foto")||n.foto).slice(0,4).map((n,di) => {
                         const ayriFoto = n.tip === "foto";
@@ -5608,7 +5623,7 @@ function Atolye({ onSirketDegis }) {
               };
               const gridStil = { display:"grid", gridTemplateColumns:`repeat(auto-fill,minmax(${katalogZoom}px,1fr))`, gap:9 };
               // Klasör sistemi gruplama işini yapıyor → burada hep düz liste
-              return <div style={gridStil}>{gorunen.map((m,i)=>renderKart(m,i))}</div>;
+              return <div ref={katGridRef} style={gridStil}>{gorunen.map((m,i)=>renderKart(m,i))}</div>;
             })()}
 
             {/* ALTTA + MODEL + EKSİK KOD TESPİTİ */}
