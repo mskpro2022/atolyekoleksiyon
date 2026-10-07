@@ -2573,10 +2573,13 @@ function VitrinModu({ kod, onizleme }) {
     const secBtnBoyut = cokKucuk ? 20 : kucuk ? 23 : 26;
     const gramBoyut = cokKucuk ? 11 : kucuk ? 12 : 15;
     const kodBoyut = cokKucuk ? 9 : kucuk ? 10 : 12;
+    // Bileklik: yatay/uzun ürün → kart yan yana birkaç sütunu birleştirir (6 sütunda 3'lü → satırda 2 bileklik); yükseklik diğer kartlarla aynı kalır
+    const bilMi = m.kategori === "bileklik";
+    const bilSpan = !bilMi ? 1 : (vitrinSutun >= 4 ? Math.floor(vitrinSutun/2) : vitrinSutun);
     return (
-    <div key={m.id} className="vm-card">
+    <div key={m.id} className="vm-card" style={bilSpan>1 ? { gridColumn:"span "+bilSpan } : undefined}>
       <div onClick={()=>{ setDetayModel(m); if(vitrinMusteri && !onizleme) vitrinAktiviteKaydetGuvenli(vitrinMusteri.kod, vitrinMusteri.onek, "model", kolAdi, m.kod, m.ad); }}
-        style={{ aspectRatio:"4/3", background:"#f7f7f8", borderRadius: kucuk?9:12, position:"relative", overflow:"hidden", boxShadow: sec?"0 0 0 1px rgba(0,0,0,0.4), 0 0 0 3px var(--vurgu), 0 0 0 5px rgba(var(--vurgu-rgb),0.35)":"none" }}>
+        style={{ aspectRatio: bilSpan>1 ? String(4*bilSpan)+"/3" : "4/3", background:"#f7f7f8", borderRadius: kucuk?9:12, position:"relative", overflow:"hidden", boxShadow: sec?"0 0 0 1px rgba(0,0,0,0.4), 0 0 0 3px var(--vurgu), 0 0 0 5px rgba(var(--vurgu-rgb),0.35)":"none" }}>
         {m.foto
           ? <img className="vm-ph" src={m.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"contain", display:"block" }}/>
           : <div style={{ width:"100%", height:"100%", display:"flex", alignItems:"center", justifyContent:"center", color:"#d2d2d7", fontSize:26 }}>◇</div>}
