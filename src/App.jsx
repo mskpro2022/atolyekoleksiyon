@@ -2579,9 +2579,9 @@ function VitrinModu({ kod, onizleme }) {
     return (
     <div key={m.id} className="vm-card" style={bilSpan>1 ? { gridColumn:"span "+bilSpan } : undefined}>
       <div onClick={()=>{ setDetayModel(m); if(vitrinMusteri && !onizleme) vitrinAktiviteKaydetGuvenli(vitrinMusteri.kod, vitrinMusteri.onek, "model", kolAdi, m.kod, m.ad); }}
-        style={{ aspectRatio: bilMi ? (bilSpan>1 ? "3/1" : "2/1") : "4/3", background:"#f7f7f8", borderRadius: kucuk?9:12, position:"relative", overflow:"hidden", boxShadow: sec?"0 0 0 1px rgba(0,0,0,0.4), 0 0 0 3px var(--vurgu), 0 0 0 5px rgba(var(--vurgu-rgb),0.35)":"none" }}>
+        style={{ aspectRatio: bilMi ? "2/1" : "4/3", background:"#f7f7f8", borderRadius: kucuk?9:12, position:"relative", overflow:"hidden", boxShadow: sec?"0 0 0 1px rgba(0,0,0,0.4), 0 0 0 3px var(--vurgu), 0 0 0 5px rgba(var(--vurgu-rgb),0.35)":"none" }}>
         {m.foto
-          ? <img className="vm-ph" src={m.foto} alt="" style={{ width:"100%", height:"100%", objectFit: m.kategori==="bileklik" ? "cover" : "contain", objectPosition:"center center", display:"block" }}/>
+          ? <img className="vm-ph" src={m.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"cover", objectPosition: m.kategori==="kolye" ? "50% 72%" : "center center", display:"block" }}/>
           : <div style={{ width:"100%", height:"100%", display:"flex", alignItems:"center", justifyContent:"center", color:"#d2d2d7", fontSize:26 }}>◇</div>}
         {yeni && !cokKucuk && <span className="vm-yeni-badge" style={{ position:"absolute", top: kucuk?6:10, left: kucuk?6:10, background:"var(--vurgu)", color:"#1d1d1f", fontSize: kucuk?9:12, padding: kucuk?"3px 8px":"5px 13px", borderRadius:980, fontWeight:700, letterSpacing:"0.05em", boxShadow:"0 2px 10px rgba(0,0,0,0.35)" }}>{ce("yeni")}</span>}
         {yeni && cokKucuk && <span style={{ position:"absolute", top:5, left:5, width:8, height:8, borderRadius:"50%", background:"var(--vurgu)", boxShadow:"0 1px 4px rgba(0,0,0,0.4)" }}/>}
@@ -5508,8 +5508,8 @@ function Atolye({ onSirketDegis }) {
                 const bilSpan = Math.max(1, Math.floor(katSut/3)); // satırda 3 bileklik yan yana
                 return (
                   <div key={m.id} style={{ background:ik?"rgba(var(--vurgu-rgb),0.07)":"rgba(var(--vurgu-rgb),0.02)", border:"1px solid", borderColor:ik?"rgba(var(--vurgu-rgb),0.28)":"rgba(var(--vurgu-rgb),0.07)", borderRadius:11, overflow:"hidden", animation:"cardin .3s ease "+(i*.03)+"s both", ...(bilMi && bilSpan>1 ? { gridColumn:"span "+bilSpan } : {}) }}>
-                    <div className="model-foto-wrap" style={{ position:"relative", ...(bilMi ? { aspectRatio: bilSpan>1 ? "3/1" : "2/1" } : { height:180 }), background: bilMi ? "#f7f7f8" : "rgba(0,0,0,0.25)", overflow:"hidden" }}>
-                      {m.foto ? <img onClick={()=>openEM(m)} src={m.foto} alt="" style={{ width:"100%", height:"100%", objectFit: m.kategori==="kolye" ? "contain" : "cover", objectPosition:"center center", display:"block", cursor:"pointer" }}/> : <div onClick={()=>openEM(m)} style={{ width:"100%", height:"100%", display:"flex", alignItems:"center", justifyContent:"center", color:"rgba(var(--vurgu-rgb),0.1)", fontSize:24, cursor:"pointer" }}>-</div>}
+                    <div className="model-foto-wrap" style={{ position:"relative", ...(bilMi ? { aspectRatio: "2/1" } : { height:180 }), background: bilMi ? "#f7f7f8" : "rgba(0,0,0,0.25)", overflow:"hidden" }}>
+                      {m.foto ? <img onClick={()=>openEM(m)} src={m.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"cover", objectPosition: m.kategori==="kolye" ? "50% 72%" : "center center", display:"block", cursor:"pointer" }}/> : <div onClick={()=>openEM(m)} style={{ width:"100%", height:"100%", display:"flex", alignItems:"center", justifyContent:"center", color:"rgba(var(--vurgu-rgb),0.1)", fontSize:24, cursor:"pointer" }}>-</div>}
                       {/* Detay noktaları — KÖŞELERDE, büyük (56px). Sağ üst köşe V butonunun altına kaydırıldı ki çakışmasın. */}
                       {m.foto && Array.isArray(m.detayNoktalari) && m.detayNoktalari.filter(n=>(n.tip!=="foto")||n.foto).slice(0,4).map((n,di) => {
                         const ayriFoto = n.tip === "foto";
