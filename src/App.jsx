@@ -2561,7 +2561,7 @@ function VitrinModu({ kod, onizleme }) {
   };
 
   // Model ızgarası stili — sütun sayısı sağ alttaki büyüt/küçült kontrolüyle değişir
-  const modelGridStil = { display:"grid", gridTemplateColumns:`repeat(${vitrinSutun},1fr)`, gap: vitrinSutun >= 5 ? 6 : vitrinSutun === 4 ? 8 : vitrinSutun === 3 ? 10 : 14 };
+  const modelGridStil = { display:"grid", gridTemplateColumns:`repeat(${vitrinSutun*3},1fr)`, gap: vitrinSutun >= 5 ? 6 : vitrinSutun === 4 ? 8 : vitrinSutun === 3 ? 10 : 14 };
   // Tek model kartı — hem koleksiyon içi hem "Tüm Koleksiyonlar" görünümünde kullanılır
   const vKart = (m) => {
     const sec = secili.has(m.id);
@@ -2575,14 +2575,14 @@ function VitrinModu({ kod, onizleme }) {
     const kodBoyut = cokKucuk ? 9 : kucuk ? 10 : 12;
     // Bileklik: yatay/uzun ürün → kart yan yana birkaç sütunu birleştirir (6 sütunda 3'lü → satırda 2 bileklik); yükseklik diğer kartlarla aynı kalır
     const bilMi = m.kategori === "bileklik" || m.kategori === "kolye"; // kolye de bileklik gibi 3'lü geniş kart
-    const bilSpan1 = Math.max(1, Math.floor(vitrinSutun/3)); // geniş kartın sütun sayısı
-    const bilSpan = !bilMi ? 1 : bilSpan1; // satırda 3 bileklik yan yana (6 sütunda 2'şer sütun)
+    // Izgara 3×sütun ince sütundan oluşur: normal kart 3 ince sütun, bileklik/kolye = sütun sayısı kadar → her satırda tam 3 bileklik
+    const genis = bilMi && vitrinSutun >= 3;
     return (
-    <div key={m.id} className="vm-card" style={bilSpan>1 ? { gridColumn:"span "+bilSpan } : undefined}>
+    <div key={m.id} className="vm-card" style={{ gridColumn: "span "+(genis ? vitrinSutun : 3) }}>
       <div onClick={()=>{ setDetayModel(m); if(vitrinMusteri && !onizleme) vitrinAktiviteKaydetGuvenli(vitrinMusteri.kod, vitrinMusteri.onek, "model", kolAdi, m.kod, m.ad); }}
-        style={{ aspectRatio: (bilMi && bilSpan>1) ? String(4*bilSpan)+"/3" : "4/3", background:"#f7f7f8", borderRadius: kucuk?9:12, position:"relative", overflow:"hidden", boxShadow: sec?"0 0 0 1px rgba(0,0,0,0.4), 0 0 0 3px var(--vurgu), 0 0 0 5px rgba(var(--vurgu-rgb),0.35)":"none" }}>
+        style={{ aspectRatio: genis ? String(4*vitrinSutun)+"/9" : "4/3", background:"#f7f7f8", borderRadius: kucuk?9:12, position:"relative", overflow:"hidden", boxShadow: sec?"0 0 0 1px rgba(0,0,0,0.4), 0 0 0 3px var(--vurgu), 0 0 0 5px rgba(var(--vurgu-rgb),0.35)":"none" }}>
         {m.foto
-          ? <img className="vm-ph" src={m.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"cover", objectPosition: m.kategori==="kolye" ? "50% 85%" : "center center", display:"block", ...(m.kategori==="kolye" ? { width:"72%", margin:"0 auto" } : {}) }}/>
+          ? <img className="vm-ph" src={m.foto} alt="" style={{ width:"100%", height:"100%", objectFit: genis ? "cover" : "contain", objectPosition: (genis && m.kategori==="kolye") ? "50% 85%" : "center center", display:"block", ...((genis && m.kategori==="kolye") ? { width:"72%", margin:"0 auto" } : {}) }}/>
           : <div style={{ width:"100%", height:"100%", display:"flex", alignItems:"center", justifyContent:"center", color:"#d2d2d7", fontSize:26 }}>◇</div>}
         {yeni && !cokKucuk && <span className="vm-yeni-badge" style={{ position:"absolute", top: kucuk?6:10, left: kucuk?6:10, background:"var(--vurgu)", color:"#1d1d1f", fontSize: kucuk?9:12, padding: kucuk?"3px 8px":"5px 13px", borderRadius:980, fontWeight:700, letterSpacing:"0.05em", boxShadow:"0 2px 10px rgba(0,0,0,0.35)" }}>{ce("yeni")}</span>}
         {yeni && cokKucuk && <span style={{ position:"absolute", top:5, left:5, width:8, height:8, borderRadius:"50%", background:"var(--vurgu)", boxShadow:"0 1px 4px rgba(0,0,0,0.4)" }}/>}
@@ -5506,8 +5506,7 @@ function Atolye({ onSirketDegis }) {
                 const h   = altinKgUSD>0 ? hesapla(m, m.refAyar, altinKgUSD, madenCarpan) : null;
                 const bilMi = m.kategori === "bileklik" || m.kategori === "kolye";
                 const katSut = Math.max(1, Math.floor((katGridW + 9) / (katalogZoom + 9)));
-                const bilSpan1 = Math.max(1, Math.floor(katSut/3));
-                const bilSpan = bilSpan1; // satırda 3 bileklik yan yana
+                const genisKart = bilMi && katSut >= 3; // ızgara 3×sütun ince sütun: normal = 3, bileklik/kolye = sütun sayısı → satırda 3 bileklik
                 return (
                   <div key={m.id} style={{ background:ik?"rgba(var(--vurgu-rgb),0.07)":"rgba(var(--vurgu-rgb),0.02)", border:"1px solid", borderColor:ik?"rgba(var(--vurgu-rgb),0.28)":"rgba(var(--vurgu-rgb),0.07)", borderRadius:11, overflow:"hidden", animation:"cardin .3s ease "+(i*.03)+"s both", ...(bilMi && bilSpan>1 ? { gridColumn:"span "+bilSpan } : {}) }}>
                     <div className="model-foto-wrap" style={{ position:"relative", height:180, background: bilMi ? "#f7f7f8" : "rgba(0,0,0,0.25)", overflow:"hidden" }}>
@@ -5626,7 +5625,7 @@ function Atolye({ onSirketDegis }) {
                   </div>
                 );
               };
-              const gridStil = { display:"grid", gridTemplateColumns:`repeat(auto-fill,minmax(${katalogZoom}px,1fr))`, gap:9 };
+              const gridStil = { display:"grid", gridTemplateColumns:`repeat(${Math.max(1, Math.floor((katGridW + 9) / (katalogZoom + 9))) * 3},1fr)`, gap:9 };
               // Klasör sistemi gruplama işini yapıyor → burada hep düz liste
               return <div ref={katGridRef} style={gridStil}>{gorunen.map((m,i)=>renderKart(m,i))}</div>;
             })()}
