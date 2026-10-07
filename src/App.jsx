@@ -2580,7 +2580,7 @@ function VitrinModu({ kod, onizleme }) {
     return (
     <div key={m.id} className="vm-card" style={{ gridColumn: "span "+(genis ? vitrinSutun : 3) }}>
       <div onClick={()=>{ setDetayModel(m); if(vitrinMusteri && !onizleme) vitrinAktiviteKaydetGuvenli(vitrinMusteri.kod, vitrinMusteri.onek, "model", kolAdi, m.kod, m.ad); }}
-        style={{ aspectRatio: genis ? String(vitrinSutun*10)+"/33" : "40/33", background:"#f7f7f8", borderRadius: kucuk?9:12, position:"relative", overflow:"hidden", boxShadow: sec?"0 0 0 1px rgba(0,0,0,0.4), 0 0 0 3px var(--vurgu), 0 0 0 5px rgba(var(--vurgu-rgb),0.35)":"none" }}>
+        style={{ aspectRatio: genis ? String(vitrinSutun)+"/3" : "1/1", background:"#f7f7f8", borderRadius: kucuk?9:12, position:"relative", overflow:"hidden", boxShadow: sec?"0 0 0 1px rgba(0,0,0,0.4), 0 0 0 3px var(--vurgu), 0 0 0 5px rgba(var(--vurgu-rgb),0.35)":"none" }}>
         {m.foto
           ? <img className="vm-ph" src={m.foto} alt="" style={{ ...(genis ? { width:"100%", height:"100%" } : { position:"absolute", top:"5%", left:"5%", width:"90%", height:"90%" }), objectFit: genis ? "cover" : "contain", objectPosition: (genis && m.kategori==="kolye") ? "50% 85%" : "center center", display:"block", ...((genis && m.kategori==="kolye") ? { width:"72%", margin:"0 auto" } : {}) }}/>
           : <div style={{ width:"100%", height:"100%", display:"flex", alignItems:"center", justifyContent:"center", color:"#d2d2d7", fontSize:26 }}>◇</div>}
@@ -3635,6 +3635,7 @@ function Atolye({ onSirketDegis }) {
       }
     }
   }, []);
+  const katSutSayisi = Math.max(1, Math.min(Math.round(1700 / katalogZoom), Math.floor((katGridW + 9) / 169))); // varsayılan zoom (340) → satırda 5 kart; Ctrl+scroll ile değişir
   const katalogZoomTut = useCallback((delta) => {
     setKatalogZoom(prev => {
       const yeni = Math.min(420, Math.max(130, prev - delta * 0.4));
@@ -5505,11 +5506,11 @@ function Atolye({ onSirketDegis }) {
                 const dur = DURUMLAR.find(d=>d.id===m.durum)||DURUMLAR[0];
                 const h   = altinKgUSD>0 ? hesapla(m, m.refAyar, altinKgUSD, madenCarpan) : null;
                 const bilMi = m.kategori === "bileklik" || m.kategori === "kolye";
-                const katSut = Math.max(1, Math.floor((katGridW + 9) / (katalogZoom + 9)));
+                const katSut = katSutSayisi;
                 const genisKart = bilMi && katSut >= 3; // ızgara 3×sütun ince sütun: normal = 3, bileklik/kolye = sütun sayısı → satırda 3 bileklik
                 return (
                   <div key={m.id} style={{ background:ik?"rgba(var(--vurgu-rgb),0.07)":"rgba(var(--vurgu-rgb),0.02)", border:"1px solid", borderColor:ik?"rgba(var(--vurgu-rgb),0.28)":"rgba(var(--vurgu-rgb),0.07)", borderRadius:11, overflow:"hidden", animation:"cardin .3s ease "+(i*.03)+"s both", gridColumn:"span "+(genisKart ? katSut : 3) }}>
-                    <div className="model-foto-wrap" style={{ position:"relative", height: bilMi ? 264 : 198, background: "#f6f6f7", overflow:"hidden" }}>
+                    <div className="model-foto-wrap" style={{ position:"relative", ...(bilMi ? (katSut>=3 ? { aspectRatio: katSut+"/3" } : { height:264 }) : { aspectRatio:"1/1" }), background: "#f6f6f7", overflow:"hidden" }}>
                       {m.foto ? <img onClick={()=>openEM(m)} src={m.foto} alt="" style={{ ...(bilMi ? { width:"100%", height:"100%" } : { position:"absolute", top:"5%", left:"5%", width:"90%", height:"90%" }), objectFit:"cover", objectPosition: m.kategori==="kolye" ? "50% 85%" : "center center", display:"block", ...(m.kategori==="kolye" ? { width:"72%", margin:"0 auto" } : {}), cursor:"pointer" }}/> : <div onClick={()=>openEM(m)} style={{ width:"100%", height:"100%", display:"flex", alignItems:"center", justifyContent:"center", color:"rgba(var(--vurgu-rgb),0.1)", fontSize:24, cursor:"pointer" }}>-</div>}
                       {/* Detay noktaları — KÖŞELERDE, büyük (56px). Sağ üst köşe V butonunun altına kaydırıldı ki çakışmasın. */}
                       {m.foto && Array.isArray(m.detayNoktalari) && m.detayNoktalari.filter(n=>(n.tip!=="foto")||n.foto).slice(0,4).map((n,di) => {
@@ -5625,7 +5626,7 @@ function Atolye({ onSirketDegis }) {
                   </div>
                 );
               };
-              const gridStil = { display:"grid", gridTemplateColumns:`repeat(${Math.max(1, Math.floor((katGridW + 9) / (katalogZoom + 9))) * 3},1fr)`, gap:9 };
+              const gridStil = { display:"grid", gridTemplateColumns:`repeat(${katSutSayisi * 3},1fr)`, gap:9 };
               // Klasör sistemi gruplama işini yapıyor → burada hep düz liste
               return <div ref={katGridRef} style={gridStil}>{gorunen.map((m,i)=>renderKart(m,i))}</div>;
             })()}
