@@ -1099,6 +1099,22 @@ function psModelTasRengi(m) {
 }
 function psKodTaban(kod) { return psTrBuyuk(kod).replace(/[\s_.]/g, "").replace(/-[A-Z0-9]{1,2}$/, ""); }
 
+// ── SET modeli: müşteri tek parça (ör. sadece kolye) istiyorsa setin ilgili parçasını bul ──
+const PS_PARCA_KOKLERI = [["yuzuk", "YUZ"], ["kolye", "KOLYE"], ["kolye", "PENDANT"], ["kolye", "PANDANTIF"], ["kolye", "SARKIT"], ["kupe", "KUPE"], ["bilezik", "BILEZIK"], ["bileklik", "BILEKLIK"]];
+const PS_PARCA_AD = { yuzuk: "yüzük", kolye: "kolye", kupe: "küpe", bilezik: "bilezik", bileklik: "bileklik" };
+function psParcaGrubu(kategori) { return kategori === "pendant" ? "kolye" : kategori; }
+// not → { digeri: "yuzuk" | "", dogrudan: ["kolye"] }  ("RP24D YÜZÜĞÜYLE MATCH OLACAK" → digeri = yüzük, yani bu kalem yüzük DEĞİL)
+function psNotParcaIpucu(metin) {
+  const t = psTrBuyuk(metin);
+  let digeri = "";
+  for (const [g, kok] of PS_PARCA_KOKLERI) {
+    if (new RegExp("\\b" + kok + "\\w*\\s+(?:ILE\\s+)?(?:MATCH|TAKIM|SET\\b|UYUM|UYUS|ESLES)").test(t)) { digeri = g; break; }
+  }
+  const dogrudan = [];
+  if (!digeri) for (const [g, kok] of PS_PARCA_KOKLERI) if (new RegExp("\\b" + kok).test(t) && !dogrudan.includes(g)) dogrudan.push(g);
+  return { digeri, dogrudan };
+}
+
 function psKategoriTahmin(k) {
   const t = ((k.aciklama || "") + " " + (k.disKod || "")).toUpperCase();
   if (/BRACELET|BİLEKLİK|BILEKLIK/.test(t)) return "bileklik";
@@ -1174,6 +1190,34 @@ function PdfSiparisModal({ modeller, kollar, onKapat, onUygula }) {
         }
         const ilkKod = (k.kodAdaylari[0] && k.kodAdaylari[0].kod) || "";
         const excel = k.tip === "excel";
+        // Eşleşen model bir SET ise: açıklamadan hangi parçanın istendiğini bul (ör. "yüzüğüyle match olacak" → kolye parçası)
+        if (eslesti) {
+          const secM = sirali.find(m => m.id === (renkSecim || sirali[0].id)) || sirali[0];
+          if (secM && secM.kategori === "set" && Array.isArray(secM.setParcalari) && secM.setParcalari.length) {
+            const parcalar = secM.setParcalari.map(refKod => {
+              const l = (modeller || []).filter(x => psNorm(x.kod) === psNorm(refKod));
+              return l.sort((a, b) => (b.foto ? 1 : 0) - (a.foto ? 1 : 0))[0] || null;
+            }).filter(Boolean);
+            const ip = psNotParcaIpucu([k.aciklama, k.not].filter(Boolean).join(" "));
+            let hedef = null;
+            if (ip.digeri) {
+              const kalan = parcalar.filter(p => psParcaGrubu(p.kategori) !== ip.digeri);
+              if (kalan.length === 1) hedef = kalan[0];
+            } else if (ip.dogrudan.length === 1) {
+              const uyan = parcalar.filter(p => psParcaGrubu(p.kategori) === ip.dogrudan[0]);
+              if (uyan.length === 1) hedef = uyan[0];
+            }
+            const parcaYazi = parcalar.map(p => p.kod + " (" + (PS_PARCA_AD[psParcaGrubu(p.kategori)] || p.kategori || "?") + (p.gram ? ", " + p.gram + " gr" : "") + ")").join(" · ");
+            if (hedef) {
+              sirali = [hedef, ...sirali.filter(m => m.id !== hedef.id), ...parcalar.filter(p => p.id !== hedef.id && !sirali.some(m => m.id === p.id))];
+              renkSecim = hedef.id;
+              renkUyari = "SET " + secM.kod + " bulundu ama açıklamaya göre tek parça isteniyor → " + hedef.kod + " (" + (PS_PARCA_AD[psParcaGrubu(hedef.kategori)] || hedef.kategori) + ") seçildi. Set parçaları: " + parcaYazi;
+            } else if (parcalar.length) {
+              sirali = [...sirali, ...parcalar.filter(p => !sirali.some(m => m.id === p.id))];
+              renkUyari = "⚠ " + secM.kod + " bir SET modeli. Müşteri tek parça mı istiyor? Parçalar: " + parcaYazi + " — listeden seçebilirsin";
+            }
+          }
+        }
         return {
           id: k.id, kalem: k,
           durum: !eslesti ? "yok" : (sirali.length > 1 ? "coklu" : "eslesti"),
