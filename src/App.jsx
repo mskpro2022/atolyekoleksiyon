@@ -3629,6 +3629,13 @@ function Atolye({ onSirketDegis }) {
       setAltinHata("Alınamadı — elle girebilirsin");
     } finally { setAltinYukleniyor(false); }
   }, []);
+  // Uygulama açılınca ve sonra her 15 dakikada bir ons fiyatı kendiliğinden güncellenir (alınamazsa son fiyat kalır)
+  useEffect(() => {
+    if (!loaded) return;
+    altinGuncelle();
+    const t = setInterval(altinGuncelle, 15 * 60 * 1000);
+    return () => clearInterval(t);
+  }, [loaded, altinGuncelle]);
   const [mc,      setMc]         = useState("0.030");
 
   const [sayfa,     setSayfa]     = useState("koleksiyonlar");
