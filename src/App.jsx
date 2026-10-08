@@ -3624,7 +3624,7 @@ function Atolye({ onSirketDegis }) {
       const { data, error } = await supabase.functions.invoke("altin-ons");
       if (error || !data || !data.ok || !(Number(data.kgUSD) > 0)) throw new Error((data && data.hatalar && data.hatalar.join(" | ")) || (error && error.message) || "Fiyat alınamadı");
       setAltinKg(String(data.kgUSD));
-      setAltinSon({ ons: data.ons, kaynak: data.kaynak, zaman: data.zaman });
+      setAltinSon({ ons: data.ons, kaynak: data.kaynak, zaman: data.zaman, usdTry: data.usdTry || null, kurKaynak: data.kurKaynak || null });
     } catch (e) {
       setAltinHata("Alınamadı — elle girebilirsin");
     } finally { setAltinYukleniyor(false); }
@@ -5081,7 +5081,25 @@ function Atolye({ onSirketDegis }) {
               <span style={{ fontSize:8, color:"#998a6e" }}>$/kg</span>
               <input type="number" value={altinKg} onChange={e => setAltinKg(e.target.value)} placeholder="96000" style={{ ...IS, width:90, padding:"4px 7px", fontSize:12, textAlign:"center", fontWeight:700 }} />
               <button onClick={altinGuncelle} disabled={altinYukleniyor} title="Ons altın fiyatından otomatik hesapla: ons ÷ 31,1035 × 1000" style={{ background:"rgba(106,191,105,0.12)", border:"1px solid rgba(106,191,105,0.35)", borderRadius:6, padding:"4px 9px", color:"#6abf69", fontSize:10, fontWeight:700, cursor: altinYukleniyor?"default":"pointer", opacity: altinYukleniyor?0.6:1 }}>{altinYukleniyor ? "..." : "↻ Ons'tan güncelle"}</button>
-              {altinSon && !altinHata && <span style={{ fontSize:8, color:"#998a6e" }}>ons {fN(altinSon.ons,2)} · {altinSon.kaynak} · {new Date(altinSon.zaman).toLocaleTimeString("tr-TR",{hour:"2-digit",minute:"2-digit"})}</span>}
+              {altinSon && !altinHata && (() => {
+                const tr = (n, d) => Number(n).toLocaleString("tr-TR", { minimumFractionDigits:d, maximumFractionDigits:d });
+                const gramTL = altinSon.usdTry ? altinSon.ons / 31.1035 * altinSon.usdTry : 0;
+                const chip = (et, deger, alt, renk) => (
+                  <div key={et} style={{ display:"flex", flexDirection:"column", gap:1, background:"rgba(var(--vurgu-rgb),0.07)", border:"1px solid rgba(var(--vurgu-rgb),0.16)", borderRadius:8, padding:"3px 10px", minWidth:78 }}>
+                    <span style={{ fontSize:7, fontWeight:800, letterSpacing:".08em", color:"#998a6e" }}>{et}</span>
+                    <span style={{ fontSize:13, fontWeight:800, color:renk||"var(--goldtext)", lineHeight:1.1 }}>{deger}</span>
+                    {alt && <span style={{ fontSize:7, color:"#8a7d64" }}>{alt}</span>}
+                  </div>
+                );
+                const saat = new Date(altinSon.zaman).toLocaleTimeString("tr-TR",{hour:"2-digit",minute:"2-digit"});
+                return (
+                  <div style={{ display:"flex", gap:6, alignItems:"stretch", flexWrap:"wrap" }}>
+                    {chip("ONS ALTIN", "$"+tr(altinSon.ons,2), altinSon.kaynak+" · "+saat)}
+                    {altinSon.usdTry ? chip("USD / TL", "₺"+tr(altinSon.usdTry,4), altinSon.kurKaynak||"") : null}
+                    {gramTL > 0 ? chip("GRAM ALTIN", "₺"+tr(gramTL,0), "24K has") : null}
+                  </div>
+                );
+              })()}
               {altinHata && <span style={{ fontSize:8, color:"#e85a4f", fontWeight:700 }}>{altinHata}</span>}
             </div>
             <div style={{ display:"flex", alignItems:"center", gap:4 }}>
