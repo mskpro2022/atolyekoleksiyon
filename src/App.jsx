@@ -1066,6 +1066,39 @@ async function psFotolariKirp(pdf, kalemler, ilerle) {
   });
 }
 
+// ── Taş rengi: müşteri açıklamasından rengi oku, aynı model ailesinde (ALT209, ALT209-W …) rengi tutan modeli seç ──
+const PS_RENKLER = [
+  ["BEYAZ", /BEYAZ|WHITE/], ["YESIL", /YESIL|ZUMRUT|GREEN/], ["MAVI", /MAVI|BLUE|TOPAZ|AKUA/], ["KIRMIZI", /KIRMIZI|RUBY|RUBI|RED/],
+  ["SIYAH", /SIYAH|ONIKS|ONYX|BLACK/], ["PEMBE", /PEMBE|PINK/], ["MOR", /\bMOR\b|AMETIST|PURPLE/], ["LACIVERT", /LACIVERT|SAFIR/],
+  ["TURKUAZ", /TURKUAZ|TURQUOISE/], ["SARI", /SITRIN|CITRINE/], ["KAHVE", /KAHVE|BROWN|SMOKY/],
+];
+const PS_RENK_AD = { BEYAZ: "beyaz", YESIL: "yeşil", MAVI: "mavi", KIRMIZI: "kırmızı", SIYAH: "siyah", PEMBE: "pembe", MOR: "mor", LACIVERT: "lacivert", TURKUAZ: "turkuaz", SARI: "sarı", KAHVE: "kahve" };
+function psTrBuyuk(t) {
+  return String(t || "").replace(/İ/g, "I").replace(/ı/g, "I").toUpperCase()
+    .replace(/Ş/g, "S").replace(/Ğ/g, "G").replace(/Ü/g, "U").replace(/Ö/g, "O").replace(/Ç/g, "C").replace(/İ/g, "I");
+}
+// "beyaz taş", "yeşil taşlı", "taş rengi mavi" → "BEYAZ" / "YESIL" / "MAVI"; yoksa ""
+function psNotTasRengi(metin) {
+  const t = psTrBuyuk(metin);
+  if (!t) return "";
+  for (const [k, re] of PS_RENKLER) {
+    const r = re.source;
+    if (new RegExp("(" + r + ")\\s*(TAS|TASLI|TASIN|TASI|ZIRKON|ZIRCON|STONE)").test(t)) return k;
+    if (new RegExp("TAS\\s*(RENGI|RENK)?\\s*[:=\\-]?\\s*(" + r + ")").test(t)) return k;
+  }
+  return "";
+}
+// Modelin taş rengi (kayıtlı ad/açıklama/etiket/taş şekli + "-W" son eki)
+function psModelTasRengi(m) {
+  const parca = [m.ad, m.ac, ...(Array.isArray(m.etiketler) ? m.etiketler : [])];
+  (Array.isArray(m.taslar) ? m.taslar : []).forEach(t => { parca.push(t && t.sekil); parca.push(t && t.boyut); });
+  const t = psTrBuyuk(parca.filter(Boolean).join(" "));
+  for (const [k, re] of PS_RENKLER) if (re.test(t)) return k;
+  if (/-W$/.test(psTrBuyuk(m.kod || ""))) return "BEYAZ";
+  return "";
+}
+function psKodTaban(kod) { return psTrBuyuk(kod).replace(/[\s_.]/g, "").replace(/-[A-Z0-9]{1,2}$/, ""); }
+
 function psKategoriTahmin(k) {
   const t = ((k.aciklama || "") + " " + (k.disKod || "")).toUpperCase();
   if (/BRACELET|BİLEKLİK|BILEKLIK/.test(t)) return "bileklik";
@@ -1113,14 +1146,38 @@ function PdfSiparisModal({ modeller, kollar, onKapat, onUygula }) {
           const l = kodHaritasi.get(psNorm(a.kod));
           if (l && l.length) { adaylar = l; bulunanKod = a.kod; break; }
         }
-        const sirali = adaylar.slice().sort((x, y) => (y.foto ? 1 : 0) - (x.foto ? 1 : 0));
+        let sirali = adaylar.slice().sort((x, y) => (y.foto ? 1 : 0) - (x.foto ? 1 : 0));
         const eslesti = sirali.length > 0;
+        // Açıklamada taş rengi varsa (ör. "beyaz taş"), aynı model ailesinde rengi tutan modeli öne al
+        let renkUyari = "", renkSecim = "";
+        const istenenRenk = eslesti ? psNotTasRengi([k.aciklama, k.not].filter(Boolean).join(" ")) : "";
+        if (istenenRenk) {
+          const taban = psKodTaban(bulunanKod);
+          const aile = []; const gorulen = new Set();
+          (modeller || []).forEach(m => { if (psKodTaban(m.kod) === taban) { const nk = psNorm(m.kod); if (!gorulen.has(nk) || m.foto) { gorulen.add(nk); aile.push(m); } } });
+          const uyan = [...sirali, ...aile].filter((m, i, a) => a.findIndex(z => z.id === m.id) === i)
+            .filter(m => psModelTasRengi(m) === istenenRenk)
+            .sort((x, y) => (psNorm(y.kod) === psNorm(bulunanKod) ? 1 : 0) - (psNorm(x.kod) === psNorm(bulunanKod) ? 1 : 0) || (y.foto ? 1 : 0) - (x.foto ? 1 : 0));
+          const ad = PS_RENK_AD[istenenRenk];
+          if (uyan.length) {
+            const digerleri = [...sirali, ...aile].filter((m, i, a) => a.findIndex(z => z.id === m.id) === i && !uyan.some(u => u.id === m.id));
+            sirali = [...uyan, ...digerleri];
+            renkSecim = uyan[0].id;
+            renkUyari = psNorm(uyan[0].kod) === psNorm(bulunanKod)
+              ? "Açıklamada '" + ad + " taş' yazıyor — " + uyan[0].kod + " taş rengi uyuyor"
+              : "Açıklamada '" + ad + " taş' yazıyor — " + uyan[0].kod + " seçildi (aynı model, " + ad + " taşlı)";
+          } else if (istenenRenk !== "BEYAZ") {
+            renkUyari = "⚠ Açıklamada '" + ad + " taş' yazıyor ama bu modelin " + ad + " taşlı kaydı bulunamadı — kontrol edin";
+          } else if (sirali.every(m => psModelTasRengi(m) && psModelTasRengi(m) !== "BEYAZ")) {
+            renkUyari = "⚠ Açıklamada 'beyaz taş' yazıyor ama bulunan model renkli taşlı — kontrol edin";
+          }
+        }
         const ilkKod = (k.kodAdaylari[0] && k.kodAdaylari[0].kod) || "";
         const excel = k.tip === "excel";
         return {
           id: k.id, kalem: k,
           durum: !eslesti ? "yok" : (sirali.length > 1 ? "coklu" : "eslesti"),
-          adaylar: sirali, secimId: eslesti ? sirali[0].id : "", bulunanKod,
+          adaylar: sirali, secimId: eslesti ? (renkSecim || sirali[0].id) : "", bulunanKod, renkUyari,
           adet: k.adet || 1, not: k.aciklama || "",
           dahil: eslesti || excel,
           ekle: !eslesti, // eşleşme yoksa varsayılan: yeni model olarak ekle
@@ -1140,12 +1197,12 @@ function PdfSiparisModal({ modeller, kollar, onKapat, onUygula }) {
   const guncelle = (id, patch) => setSatirlar(p => p.map(s => s.id === id ? { ...s, ...patch } : s));
   const modelAra = (id, metin) => {
     const l = kodHaritasi.get(psNorm(metin));
-    if (l && l.length) guncelle(id, { ara: metin, adaylar: l, secimId: l[0].id, durum: l.length > 1 ? "coklu" : "eslesti", ekle: false, dahil: true });
+    if (l && l.length) guncelle(id, { ara: metin, adaylar: l, secimId: l[0].id, durum: l.length > 1 ? "coklu" : "eslesti", ekle: false, dahil: true, renkUyari: "" });
     else guncelle(id, { ara: metin });
   };
 
   const modelSec = (satirId, m) => {
-    guncelle(satirId, { adaylar: [m], secimId: m.id, durum: "eslesti", ekle: false, dahil: true, ara: m.kod || "", bulunanKod: m.kod || "" });
+    guncelle(satirId, { adaylar: [m], secimId: m.id, durum: "eslesti", ekle: false, dahil: true, ara: m.kod || "", bulunanKod: m.kod || "", renkUyari: "" });
     setGozSatir(null); setGozKol(""); setGozAra("");
   };
   const gozAcKapat = () => { setGozSatir(null); setGozKol(""); setGozAra(""); };
@@ -1315,6 +1372,7 @@ function PdfSiparisModal({ modeller, kollar, onKapat, onUygula }) {
                             <span style={{ fontSize: 10, color: "#a89c84" }}>{m.ad || ""}</span>
                           </div>
                           <div style={{ fontSize: 10, color: "#8a7d64", marginTop: 2 }}>{m.gram ? m.gram + " gr · " : ""}{m.refAyar || ""} · {m.kategori || ""} · bulunan: {s.bulunanKod} ({(s.kalem.kodAdaylari.find(a => a.kod === s.bulunanKod) || {}).kaynak || ""})</div>
+                          {s.renkUyari && <div style={{ fontSize: 10, fontWeight: 700, marginBottom: 4, color: s.renkUyari.startsWith("⚠") ? "#e8b04f" : "#6abf69" }}>🎨 {s.renkUyari}</div>}
                           {s.adaylar.length > 1 && (
                             <select value={s.secimId} onChange={e => guncelle(s.id, { secimId: e.target.value })} style={{ ...kucukIS, marginTop: 5 }}>
                               {s.adaylar.map(x => <option key={x.id} value={x.id}>{x.kod} — {(kollar.find(k => k.id === x.ki) || {}).ad || "?"}{x.ad ? " · " + x.ad : ""}</option>)}
