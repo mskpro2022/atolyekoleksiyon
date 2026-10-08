@@ -659,7 +659,7 @@ function buildKatalogHTML(kol, modeller, sutun, hedefAyar, kollar, gruplu, tamKa
     + ".dn{position:absolute;width:56px;height:56px;border-radius:50%;border:3px solid #fff;box-shadow:0 3px 12px rgba(0,0,0,0.55);background-color:#fff;overflow:hidden;z-index:2}"
     + ".dn img{width:100%;height:100%;object-fit:cover}"
     + ".dn-ico{display:flex;align-items:center;justify-content:center;font-size:20px;background:#1a1a1a}"
-    + ".cd-bileklik .ph img{object-fit:contain;transform:translate(-50%,-50%);width:100%;height:100%}" // vitrindeki gibi: foto KIRPILMADAN tamamı görünür, kart tüm satır genişliğinde
+    + ".cd-bileklik .ph img{object-fit:cover;transform:translate(-50%,-50%);width:100%;height:100%}" // bileklik kartın tüm genişliğini doldursun (fotonun boş üst/alt kısmı kırpılır, bilezik ortada kalır)
     + ".cd-kolye-3 .ph img,.cd-kolye-4 .ph img{width:105%;height:105%;object-fit:contain}"
     + ".inf{padding:6px 9px 7px 10px;flex-shrink:0;background:#fff;border-top:1px solid #f0f0f0;border-left:3px solid #1a1a1a}"
     + ".r1{display:flex;justify-content:space-between;align-items:baseline}"
