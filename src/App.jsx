@@ -1,4 +1,4 @@
-import { supabase, dbLoad, dbSave, fotoYukleStorage, yedekKaydet, yedekListesi, yedekGetir, bugunYedekVarMi, tabloModelleriSenkron, tabloModelleriToplu, tabloModelSil, tabloSiparisleriSenkron, tabloSiparisleriToplu, tabloMusterileriYaz, akilliModelOku, akilliSiparisOku, akilliMusteriOku, islemKaydet, islemGecmisiGetir, realtimeBaslat, tabloKoleksiyonlariYaz, tabloKasaYaz, akilliKoleksiyonOku, akilliKasaOku, tabloKoleksiyonlariOku, tabloKasaOku, saglikDenetimi, ekranSunucuFarki, toptanciKaydet, toptancilariGetir, toptanciSil, vitrinGecmisiGetir, vitrinEnCokBakilan, vitrinOzetGetir, vitrinAnaliz, vitrinGetirGuvenli, siparisOlusturGuvenli, vitrinAktiviteKaydetGuvenli, vitrinSupheliCihazlar, vitrinCevrimiciMusteriler, radarTrendleriOku, radarKaynaklariOku, radarKanitlariOku, radarTumKanitlariOku, radarTrendGuncelle, radarTrendSil, radarManuelKanitEkle } from "./supabase.js";
+import { supabase, dbLoad, dbSave, fotoYukleStorage, vektorDosyaOku, vektorDosyaYaz, yedekKaydet, yedekListesi, yedekGetir, bugunYedekVarMi, tabloModelleriSenkron, tabloModelleriToplu, tabloModelSil, tabloSiparisleriSenkron, tabloSiparisleriToplu, tabloMusterileriYaz, akilliModelOku, akilliSiparisOku, akilliMusteriOku, islemKaydet, islemGecmisiGetir, realtimeBaslat, tabloKoleksiyonlariYaz, tabloKasaYaz, akilliKoleksiyonOku, akilliKasaOku, tabloKoleksiyonlariOku, tabloKasaOku, saglikDenetimi, ekranSunucuFarki, toptanciKaydet, toptancilariGetir, toptanciSil, vitrinGecmisiGetir, vitrinEnCokBakilan, vitrinOzetGetir, vitrinAnaliz, vitrinGetirGuvenli, siparisOlusturGuvenli, vitrinAktiviteKaydetGuvenli, vitrinSupheliCihazlar, vitrinCevrimiciMusteriler, radarTrendleriOku, radarKaynaklariOku, radarKanitlariOku, radarTumKanitlariOku, radarTrendGuncelle, radarTrendSil, radarManuelKanitEkle } from "./supabase.js";
 import { useState, useEffect, useCallback, useMemo, useRef, Fragment } from "react";
 
 const uid = () => "x" + Date.now() + Math.random().toString(36).substr(2, 5);
@@ -1115,6 +1115,132 @@ function psNotParcaIpucu(metin) {
   return { digeri, dogrudan };
 }
 
+// ── FOTOĞRAF PARMAK İZİ (CLIP — tarayıcıda çalışır, sunucu gerekmez) ──
+// Katalog fotoğraflarının parmak izleri Storage'da tek dosyada (_vektor/v1-<önek>.json) saklanır; PDF'teki fotoğraf da aynı modelle
+// parmak izine çevrilir ve katalogdakilere en çok benzeyenler önerilir.
+const PS_CLIP_MODEL = "Xenova/clip-vit-base-patch32";
+const PS_VQ = 905;               // int8 nicemleme çarpanı (cos = nokta çarpım / PS_VQ²)
+const PS_VQ2 = PS_VQ * PS_VQ;
+let _clipHazir = null;
+let psIndeksDepo = null;         // { ids, fotos, dim, mat:Int8Array }
+function clipYukle(ilerle) {
+  if (_clipHazir) return _clipHazir;
+  _clipHazir = (async () => {
+    const TURL = "https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2/dist/transformers.min.js";
+    const T = await import(/* @vite-ignore */ TURL);
+    T.env.allowLocalModels = false;
+    T.env.useBrowserCache = true;
+    const cb = ilerle ? (p) => { if (p && p.status === "progress") ilerle(Math.round(p.progress || 0)); } : undefined;
+    const processor = await T.AutoProcessor.from_pretrained(PS_CLIP_MODEL, { progress_callback: cb });
+    const model = await T.CLIPVisionModelWithProjection.from_pretrained(PS_CLIP_MODEL, { quantized: true, progress_callback: cb });
+    return { T, processor, model };
+  })().catch(e => { _clipHazir = null; throw e; });
+  return _clipHazir;
+}
+// Fotoğrafı (URL veya data URL) beyaz zeminli kareye oturtur — dar/uzun ürünler (bileklik) kırpılmasın
+async function psKareBlob(kaynak) {
+  const r = await fetch(kaynak, { mode: "cors" });
+  if (!r.ok) throw new Error("foto indirilemedi (" + r.status + ")");
+  const bmp = await createImageBitmap(await r.blob());
+  const S = 224, cv = document.createElement("canvas");
+  cv.width = cv.height = S;
+  const ctx = cv.getContext("2d");
+  ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, S, S);
+  const oran = Math.min(S * 0.94 / bmp.width, S * 0.94 / bmp.height);
+  const w = bmp.width * oran, h = bmp.height * oran;
+  ctx.drawImage(bmp, (S - w) / 2, (S - h) / 2, w, h);
+  if (bmp.close) bmp.close();
+  return await new Promise((res, rej) => cv.toBlob(b => b ? res(b) : rej(new Error("görüntü hazırlanamadı")), "image/png"));
+}
+async function clipVektorBlob(blob, ilerle) {
+  const { T, processor, model } = await clipYukle(ilerle);
+  const img = await T.RawImage.fromBlob(blob);
+  const inputs = await processor(img);
+  const { image_embeds } = await model(inputs);
+  const v = image_embeds.data;
+  let n = 0; for (let i = 0; i < v.length; i++) n += v[i] * v[i];
+  n = Math.sqrt(n) || 1;
+  const q = new Int8Array(v.length);
+  for (let i = 0; i < v.length; i++) q[i] = Math.max(-127, Math.min(127, Math.round(v[i] / n * PS_VQ)));
+  return q;
+}
+function psIndeksCoz(j) {
+  if (!j || !j.data || !Array.isArray(j.ids)) return null;
+  const bin = atob(j.data);
+  const mat = new Int8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) mat[i] = (bin.charCodeAt(i) << 24) >> 24;
+  if (mat.length !== j.ids.length * j.dim) return null;
+  return { ids: j.ids, fotos: j.fotos || [], dim: j.dim, mat };
+}
+function psIndeksKodla(ids, fotos, dim, mat) {
+  const u = new Uint8Array(mat.buffer, mat.byteOffset, mat.byteLength);
+  let bin = "";
+  for (let i = 0; i < u.length; i += 0x8000) bin += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000));
+  return { v: 1, dim, q: PS_VQ, ids, fotos, data: btoa(bin) };
+}
+// Fotoğrafı olan ama indekste olmayan (veya fotoğrafı değişmiş) modeller
+function psIndeksEksikler(modeller) {
+  const D = psIndeksDepo;
+  const var_ = new Map();
+  if (D) D.ids.forEach((id, i) => var_.set(id, D.fotos[i]));
+  return (modeller || []).filter(m => m.foto && /^https?:/.test(m.foto) && var_.get(m.id) !== m.foto);
+}
+async function psIndeksKur(modeller, onek, iptal, ilerle) {
+  const D = psIndeksDepo;
+  const dim = 512;
+  const harita = new Map();
+  if (D && D.dim === dim) D.ids.forEach((id, i) => harita.set(id, { foto: D.fotos[i], vec: D.mat.subarray(i * dim, (i + 1) * dim) }));
+  const eksik = psIndeksEksikler(modeller);
+  const gecerli = new Set((modeller || []).filter(m => m.foto).map(m => m.id));
+  const kaydet = async () => {
+    const ids = [], fotos = [];
+    harita.forEach((e, id) => { if (gecerli.has(id)) { ids.push(id); fotos.push(e.foto); } });
+    const mat = new Int8Array(ids.length * dim);
+    ids.forEach((id, i) => mat.set(harita.get(id).vec, i * dim));
+    await vektorDosyaYaz(onek, psIndeksKodla(ids, fotos, dim, mat));
+    psIndeksDepo = { ids, fotos, dim, mat };
+  };
+  const ON = 4, bp = new Map();
+  const hazirla = i => { if (i < eksik.length && !bp.has(i)) { const p = psKareBlob(eksik[i].foto); p.catch(() => {}); bp.set(i, p); } };
+  for (let i = 0; i < ON; i++) hazirla(i);
+  let bitti = 0, hata = 0, sonKayit = 0;
+  for (let i = 0; i < eksik.length; i++) {
+    if (iptal.current) break;
+    hazirla(i + ON);
+    try {
+      const blob = await bp.get(i);
+      const vec = await clipVektorBlob(blob);
+      harita.set(eksik[i].id, { foto: eksik[i].foto, vec });
+    } catch (e) { hata++; if (hata <= 3) console.warn("indeks hata:", eksik[i].kod, e && e.message); }
+    bp.delete(i);
+    bitti++;
+    ilerle(bitti, eksik.length, hata);
+    if (bitti - sonKayit >= 250) { await kaydet(); sonKayit = bitti; }
+  }
+  if (bitti > sonKayit || eksik.length === 0) await kaydet();
+  return { bitti, hata, toplam: eksik.length };
+}
+// q: Int8Array parmak izi → en benzer n model (aynı kodlu kopyalar tek sayılır)
+function psBenzerBul(q, modeller, n) {
+  const D = psIndeksDepo;
+  if (!D || !D.ids.length) return [];
+  const dim = D.dim, mat = D.mat, sk = new Float32Array(D.ids.length);
+  for (let r = 0; r < D.ids.length; r++) { let d = 0; const o = r * dim; for (let k = 0; k < dim; k++) d += mat[o + k] * q[k]; sk[r] = d / PS_VQ2; }
+  const sira = Array.from(sk.keys()).sort((a, b) => sk[b] - sk[a]);
+  const mh = new Map((modeller || []).map(m => [m.id, m]));
+  const gorulen = new Set(), sonuc = [];
+  for (const r of sira) {
+    const m = mh.get(D.ids[r]);
+    if (!m) continue;
+    const nk = psNorm(m.kod);
+    if (gorulen.has(nk)) continue;
+    gorulen.add(nk);
+    sonuc.push({ m, skor: sk[r] });
+    if (sonuc.length >= n) break;
+  }
+  return sonuc;
+}
+
 function psKategoriTahmin(k) {
   const t = ((k.aciklama || "") + " " + (k.disKod || "")).toUpperCase();
   if (/BRACELET|BİLEKLİK|BILEKLIK/.test(t)) return "bileklik";
@@ -1137,6 +1263,21 @@ function PdfSiparisModal({ modeller, kollar, onKapat, onUygula }) {
   const [gozSatir, setGozSatir] = useState(null); // koleksiyondan seçim yapılan satır id
   const [gozKol, setGozKol] = useState("");
   const [gozAra, setGozAra] = useState("");
+  const [vi, setVi] = useState({ durum: "kontrol", mesaj: "", yuzde: 0, hata: "" }); // fotoğraf indeksi durumu
+  const [viSurum, setViSurum] = useState(0);
+  const iptalRef = useRef(false);
+  useEffect(() => {
+    let canli = true;
+    iptalRef.current = false;
+    (async () => {
+      try { const d = psIndeksCoz(await vektorDosyaOku(AKTIF_SIRKET_ONEK)); if (d) psIndeksDepo = d; } catch {}
+      if (psIndeksDepo && psIndeksDepo.ids.length) clipYukle().catch(() => {}); // modeli arka planda ısıt: PDF seçilince hazır olsun
+      if (canli) { setViSurum(x => x + 1); setVi(v => ({ ...v, durum: "hazir" })); }
+    })();
+    return () => { canli = false; iptalRef.current = true; };
+  }, []);
+  const eksikSayi = useMemo(() => psIndeksEksikler(modeller).length, [modeller, viSurum]);
+  const hazirSayi = psIndeksDepo ? psIndeksDepo.ids.length : 0;
 
   const kodHaritasi = useMemo(() => {
     const h = new Map();
@@ -1219,6 +1360,7 @@ function PdfSiparisModal({ modeller, kollar, onKapat, onUygula }) {
       // Fabor'da eşleşmeyen kalemler varsayılan olarak kapalı gelir (iç kodlar bizim kodumuz değil)
       yeniSatirlar.forEach(s => { if (s.durum === "yok" && s.kalem.tip === "fabor") s.dahil = false; });
       setBaslik(sonuc.baslik || {}); setTip(sonuc.tip); setSatirlar(yeniSatirlar); setIlkSatirlar(yeniSatirlar); setAsama("onay");
+      if (psIndeksDepo && psIndeksDepo.ids.length) oneriToplu(yeniSatirlar.filter(x => x.durum === "yok" && x.kalem.foto));
     } catch (err) {
       console.error("PDF okuma hatası:", err);
       setHata("PDF okunamadı: " + (err && err.message ? err.message : err)); setAsama("sec");
@@ -1226,6 +1368,29 @@ function PdfSiparisModal({ modeller, kollar, onKapat, onUygula }) {
   };
 
   const guncelle = (id, patch) => setSatirlar(p => p.map(s => s.id === id ? { ...s, ...patch } : s));
+  // Müşteri fotoğrafına en çok benzeyen katalog modellerini bul
+  const oneriHesapla = async (id, kalem) => {
+    if (!kalem || !kalem.foto) return;
+    if (!psIndeksDepo || !psIndeksDepo.ids.length) { guncelle(id, { oneriDurum: "indeksyok" }); return; }
+    guncelle(id, { oneriDurum: "hesapliyor" });
+    try {
+      const q = await clipVektorBlob(await psKareBlob(kalem.foto));
+      guncelle(id, { oneriler: psBenzerBul(q, modeller, 6), oneriDurum: "tamam" });
+    } catch (e) { console.error("benzer arama:", e); guncelle(id, { oneriDurum: "hata", oneriHata: (e && e.message) || "hata" }); }
+  };
+  const oneriToplu = async (liste) => { for (const r of liste) { if (iptalRef.current) break; await oneriHesapla(r.id, r.kalem); } };
+  const indeksBaslat = async () => {
+    if (vi.durum === "kuruyor") return;
+    iptalRef.current = false;
+    setVi({ durum: "kuruyor", mesaj: "Model hazırlanıyor (ilk seferde ~90 MB iner)…", yuzde: 0, hata: "" });
+    try {
+      await clipYukle(p => setVi(v => v.durum === "kuruyor" && !v.yuzde ? { ...v, mesaj: "Model indiriliyor… %" + p } : v));
+      const r = await psIndeksKur(modeller, AKTIF_SIRKET_ONEK, iptalRef, (b, t, h) => setVi({ durum: "kuruyor", mesaj: b + " / " + t + " fotoğraf işlendi" + (h ? " (" + h + " okunamadı)" : ""), yuzde: Math.max(1, Math.round(b / t * 100)), hata: "" }));
+      setViSurum(x => x + 1);
+      setVi({ durum: "hazir", mesaj: iptalRef.current ? "Durduruldu — kaldığı yerden devam edebilir" : "Tamamlandı: " + r.bitti + " fotoğraf" + (r.hata ? " (" + r.hata + " okunamadı)" : ""), yuzde: 100, hata: "" });
+      if (!iptalRef.current) oneriToplu(satirlar.filter(x => x.durum === "yok" && x.kalem.foto && !x.oneriler));
+    } catch (e) { console.error("indeks hatası:", e); setVi({ durum: "hata", mesaj: "", yuzde: 0, hata: (e && e.message) || String(e) }); }
+  };
   const modelAra = (id, metin) => {
     const l = kodHaritasi.get(psNorm(metin));
     if (l && l.length) guncelle(id, { ara: metin, adaylar: l, secimId: l[0].id, durum: l.length > 1 ? "coklu" : "eslesti", ekle: false, dahil: true, renkUyari: "" });
@@ -1269,6 +1434,29 @@ function PdfSiparisModal({ modeller, kollar, onKapat, onUygula }) {
     } finally { setUygulaniyor(false); }
   };
 
+  const oneriBlok = (s) => (
+    <div style={{ marginBottom: 6 }}>
+      {s.oneriDurum === "hesapliyor" && <div style={{ fontSize: 10, color: "#a89c84" }}>📷 Benzer modeller aranıyor…</div>}
+      {s.oneriDurum === "indeksyok" && <div style={{ fontSize: 10, color: "#e8b04f" }}>📷 Fotoğraf indeksi hazır değil — üstteki "Hazırla" düğmesine basın</div>}
+      {s.oneriDurum === "hata" && <div style={{ fontSize: 10, color: "#e85a4f" }}>📷 Benzer arama yapılamadı: {s.oneriHata}</div>}
+      {s.oneriler && s.oneriler.length > 0 && (<>
+        <div style={{ fontSize: 9, color: "#8a7d64", fontWeight: 700, marginBottom: 3 }}>📷 FOTOĞRAFA GÖRE BENZER MODELLER — tıkla, satıra bağlansın</div>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          {s.oneriler.map(o => (
+            <div key={o.m.id} onClick={() => modelSec(s.id, o.m)} title={o.m.kod + (o.m.ad ? " · " + o.m.ad : "")} style={{ width: 76, cursor: "pointer", border: "1px solid " + (o.m.id === s.secimId ? "#6abf69" : "rgba(255,255,255,0.12)"), borderRadius: 8, overflow: "hidden", background: "rgba(255,255,255,0.04)" }}>
+              <div style={{ height: 70, background: "#f3f3f3", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                {o.m.foto ? <img src={o.m.foto} alt="" loading="lazy" style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }} /> : null}
+              </div>
+              <div style={{ fontSize: 10, fontWeight: 700, padding: "2px 4px 0", color: "#e8dcc8", wordBreak: "break-all" }}>{o.m.kod}</div>
+              <div style={{ fontSize: 9, fontWeight: 700, padding: "0 4px 3px", color: o.skor >= 0.88 ? "#6abf69" : o.skor >= 0.8 ? "#e8b04f" : "#8a7d64" }}>%{Math.round(o.skor * 100)}</div>
+            </div>
+          ))}
+        </div>
+      </>)}
+      {!s.oneriler && s.oneriDurum !== "hesapliyor" && s.kalem.foto && <button onClick={() => oneriHesapla(s.id, s.kalem)} style={{ ...GH, fontSize: 9, padding: "2px 8px", marginTop: 4 }}>📷 Benzer bul</button>}
+    </div>
+  );
+
   const kucukIS = { ...IS, padding: "5px 8px", fontSize: 11 };
   const etiket = { fontSize: 9, color: "#8a7d64", fontWeight: 700, whiteSpace: "nowrap" };
   const rozet = (renk, yazi) => <span style={{ fontSize: 9, fontWeight: 800, padding: "2px 8px", borderRadius: 20, background: renk + "22", border: "1px solid " + renk + "66", color: renk }}>{yazi}</span>;
@@ -1279,6 +1467,20 @@ function PdfSiparisModal({ modeller, kollar, onKapat, onUygula }) {
         <div style={{ padding: "14px 18px", borderBottom: "1px solid rgba(255,255,255,0.08)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
           <div style={{ fontSize: 15, fontWeight: 700, color: "#f5f5f7" }}>📄 PDF'ten sipariş hazırla</div>
           <button onClick={onKapat} disabled={uygulaniyor} style={{ ...GH, padding: "4px 10px" }}>✕</button>
+        </div>
+        <div style={{ padding: "7px 18px", borderBottom: "1px solid rgba(255,255,255,0.06)", display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", fontSize: 11, color: "#a89c84" }}>
+          <span style={{ fontWeight: 700 }}>📷 Fotoğrafa göre eşleştirme:</span>
+          {vi.durum === "kontrol" && <span>kontrol ediliyor…</span>}
+          {vi.durum !== "kontrol" && vi.durum !== "kuruyor" && <span>{hazirSayi} model hazır{eksikSayi > 0 ? ", " + eksikSayi + " eksik" : " — güncel"}</span>}
+          {vi.durum === "kuruyor" && <>
+            <span>{vi.mesaj}</span>
+            <span style={{ width: 120, height: 6, background: "rgba(255,255,255,0.1)", borderRadius: 3, overflow: "hidden", display: "inline-block" }}><span style={{ display: "block", height: "100%", width: vi.yuzde + "%", background: "#6abf69" }} /></span>
+            <button onClick={() => { iptalRef.current = true; }} style={{ ...GH, fontSize: 10, padding: "3px 9px" }}>Durdur</button>
+          </>}
+          {vi.durum !== "kuruyor" && vi.durum !== "kontrol" && eksikSayi > 0 && <button onClick={indeksBaslat} style={{ ...GH, fontSize: 10, padding: "3px 9px" }}>{hazirSayi ? "Eksikleri ekle" : "Hazırla"} ({eksikSayi})</button>}
+          {vi.durum === "hazir" && vi.mesaj && <span style={{ color: "#6abf69" }}>{vi.mesaj}</span>}
+          {vi.hata && <span style={{ color: "#e85a4f" }}>{vi.hata}</span>}
+          {hazirSayi === 0 && eksikSayi > 0 && vi.durum !== "kuruyor" && <span style={{ fontSize: 10, color: "#7a6f5a", flexBasis: "100%" }}>İlk kurulum: yaklaşık 90 MB'lık model iner ve fotoğraflar işlenir (birkaç on dakika). Sekmeyi açık tutun; kapatırsanız kaldığı yerden devam eder. Sonraki kullanımlarda bu adım gerekmez, sadece yeni modeller eklenir.</span>}
         </div>
 
         {asama === "sec" && (
@@ -1391,6 +1593,7 @@ function PdfSiparisModal({ modeller, kollar, onKapat, onUygula }) {
                     <textarea value={s.not} onChange={e => guncelle(s.id, { not: e.target.value })} rows={Math.min(5, Math.max(2, Math.ceil((s.not || "").length / 46)))} placeholder="Açıklama / not" style={{ ...kucukIS, resize: "vertical", fontFamily: "sans-serif", lineHeight: 1.35 }} />
                   </div>
                   <div style={{ flex: "1 1 300px", minWidth: 260 }}>
+                    {oneriBlok(s)}
                     {s.durum !== "yok" && m && (
                       <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
                         <div style={{ width: 70, height: 70, background: "#f3f3f3", borderRadius: 8, overflow: "hidden", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
