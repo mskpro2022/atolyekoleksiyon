@@ -2585,6 +2585,8 @@ function VitrinModu({ kod, onizleme }) {
     return (
     <div key={m.id} className="vm-card" style={{ gridColumn: "span "+(genis ? vitrinSutun : 3) }}>
       <div onClick={()=>{ setDetayModel(m); if(vitrinMusteri && !onizleme) vitrinAktiviteKaydetGuvenli(vitrinMusteri.kod, vitrinMusteri.onek, "model", kolAdi, m.kod, m.ad); }}
+        onMouseMove={bilMi ? (e)=>{ try { if(!window.matchMedia("(hover:hover)").matches) return; const im=e.currentTarget.querySelector("img"); if(!im) return; const r=e.currentTarget.getBoundingClientRect(); im.style.transformOrigin=((e.clientX-r.left)/r.width*100).toFixed(1)+"% "+((e.clientY-r.top)/r.height*100).toFixed(1)+"%"; im.style.transform="scale(2.8)"; } catch {} } : undefined}
+        onMouseLeave={bilMi ? (e)=>{ const im=e.currentTarget.querySelector("img"); if(im){ im.style.transform=""; im.style.transformOrigin=""; } } : undefined}
         style={{ aspectRatio: genis ? String(5*vitrinSutun)+"/12" : "5/4", background: genis ? "#f3f3f3" : "#ededed", borderRadius: kucuk?9:12, position:"relative", overflow:"hidden", boxShadow: sec?"0 0 0 1px rgba(0,0,0,0.4), 0 0 0 3px var(--vurgu), 0 0 0 5px rgba(var(--vurgu-rgb),0.35)":"none" }}>
         {m.foto
           ? <img className="vm-ph" src={m.foto} alt="" style={{ ...(genis ? { width:"100%", height:"100%" } : { position:"absolute", top:"8.5%", left:"8.5%", width:"83%", height:"83%", ...FOTO_KENAR_SOLUK }), objectFit:"cover", objectPosition: (genis && m.kategori==="kolye") ? "50% 85%" : "center center", display:"block", ...((genis && m.kategori==="kolye") ? { width:"72%", margin:"0 auto", ...FOTO_KENAR_SOLUK } : {}) }}/>
@@ -3891,7 +3893,7 @@ function Atolye({ onSirketDegis }) {
     if (!document.getElementById("atolye-hover-zoom")) {
       const s = document.createElement("style");
       s.id = "atolye-hover-zoom";
-      s.textContent = `.model-foto-wrap { overflow:hidden; position:relative; } .model-foto-wrap img { transition: transform .4s cubic-bezier(.25,.46,.45,.94), transform-origin 0s !important; transform-origin: center center; } .model-foto-wrap:hover img { transform: scale(1.90) !important; }`;
+      s.textContent = `.model-foto-wrap { overflow:hidden; position:relative; } .model-foto-wrap img { transition: transform .4s cubic-bezier(.25,.46,.45,.94), transform-origin 0s !important; transform-origin: center center; } .model-foto-wrap:hover img { transform: scale(1.90) !important; } .model-foto-wrap.bil-zoom:hover img { transform: scale(3.2) !important; }`;
       document.head.appendChild(s);
     }
     const hoverHandler = function(e) {
@@ -5558,7 +5560,7 @@ function Atolye({ onSirketDegis }) {
                 const genisKart = bilMi && katSut >= 3; // ızgara 3×sütun ince sütun: normal = 3, bileklik/kolye = sütun sayısı → satırda 3 bileklik
                 return (
                   <div key={m.id} style={{ background:ik?"rgba(var(--vurgu-rgb),0.07)":"rgba(var(--vurgu-rgb),0.02)", border:"1px solid", borderColor:ik?"rgba(var(--vurgu-rgb),0.28)":"rgba(var(--vurgu-rgb),0.07)", borderRadius:11, overflow:"hidden", animation:"cardin .3s ease "+(i*.03)+"s both", gridColumn:"span "+(genisKart ? katSut : 3) }}>
-                    <div className="model-foto-wrap" style={{ position:"relative", ...(bilMi ? (katSut>=3 ? { aspectRatio: (5*katSut)+"/12" } : { height:264 }) : { aspectRatio:"5/4" }), background: bilMi ? "#f3f3f3" : "#f0f0f0", overflow:"hidden" }}>
+                    <div className={"model-foto-wrap"+(bilMi?" bil-zoom":"")} style={{ position:"relative", ...(bilMi ? (katSut>=3 ? { aspectRatio: (5*katSut)+"/12" } : { height:264 }) : { aspectRatio:"5/4" }), background: bilMi ? "#f3f3f3" : "#f0f0f0", overflow:"hidden" }}>
                       {m.foto ? <img onClick={()=>openEM(m)} src={m.foto} alt="" style={{ ...(bilMi ? { width:"100%", height:"100%" } : { position:"absolute", top:"8.5%", left:"8.5%", width:"83%", height:"83%", ...FOTO_KENAR_SOLUK }), objectFit:"cover", objectPosition: m.kategori==="kolye" ? "50% 85%" : "center center", display:"block", ...(m.kategori==="kolye" ? { width:"72%", margin:"0 auto", ...FOTO_KENAR_SOLUK } : {}), cursor:"pointer" }}/> : <div onClick={()=>openEM(m)} style={{ width:"100%", height:"100%", display:"flex", alignItems:"center", justifyContent:"center", color:"rgba(var(--vurgu-rgb),0.1)", fontSize:24, cursor:"pointer" }}>-</div>}
                       {/* Detay noktaları — KÖŞELERDE, büyük (56px). Sağ üst köşe V butonunun altına kaydırıldı ki çakışmasın. */}
                       {m.foto && Array.isArray(m.detayNoktalari) && m.detayNoktalari.filter(n=>(n.tip!=="foto")||n.foto).slice(0,4).map((n,di) => {
