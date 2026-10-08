@@ -1198,23 +1198,10 @@ function PdfSiparisModal({ modeller, kollar, onKapat, onUygula }) {
               const l = (modeller || []).filter(x => psNorm(x.kod) === psNorm(refKod));
               return l.sort((a, b) => (b.foto ? 1 : 0) - (a.foto ? 1 : 0))[0] || null;
             }).filter(Boolean);
-            const ip = psNotParcaIpucu([k.aciklama, k.not].filter(Boolean).join(" "));
-            let hedef = null;
-            if (ip.digeri) {
-              const kalan = parcalar.filter(p => psParcaGrubu(p.kategori) !== ip.digeri);
-              if (kalan.length === 1) hedef = kalan[0];
-            } else if (ip.dogrudan.length === 1) {
-              const uyan = parcalar.filter(p => psParcaGrubu(p.kategori) === ip.dogrudan[0]);
-              if (uyan.length === 1) hedef = uyan[0];
-            }
-            const parcaYazi = parcalar.map(p => p.kod + " (" + (PS_PARCA_AD[psParcaGrubu(p.kategori)] || p.kategori || "?") + (p.gram ? ", " + p.gram + " gr" : "") + ")").join(" · ");
-            if (hedef) {
-              sirali = [hedef, ...sirali.filter(m => m.id !== hedef.id), ...parcalar.filter(p => p.id !== hedef.id && !sirali.some(m => m.id === p.id))];
-              renkSecim = hedef.id;
-              renkUyari = "SET " + secM.kod + " bulundu ama açıklamaya göre tek parça isteniyor → " + hedef.kod + " (" + (PS_PARCA_AD[psParcaGrubu(hedef.kategori)] || hedef.kategori) + ") seçildi. Set parçaları: " + parcaYazi;
-            } else if (parcalar.length) {
+            const parcaYazi = parcalar.map(p => (PS_PARCA_AD[psParcaGrubu(p.kategori)] || p.kategori || "parça") + " " + p.kod + (p.gram ? " " + p.gram + " gr" : "")).join(" · ");
+            if (parcalar.length) {
               sirali = [...sirali, ...parcalar.filter(p => !sirali.some(m => m.id === p.id))];
-              renkUyari = "⚠ " + secM.kod + " bir SET modeli. Müşteri tek parça mı istiyor? Parçalar: " + parcaYazi + " — listeden seçebilirsin";
+              renkUyari = (renkUyari ? renkUyari + " | " : "") + "SET parçaları: " + parcaYazi;
             }
           }
         }
