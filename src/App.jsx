@@ -3614,6 +3614,21 @@ function Atolye({ onSirketDegis }) {
 
   // Kur: kg USD fiyatı
   const [altinKg, setAltinKg]   = useState("");
+  const [altinYukleniyor, setAltinYukleniyor] = useState(false);
+  const [altinSon, setAltinSon] = useState(null); // { ons, kaynak, zaman } — son otomatik güncelleme
+  const [altinHata, setAltinHata] = useState("");
+  // Ons altın (XAU/USD) → 1 kg has altın dolar fiyatı = ons / 31.1035 × 1000 (Supabase "altin-ons" fonksiyonu çeker)
+  const altinGuncelle = useCallback(async () => {
+    setAltinYukleniyor(true); setAltinHata("");
+    try {
+      const { data, error } = await supabase.functions.invoke("altin-ons");
+      if (error || !data || !data.ok || !(Number(data.kgUSD) > 0)) throw new Error((data && data.hatalar && data.hatalar.join(" | ")) || (error && error.message) || "Fiyat alınamadı");
+      setAltinKg(String(data.kgUSD));
+      setAltinSon({ ons: data.ons, kaynak: data.kaynak, zaman: data.zaman });
+    } catch (e) {
+      setAltinHata("Alınamadı — elle girebilirsin");
+    } finally { setAltinYukleniyor(false); }
+  }, []);
   const [mc,      setMc]         = useState("0.030");
 
   const [sayfa,     setSayfa]     = useState("koleksiyonlar");
@@ -5065,6 +5080,9 @@ function Atolye({ onSirketDegis }) {
             <div style={{ display:"flex", alignItems:"center", gap:4 }}>
               <span style={{ fontSize:8, color:"#998a6e" }}>$/kg</span>
               <input type="number" value={altinKg} onChange={e => setAltinKg(e.target.value)} placeholder="96000" style={{ ...IS, width:90, padding:"4px 7px", fontSize:12, textAlign:"center", fontWeight:700 }} />
+              <button onClick={altinGuncelle} disabled={altinYukleniyor} title="Ons altın fiyatından otomatik hesapla: ons ÷ 31,1035 × 1000" style={{ background:"rgba(106,191,105,0.12)", border:"1px solid rgba(106,191,105,0.35)", borderRadius:6, padding:"4px 9px", color:"#6abf69", fontSize:10, fontWeight:700, cursor: altinYukleniyor?"default":"pointer", opacity: altinYukleniyor?0.6:1 }}>{altinYukleniyor ? "..." : "↻ Ons'tan güncelle"}</button>
+              {altinSon && !altinHata && <span style={{ fontSize:8, color:"#998a6e" }}>ons {fN(altinSon.ons,2)} · {altinSon.kaynak} · {new Date(altinSon.zaman).toLocaleTimeString("tr-TR",{hour:"2-digit",minute:"2-digit"})}</span>}
+              {altinHata && <span style={{ fontSize:8, color:"#e85a4f", fontWeight:700 }}>{altinHata}</span>}
             </div>
             <div style={{ display:"flex", alignItems:"center", gap:4 }}>
               <span style={{ fontSize:8, color:"#998a6e" }}>Uretim mly/gr</span>
