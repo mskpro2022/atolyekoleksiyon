@@ -613,6 +613,702 @@ function kodOnEk(kod) {
   return m ? m[1].toUpperCase() : "—";
 }
 
+// ═══ PDF'TEN SİPARİŞ — ayrıştırıcı (tarayıcı + node'da çalışır) ═══
+// İki müşteri formatını okur:
+//   1) "excel"  : Excel'den PDF — satır başına: Code (109KP-FB141), Photo, Unit Gram, Quantity, Explanation
+//   2) "fabor"  : Fabor işemri — kutu (kart) başına: "NNN # KOD" veya "ModelID : N | Kod : KOD", Adet, Dikkat notu, foto
+// Sadece yapıyı çıkarır (metin + foto kutuları). Fotoğrafları kırpma ve model eşleştirme App.jsx tarafında.
+
+const PS_KOD_ONEK = /^(\d{1,4}[A-Z]{1,3})-(.+)$/; // 109KP-FB141 → ön ek + bizim kod
+
+function psNorm(s) {
+  return String(s || "").toUpperCase().replace(/[\s\-_.,;:]/g, "");
+}
+
+function psSayi(s) {
+  const n = parseFloat(String(s || "").replace(",", "."));
+  return isNaN(n) ? 0 : n;
+}
+
+// Metinden olası model kodlarını çıkar: "ALT 104R", "RP 24", "ALT 157 - S", "ALT212-R" ...
+// Her aday için uzun → kısa varyantlar döner (örn. ALT104R, ALT104). Hangisinin gerçekten var olduğuna eşleştirme karar verir.
+const PS_KARA_ONEK = new Set(["ALTIN","GIBI","GİBİ","PCS","BOY","ADET","SZ","US","CM","MM","GR","RENK","BOYU","NO","KG"]);
+function psKodAdaylariCikar(metin) {
+  const out = [];
+  const t = String(metin || "").toUpperCase();
+  const re = /(^|[^A-ZÇĞİÖŞÜ0-9])([A-ZÇĞİÖŞÜ]{1,5})\s?(\d{1,4})(?:\s?-\s?([A-Z0-9]{1,3}))?(?![A-Z0-9])/g;
+  let m;
+  while ((m = re.exec(t))) {
+    if (PS_KARA_ONEK.has(m[2])) continue;
+    const taban = m[2] + m[3];
+    const tam = m[4] ? taban + "-" + m[4] : taban;
+    // "RP 21C" gibi harf eki bitişik yazıldıysa: (?![A-Z0-9]) engeller — ayrıca bitişik harfli hali yakala
+    if (!out.includes(tam)) out.push(tam);
+    if (!out.includes(taban)) out.push(taban);
+  }
+  // Bitişik harf ekli: ALT104R, RP24F, RP21C
+  const re2 = /(^|[^A-ZÇĞİÖŞÜ0-9])([A-ZÇĞİÖŞÜ]{1,5})\s?(\d{1,4})([A-Z]{1,2})(?![A-Z0-9])/g;
+  while ((m = re2.exec(t))) {
+    if (PS_KARA_ONEK.has(m[2])) continue;
+    const v = m[2] + m[3] + m[4];
+    if (!out.includes(v)) out.unshift(v);
+  }
+  return out;
+}
+
+// ═══ Sayfa okuma: metin parçaları + resim kutuları + tablo yatay çizgileri ═══
+async function psSayfaOku(pdfjsLib, page) {
+  const OPS = pdfjsLib.OPS;
+  const vp = page.getViewport({ scale: 1 });
+  const W = vp.width, H = vp.height;
+  const tc = await page.getTextContent();
+  const items = [];
+  for (const it of tc.items) {
+    const s = (it.str || "").trim();
+    if (!s) continue;
+    items.push({ s, x: it.transform[4], y: H - it.transform[5], w: it.width || 0 });
+  }
+  items.sort((a, b) => a.y - b.y || a.x - b.x);
+
+  const opList = await page.getOperatorList();
+  const mul = (a, b) => [
+    a[0] * b[0] + a[2] * b[1], a[1] * b[0] + a[3] * b[1],
+    a[0] * b[2] + a[2] * b[3], a[1] * b[2] + a[3] * b[3],
+    a[0] * b[4] + a[2] * b[5] + a[4], a[1] * b[4] + a[3] * b[5] + a[5],
+  ];
+  const nokta = (m, x, y) => [m[0] * x + m[2] * y + m[4], m[1] * x + m[3] * y + m[5]];
+  let ctm = vp.transform.slice();
+  const yigin = [];
+  const imgs = [];
+  const cizgiler = []; // yatay çizgiler: {y, x0, x1}
+  const fnArr = opList.fnArray, argArr = opList.argsArray;
+  for (let i = 0; i < fnArr.length; i++) {
+    const fn = fnArr[i], args = argArr[i];
+    if (fn === OPS.save) yigin.push(ctm.slice());
+    else if (fn === OPS.restore) { if (yigin.length) ctm = yigin.pop(); }
+    else if (fn === OPS.transform) ctm = mul(ctm, args);
+    else if (fn === OPS.paintFormXObjectBegin) { yigin.push(ctm.slice()); if (args && args[0]) ctm = mul(ctm, args[0]); }
+    else if (fn === OPS.paintFormXObjectEnd) { if (yigin.length) ctm = yigin.pop(); }
+    else if (fn === OPS.paintImageXObject || fn === OPS.paintInlineImageXObject || fn === OPS.paintImageMaskXObject || fn === OPS.paintJpegXObject) {
+      const p = [nokta(ctm, 0, 0), nokta(ctm, 1, 0), nokta(ctm, 0, 1), nokta(ctm, 1, 1)];
+      const xs = p.map(q => q[0]), ys = p.map(q => q[1]);
+      const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+      imgs.push({ x0, y0, x1, y1, w: x1 - x0, h: y1 - y0 });
+    } else if (fn === OPS.constructPath) {
+      const ops = args[0], co = args[1];
+      let ci = 0, px = 0, py = 0;
+      for (const op of ops) {
+        if (op === OPS.moveTo) { px = co[ci]; py = co[ci + 1]; ci += 2; }
+        else if (op === OPS.lineTo) {
+          const nx = co[ci], ny = co[ci + 1]; ci += 2;
+          const a = nokta(ctm, px, py), b = nokta(ctm, nx, ny);
+          if (Math.abs(a[1] - b[1]) < 0.6 && Math.abs(a[0] - b[0]) > 150) cizgiler.push({ y: (a[1] + b[1]) / 2, x0: Math.min(a[0], b[0]), x1: Math.max(a[0], b[0]) });
+          px = nx; py = ny;
+        } else if (op === OPS.rectangle) {
+          const rx = co[ci], ry = co[ci + 1], rw = co[ci + 2], rh = co[ci + 3]; ci += 4;
+          const a = nokta(ctm, rx, ry), b = nokta(ctm, rx + rw, ry + rh);
+          const gen = Math.abs(a[0] - b[0]);
+          if (gen > 150) {
+            cizgiler.push({ y: a[1], x0: Math.min(a[0], b[0]), x1: Math.max(a[0], b[0]) });
+            cizgiler.push({ y: b[1], x0: Math.min(a[0], b[0]), x1: Math.max(a[0], b[0]) });
+          }
+        } else if (op === OPS.curveTo) ci += 6;
+        else if (op === OPS.curveTo2 || op === OPS.curveTo3) ci += 4;
+      }
+    }
+  }
+  // Çok küçük (QR, barkod, logo parçası) ve sayfayı kaplayan resimleri ele
+  const fotolar = imgs.filter(r => ((r.w >= 38 && r.h >= 38) || (r.w >= 120 && r.h >= 10)) && !(r.w > W * 0.95 && r.h > H * 0.9) && !(Math.abs(r.w - r.h) < 6 && r.w < 62));
+  return { W, H, items, imgs: fotolar, cizgiler };
+}
+
+// ═══ FABOR İŞEMRİ ═══
+const FABOR_ANKRAJ_A = /^(\d{4,8})\s*#\s*(\S.*)$/;
+const FABOR_ANKRAJ_B = /ModelID\s*:\s*(\d+)\s*\|\s*Kod\s*:\s*(\S.*)$/i;
+
+function psFaborBaslik(sayfa) {
+  const it = sayfa.items;
+  const sagindaki = (etiketRe, maxDx = 400) => {
+    const e = it.find(x => etiketRe.test(x.s));
+    if (!e) return "";
+    const s = it.filter(x => Math.abs(x.y - e.y) < 4 && x.x > e.x + 5 && x.x < e.x + maxDx).sort((a, b) => a.x - b.x)[0];
+    return s ? s.s : "";
+  };
+  const ayarM = it.map(x => x.s.match(/^(\d{1,2})\s*K\s*\((\d{3})\)/i)).find(Boolean);
+  const tarihler = it.filter(x => /^\d{1,2}\.\d{1,2}\.\d{4}$/.test(x.s)).sort((a, b) => a.x - b.x).map(x => x.s);
+  // "Sorumlu" satırında isimden sonra yazılan genel not (örn. "DÜŞÜK AYAR LAK KORUMA YAPALIM")
+  let genelNot = "";
+  const so = it.find(x => /^Sorumlu$/i.test(x.s));
+  if (so) {
+    const ayni = it.filter(x => Math.abs(x.y - so.y) < 4 && x.x > so.x + 5).sort((a, b) => a.x - b.x);
+    if (ayni.length > 1) genelNot = ayni.slice(1).map(x => x.s).join(" ");
+  }
+  return {
+    referans: sagindaki(/^Referans/i, 260),
+    po: sagindaki(/^PO\(Sip/i, 150),
+    listeGram: sagindaki(/^Liste Gram/i, 150),
+    ayar: ayarM ? ayarM[1] + "K" : "",
+    siparisTarihi: tarihler[0] || "",
+    teslimTarihi: tarihler[1] || "",
+    genelNot,
+  };
+}
+
+function psFaborKartlar(sayfa, sayfaNo) {
+  const { W, H, items, imgs } = sayfa;
+  const ankrajlar = [];
+  for (const x of items) {
+    let m = x.s.match(FABOR_ANKRAJ_B);
+    if (m) { ankrajlar.push({ x: x.x, y: x.y, ic: m[2].trim(), id: m[1] }); continue; }
+    m = x.s.match(FABOR_ANKRAJ_A);
+    if (m) ankrajlar.push({ x: x.x, y: x.y, ic: m[2].trim(), id: m[1] });
+  }
+  if (!ankrajlar.length) return [];
+  ankrajlar.sort((a, b) => a.y - b.y || a.x - b.x);
+  // Satırlara grupla
+  const satirlar = [];
+  for (const a of ankrajlar) {
+    const s = satirlar.find(r => Math.abs(r.y - a.y) < 14);
+    if (s) s.liste.push(a); else satirlar.push({ y: a.y, liste: [a] });
+  }
+  satirlar.sort((a, b) => a.y - b.y);
+  const kartlar = [];
+  satirlar.forEach((sat, si) => {
+    const y0 = sat.y - 3;
+    const y1 = si + 1 < satirlar.length ? satirlar[si + 1].y - 3 : H;
+    sat.liste.sort((a, b) => a.x - b.x);
+    sat.liste.forEach((a, ai) => {
+      const x0 = ai === 0 ? 0 : a.x - 10;
+      const x1 = ai + 1 < sat.liste.length ? sat.liste[ai + 1].x - 10 : W;
+      kartlar.push({ ankraj: a, x0, x1, y0, y1, sayfaNo });
+    });
+  });
+
+  const sonuc = [];
+  for (const k of kartlar) {
+    const it = items.filter(x => x.x >= k.x0 && x.x < k.x1 && x.y >= k.y0 && x.y < k.y1 && x.s !== "Temsili");
+    const sayiMi = s => /^\d+([.,]\d+)?$/.test(s);
+    const tamMi = s => /^\d+$/.test(s);
+
+    // ── Adet
+    let adet = 0;
+    let m;
+    for (const x of it) { if ((m = x.s.match(/^Adet\s*:\s*(\d+)/i))) { adet = +m[1]; break; } }
+    if (!adet) {
+      const e = it.find(x => /^Adet\s*:$/i.test(x.s));
+      if (e) { const v = it.filter(x => Math.abs(x.y - e.y) < 4 && x.x > e.x && tamMi(x.s)).sort((a, b) => a.x - b.x)[0]; if (v) adet = +v.s; }
+    }
+    if (!adet) { // ModelID düzeni: "Adet" etiketi + "46 adet"
+      const e = it.find(x => /^Adet$/i.test(x.s));
+      if (e) {
+        const v = it.filter(x => Math.abs(x.y - e.y) < 5 && x.x > e.x + 5).map(x => ({ x, m: x.s.match(/^(\d+)\s*adet$/i) })).find(q => q.m);
+        if (v) adet = +v.m[1];
+      }
+    }
+    if (!adet) { // Tablo düzeni: başlık "Adet" + altındaki satırda tam sayı
+      const e = it.find(x => /^Adet$/i.test(x.s));
+      if (e) {
+        const alt = it.filter(x => x.y > e.y + 3 && x.y < e.y + 70 && tamMi(x.s));
+        if (alt.length) {
+          const satirY = alt.sort((a, b) => a.y - b.y)[0].y;
+          const sat = alt.filter(x => Math.abs(x.y - satirY) < 4);
+          sat.sort((a, b) => Math.abs(a.x - e.x) - Math.abs(b.x - e.x));
+          adet = +sat[0].s;
+        }
+      }
+    }
+
+    // ── Birim gram
+    let gram = 0;
+    const istG = it.find(x => /^İst\.?Ağırlık|^İst\.Agirlik/i.test(x.s));
+    if (istG) { const v = it.filter(x => Math.abs(x.y - istG.y) < 5 && x.x > istG.x && /gr$/i.test(x.s)).sort((a, b) => a.x - b.x)[0]; if (v) gram = psSayi(v.s); }
+    if (!gram) {
+      const e = it.find(x => /^Adet\/Gr$/i.test(x.s));
+      if (e) {
+        const alt = it.filter(x => x.y > e.y + 3 && x.y < e.y + 70 && /^\d+[.,]\d+$/.test(x.s)).sort((a, b) => a.y - b.y);
+        if (alt.length) {
+          const satirY = alt[0].y;
+          const sat = alt.filter(x => Math.abs(x.y - satirY) < 4).sort((a, b) => Math.abs(a.x - e.x) - Math.abs(b.x - e.x));
+          gram = psSayi(sat[0].s);
+        }
+      }
+    }
+    if (!gram) {
+      const e = it.find(x => /^Ağırlık\s*:?$/i.test(x.s));
+      if (e) { const v = it.filter(x => Math.abs(x.y - e.y) < 4 && x.x > e.x && sayiMi(x.s)).sort((a, b) => a.x - b.x)[0]; if (v) gram = psSayi(v.s); }
+    }
+
+    // ── Boy bilgisi
+    let boy = "";
+    const boyE = it.find(x => /^Boy\s*:?$/i.test(x.s));
+    if (boyE) { const v = it.filter(x => Math.abs(x.y - boyE.y) < 5 && x.x > boyE.x && /\d/.test(x.s)).sort((a, b) => a.x - b.x)[0]; if (v) boy = v.s; }
+
+    // ── Dikkat notu
+    let not = "";
+    const dE = it.find(x => /^Dikkat/i.test(x.s));
+    const tabloUstte = it.some(x => /^Toplam$|^Toplam Gr$/i.test(x.s) && dE && x.y <= dE.y + 12);
+    if (dE) {
+      const parcalar = [];
+      const ilk = dE.s.replace(/^Dikkat\s*:?\s*/i, "");
+      let ilkSatir = ilk;
+      if (!ilkSatir) { const v = it.filter(x => Math.abs(x.y - dE.y) < 4 && x.x > dE.x && x !== dE).sort((a, b) => a.x - b.x); ilkSatir = v.map(q => q.s.replace(/^:\s*/, "")).join(" "); }
+      else { const v = it.filter(x => Math.abs(x.y - dE.y) < 4 && x.x > dE.x + 1 && x !== dE).sort((a, b) => a.x - b.x); if (v.length) ilkSatir += " " + v.map(q => q.s).join(" "); }
+      ilkSatir = ilkSatir.replace(/^:\s*/, "").trim();
+      if (ilkSatir) parcalar.push(ilkSatir);
+      const devam = it.filter(x => x.y > dE.y + 3).sort((a, b) => a.y - b.y || a.x - b.x);
+      const etiketRe = /^(ATÖLYE|AtölyeKodu|Adet|İst\.|Sys\.|T\.Ağ|T\.Agirlik|Boy\b|Karakter|Toplam)/i;
+      let sonY = null;
+      for (const x of devam) {
+        if (/^KID\s*:/i.test(x.s) || /^\d{5,7}$/.test(x.s)) break;
+        if (etiketRe.test(x.s)) break;
+        if (/^\d{3}[A-Z]{3,4}\d{5}$/.test(x.s)) break;
+        if (tabloUstte && (sayiMi(x.s) || /^\d{3}[A-Z]{3}\d{5}$/.test(x.s) || /^[A-Z]{2,5}\d{1,4}(-[A-Z0-9]+)?$/.test(x.s))) break;
+        if (sonY !== null && x.y - sonY > 40) break;
+        sonY = x.y;
+        parcalar.push(x.s);
+      }
+      not = parcalar.join(" ").replace(/\s+/g, " ").trim();
+    }
+
+    // ── Atölye kodu değeri (tablo düzeninde "FHP151" gibi bizim koda benzeyen)
+    const adayKodlar = [];
+    const kodSekli = /^[A-Z]{2,5}\d{1,4}(-[A-Z0-9]+)?$/;
+    if (tabloUstte) for (const x of it) if (kodSekli.test(x.s)) adayKodlar.push({ kod: x.s, kaynak: "atölye kodu" });
+    const aE = it.find(x => /^AtölyeKodu$/i.test(x.s));
+    if (aE) { const v = it.filter(x => Math.abs(x.y - aE.y) < 5 && x.x > aE.x + 5).sort((a, b) => a.x - b.x)[0]; if (v && kodSekli.test(v.s)) adayKodlar.push({ kod: v.s, kaynak: "atölye kodu" }); }
+    const notKodlari = psKodAdaylariCikar(not).map(kod => ({ kod, kaynak: "açıklama" }));
+
+    // ── Fotoğraflar (kartın içindeki resimler)
+    const kartFoto = imgs.filter(r => {
+      const cx = (r.x0 + r.x1) / 2, cy = (r.y0 + r.y1) / 2;
+      return cx >= k.x0 && cx < k.x1 && cy >= k.y0 && cy < k.y1;
+    }).sort((a, b) => b.w * b.h - a.w * a.h);
+
+    const atolyeKodlari = it.filter(x => /^\d{3}[A-Z]{3}\d{5}$/.test(x.s)).map(x => x.s);
+    sonuc.push({
+      tip: "fabor",
+      sayfaNo,
+      disKod: k.ankraj.ic.replace(/\s+/g, " "),
+      disId: k.ankraj.id,
+      atolyeKodlari,
+      kodAdaylari: [...notKodlari, ...adayKodlar],
+      adet: adet || 1,
+      adetBulundu: !!adet,
+      gramBirim: gram,
+      boy,
+      aciklama: [not, boy ? "Boy: " + boy : ""].filter(Boolean).join(" | "),
+      not,
+      fotoKutular: kartFoto.map(r => ({ sayfaNo, x0: r.x0, y0: r.y0, x1: r.x1, y1: r.y1 })),
+    });
+  }
+  return sonuc;
+}
+
+// ═══ EXCEL PDF ═══
+// Satır sınırı yerine yakınlık kullanılır: gram/adet kod ile aynı hizada; açıklama satırları boşluklara göre kümelenip en yakın koda bağlanır;
+// resimler merkezine en yakın koda bağlanır.
+function psExcelSatirlar(sayfa, sayfaNo, belge) {
+  const { W, H, items, imgs } = sayfa;
+  const kodlar = items.filter(x => PS_KOD_ONEK.test(x.s));
+  if (!kodlar.length) return [];
+  kodlar.sort((a, b) => a.y - b.y);
+  const kodX = kodlar.map(k => k.x).sort((a, b) => a - b)[Math.floor(kodlar.length / 2)];
+  const baslikSozcukler = new Set(["NO.", "NO", "CODE", "PHOTO", "UNIT GRAM", "QUANTITY", "EXPLANATION"]);
+  const govde = items.filter(x => !baslikSozcukler.has(x.s.toUpperCase()) && x.y < H - 45 && !PS_KOD_ONEK.test(x.s));
+  const medyan = (arr) => arr.length ? arr.slice().sort((a, b) => a - b)[Math.floor(arr.length / 2)] : null;
+
+  // Sütunlar: gram (ondalık), adet (tam sayı, gramın sağında)
+  const ondalik = govde.filter(x => /^\d+[.,]\d+$/.test(x.s) && x.x > kodX + 60);
+  const gramX = medyan(ondalik.map(x => x.x));
+  const tamlar = govde.filter(x => /^\d+$/.test(x.s) && gramX !== null && x.x > gramX + 15);
+  const adetX = medyan(tamlar.map(x => x.x));
+  if (belge) { if (gramX !== null) belge.gramX = gramX; if (adetX !== null) belge.adetX = adetX; }
+  const gX = gramX !== null ? gramX : (belge && belge.gramX);
+  const aX = adetX !== null ? adetX : (belge && belge.adetX);
+
+  const enYakin = (y, maxDy) => {
+    let en = -1, fark = 1e9;
+    kodlar.forEach((k, i) => { const d = Math.abs(k.y - y); if (d < fark) { fark = d; en = i; } });
+    return fark <= maxDy ? en : -1;
+  };
+  const satir = kodlar.map(k => ({ kod: k, gram: 0, adet: 0, acik: [], foto: [] }));
+
+  // gram / adet: kodla aynı hizada
+  for (const x of govde) {
+    const i = enYakin(x.y, 8);
+    if (i < 0) continue;
+    if (gX !== null && /^\d+[.,]\d+$/.test(x.s) && Math.abs(x.x - gX) < 40) satir[i].gram = psSayi(x.s);
+    else if (aX !== null && /^\d+$/.test(x.s) && Math.abs(x.x - aX) < 30) satir[i].adet = +x.s;
+  }
+  // açıklama: adet sütununun sağındaki metinler — boşluk > 14pt olunca yeni küme
+  if (aX !== null) {
+    const acik = govde.filter(x => (x.x + (x.w || 0) / 2) > aX + 45).sort((a, b) => a.y - b.y || a.x - b.x);
+    let kume = [];
+    const bagla = () => {
+      if (!kume.length) return;
+      const merkez = (kume[0].y + kume[kume.length - 1].y) / 2;
+      const i = enYakin(merkez, 120);
+      if (i >= 0) kume.forEach(q => satir[i].acik.push(q.s));
+      kume = [];
+    };
+    for (const x of acik) {
+      if (kume.length && x.y - kume[kume.length - 1].y > 14) bagla();
+      kume.push(x);
+    }
+    bagla();
+  }
+  // resimler: merkezine en yakın koda
+  const fotoAday = imgs.filter(r => (r.x0 + r.x1) / 2 > kodX + 40);
+  for (const r of fotoAday) {
+    const i = enYakin((r.y0 + r.y1) / 2, 110);
+    if (i >= 0) satir[i].foto.push(r);
+  }
+
+  return satir.map(r => {
+    const mm = r.kod.s.match(PS_KOD_ONEK);
+    const aciklama = r.acik.join(" ").replace(/\s+/g, " ").trim();
+    return {
+      tip: "excel",
+      sayfaNo,
+      disKod: r.kod.s,
+      kodAdaylari: [{ kod: mm[2], kaynak: "kod" }, { kod: r.kod.s, kaynak: "tam kod" }],
+      adet: r.adet || 1,
+      adetBulundu: !!r.adet,
+      gramBirim: r.gram,
+      aciklama,
+      not: aciklama,
+      fotoKutular: r.foto.sort((a, b) => a.x0 - b.x0).map(q => ({ sayfaNo, x0: q.x0, y0: q.y0, x1: q.x1, y1: q.y1 })),
+    };
+  });
+}
+
+// ═══ ANA GİRİŞ ═══
+// pdfjsLib: pdf.js kütüphanesi, data: Uint8Array, dönüş: { tip, baslik, kalemler, sayfaSayisi, pdf }
+async function psPdfAyristir(pdfjsLib, data) {
+  const pdf = await pdfjsLib.getDocument({ data, useSystemFonts: true }).promise;
+  const sayfalar = [];
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i);
+    sayfalar.push(await psSayfaOku(pdfjsLib, page));
+  }
+  const faborVar = sayfalar.some(s => s.items.some(x => FABOR_ANKRAJ_A.test(x.s) || FABOR_ANKRAJ_B.test(x.s)));
+  let tip = "bilinmiyor", baslik = {}, kalemler = [];
+  if (faborVar) {
+    tip = "fabor";
+    baslik = psFaborBaslik(sayfalar[0]);
+    sayfalar.forEach((s, i) => { kalemler.push(...psFaborKartlar(s, i + 1)); });
+  } else {
+    const belge = {};
+    // Sütun konumlarını bulmak için önce tüm sayfaları tara
+    sayfalar.forEach((s, i) => { psExcelSatirlar(s, i + 1, belge); });
+    sayfalar.forEach((s, i) => { kalemler.push(...psExcelSatirlar(s, i + 1, belge)); });
+    if (kalemler.length) tip = "excel";
+  }
+  kalemler.forEach((k, i) => { k.id = "pk" + (i + 1); });
+  return { tip, baslik, kalemler, sayfaSayisi: pdf.numPages, pdf };
+}
+
+// ═══ PDF'TEN SİPARİŞ — pdf.js yükleme, foto kırpma, onay ekranı ═══
+let _pdfjsYuklenen = null;
+function pdfjsYukle() {
+  if (typeof window !== "undefined" && window.pdfjsLib) return Promise.resolve(window.pdfjsLib);
+  if (_pdfjsYuklenen) return _pdfjsYuklenen;
+  _pdfjsYuklenen = new Promise((res, rej) => {
+    const s = document.createElement("script");
+    s.src = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js";
+    s.onload = () => {
+      try { window.pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js"; res(window.pdfjsLib); }
+      catch (e) { _pdfjsYuklenen = null; rej(e); }
+    };
+    s.onerror = () => { _pdfjsYuklenen = null; rej(new Error("PDF okuyucu yüklenemedi (internet bağlantısını kontrol edin)")); };
+    document.head.appendChild(s);
+  });
+  return _pdfjsYuklenen;
+}
+
+// Her sayfayı bir kez çizip, fotoğraf kutularını kırpar → kalem.foto (JPEG data URL), kalem.fotolar
+async function psFotolariKirp(pdf, kalemler, ilerle) {
+  const OLCEK = 2;
+  const sayfaNolar = [...new Set(kalemler.flatMap(k => k.fotoKutular.map(b => b.sayfaNo)))].sort((a, b) => a - b);
+  let yapilan = 0;
+  for (const no of sayfaNolar) {
+    const page = await pdf.getPage(no);
+    const vp = page.getViewport({ scale: OLCEK });
+    const cv = document.createElement("canvas");
+    cv.width = Math.ceil(vp.width); cv.height = Math.ceil(vp.height);
+    const ctx = cv.getContext("2d");
+    ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, cv.width, cv.height);
+    await page.render({ canvasContext: ctx, viewport: vp }).promise;
+    for (const k of kalemler) {
+      for (const b of k.fotoKutular) {
+        if (b.sayfaNo !== no) continue;
+        const x = Math.max(0, Math.floor(b.x0 * OLCEK)), y = Math.max(0, Math.floor(b.y0 * OLCEK));
+        const w = Math.min(cv.width - x, Math.ceil((b.x1 - b.x0) * OLCEK)), h = Math.min(cv.height - y, Math.ceil((b.y1 - b.y0) * OLCEK));
+        if (w < 8 || h < 8) continue;
+        const en = Math.min(1, 720 / Math.max(w, h));
+        const kc = document.createElement("canvas");
+        kc.width = Math.max(1, Math.round(w * en)); kc.height = Math.max(1, Math.round(h * en));
+        const kctx = kc.getContext("2d");
+        kctx.fillStyle = "#fff"; kctx.fillRect(0, 0, kc.width, kc.height);
+        kctx.drawImage(cv, x, y, w, h, 0, 0, kc.width, kc.height);
+        b.dataUrl = kc.toDataURL("image/jpeg", 0.85);
+        b.alan = (b.x1 - b.x0) * (b.y1 - b.y0);
+      }
+    }
+    cv.width = 0; cv.height = 0;
+    yapilan++;
+    if (ilerle) ilerle(yapilan, sayfaNolar.length);
+  }
+  kalemler.forEach(k => {
+    const bulunan = k.fotoKutular.filter(b => b.dataUrl).sort((a, b) => b.alan - a.alan);
+    k.foto = bulunan.length ? bulunan[0].dataUrl : "";
+    k.fotolar = bulunan.map(b => b.dataUrl);
+  });
+}
+
+function psKategoriTahmin(k) {
+  const t = ((k.aciklama || "") + " " + (k.disKod || "")).toUpperCase();
+  if (/BRACELET|BİLEKLİK|BILEKLIK/.test(t)) return "bileklik";
+  if (/NECKLACE|KOLYE|PENDANT|KULON|\bCHAIN\b/.test(t)) return "kolye";
+  if (/EARRING|KÜPE|KUPE/.test(t)) return "kupe";
+  if (/\bUS-?1\b|\bUS\b|MALAFA|YÜZÜK|YUZUK|\bRING\b|\bSIZE\b/.test(t)) return "yuzuk";
+  return "diger";
+}
+
+function PdfSiparisModal({ modeller, kollar, onKapat, onUygula }) {
+  const [asama, setAsama] = useState("sec"); // sec | okuyor | onay
+  const [mesaj, setMesaj] = useState("");
+  const [hata, setHata] = useState("");
+  const [baslik, setBaslik] = useState({});
+  const [tip, setTip] = useState("");
+  const [satirlar, setSatirlar] = useState([]);
+  const [yeniKolId, setYeniKolId] = useState("");
+  const [uygulaniyor, setUygulaniyor] = useState(false);
+
+  const kodHaritasi = useMemo(() => {
+    const h = new Map();
+    (modeller || []).forEach(m => { const k = psNorm(m.kod); if (!k) return; if (!h.has(k)) h.set(k, []); h.get(k).push(m); });
+    return h;
+  }, [modeller]);
+
+  const dosyaSecildi = async (e) => {
+    const f = e.target.files && e.target.files[0];
+    e.target.value = "";
+    if (!f) return;
+    setHata(""); setAsama("okuyor"); setMesaj("PDF okunuyor…");
+    try {
+      const pdfjsLib = await pdfjsYukle();
+      const buf = new Uint8Array(await f.arrayBuffer());
+      const sonuc = await psPdfAyristir(pdfjsLib, buf);
+      if (!sonuc.kalemler.length) { setHata("Bu PDF'te sipariş kalemi bulunamadı. Desteklenen biçimler: Fabor işemri ve Excel'den alınmış tablo PDF'i."); setAsama("sec"); return; }
+      setMesaj("Fotoğraflar hazırlanıyor… (" + sonuc.kalemler.length + " kalem)");
+      await psFotolariKirp(sonuc.pdf, sonuc.kalemler, (a, b) => setMesaj("Fotoğraflar hazırlanıyor… sayfa " + a + "/" + b));
+      const yeniSatirlar = sonuc.kalemler.map(k => {
+        let adaylar = [], bulunanKod = "";
+        for (const a of k.kodAdaylari) {
+          const l = kodHaritasi.get(psNorm(a.kod));
+          if (l && l.length) { adaylar = l; bulunanKod = a.kod; break; }
+        }
+        const sirali = adaylar.slice().sort((x, y) => (y.foto ? 1 : 0) - (x.foto ? 1 : 0));
+        const eslesti = sirali.length > 0;
+        const ilkKod = (k.kodAdaylari[0] && k.kodAdaylari[0].kod) || "";
+        const excel = k.tip === "excel";
+        return {
+          id: k.id, kalem: k,
+          durum: !eslesti ? "yok" : (sirali.length > 1 ? "coklu" : "eslesti"),
+          adaylar: sirali, secimId: eslesti ? sirali[0].id : "", bulunanKod,
+          adet: k.adet || 1, not: k.aciklama || "",
+          dahil: eslesti || excel,
+          ekle: !eslesti, // eşleşme yoksa varsayılan: yeni model olarak ekle
+          yeniKod: excel ? ilkKod : (k.disKod || ""), yeniKategori: psKategoriTahmin(k), yeniGram: k.gramBirim || "",
+          ara: "",
+        };
+      });
+      // Fabor'da eşleşmeyen kalemler varsayılan olarak kapalı gelir (iç kodlar bizim kodumuz değil)
+      yeniSatirlar.forEach(s => { if (s.durum === "yok" && s.kalem.tip === "fabor") s.dahil = false; });
+      setBaslik(sonuc.baslik || {}); setTip(sonuc.tip); setSatirlar(yeniSatirlar); setAsama("onay");
+    } catch (err) {
+      console.error("PDF okuma hatası:", err);
+      setHata("PDF okunamadı: " + (err && err.message ? err.message : err)); setAsama("sec");
+    }
+  };
+
+  const guncelle = (id, patch) => setSatirlar(p => p.map(s => s.id === id ? { ...s, ...patch } : s));
+  const modelAra = (id, metin) => {
+    const l = kodHaritasi.get(psNorm(metin));
+    if (l && l.length) guncelle(id, { ara: metin, adaylar: l, secimId: l[0].id, durum: l.length > 1 ? "coklu" : "eslesti", ekle: false, dahil: true });
+    else guncelle(id, { ara: metin });
+  };
+
+  const secili = satirlar.filter(s => s.dahil);
+  const yeniSayisi = secili.filter(s => s.ekle && s.durum === "yok").length;
+  const eksikKod = secili.filter(s => s.durum === "yok" && s.ekle && !String(s.yeniKod || "").trim()).length;
+  const kodCakisan = (() => { const c = {}; secili.filter(s => s.durum === "yok" && s.ekle).forEach(s => { const k = psNorm(s.yeniKod); if (k) c[k] = (c[k] || 0) + 1; }); return c; })();
+  const uygulanabilir = secili.length > 0 && eksikKod === 0 && (yeniSayisi === 0 || !!yeniKolId);
+  const sayac = { eslesti: satirlar.filter(s => s.durum === "eslesti").length, coklu: satirlar.filter(s => s.durum === "coklu").length, yok: satirlar.filter(s => s.durum === "yok").length };
+
+  const onayla = async () => {
+    if (!uygulanabilir || uygulaniyor) return;
+    setUygulaniyor(true);
+    try {
+      await onUygula({ baslik, tip, kolId: yeniKolId, satirlar: secili.map(s => ({
+        yeni: s.durum === "yok" && s.ekle,
+        model: s.durum === "yok" ? null : (s.adaylar.find(m => m.id === s.secimId) || s.adaylar[0]),
+        kalem: s.kalem, adet: Math.max(1, Number(s.adet) || 1), not: s.not,
+        yeniKod: s.yeniKod, yeniKategori: s.yeniKategori, yeniGram: s.yeniGram,
+      })).filter(x => x.yeni || x.model) });
+      onKapat();
+    } catch (err) {
+      console.error("PDF sipariş aktarma hatası:", err);
+      setHata("Aktarma sırasında hata: " + (err && err.message ? err.message : err));
+    } finally { setUygulaniyor(false); }
+  };
+
+  const kucukIS = { ...IS, padding: "5px 8px", fontSize: 11 };
+  const etiket = { fontSize: 9, color: "#8a7d64", fontWeight: 700, whiteSpace: "nowrap" };
+  const rozet = (renk, yazi) => <span style={{ fontSize: 9, fontWeight: 800, padding: "2px 8px", borderRadius: 20, background: renk + "22", border: "1px solid " + renk + "66", color: renk }}>{yazi}</span>;
+
+  return (
+    <div onClick={() => { if (!uygulaniyor) onKapat(); }} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.82)", zIndex: 300, display: "flex", alignItems: "center", justifyContent: "center", padding: 14 }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: "#1c1c1e", borderRadius: 16, width: "100%", maxWidth: 1040, maxHeight: "94vh", display: "flex", flexDirection: "column", color: "#e8dcc8" }}>
+        <div style={{ padding: "14px 18px", borderBottom: "1px solid rgba(255,255,255,0.08)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+          <div style={{ fontSize: 15, fontWeight: 700, color: "#f5f5f7" }}>📄 PDF'ten sipariş hazırla</div>
+          <button onClick={onKapat} disabled={uygulaniyor} style={{ ...GH, padding: "4px 10px" }}>✕</button>
+        </div>
+
+        {asama === "sec" && (
+          <div style={{ padding: 28, textAlign: "center" }}>
+            <p style={{ fontSize: 12, color: "#a89c84", margin: "0 0 6px" }}>Müşterinin gönderdiği sipariş PDF'ini seçin.</p>
+            <p style={{ fontSize: 10, color: "#7a6f5a", margin: "0 0 16px" }}>Fabor işemri ve Excel'den alınmış tablo PDF'leri okunur. Kodlar bizim modellerle eşleştirilir; bulunamayanlar yeni model olarak eklenebilir.</p>
+            <label style={{ ...BG, display: "inline-block", cursor: "pointer", padding: "10px 22px", fontSize: 12 }}>
+              PDF seç
+              <input type="file" accept="application/pdf,.pdf" onChange={dosyaSecildi} style={{ display: "none" }} />
+            </label>
+            {hata && <div style={{ marginTop: 14, fontSize: 11, color: "#e85a4f" }}>{hata}</div>}
+          </div>
+        )}
+
+        {asama === "okuyor" && (
+          <div style={{ padding: 40, textAlign: "center", fontSize: 12, color: "#a89c84" }}>{mesaj || "Okunuyor…"}</div>
+        )}
+
+        {asama === "onay" && (<>
+          <div style={{ padding: "10px 18px", borderBottom: "1px solid rgba(255,255,255,0.06)", display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center", fontSize: 11 }}>
+            <span style={{ color: "#f5f5f7", fontWeight: 700 }}>{tip === "fabor" ? "Fabor işemri" : "Excel PDF"}</span>
+            {baslik.referans ? <span>Ref: <b>{baslik.referans}</b></span> : null}
+            {baslik.po ? <span>PO: <b>{baslik.po}</b></span> : null}
+            {baslik.ayar ? <span>Ayar: <b>{baslik.ayar}</b></span> : null}
+            {baslik.teslimTarihi ? <span>Teslim: <b>{baslik.teslimTarihi}</b></span> : null}
+            {baslik.genelNot ? <span style={{ color: "#e85a4f" }}>⚠ {baslik.genelNot}</span> : null}
+            <span style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
+              {rozet("#6abf69", sayac.eslesti + " eşleşti")}
+              {sayac.coklu > 0 && rozet("#e8b04f", sayac.coklu + " birden çok model")}
+              {rozet("#e85a4f", sayac.yok + " bulunamadı")}
+            </span>
+          </div>
+          {sayac.yok > 0 && (
+            <div style={{ padding: "8px 18px", borderBottom: "1px solid rgba(255,255,255,0.06)", display: "flex", alignItems: "center", gap: 8, fontSize: 11 }}>
+              <span style={etiket}>YENİ MODELLER ŞU KOLEKSİYONA EKLENSİN:</span>
+              <select value={yeniKolId} onChange={e => setYeniKolId(e.target.value)} style={{ ...kucukIS, width: "auto", minWidth: 200 }}>
+                <option value="">— koleksiyon seç —</option>
+                {(kollar || []).map(k => <option key={k.id} value={k.id}>{k.ad}</option>)}
+              </select>
+              {yeniSayisi > 0 && !yeniKolId && <span style={{ color: "#e85a4f", fontSize: 10 }}>Yeni model eklemek için koleksiyon seçin</span>}
+            </div>
+          )}
+          <div style={{ overflowY: "auto", padding: "10px 14px", flex: 1 }}>
+            {satirlar.map((s, sn) => {
+              const m = s.durum !== "yok" ? (s.adaylar.find(x => x.id === s.secimId) || s.adaylar[0]) : null;
+              return (
+                <div key={s.id} style={{ display: "flex", gap: 12, padding: "10px 8px", marginBottom: 8, borderRadius: 10, background: s.dahil ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.01)", border: "1px solid " + (s.dahil ? "rgba(var(--vurgu-rgb),0.18)" : "rgba(255,255,255,0.05)"), opacity: s.dahil ? 1 : 0.55, alignItems: "flex-start", flexWrap: "wrap" }}>
+                  <input type="checkbox" checked={s.dahil} onChange={e => guncelle(s.id, { dahil: e.target.checked })} style={{ marginTop: 4 }} title="Siparişe aktar" />
+                  <div style={{ width: 92, flexShrink: 0 }}>
+                    <div style={{ width: 92, height: 92, background: "#fff", borderRadius: 8, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      {s.kalem.foto ? <img src={s.kalem.foto} alt="" style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }} /> : <span style={{ color: "#bbb", fontSize: 10 }}>foto yok</span>}
+                    </div>
+                    <div style={{ fontSize: 8, color: "#7a6f5a", marginTop: 3, wordBreak: "break-all" }}>#{sn + 1} · s.{s.kalem.sayfaNo} · {s.kalem.disKod}</div>
+                  </div>
+                  <div style={{ flex: "1 1 260px", minWidth: 240 }}>
+                    <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 6, flexWrap: "wrap" }}>
+                      <span style={etiket}>ADET</span>
+                      <input type="number" min="1" value={s.adet} onChange={e => guncelle(s.id, { adet: e.target.value })} style={{ ...kucukIS, width: 64 }} />
+                      {s.kalem.gramBirim ? <span style={{ fontSize: 10, color: "#a89c84" }}>PDF gram: {s.kalem.gramBirim}</span> : null}
+                      {!s.kalem.adetBulundu && <span style={{ fontSize: 9, color: "#e8b04f" }}>adet okunamadı, kontrol edin</span>}
+                    </div>
+                    <textarea value={s.not} onChange={e => guncelle(s.id, { not: e.target.value })} rows={Math.min(5, Math.max(2, Math.ceil((s.not || "").length / 46)))} placeholder="Açıklama / not" style={{ ...kucukIS, resize: "vertical", fontFamily: "sans-serif", lineHeight: 1.35 }} />
+                  </div>
+                  <div style={{ flex: "1 1 300px", minWidth: 260 }}>
+                    {s.durum !== "yok" && m && (
+                      <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+                        <div style={{ width: 70, height: 70, background: "#f3f3f3", borderRadius: 8, overflow: "hidden", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                          {m.foto ? <img src={m.foto} alt="" loading="lazy" style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }} /> : null}
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+                            {rozet(s.durum === "coklu" ? "#e8b04f" : "#6abf69", s.durum === "coklu" ? "birden çok model" : "eşleşti")}
+                            <b style={{ fontSize: 13, color: "#f5f5f7" }}>{m.kod}</b>
+                            <span style={{ fontSize: 10, color: "#a89c84" }}>{m.ad || ""}</span>
+                          </div>
+                          <div style={{ fontSize: 10, color: "#8a7d64", marginTop: 2 }}>{m.gram ? m.gram + " gr · " : ""}{m.refAyar || ""} · {m.kategori || ""} · bulunan: {s.bulunanKod} ({(s.kalem.kodAdaylari.find(a => a.kod === s.bulunanKod) || {}).kaynak || ""})</div>
+                          {s.adaylar.length > 1 && (
+                            <select value={s.secimId} onChange={e => guncelle(s.id, { secimId: e.target.value })} style={{ ...kucukIS, marginTop: 5 }}>
+                              {s.adaylar.map(x => <option key={x.id} value={x.id}>{x.kod} — {(kollar.find(k => k.id === x.ki) || {}).ad || "?"}{x.ad ? " · " + x.ad : ""}</option>)}
+                            </select>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    {s.durum === "yok" && (
+                      <div>
+                        <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 6, flexWrap: "wrap" }}>
+                          {rozet("#e85a4f", "bulunamadı")}
+                          <label style={{ fontSize: 10, display: "flex", gap: 4, alignItems: "center", cursor: "pointer" }}>
+                            <input type="checkbox" checked={s.ekle} onChange={e => guncelle(s.id, { ekle: e.target.checked })} /> yeni model olarak ekle
+                          </label>
+                        </div>
+                        {s.ekle && (
+                          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 6 }}>
+                            <input value={s.yeniKod} onChange={e => guncelle(s.id, { yeniKod: e.target.value.toUpperCase() })} placeholder="Kod" style={{ ...kucukIS, width: 120, borderColor: (!String(s.yeniKod).trim() || kodCakisan[psNorm(s.yeniKod)] > 1) ? "#e85a4f" : undefined }} />
+                            <select value={s.yeniKategori} onChange={e => guncelle(s.id, { yeniKategori: e.target.value })} style={{ ...kucukIS, width: "auto" }}>
+                              {KATEGORILER.map(k => <option key={k.id} value={k.id}>{k.l}</option>)}
+                            </select>
+                            <input type="number" step="0.01" value={s.yeniGram} onChange={e => guncelle(s.id, { yeniGram: e.target.value })} placeholder="gram" style={{ ...kucukIS, width: 70 }} />
+                            {kodCakisan[psNorm(s.yeniKod)] > 1 && <span style={{ fontSize: 9, color: "#e85a4f", alignSelf: "center" }}>aynı kod listede birden fazla</span>}
+                          </div>
+                        )}
+                        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                          <input value={s.ara} onChange={e => modelAra(s.id, e.target.value)} placeholder="Kodu elle yaz: mevcut modeli bul" style={{ ...kucukIS, width: 200 }} />
+                        </div>
+                      </div>
+                    )}
+                    {s.durum !== "yok" && (
+                      <div style={{ marginTop: 6 }}>
+                        <input value={s.ara} onChange={e => modelAra(s.id, e.target.value)} placeholder="Başka model: kodu yaz" style={{ ...kucukIS, width: 170 }} />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <div style={{ padding: "12px 18px", borderTop: "1px solid rgba(255,255,255,0.08)", display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+            <span style={{ fontSize: 11, color: "#a89c84" }}>{secili.length} kalem seçili{yeniSayisi > 0 ? " · " + yeniSayisi + " yeni model eklenecek" : ""}</span>
+            {hata && <span style={{ fontSize: 11, color: "#e85a4f" }}>{hata}</span>}
+            {eksikKod > 0 && <span style={{ fontSize: 10, color: "#e85a4f" }}>{eksikKod} yeni modelin kodu boş</span>}
+            <span style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
+              <button onClick={() => { setAsama("sec"); setSatirlar([]); }} disabled={uygulaniyor} style={GH}>Başka PDF</button>
+              <button onClick={onKapat} disabled={uygulaniyor} style={GH}>İptal</button>
+              <button onClick={onayla} disabled={!uygulanabilir || uygulaniyor} style={{ ...BG, opacity: (!uygulanabilir || uygulaniyor) ? 0.45 : 1, cursor: (!uygulanabilir || uygulaniyor) ? "not-allowed" : "pointer" }}>{uygulaniyor ? "Aktarılıyor…" : "Konfirmasyon'a aktar (" + secili.length + ")"}</button>
+            </span>
+          </div>
+        </>)}
+      </div>
+    </div>
+  );
+}
+
+
+
 function dogalSirala(a, b, ters) {
   const ka = a.kod || "", kb = b.kod || "";
   // Karmaşık kodları doğru sırala: prefix + ana sayı + suffix
@@ -3747,6 +4443,7 @@ function Atolye({ onSirketDegis }) {
   const [topluHedefKolId, setTopluHedefKolId] = useState("");
 
   const [konfList,    setKonfList]    = useState([]);
+  const [pdfModal, setPdfModal] = useState(false);
   const [konfMus,        setKonfMus]        = useState("");
   const [konfSipAciklama, setKonfSipAciklama] = useState(""); // sipariş geneli açıklama
   const [konfTeslim,     setKonfTeslim]     = useState("");
@@ -4784,6 +5481,61 @@ function Atolye({ onSirketDegis }) {
     tasi(setKonfAyarlar); tasi(setKonfRenkler); tasi(setKonfAdet); tasi(setKonfNot); tasi(setKonfBoylar);
     setKonfFiyatlar(p => { if (!(eski.id in p)) return p; const { [eski.id]: _at, ...kalan } = p; return kalan; }); // fiyat yeni modelin kendi işçiliğinden gelsin
   };
+  // PDF'ten sipariş: onaylanan satırları Konfirmasyon listesine aktarır; eşleşmeyenleri yeni model olarak ekler
+  const pdfSiparisUygula = async ({ baslik, kolId, satirlar }) => {
+    const onek = AKTIF_SIRKET_ONEK;
+    const idle = id => { const x = String(id); return (onek && !x.startsWith(onek)) ? onek + x : x; };
+    const refAyar = (baslik && baslik.ayar && AYARLAR.some(x=>x.id===baslik.ayar)) ? baslik.ayar : "14K";
+    const yeniler = [];
+    const kalemler = []; // {model, adet, not}
+    for (const s of satirlar) {
+      if (s.yeni) {
+        const hamId = uid();
+        let foto = (s.kalem && s.kalem.foto) || "";
+        if (foto.startsWith("data:")) {
+          try { foto = await fotoYukleStorage(foto, hamId, onek); } catch (e) { console.error("foto yüklenemedi:", e); foto = ""; }
+        }
+        const kod = String(s.yeniKod || "").trim().toUpperCase();
+        const m = { id: hamId, ad: "", kod, kategori: s.yeniKategori || "diger", gram: Number(s.yeniGram) || 0, refAyar,
+          tasGram: 0, taslar: [], tasBoy: "", tasSekil: "ROUND", tasTur: "N", tasBoyut: "", tasAdet: 0, madenCarpan: 0,
+          iscilikDolar: 0, iscilikBirim: "dolar", iscilikAyarlar: {}, ekMaliyet: 0, ac: (s.kalem && s.kalem.aciklama) || "",
+          foto, ki: kolId, durum: "baslanmadi", etiketler: [], detayNoktalari: [], t: Date.now(), olusturma: Date.now() };
+        yeniler.push(m);
+        kalemler.push({ model: { ...m, id: idle(hamId) }, adet: s.adet, not: s.not });
+      } else if (s.model) {
+        kalemler.push({ model: s.model, adet: s.adet, not: s.not });
+      }
+    }
+    if (yeniler.length) {
+      const r = await svMUpsert(yeniler);
+      if (r && r.ok === false) throw new Error("Yeni modeller kaydedilemedi: " + r.hata);
+      islemKaydet(onek, "ekle", "model", "PDF'ten " + yeniler.length + " yeni model");
+    }
+    // Aynı modeli birleştir (adet topla, not birleştir)
+    const birlesik = new Map();
+    for (const k of kalemler) {
+      const id = k.model.id;
+      const o = birlesik.get(id);
+      if (!o) birlesik.set(id, { model: k.model, adet: k.adet, not: (k.not || "").trim() });
+      else { o.adet += k.adet; if ((k.not || "").trim()) o.not = o.not ? o.not + " / " + k.not.trim() : k.not.trim(); }
+    }
+    const eklenecek = [...birlesik.values()];
+    const mevcut = new Set(konfList.map(x => x.id));
+    setKonfList(p => { const var_ = new Set(p.map(x => x.id)); return siraliKonfListe([...p, ...eklenecek.filter(e => !var_.has(e.model.id)).map(e => e.model)]); });
+    setKonfAdet(p => { const n = { ...p }; eklenecek.forEach(e => { n[e.model.id] = mevcut.has(e.model.id) ? (Number(p[e.model.id]) || 1) + e.adet : e.adet; }); return n; });
+    setKonfNot(p => { const n = { ...p }; eklenecek.forEach(e => { if (e.not) n[e.model.id] = n[e.model.id] ? n[e.model.id] + ", " + e.not : e.not; }); return n; });
+    if (baslik && baslik.ayar && AYARLAR.some(x=>x.id===baslik.ayar)) setKonfAyar(baslik.ayar);
+    if (baslik && baslik.teslimTarihi) {
+      const mt = String(baslik.teslimTarihi).match(/(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{4})/);
+      if (mt) setKonfTeslim(mt[3] + "-" + mt[2].padStart(2, "0") + "-" + mt[1].padStart(2, "0"));
+    }
+    const parcalar = [];
+    if (baslik && baslik.referans) parcalar.push("Ref " + baslik.referans);
+    if (baslik && baslik.po) parcalar.push("PO " + baslik.po);
+    if (baslik && baslik.genelNot) parcalar.push(baslik.genelNot);
+    if (parcalar.length) setKonfSipAciklama(p => (p ? p + " | " : "") + "PDF: " + parcalar.join(" · "));
+    setSayfa("konfirmasyon");
+  };
   const togKonf     = m => setKonfList(p => p.find(x => x.id === m.id) ? p.filter(x => x.id !== m.id) : siraliKonfListe([...p, m]));
   // Ayar bazlı işçilik girişi — sadece SEÇİLİ ayar için yazar (10K/14K/18K birbirini ezmez)
   const konfFiyatYaz = (id, ayar, dolar, birim) => setKonfFiyatlar(p => {
@@ -5723,6 +6475,7 @@ function Atolye({ onSirketDegis }) {
         {/* KONFİRMASYON */}
         {sayfa==="konfirmasyon" && (
           <div style={{ animation:"fadein .3s" }}>
+            {pdfModal && <PdfSiparisModal modeller={modeller} kollar={kollar} onKapat={()=>setPdfModal(false)} onUygula={pdfSiparisUygula}/>}
             {/* Header */}
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12, flexWrap:"wrap", gap:6 }}>
               <h2 style={{ margin:0, fontSize:14, fontWeight:700, color:"var(--goldtext)" }}>Konfirmasyon</h2>
@@ -5753,6 +6506,7 @@ function Atolye({ onSirketDegis }) {
                 <select value={konfSira} onChange={e=>konfSiraDegistir(e.target.value)} title="Listeyi sırala" style={{ ...IS, width:"auto", padding:"5px 8px", fontSize:10 }}>
                   {KONF_SIRA_SECENEKLERI.map(o => <option key={o.id} value={o.id}>↕ {o.l}</option>)}
                 </select>
+                <button onClick={()=>setPdfModal(true)} style={{ ...GH, fontSize:9, padding:"5px 9px", borderColor:"rgba(var(--vurgu-rgb),0.4)" }}>📄 PDF'ten sipariş</button>
                 {konfList.length>0 && <>
                   <button onClick={()=>downloadPDF(buildKonfHTML({musteri:konfMus,musKod:(musteriler[konfMus]||""),tarih:Date.now(),kalemler:konfKalemler},altinKgUSD,madenCarpan,true,modeller,konfSira),(konfMus||"siparis")+"-musteri")} style={{ ...GH, fontSize:9, padding:"5px 9px" }}>PDF Fiyatli</button>
                   <button onClick={()=>downloadPDF(buildKonfHTML({musteri:konfMus,musKod:(musteriler[konfMus]||""),tarih:Date.now(),kalemler:konfKalemler},altinKgUSD,madenCarpan,false,modeller,konfSira),(konfMus||"siparis")+"-ic")} style={{ background:"rgba(232,90,79,0.08)", border:"1px solid rgba(232,90,79,0.2)", borderRadius:9, padding:"5px 9px", color:"#e85a4f", fontSize:9, fontWeight:700, cursor:"pointer" }}>PDF Fiyatsiz</button>
