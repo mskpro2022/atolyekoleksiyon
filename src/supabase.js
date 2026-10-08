@@ -15,7 +15,7 @@ export async function fotoYukleStorage(dataUrl, modelId, onek = '') {
     const uzanti = blob.type.includes('png') ? 'png' : 'jpg'
     const yol = onek + 'model-' + modelId + '.' + uzanti
     for (let deneme = 0; deneme < 3; deneme++) {
-      const { error } = await supabase.storage.from(FOTO_BUCKET).upload(yol, blob, { upsert: true, contentType: blob.type })
+      const { error } = await supabase.storage.from(FOTO_BUCKET).upload(yol, blob, { upsert: true, contentType: blob.type, cacheControl: '31536000' })
       if (!error) {
         const { data } = supabase.storage.from(FOTO_BUCKET).getPublicUrl(yol)
         // Cache-busting: her yüklemede değişen sürüm işareti — tarayıcı eski resmi göstermesin
