@@ -2442,10 +2442,12 @@ function VitrinModu({ kod, onizleme }) {
   };
   // Ortak sıralama
   const modelSirala = (a, b) => {
-    // YENİ olanlar her zaman en üstte (hangi sıralama olursa olsun)
+    // KOD sıralamalarında (Yeni→Eski / Eski→Yeni) saf kod sırası geçerli — "yeni" önceliği bunu bozmasın.
+    // Gram sıralamalarında yeni olanlar yine en üstte.
+    if (siralama === "kod") return dogalSirala(a, b, false);
+    if (siralama !== "gramAzalan" && siralama !== "gramArtan") return dogalSirala(a, b, true); // varsayılan "kodTers"
     const ay = yeniMi(a) ? 1 : 0, by = yeniMi(b) ? 1 : 0;
     if (ay !== by) return by - ay;
-    if (siralama === "kod") return dogalSirala(a, b, false);
     if (siralama === "gramAzalan") return (Number(ayarliGram(b))||0) - (Number(ayarliGram(a))||0);
     if (siralama === "gramArtan") return (Number(ayarliGram(a))||0) - (Number(ayarliGram(b))||0);
     return dogalSirala(a, b, true); // varsayılan "kodTers" — koda göre en yeniden eskiye
