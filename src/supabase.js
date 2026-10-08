@@ -32,6 +32,29 @@ export async function fotoYukleStorage(dataUrl, modelId, onek = '') {
   }
 }
 
+// ═══ FOTOĞRAF PARMAK İZİ İNDEKSİ (PDF'ten sipariş — görsel benzerlik) ═══
+// Tek dosya olarak Storage'da tutulur: _vektor/v1-<önek>.json (tablo gerektirmez)
+const vektorYolu = (onek) => '_vektor/v1-' + (onek || 'msk') + '.json'
+export async function vektorDosyaOku(onek) {
+  try {
+    const { data } = supabase.storage.from(FOTO_BUCKET).getPublicUrl(vektorYolu(onek))
+    const r = await fetch(data.publicUrl + '?t=' + Date.now(), { cache: 'no-store' })
+    if (!r.ok) return null
+    return await r.json()
+  } catch (e) { console.warn('vektorDosyaOku:', e.message); return null }
+}
+export async function vektorDosyaYaz(onek, obj) {
+  const blob = new Blob([JSON.stringify(obj)], { type: 'application/json' })
+  let sonHata = null
+  for (let deneme = 0; deneme < 3; deneme++) {
+    const { error } = await supabase.storage.from(FOTO_BUCKET).upload(vektorYolu(onek), blob, { upsert: true, contentType: 'application/json', cacheControl: '60' })
+    if (!error) return true
+    sonHata = error
+    await new Promise(r => setTimeout(r, 500 * (deneme + 1)))
+  }
+  throw new Error('İndeks kaydedilemedi: ' + (sonHata && sonHata.message))
+}
+
 // ═══ OTOMATİK YEDEKLEME (yedekler tablosu) ═══
 // Yedek kaydet — aynı gün + önek için varsa günceller, son 7'yi tutar
 export async function yedekKaydet(onek, veri, modelSayisi, siparisSayisi) {
