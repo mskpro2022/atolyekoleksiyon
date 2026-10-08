@@ -1084,6 +1084,9 @@ function PdfSiparisModal({ modeller, kollar, onKapat, onUygula }) {
   const [satirlar, setSatirlar] = useState([]);
   const [yeniKolId, setYeniKolId] = useState("");
   const [uygulaniyor, setUygulaniyor] = useState(false);
+  const [gozSatir, setGozSatir] = useState(null); // koleksiyondan seçim yapılan satır id
+  const [gozKol, setGozKol] = useState("");
+  const [gozAra, setGozAra] = useState("");
 
   const kodHaritasi = useMemo(() => {
     const h = new Map();
@@ -1140,6 +1143,19 @@ function PdfSiparisModal({ modeller, kollar, onKapat, onUygula }) {
     else guncelle(id, { ara: metin });
   };
 
+  const modelSec = (satirId, m) => {
+    guncelle(satirId, { adaylar: [m], secimId: m.id, durum: "eslesti", ekle: false, dahil: true, ara: m.kod || "", bulunanKod: m.kod || "" });
+    setGozSatir(null); setGozKol(""); setGozAra("");
+  };
+  const gozAcKapat = () => { setGozSatir(null); setGozKol(""); setGozAra(""); };
+  const gozListe = (() => {
+    const q = psNorm(gozAra);
+    const ham = (modeller || []);
+    if (q) return ham.filter(m => psNorm(m.kod).includes(q) || psNorm(m.ad).includes(q)).slice(0, 120);
+    if (gozKol) return ham.filter(m => m.ki === gozKol).sort((a, b) => (b.t || 0) - (a.t || 0)).slice(0, 400);
+    return [];
+  })();
+
   const secili = satirlar.filter(s => s.dahil);
   const yeniSayisi = secili.filter(s => s.ekle && s.durum === "yok").length;
   const eksikKod = secili.filter(s => s.durum === "yok" && s.ekle && !String(s.yeniKod || "").trim()).length;
@@ -1188,6 +1204,53 @@ function PdfSiparisModal({ modeller, kollar, onKapat, onUygula }) {
           </div>
         )}
 
+        {gozSatir && (
+          <div onClick={gozAcKapat} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 310, display: "flex", alignItems: "center", justifyContent: "center", padding: 14 }}>
+            <div onClick={e => e.stopPropagation()} style={{ background: "#1c1c1e", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 14, width: "100%", maxWidth: 940, maxHeight: "90vh", display: "flex", flexDirection: "column" }}>
+              <div style={{ padding: "12px 16px", borderBottom: "1px solid rgba(255,255,255,0.08)", display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                {gozKol && !gozAra && <button onClick={() => setGozKol("")} style={{ ...GH, padding: "4px 10px", fontSize: 10 }}>← Koleksiyonlar</button>}
+                <div style={{ fontSize: 13, fontWeight: 700, color: "#f5f5f7" }}>{gozKol && !gozAra ? ((kollar || []).find(k => k.id === gozKol) || {}).ad : "Model seç"}</div>
+                <input autoFocus value={gozAra} onChange={e => setGozAra(e.target.value)} placeholder="Kod veya ad yaz (tüm koleksiyonlarda ara)" style={{ ...IS, flex: "1 1 200px", padding: "6px 10px", fontSize: 11 }} />
+                <button onClick={gozAcKapat} style={{ ...GH, padding: "4px 10px" }}>✕</button>
+              </div>
+              <div style={{ padding: 14, overflowY: "auto" }}>
+                {!gozKol && !gozAra && (
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(150px,1fr))", gap: 10 }}>
+                    {(kollar || []).map(k => {
+                      const ms = (modeller || []).filter(m => m.ki === k.id);
+                      const kapak = ms.find(m => m.foto);
+                      return (
+                        <div key={k.id} onClick={() => setGozKol(k.id)} style={{ cursor: "pointer", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 10, overflow: "hidden" }}>
+                          <div style={{ height: 100, background: "#f3f3f3", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                            {kapak ? <img src={kapak.foto} alt="" loading="lazy" style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }} /> : null}
+                          </div>
+                          <div style={{ padding: "6px 8px", fontSize: 11, fontWeight: 700, color: "#e8dcc8" }}>{k.ad}</div>
+                          <div style={{ padding: "0 8px 7px", fontSize: 9, color: "#8a7d64" }}>{ms.length} model</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+                {(gozKol || gozAra) && (
+                  gozListe.length === 0
+                    ? <div style={{ textAlign: "center", color: "#8a7d64", fontSize: 12, padding: 24 }}>Model bulunamadı</div>
+                    : <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(120px,1fr))", gap: 10 }}>
+                        {gozListe.map(m => (
+                          <div key={m.id} onClick={() => modelSec(gozSatir, m)} style={{ cursor: "pointer", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 10, overflow: "hidden" }}>
+                            <div style={{ height: 110, background: "#f3f3f3", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                              {m.foto ? <img src={m.foto} alt="" loading="lazy" style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }} /> : <span style={{ color: "#bbb", fontSize: 10 }}>foto yok</span>}
+                            </div>
+                            <div style={{ padding: "5px 7px", fontSize: 11, fontWeight: 700, color: "#e8dcc8" }}>{m.kod}</div>
+                            <div style={{ padding: "0 7px 6px", fontSize: 9, color: "#8a7d64" }}>{m.gram ? m.gram + " gr" : ""}{gozAra && m.ki ? " · " + ((kollar || []).find(k => k.id === m.ki) || {}).ad : ""}</div>
+                          </div>
+                        ))}
+                      </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
         {asama === "okuyor" && (
           <div style={{ padding: 40, textAlign: "center", fontSize: 12, color: "#a89c84" }}>{mesaj || "Okunuyor…"}</div>
         )}
@@ -1198,6 +1261,7 @@ function PdfSiparisModal({ modeller, kollar, onKapat, onUygula }) {
             {baslik.referans ? <span>Ref: <b>{baslik.referans}</b></span> : null}
             {baslik.po ? <span>PO: <b>{baslik.po}</b></span> : null}
             {baslik.ayar ? <span>Ayar: <b>{baslik.ayar}</b></span> : null}
+            {baslik.listeGram ? <span>Liste gramı: <b>{baslik.listeGram}</b></span> : null}
             {baslik.teslimTarihi ? <span>Teslim: <b>{baslik.teslimTarihi}</b></span> : null}
             {baslik.genelNot ? <span style={{ color: "#e85a4f" }}>⚠ {baslik.genelNot}</span> : null}
             <span style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
@@ -1278,12 +1342,16 @@ function PdfSiparisModal({ modeller, kollar, onKapat, onUygula }) {
                         )}
                         <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                           <input value={s.ara} onChange={e => modelAra(s.id, e.target.value)} placeholder="Kodu elle yaz: mevcut modeli bul" style={{ ...kucukIS, width: 200 }} />
+                          <button onClick={() => setGozSatir(s.id)} style={{ ...GH, fontSize: 10, padding: "5px 9px", whiteSpace: "nowrap" }}>📂 Koleksiyondan seç</button>
                         </div>
                       </div>
                     )}
                     {s.durum !== "yok" && (
                       <div style={{ marginTop: 6 }}>
-                        <input value={s.ara} onChange={e => modelAra(s.id, e.target.value)} placeholder="Başka model: kodu yaz" style={{ ...kucukIS, width: 170 }} />
+                        <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+                          <input value={s.ara} onChange={e => modelAra(s.id, e.target.value)} placeholder="Başka model: kodu yaz" style={{ ...kucukIS, width: 170 }} />
+                          <button onClick={() => setGozSatir(s.id)} style={{ ...GH, fontSize: 10, padding: "5px 9px", whiteSpace: "nowrap" }}>📂 Koleksiyondan seç</button>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -2573,6 +2641,8 @@ function OnizlemeBox({ m, altinKgUSD, mc }) {
   );
 }
 
+// Giriş şifresinin varsayılanı (cihazda özel şifre kaydedilmediyse bu geçerli). Kalıcı değiştirmek için buradaki değeri düzenle.
+const VARSAYILAN_GIRIS_SIFRESI = "*Mm19671967";
 function GirisEkrani({ onGiris }) {
   const [sifre, setSifre] = useState("");
   const [hata, setHata] = useState(false);
@@ -2584,7 +2654,7 @@ function GirisEkrani({ onGiris }) {
     document.documentElement.style.padding = "0";
   }, []);
   const kontrol = () => {
-    const aktifSifre = localStorage.getItem("atolye_sifre") || "19671967*Mm";
+    const aktifSifre = (localStorage.getItem("atolye_sifre_v2") || VARSAYILAN_GIRIS_SIFRESI);
     if (sifre === aktifSifre) {
       // "Beni Hatırla" işaretliyse 30 günlük oturum token'ı kaydet
       try {
@@ -2636,7 +2706,7 @@ function SifreDegistir({ T }) {
 
   // 1. ADIM — mevcut şifre + yeni şifre kontrolleri geçerse, e-postaya 6 haneli kod gönder
   const kodGonder = async () => {
-    const aktif = localStorage.getItem("atolye_sifre") || "19671967*Mm";
+    const aktif = (localStorage.getItem("atolye_sifre_v2") || VARSAYILAN_GIRIS_SIFRESI);
     if (eskiSifre !== aktif) { setMesaj({ok:false,txt:"Mevcut şifre yanlış!"}); return; }
     if (yeniSifre.length < 6) { setMesaj({ok:false,txt:"En az 6 karakter olmalı!"}); return; }
     if (yeniSifre !== yeniSifre2) { setMesaj({ok:false,txt:"Şifreler eşleşmiyor!"}); return; }
@@ -2662,7 +2732,7 @@ function SifreDegistir({ T }) {
       const r = await fetch("/api/sifre-kod-dogrula", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ token: kodToken, kod: onayKodu.trim() }) });
       const j = await r.json();
       if (!j.basarili) { setMesaj({ok:false,txt:j.hata||"Kod doğrulanamadı"}); setDogrulaniyor(false); return; }
-      localStorage.setItem("atolye_sifre", yeniSifre);
+      localStorage.setItem("atolye_sifre_v2", yeniSifre);
       try { localStorage.removeItem("atolye_oturum"); } catch {} // şifre değişti, oturum sıfırlansın
       setEskiSifre(""); setYeniSifre(""); setYeniSifre2(""); setOnayKodu(""); setKodToken(null);
       setAdim("form");
@@ -5532,6 +5602,8 @@ function Atolye({ onSirketDegis }) {
     const parcalar = [];
     if (baslik && baslik.referans) parcalar.push("Ref " + baslik.referans);
     if (baslik && baslik.po) parcalar.push("PO " + baslik.po);
+    if (baslik && baslik.ayar) parcalar.push(baslik.ayar);
+    if (baslik && baslik.listeGram) parcalar.push("Liste " + baslik.listeGram);
     if (baslik && baslik.genelNot) parcalar.push(baslik.genelNot);
     if (parcalar.length) setKonfSipAciklama(p => (p ? p + " | " : "") + "PDF: " + parcalar.join(" · "));
     setSayfa("konfirmasyon");
