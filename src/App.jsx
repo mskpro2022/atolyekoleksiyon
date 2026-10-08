@@ -1084,6 +1084,7 @@ function PdfSiparisModal({ modeller, kollar, onKapat, onUygula }) {
   const [satirlar, setSatirlar] = useState([]);
   const [yeniKolId, setYeniKolId] = useState("");
   const [uygulaniyor, setUygulaniyor] = useState(false);
+  const [ilkSatirlar, setIlkSatirlar] = useState([]); // okunan ilk hâl (Sıfırla için)
   const [gozSatir, setGozSatir] = useState(null); // koleksiyondan seçim yapılan satır id
   const [gozKol, setGozKol] = useState("");
   const [gozAra, setGozAra] = useState("");
@@ -1129,7 +1130,7 @@ function PdfSiparisModal({ modeller, kollar, onKapat, onUygula }) {
       });
       // Fabor'da eşleşmeyen kalemler varsayılan olarak kapalı gelir (iç kodlar bizim kodumuz değil)
       yeniSatirlar.forEach(s => { if (s.durum === "yok" && s.kalem.tip === "fabor") s.dahil = false; });
-      setBaslik(sonuc.baslik || {}); setTip(sonuc.tip); setSatirlar(yeniSatirlar); setAsama("onay");
+      setBaslik(sonuc.baslik || {}); setTip(sonuc.tip); setSatirlar(yeniSatirlar); setIlkSatirlar(yeniSatirlar); setAsama("onay");
     } catch (err) {
       console.error("PDF okuma hatası:", err);
       setHata("PDF okunamadı: " + (err && err.message ? err.message : err)); setAsama("sec");
@@ -1364,7 +1365,11 @@ function PdfSiparisModal({ modeller, kollar, onKapat, onUygula }) {
             {hata && <span style={{ fontSize: 11, color: "#e85a4f" }}>{hata}</span>}
             {eksikKod > 0 && <span style={{ fontSize: 10, color: "#e85a4f" }}>{eksikKod} yeni modelin kodu boş</span>}
             <span style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
-              <button onClick={() => { setAsama("sec"); setSatirlar([]); }} disabled={uygulaniyor} style={GH}>Başka PDF</button>
+              <button onClick={() => { if (window.confirm("Yaptığın tüm değişiklikler (seçimler, adet, not, model eşleştirmeleri) silinip PDF ilk okunduğu hâle dönsün mü?")) { setSatirlar(ilkSatirlar); setHata(""); } }} disabled={uygulaniyor} title="Tüm satırları PDF'in ilk okunduğu hâle döndür" style={GH}>↺ Sıfırla</button>
+              <button onClick={() => { if (window.confirm("Bu PDF'teki çalışma silinsin ve ekran boşalsın mı?")) { setAsama("sec"); setSatirlar([]); setIlkSatirlar([]); setBaslik({}); setHata(""); } }} disabled={uygulaniyor} style={GH}>🗑 Temizle</button>
+              <label style={{ ...GH, cursor: uygulaniyor ? "default" : "pointer", display: "inline-block" }} title="Başka (veya aynı) PDF'i seç ve yeniden oku">🔄 Tekrar yükle
+                <input type="file" accept="application/pdf,.pdf" disabled={uygulaniyor} onChange={e => { if (window.confirm("Yeni PDF yüklenince mevcut çalışma silinir. Devam edilsin mi?")) dosyaSecildi(e); else e.target.value = ""; }} style={{ display: "none" }} />
+              </label>
               <button onClick={onKapat} disabled={uygulaniyor} style={GH}>İptal</button>
               <button onClick={onayla} disabled={!uygulanabilir || uygulaniyor} style={{ ...BG, opacity: (!uygulanabilir || uygulaniyor) ? 0.45 : 1, cursor: (!uygulanabilir || uygulaniyor) ? "not-allowed" : "pointer" }}>{uygulaniyor ? "Aktarılıyor…" : "Konfirmasyon'a aktar (" + secili.length + ")"}</button>
             </span>
@@ -1666,7 +1671,7 @@ function buildKonfHTML(siparis, altinKgUSD, mc, fiyatli, modeller, siraModu) {
     ".bileklik-foto img{width:100%;height:100%;object-fit:cover;object-position:center;display:block}",
     ".kod{font-size:12px;font-weight:700;color:#0f1923;letter-spacing:.02em}",
     ".model-ad{font-size:10px;color:#4a5568;margin-top:2px}",
-    ".model-nt{font-size:9px;color:#0a84ff;margin-top:3px;font-style:italic}",
+    ".model-nt{font-size:9px;color:#e03131;margin-top:3px;font-style:italic}",
     ".model-boy{font-size:9px;color:#6b7a8d;margin-top:3px}",
     ".tas-blok{margin-top:5px;padding:4px 7px;background:#f5f8fc;border-left:2px solid #0a84ff;border-radius:2px}",
     ".tas-lbl{font-size:7px;color:#8a9bb0;text-transform:uppercase;letter-spacing:.08em;margin-bottom:3px}",
@@ -1677,7 +1682,7 @@ function buildKonfHTML(siparis, altinKgUSD, mc, fiyatli, modeller, siraModu) {
     ".gram-birim{font-size:10px;font-weight:600;color:#1a1a2e}",
     ".gram-top{font-size:11px;font-weight:700;color:#0f1923}",
     ".gram-lbl{font-size:7px;color:#8a9bb0;margin-bottom:1px}",
-    ".renk-sari{color:#0968cc;font-weight:600}",
+    ".renk-sari{color:#e03131;font-weight:600}",
     ".renk-beyaz{color:#6b7a8d;font-weight:600}",
     ".renk-rose{color:#b06060;font-weight:600}",
     ".isc-birim{font-size:9px;color:#4a5568}",
@@ -5608,6 +5613,11 @@ function Atolye({ onSirketDegis }) {
     if (parcalar.length) setKonfSipAciklama(p => (p ? p + " | " : "") + "PDF: " + parcalar.join(" · "));
     setSayfa("konfirmasyon");
   };
+  // Konfirmasyon listesini ve ona bağlı tüm seçimleri sıfırlar (sipariş kaydedilmez)
+  const konfTemizle = () => {
+    if (!window.confirm("Konfirmasyon listesi ve girilen tüm adet/not/ayar bilgileri silinsin mi? (Sipariş kaydedilmez)")) return;
+    setKonfList([]); setKonfAyarlar({}); setKonfRenkler({}); setKonfAdet({}); setKonfNot({}); setKonfFiyatlar({}); setKonfBoylar({}); setKonfMus(""); setKonfTeslim(""); setKonfAyar("14K"); setKonfSipAciklama("");
+  };
   const togKonf     = m => setKonfList(p => p.find(x => x.id === m.id) ? p.filter(x => x.id !== m.id) : siraliKonfListe([...p, m]));
   // Ayar bazlı işçilik girişi — sadece SEÇİLİ ayar için yazar (10K/14K/18K birbirini ezmez)
   const konfFiyatYaz = (id, ayar, dolar, birim) => setKonfFiyatlar(p => {
@@ -6582,6 +6592,7 @@ function Atolye({ onSirketDegis }) {
                 {konfList.length>0 && <>
                   <button onClick={()=>downloadPDF(buildKonfHTML({musteri:konfMus,musKod:(musteriler[konfMus]||""),tarih:Date.now(),kalemler:konfKalemler},altinKgUSD,madenCarpan,true,modeller,konfSira),(konfMus||"siparis")+"-musteri")} style={{ ...GH, fontSize:9, padding:"5px 9px" }}>PDF Fiyatli</button>
                   <button onClick={()=>downloadPDF(buildKonfHTML({musteri:konfMus,musKod:(musteriler[konfMus]||""),tarih:Date.now(),kalemler:konfKalemler},altinKgUSD,madenCarpan,false,modeller,konfSira),(konfMus||"siparis")+"-ic")} style={{ background:"rgba(232,90,79,0.08)", border:"1px solid rgba(232,90,79,0.2)", borderRadius:9, padding:"5px 9px", color:"#e85a4f", fontSize:9, fontWeight:700, cursor:"pointer" }}>PDF Fiyatsiz</button>
+                  <button onClick={konfTemizle} title="Listeyi ve girilen bilgileri temizle" style={{ background:"rgba(232,90,79,0.08)", border:"1px solid rgba(232,90,79,0.2)", borderRadius:9, padding:"5px 9px", color:"#e85a4f", fontSize:9, fontWeight:700, cursor:"pointer" }}>🗑 Temizle</button>
                   <button onClick={konfKaydet} style={{ ...BG, padding:"6px 12px", fontSize:10 }}>Kaydet</button>
                 </>}
               </div>
