@@ -1160,8 +1160,8 @@ function ZorlukModal({ siparis, onKapat, onKaydet }) {
 
 // ── Taş rengi: müşteri açıklamasından rengi oku, aynı model ailesinde (ALT209, ALT209-W …) rengi tutan modeli seç ──
 const PS_RENKLER = [
-  ["BEYAZ", /BEYAZ|WHITE/], ["YESIL", /YESIL|ZUMRUT|GREEN/], ["MAVI", /MAVI|BLUE|TOPAZ|AKUA/], ["KIRMIZI", /KIRMIZI|RUBY|RUBI|RED/],
-  ["SIYAH", /SIYAH|ONIKS|ONYX|BLACK/], ["PEMBE", /PEMBE|PINK/], ["MOR", /\bMOR\b|AMETIST|PURPLE/], ["LACIVERT", /LACIVERT|SAFIR/],
+  ["BEYAZ", /BEYAZ|WHITE/], ["YESIL", /YESIL|ZUMRUT|GREEN|EMERALD/], ["MAVI", /MAVI|BLUE|TOPAZ|AKUA/], ["KIRMIZI", /KIRMIZI|RUBY|RUBI|GARNET|RED/],
+  ["SIYAH", /SIYAH|ONIKS|ONYX|BLACK/], ["PEMBE", /PEMBE|PINK/], ["MOR", /\bMOR\b|AMETIST|AMETHYST|PURPLE|VIOLET/], ["LACIVERT", /LACIVERT|SAFIR|SAPPHIRE/],
   ["TURKUAZ", /TURKUAZ|TURQUOISE/], ["SARI", /SITRIN|CITRINE/], ["KAHVE", /KAHVE|BROWN|SMOKY/],
 ];
 const PS_RENK_AD = { BEYAZ: "beyaz", YESIL: "yeşil", MAVI: "mavi", KIRMIZI: "kırmızı", SIYAH: "siyah", PEMBE: "pembe", MOR: "mor", LACIVERT: "lacivert", TURKUAZ: "turkuaz", SARI: "sarı", KAHVE: "kahve" };
@@ -1190,6 +1190,60 @@ function psModelTasRengi(m) {
   return "";
 }
 function psKodTaban(kod) { return psTrBuyuk(kod).replace(/[\s_.]/g, "").replace(/-[A-Z0-9]{1,2}$/, ""); }
+
+// Müşteri notunda birden çok taş rengi varsa ("Colors: White, ruby, emerald, topaz  Each color 3 pcs") sırayla renk listesini döndür
+function psNotRenkListesi(metin) {
+  const t = psTrBuyuk(metin);
+  if (!t || !/COLOU?R|RENK|RENGI|STONE|\bTAS/.test(t)) return [];
+  const bulunan = [];
+  for (const [k, re] of PS_RENKLER) {
+    const m = new RegExp("\\b(?:" + re.source + ")\\b").exec(t);
+    if (m) bulunan.push({ k, i: m.index });
+  }
+  if (bulunan.length < 2) return [];
+  return bulunan.sort((a, b) => a.i - b.i).map(x => x.k);
+}
+// "each color 3 pcs" / "her renk 3 adet" / "3 pcs each" → 3 (yoksa 0)
+function psNotRenkBasiAdet(metin) {
+  const t = psTrBuyuk(metin);
+  let m = /(?:EACH|PER|HER)\s*(?:COLOU?R|RENK|ONE|BIRI)\D{0,14}?(\d+)/.exec(t);
+  if (m) return Number(m[1]) || 0;
+  m = /(\d+)\s*(?:PCS|PC|ADET|PIECES?)?\s*(?:EACH|PER\s*COLOU?R|HER\s*RENK|HER\s*BIRI)/.exec(t);
+  return m ? (Number(m[1]) || 0) : 0;
+}
+function psAdetDagit(toplam, n) {
+  const t = Math.max(1, Number(toplam) || 1);
+  if (n <= 1) return [t];
+  const taban = Math.floor(t / n), kalan = t - taban * n;
+  return Array.from({ length: n }, (_, i) => Math.max(1, taban + (i < kalan ? 1 : 0)));
+}
+// Aynı model ailesinden (psKodTaban) her renk için bir model seç
+function psAileModelleri(modeller, bulunanKod, adaylar) {
+  const taban = psKodTaban(bulunanKod);
+  const aile = []; const gorulen = new Set();
+  [...(adaylar || []), ...(modeller || [])].forEach(m => {
+    if (psKodTaban(m.kod) !== taban || aile.some(z => z.id === m.id)) return;
+    const nk = psTrBuyuk(m.kod);
+    if (gorulen.has(nk)) { const i = aile.findIndex(z => psTrBuyuk(z.kod) === nk); if (!aile[i].foto && m.foto) aile[i] = m; return; }
+    gorulen.add(nk); aile.push(m);
+  });
+  return aile;
+}
+const PS_RENK_YAKIN = { LACIVERT: ["LACIVERT", "MAVI"], MAVI: ["MAVI", "LACIVERT"] }; // safir: kayıtta mavi/lacivert olabilir
+function psRenkAilesi(modeller, bulunanKod, adaylar, renkler) {
+  const aile = psAileModelleri(modeller, bulunanKod, adaylar);
+  const tam = psTrBuyuk(bulunanKod);
+  const secimler = [], eksik = [];
+  renkler.forEach(r => {
+    const kabul = PS_RENK_YAKIN[r] || [r];
+    let uyan = aile.filter(m => kabul.includes(psModelTasRengi(m))).sort((x, y) => kabul.indexOf(psModelTasRengi(x)) - kabul.indexOf(psModelTasRengi(y)));
+    if (!uyan.length && r === "BEYAZ") uyan = aile.filter(m => psTrBuyuk(m.kod) === tam && !psModelTasRengi(m));
+    uyan = uyan.filter(m => !secimler.some(x => x.m.id === m.id));
+    uyan.sort((x, y) => (kabul.indexOf(psModelTasRengi(x)) - kabul.indexOf(psModelTasRengi(y))) || (psTrBuyuk(y.kod) === tam ? 1 : 0) - (psTrBuyuk(x.kod) === tam ? 1 : 0) || (y.foto ? 1 : 0) - (x.foto ? 1 : 0) || psTrBuyuk(x.kod).localeCompare(psTrBuyuk(y.kod)));
+    if (uyan.length) secimler.push({ renk: r, m: uyan[0] }); else eksik.push(r);
+  });
+  return { secimler, eksik };
+}
 
 // ── SET modeli: müşteri tek parça (ör. sadece kolye) istiyorsa setin ilgili parçasını bul ──
 const PS_PARCA_KOKLERI = [["yuzuk", "YUZ"], ["kolye", "KOLYE"], ["kolye", "PENDANT"], ["kolye", "PANDANTIF"], ["kolye", "SARKIT"], ["kupe", "KUPE"], ["bilezik", "BILEZIK"], ["bileklik", "BILEKLIK"]];
@@ -1353,6 +1407,7 @@ function PdfSiparisModal({ modeller, kollar, onKapat, onUygula }) {
   const [uygulaniyor, setUygulaniyor] = useState(false);
   const [ilkSatirlar, setIlkSatirlar] = useState([]); // okunan ilk hâl (Sıfırla için)
   const [gozSatir, setGozSatir] = useState(null); // koleksiyondan seçim yapılan satır id
+  const [gozSecim, setGozSecim] = useState([]); // koleksiyonda çoklu seçilen modeller
   const [gozKol, setGozKol] = useState("");
   const [gozAra, setGozAra] = useState("");
   const [vi, setVi] = useState({ durum: "kontrol", mesaj: "", yuzde: 0, hata: "" }); // fotoğraf indeksi durumu
@@ -1438,11 +1493,32 @@ function PdfSiparisModal({ modeller, kollar, onKapat, onUygula }) {
             }
           }
         }
+        // Notta birden çok renk varsa: her renk için aynı aileden bir model bul, ilki ana model, kalanı "ekler"
+        let ekler = [], adetBasi = 0, adet0 = k.adet || 1, secId = eslesti ? (renkSecim || sirali[0].id) : "";
+        if (eslesti) {
+          const secM0 = sirali.find(m => m.id === secId) || sirali[0];
+          const notMetin = [k.aciklama, k.not].filter(Boolean).join(" ");
+          const renkler = secM0 && secM0.kategori !== "set" ? psNotRenkListesi(notMetin) : [];
+          if (renkler.length >= 2) {
+            const { secimler, eksik } = psRenkAilesi(modeller, bulunanKod, sirali, renkler);
+            if (secimler.length >= 2) {
+              adetBasi = psNotRenkBasiAdet(notMetin);
+              const dag = adetBasi > 0 ? secimler.map(() => adetBasi) : psAdetDagit(k.adet || 1, secimler.length);
+              sirali = [secimler[0].m, ...sirali.filter(m => m.id !== secimler[0].m.id)];
+              secId = secimler[0].m.id; adet0 = dag[0];
+              ekler = secimler.slice(1).map((x, i) => ({ m: x.m, adet: dag[i + 1], renk: x.renk }));
+              renkUyari = "Notta " + renkler.length + " renk var → " + secimler.map(x => x.m.kod + " (" + PS_RENK_AD[x.renk] + ")").join(", ")
+                + (eksik.length ? " | ⚠ " + eksik.map(r => PS_RENK_AD[r]).join(", ") + " için bu ailede model bulunamadı — gerekirse 'Model/renk ekle' ile ekleyin" : "")
+                + (adetBasi > 0 ? " | her renk " + adetBasi + " adet" : "");
+              if (eksik.length) renkUyari = "⚠ " + renkUyari;
+            }
+          }
+        }
         return {
           id: k.id, kalem: k,
           durum: !eslesti ? "yok" : (sirali.length > 1 ? "coklu" : "eslesti"),
-          adaylar: sirali, secimId: eslesti ? (renkSecim || sirali[0].id) : "", bulunanKod, renkUyari,
-          adet: k.adet || 1, not: k.aciklama || "",
+          adaylar: sirali, secimId: secId, bulunanKod, renkUyari, ekler, adetBasi, adetPdf: k.adet || 1,
+          adet: adet0, not: k.aciklama || "",
           dahil: eslesti || excel,
           ekle: !eslesti, // eşleşme yoksa varsayılan: yeni model olarak ekle
           yeniKod: excel ? ilkKod : (k.disKod || ""), yeniKategori: psKategoriTahmin(k), yeniGram: k.gramBirim || "",
@@ -1485,15 +1561,37 @@ function PdfSiparisModal({ modeller, kollar, onKapat, onUygula }) {
   };
   const modelAra = (id, metin) => {
     const l = kodHaritasi.get(psNorm(metin));
-    if (l && l.length) guncelle(id, { ara: metin, adaylar: l, secimId: l[0].id, durum: l.length > 1 ? "coklu" : "eslesti", ekle: false, dahil: true, renkUyari: "" });
+    if (l && l.length) guncelle(id, { ara: metin, adaylar: l, secimId: l[0].id, durum: l.length > 1 ? "coklu" : "eslesti", ekle: false, dahil: true, renkUyari: "", ekler: [] });
     else guncelle(id, { ara: metin });
   };
 
   const modelSec = (satirId, m) => {
-    guncelle(satirId, { adaylar: [m], secimId: m.id, durum: "eslesti", ekle: false, dahil: true, ara: m.kod || "", bulunanKod: m.kod || "", renkUyari: "" });
+    guncelle(satirId, { adaylar: [m], secimId: m.id, durum: "eslesti", ekle: false, dahil: true, ara: m.kod || "", bulunanKod: m.kod || "", renkUyari: "", ekler: [] });
     setGozSatir(null); setGozKol(""); setGozAra("");
   };
-  const gozAcKapat = () => { setGozSatir(null); setGozKol(""); setGozAra(""); };
+  const gozAcKapat = () => { setGozSatir(null); setGozKol(""); setGozAra(""); setGozSecim([]); };
+  const gozAc = (s) => {
+    const m0 = s.durum !== "yok" ? (s.adaylar.find(x => x.id === s.secimId) || s.adaylar[0]) : null;
+    setGozSecim(m0 ? [m0, ...(s.ekler || []).map(e => e.m)] : []);
+    setGozSatir(s.id);
+  };
+  const gozTikla = (m) => setGozSecim(p => p.some(x => x.id === m.id) ? p.filter(x => x.id !== m.id) : [...p, m]);
+  const cokluSec = () => {
+    const s = satirlar.find(x => x.id === gozSatir);
+    if (!s || !gozSecim.length) { gozAcKapat(); return; }
+    const eskiAdet = new Map();
+    const m0 = s.durum !== "yok" ? (s.adaylar.find(x => x.id === s.secimId) || s.adaylar[0]) : null;
+    if (m0) eskiAdet.set(m0.id, Number(s.adet) || 1);
+    (s.ekler || []).forEach(e => eskiAdet.set(e.m.id, Number(e.adet) || 1));
+    const taze = eskiAdet.size === 0 || !gozSecim.some(x => eskiAdet.has(x.id));
+    const dag = s.adetBasi > 0 ? gozSecim.map(() => s.adetBasi) : psAdetDagit(s.adetPdf || s.adet, gozSecim.length);
+    const adetler = gozSecim.map((x, i) => (!taze && eskiAdet.has(x.id)) ? eskiAdet.get(x.id) : (taze ? dag[i] : (s.adetBasi > 0 ? s.adetBasi : 1)));
+    const [ana, ...digerleri] = gozSecim;
+    guncelle(s.id, { adaylar: [ana], secimId: ana.id, durum: "eslesti", ekle: false, dahil: true, ara: ana.kod || "", bulunanKod: ana.kod || "", renkUyari: "", adet: adetler[0], ekler: digerleri.map((x, i) => ({ m: x, adet: adetler[i + 1] })) });
+    gozAcKapat();
+  };
+  const ekAdetYaz = (satirId, mid, v) => setSatirlar(p => p.map(s => s.id === satirId ? { ...s, ekler: (s.ekler || []).map(e => e.m.id === mid ? { ...e, adet: v } : e) } : s));
+  const ekSil = (satirId, mid) => setSatirlar(p => p.map(s => s.id === satirId ? { ...s, ekler: (s.ekler || []).filter(e => e.m.id !== mid) } : s));
   const gozListe = (() => {
     const q = psNorm(gozAra);
     const ham = (modeller || []);
@@ -1513,12 +1611,19 @@ function PdfSiparisModal({ modeller, kollar, onKapat, onUygula }) {
     if (!uygulanabilir || uygulaniyor) return;
     setUygulaniyor(true);
     try {
-      await onUygula({ baslik, tip, kolId: yeniKolId, satirlar: secili.map(s => ({
-        yeni: s.durum === "yok" && s.ekle,
-        model: s.durum === "yok" ? null : (s.adaylar.find(m => m.id === s.secimId) || s.adaylar[0]),
-        kalem: s.kalem, adet: Math.max(1, Number(s.adet) || 1), not: s.not,
-        yeniKod: s.yeniKod, yeniKategori: s.yeniKategori, yeniGram: s.yeniGram,
-      })).filter(x => x.yeni || x.model) });
+      const kalemler = [];
+      secili.forEach(s => {
+        const ana = {
+          yeni: s.durum === "yok" && s.ekle,
+          model: s.durum === "yok" ? null : (s.adaylar.find(m => m.id === s.secimId) || s.adaylar[0]),
+          kalem: s.kalem, adet: Math.max(1, Number(s.adet) || 1), not: s.not,
+          yeniKod: s.yeniKod, yeniKategori: s.yeniKategori, yeniGram: s.yeniGram,
+        };
+        if (!ana.yeni && !ana.model) return;
+        kalemler.push(ana);
+        if (s.durum !== "yok") (s.ekler || []).forEach(e => { if (e.m && !(ana.model && e.m.id === ana.model.id)) kalemler.push({ ...ana, yeni: false, model: e.m, adet: Math.max(1, Number(e.adet) || 1) }); });
+      });
+      await onUygula({ baslik, tip, kolId: yeniKolId, satirlar: kalemler });
       onKapat();
     } catch (err) {
       console.error("PDF sipariş aktarma hatası:", err);
@@ -1619,7 +1724,8 @@ function PdfSiparisModal({ modeller, kollar, onKapat, onUygula }) {
                     ? <div style={{ textAlign: "center", color: "#8a7d64", fontSize: 12, padding: 24 }}>Model bulunamadı</div>
                     : <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(120px,1fr))", gap: 10 }}>
                         {gozListe.map(m => (
-                          <div key={m.id} onClick={() => modelSec(gozSatir, m)} style={{ cursor: "pointer", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 10, overflow: "hidden" }}>
+                          <div key={m.id} onClick={() => gozTikla(m)} style={{ cursor: "pointer", position: "relative", background: gozSecim.some(x => x.id === m.id) ? "rgba(106,191,105,0.16)" : "rgba(255,255,255,0.04)", border: "2px solid " + (gozSecim.some(x => x.id === m.id) ? "#6abf69" : "rgba(255,255,255,0.08)"), borderRadius: 10, overflow: "hidden" }}>
+                            {gozSecim.some(x => x.id === m.id) && <div style={{ position: "absolute", top: 4, right: 4, zIndex: 2, background: "#6abf69", color: "#fff", borderRadius: 10, fontSize: 10, fontWeight: 800, padding: "1px 7px" }}>✓ {gozSecim.findIndex(x => x.id === m.id) + 1}</div>}
                             <div style={{ height: 110, background: "#f3f3f3", display: "flex", alignItems: "center", justifyContent: "center" }}>
                               {m.foto ? <img src={m.foto} alt="" loading="lazy" style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }} /> : <span style={{ color: "#bbb", fontSize: 10 }}>foto yok</span>}
                             </div>
@@ -1629,6 +1735,13 @@ function PdfSiparisModal({ modeller, kollar, onKapat, onUygula }) {
                         ))}
                       </div>
                 )}
+              </div>
+              <div style={{ padding: "10px 16px", borderTop: "1px solid rgba(255,255,255,0.08)", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                <span style={{ fontSize: 11, color: "#a89c84" }}>Birden çok resme tıklayıp seçebilirsin (ilk seçilen ana model){gozSecim.length ? ": " + gozSecim.map(x => x.kod).join(", ") : ""}</span>
+                <span style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
+                  {gozSecim.length > 0 && <button onClick={() => setGozSecim([])} style={GH}>Temizle</button>}
+                  <button onClick={cokluSec} disabled={!gozSecim.length} style={{ ...BG, opacity: gozSecim.length ? 1 : 0.45, cursor: gozSecim.length ? "pointer" : "not-allowed" }}>Seç ({gozSecim.length})</button>
+                </span>
               </div>
             </div>
           </div>
@@ -1727,7 +1840,7 @@ function PdfSiparisModal({ modeller, kollar, onKapat, onUygula }) {
                         )}
                         <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                           <input value={s.ara} onChange={e => modelAra(s.id, e.target.value)} placeholder="Kodu elle yaz: mevcut modeli bul" style={{ ...kucukIS, width: 200 }} />
-                          <button onClick={() => setGozSatir(s.id)} style={{ ...GH, fontSize: 10, padding: "5px 9px", whiteSpace: "nowrap" }}>📂 Koleksiyondan seç</button>
+                          <button onClick={() => gozAc(s)} style={{ ...GH, fontSize: 10, padding: "5px 9px", whiteSpace: "nowrap" }}>📂 Koleksiyondan seç</button>
                         </div>
                       </div>
                     )}
@@ -1735,8 +1848,42 @@ function PdfSiparisModal({ modeller, kollar, onKapat, onUygula }) {
                       <div style={{ marginTop: 6 }}>
                         <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
                           <input value={s.ara} onChange={e => modelAra(s.id, e.target.value)} placeholder="Başka model: kodu yaz" style={{ ...kucukIS, width: 170 }} />
-                          <button onClick={() => setGozSatir(s.id)} style={{ ...GH, fontSize: 10, padding: "5px 9px", whiteSpace: "nowrap" }}>📂 Koleksiyondan seç</button>
+                          <button onClick={() => gozAc(s)} style={{ ...GH, fontSize: 10, padding: "5px 9px", whiteSpace: "nowrap" }}>{s.ekler && s.ekler.length ? "📂 Model/renk ekle-çıkar" : "📂 Koleksiyondan seç (çoklu)"}</button>
                         </div>
+                        {(() => {
+                          const aile = psAileModelleri(modeller, s.bulunanKod || (m && m.kod) || "", s.adaylar).filter(x => x.id !== (m && m.id) && !(s.ekler || []).some(e => e.m.id === x.id));
+                          if (!aile.length) return null;
+                          return (
+                            <div style={{ marginTop: 6, display: "flex", gap: 5, flexWrap: "wrap", alignItems: "center" }}>
+                              <span style={{ fontSize: 9, color: "#8a7d64" }}>Aynı modelin diğer kayıtları:</span>
+                              {aile.map(x => (
+                                <button key={x.id} onClick={() => setSatirlar(p => p.map(r => r.id === s.id ? { ...r, ekler: [...(r.ekler || []), { m: x, adet: r.adetBasi > 0 ? r.adetBasi : 1 }] } : r))} title="Bu kaydı da siparişe ekle" style={{ ...GH, fontSize: 10, padding: "3px 8px", display: "inline-flex", gap: 5, alignItems: "center" }}>
+                                  {x.foto ? <img src={x.foto} alt="" loading="lazy" style={{ width: 18, height: 18, objectFit: "contain", background: "#fff", borderRadius: 3 }} /> : null}
+                                  ＋ {x.kod}{psModelTasRengi(x) ? " · " + PS_RENK_AD[psModelTasRengi(x)] : ""}{psTrBuyuk(x.kod) === psTrBuyuk(s.bulunanKod) ? " (fotoğraftaki)" : ""}
+                                </button>
+                              ))}
+                            </div>
+                          );
+                        })()}
+                        {s.ekler && s.ekler.length > 0 && (() => {
+                          const top = (Number(s.adet) || 0) + s.ekler.reduce((a, e) => a + (Number(e.adet) || 0), 0);
+                          const esit = top === s.adetPdf;
+                          return (
+                            <div style={{ marginTop: 8, borderTop: "1px dashed rgba(255,255,255,0.1)", paddingTop: 6 }}>
+                              {s.ekler.map(e => (
+                                <div key={e.m.id} style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 4 }}>
+                                  <div style={{ width: 38, height: 38, background: "#f3f3f3", borderRadius: 6, overflow: "hidden", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>{e.m.foto ? <img src={e.m.foto} alt="" loading="lazy" style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }} /> : null}</div>
+                                  <b style={{ fontSize: 12, color: "#f5f5f7" }}>{e.m.kod}</b>
+                                  <span style={{ fontSize: 9, color: "#a89c84" }}>{psModelTasRengi(e.m) ? PS_RENK_AD[psModelTasRengi(e.m)] : ""}</span>
+                                  <input type="number" min="1" value={e.adet} onChange={ev => ekAdetYaz(s.id, e.m.id, ev.target.value)} style={{ ...kucukIS, width: 56, marginLeft: "auto" }} />
+                                  <span style={{ fontSize: 9, color: "#a89c84" }}>adet</span>
+                                  <button onClick={() => ekSil(s.id, e.m.id)} title="Bu modeli çıkar" style={{ ...GH, padding: "2px 7px", fontSize: 10 }}>✕</button>
+                                </div>
+                              ))}
+                              <div style={{ fontSize: 10, fontWeight: 700, color: esit ? "#6abf69" : "#e8b04f" }}>Dağılım: {[Number(s.adet) || 0, ...s.ekler.map(e => Number(e.adet) || 0)].join(" + ")} = {top} (müşteri PDF: {s.adetPdf}){esit ? " ✓" : " — kontrol edin"}</div>
+                            </div>
+                          );
+                        })()}
                       </div>
                     )}
                   </div>
