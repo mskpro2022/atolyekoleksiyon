@@ -1396,7 +1396,7 @@ function psKategoriTahmin(k) {
   return "diger";
 }
 
-function PdfSiparisModal({ modeller, kollar, onKapat, onUygula }) {
+function PdfSiparisModal({ modeller, kollar, onKapat, onUygula, onModelDuzenle }) {
   const [asama, setAsama] = useState("sec"); // sec | okuyor | onay
   const [mesaj, setMesaj] = useState("");
   const [hata, setHata] = useState("");
@@ -1536,6 +1536,20 @@ function PdfSiparisModal({ modeller, kollar, onKapat, onUygula }) {
   };
 
   const guncelle = (id, patch) => setSatirlar(p => p.map(s => s.id === id ? { ...s, ...patch } : s));
+  // Model kartı düzenlenip kaydedilince satırlardaki model kopyalarını güncel hâliyle yenile
+  useEffect(() => {
+    const tazele = (m) => (m && (modeller || []).find(x => x.id === m.id)) || m;
+    setSatirlar(p => {
+      let degisti = false;
+      const yeni = p.map(s => {
+        const ad = (s.adaylar || []).map(tazele);
+        const ek = (s.ekler || []).map(e => ({ ...e, m: tazele(e.m) }));
+        if (ad.some((m, i) => m !== s.adaylar[i]) || ek.some((e, i) => e.m !== s.ekler[i].m)) { degisti = true; return { ...s, adaylar: ad, ekler: ek }; }
+        return s;
+      });
+      return degisti ? yeni : p;
+    });
+  }, [modeller]);
   // Müşteri fotoğrafına en çok benzeyen katalog modellerini bul
   const oneriHesapla = async (id, kalem) => {
     if (!kalem || !kalem.foto) return;
@@ -1809,6 +1823,7 @@ function PdfSiparisModal({ modeller, kollar, onKapat, onUygula }) {
                             {rozet(s.durum === "coklu" ? "#e8b04f" : "#6abf69", s.durum === "coklu" ? "birden çok model" : "eşleşti")}
                             <b style={{ fontSize: 13, color: "#f5f5f7" }}>{m.kod}</b>
                             <span style={{ fontSize: 10, color: "#a89c84" }}>{m.ad || ""}</span>
+                            {onModelDuzenle && <button onClick={() => onModelDuzenle(m)} title="Model kartını aç: gram, taş, ayar vb. düzenle" style={{ ...GH, fontSize: 10, padding: "2px 8px" }}>✏️ Düzenle</button>}
                           </div>
                           <div style={{ fontSize: 10, color: "#8a7d64", marginTop: 2 }}>{m.gram ? m.gram + " gr · " : ""}{m.refAyar || ""} · {m.kategori || ""} · bulunan: {s.bulunanKod} ({(s.kalem.kodAdaylari.find(a => a.kod === s.bulunanKod) || {}).kaynak || ""})</div>
                           {s.renkUyari && <div style={{ fontSize: 10, fontWeight: 700, marginBottom: 4, color: s.renkUyari.startsWith("⚠") ? "#e8b04f" : "#6abf69" }}>🎨 {s.renkUyari}</div>}
@@ -1874,7 +1889,8 @@ function PdfSiparisModal({ modeller, kollar, onKapat, onUygula }) {
                                 <div key={e.m.id} style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 4 }}>
                                   <div style={{ width: 38, height: 38, background: "#f3f3f3", borderRadius: 6, overflow: "hidden", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>{e.m.foto ? <img src={e.m.foto} alt="" loading="lazy" style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }} /> : null}</div>
                                   <b style={{ fontSize: 12, color: "#f5f5f7" }}>{e.m.kod}</b>
-                                  <span style={{ fontSize: 9, color: "#a89c84" }}>{psModelTasRengi(e.m) ? PS_RENK_AD[psModelTasRengi(e.m)] : ""}</span>
+                                  <span style={{ fontSize: 9, color: "#a89c84" }}>{psModelTasRengi(e.m) ? PS_RENK_AD[psModelTasRengi(e.m)] : ""}{e.m.gram ? " · " + e.m.gram + " gr" : ""}</span>
+                                  {onModelDuzenle && <button onClick={() => onModelDuzenle(e.m)} title="Model kartını düzenle" style={{ ...GH, padding: "2px 7px", fontSize: 10 }}>✏️</button>}
                                   <input type="number" min="1" value={e.adet} onChange={ev => ekAdetYaz(s.id, e.m.id, ev.target.value)} style={{ ...kucukIS, width: 56, marginLeft: "auto" }} />
                                   <span style={{ fontSize: 9, color: "#a89c84" }}>adet</span>
                                   <button onClick={() => ekSil(s.id, e.m.id)} title="Bu modeli çıkar" style={{ ...GH, padding: "2px 7px", fontSize: 10 }}>✕</button>
@@ -7101,7 +7117,7 @@ function Atolye({ onSirketDegis }) {
         {/* KONFİRMASYON */}
         {sayfa==="konfirmasyon" && (
           <div style={{ animation:"fadein .3s" }}>
-            {pdfModal && <PdfSiparisModal modeller={modeller} kollar={kollar} onKapat={()=>setPdfModal(false)} onUygula={pdfSiparisUygula}/>}
+            {pdfModal && <PdfSiparisModal modeller={modeller} kollar={kollar} onKapat={()=>setPdfModal(false)} onUygula={pdfSiparisUygula} onModelDuzenle={openEM}/>}
             {/* Header */}
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12, flexWrap:"wrap", gap:6 }}>
               <h2 style={{ margin:0, fontSize:14, fontWeight:700, color:"var(--goldtext)" }}>Konfirmasyon</h2>
