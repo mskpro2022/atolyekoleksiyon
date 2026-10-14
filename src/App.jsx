@@ -44,7 +44,7 @@ const DURUMLAR = [
   { id: "mum_tas",    l: "Muma Tas",      c: "#f59e0b", s: 2 },
   { id: "dokum",      l: "Dokumde",       c: "#e8833a", s: 3 },
   { id: "tezgah",     l: "Tezgahta",      c: "#5b9bd5", s: 4 },
-  { id: "cila",       l: "Cilada",        c: "var(--vurgu)", s: 5 },
+  { id: "cila",       l: "Cilada",        c: "#d4af37", s: 5 },
   { id: "tas_dus",    l: "Tas Dusuk",     c: "#c27ba0", s: 6 },
   { id: "kalite",     l: "Kalite",        c: "#9b59b6", s: 7 },
   { id: "tamam",      l: "Teslime Hazir", c: "#6abf69", s: 8 },
@@ -646,6 +646,12 @@ function durumSureHesapla(gecmis) {
     sonuclar[d.durum] = (sonuclar[d.durum] || 0) + sure;
   }
   return sonuclar;
+}
+
+// datetime-local alanı için YEREL saat dizgesi (toISOString UTC verdiği için saat 3 saat kayıyordu)
+function yerelDT(ms) {
+  const d = new Date(ms), p2 = n => String(n).padStart(2, "0");
+  return d.getFullYear() + "-" + p2(d.getMonth() + 1) + "-" + p2(d.getDate()) + "T" + p2(d.getHours()) + ":" + p2(d.getMinutes());
 }
 
 function downloadPDF(html, filename) {
@@ -11372,8 +11378,38 @@ function Atolye({ onSirketDegis }) {
         const sonGec = gecmis[gecmis.length-1];
         const tamamlandi = sonGec.durum === "teslim";
         const sonrakiDurum = sonrakiAsama(sonGec.durum, s);
+        // Geçmişten bir aşama kaydını sil (varsayılan: son kayıt = geri al); ürün aşamaları da yeni son aşamaya çekilir
+        const gecmisSil = (gi) => {
+          if (gecmis.length < 2) return;
+          const durObj = DURUMLAR.find(d=>d.id===gecmis[gi].durum)||DURUMLAR[0];
+          if (!window.confirm(durObj.l + " aşaması (" + new Date(gecmis[gi].tarih).toLocaleString("tr-TR") + ") silinsin mi?")) return;
+          const yeniGecmis = gecmis.filter((_, i) => i !== gi);
+          const yeniSon = yeniGecmis[yeniGecmis.length - 1].durum;
+          const sonSilindi = gi === gecmis.length - 1;
+          svS(siparisler.map(sp => {
+            if (sp.id !== s.id) return sp;
+            const kd = { ...(sp.kalemDurumlar || {}) };
+            if (sonSilindi) (sp.kalemler || []).forEach(k => { if ((kd[k.id] || k.durum) !== "hurda") kd[k.id] = yeniSon; });
+            return { ...sp, durumGecmisi: yeniGecmis, kalemDurumlar: kd };
+          }));
+        };
         return (
           <Modal open={!!cizelgeModal} onClose={()=>setCizelgeModal(null)} title={"⏱ Üretim Takibi — " + (s.musteri||"")} wide T={T}>
+            {(() => {
+              const liste = [...siparisler].reverse().filter(x => (x.durumGecmisi||[]).length);
+              const idx = liste.findIndex(x => x.id === s.id);
+              const git = (d) => { const n = liste[idx + d]; if (n) setCizelgeModal(n.id); };
+              return (
+                <div style={{ display:"flex", gap:6, alignItems:"center", marginBottom:10, flexWrap:"wrap" }}>
+                  <button onClick={()=>git(-1)} disabled={idx<=0} style={{ ...GH, padding:"5px 10px", opacity: idx<=0?0.35:1 }}>◀</button>
+                  <select value={s.id} onChange={e=>setCizelgeModal(e.target.value)} style={{ ...IS, width:"auto", flex:"1 1 220px", padding:"6px 9px", fontSize:11 }}>
+                    {liste.map(x => <option key={x.id} value={x.id}>{(x.musKod||x.musteri||"?")} · {new Date(x.tarih).toLocaleDateString("tr-TR")} · {(x.kalemler||[]).length} kalem · {((DURUMLAR.find(d=>d.id===x.durumGecmisi[x.durumGecmisi.length-1].durum)||{}).l)||""}</option>)}
+                  </select>
+                  <button onClick={()=>git(1)} disabled={idx>=liste.length-1} style={{ ...GH, padding:"5px 10px", opacity: idx>=liste.length-1?0.35:1 }}>▶</button>
+                  <span style={{ fontSize:9, color:"#7a6f5a" }}>{idx+1}/{liste.length} sipariş</span>
+                </div>
+              );
+            })()}
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14, padding:"8px 12px", background:"rgba(91,155,213,0.08)", borderRadius:8 }}>
               <div>
                 <div style={{ fontSize:11, color:"#5b9bd5", fontWeight:700 }}>Sipariş: {s.musteri}</div>
@@ -11383,13 +11419,14 @@ function Atolye({ onSirketDegis }) {
                 <div style={{ fontSize:9, color:"#665d4a" }}>Toplam İş Günü Süresi</div>
                 <div style={{ fontSize:14, color:"var(--goldtext)", fontWeight:800 }}>{sureFmt(toplamSure)}</div>
                 {tamamlandi && <div style={{ fontSize:9, color:"#6abf69", fontWeight:700, marginTop:2 }}>✓ Teslim edildi</div>}
+                {gecmis.length > 1 && <button onClick={()=>gecmisSil(gecmis.length-1)} style={{ marginTop:6, fontSize:10, fontWeight:700, padding:"4px 10px", borderRadius:7, cursor:"pointer", border:"1px solid rgba(232,90,79,0.4)", background:"rgba(232,90,79,0.1)", color:"#e85a4f" }}>↶ Son aşamayı geri al</button>}
                 {sonGec.durum === "tamam" && <div style={{ fontSize:9, color:"#6abf69", fontWeight:700, marginTop:2 }}>✓ Üretim bitti — teslime hazır</div>}
               </div>
             </div>
 
             {/* Aşamalar yatay */}
-            <div style={{ overflowX:"auto", paddingBottom:8, marginBottom:14 }}>
-              <div style={{ display:"flex", alignItems:"flex-start", gap:0, minWidth:"max-content", padding:"4px 0" }}>
+            <div style={{ paddingBottom:8, marginBottom:14 }}>
+              <div style={{ display:"flex", flexWrap:"wrap", alignItems:"flex-start", gap:"14px 2px", padding:"4px 0" }}>
                 {gecmis.map((gec, gi) => {
                   const durObj = DURUMLAR.find(d=>d.id===gec.durum)||DURUMLAR[0];
                   const sonrakiGec = gecmis[gi+1];
@@ -11399,23 +11436,8 @@ function Atolye({ onSirketDegis }) {
                     <div key={gi} style={{ display:"flex", alignItems:"center", flexShrink:0 }}>
                       <div style={{ textAlign:"center", width:110 }}>
                         <div
-                          onClick={()=>{
-                            // Son aşamaya tıklanınca geri al
-                            if (aktif && gecmis.length > 1) {
-                              if (!window.confirm(durObj.l + " aşaması geri alınsın mı?")) return;
-                              setSiparisler(prev => {
-                                const yeni = prev.map(sp => {
-                                  if (sp.id !== s.id) return sp;
-                                  const yeniGecmis = sp.durumGecmisi.slice(0, -1);
-                                  return { ...sp, durumGecmisi: yeniGecmis };
-                                });
-                                versiyonDamgala("v7s", yeni);
-                                return yeni;
-                              });
-                            }
-                          }}
                           style={{ width:42, height:42, borderRadius:21, background:durObj.c+"33", border:"2px solid "+durObj.c+(aktif&&!tamamlandi?"":"99"), margin:"0 auto 5px", display:"flex", alignItems:"center", justifyContent:"center", boxShadow:aktif&&!tamamlandi?"0 0 14px "+durObj.c+"88":"none", cursor: aktif && gecmis.length > 1 ? "pointer" : "default" }}
-                          title={aktif && gecmis.length > 1 ? "Tıkla: bu aşamayı geri al" : ""}>
+                          >
                           <div style={{ width:16, height:16, borderRadius:8, background:durObj.c }}/>
                         </div>
                         <div style={{ fontSize:10, fontWeight:700, color:durObj.c, whiteSpace:"nowrap" }}>{durObj.l}</div>
@@ -11430,18 +11452,19 @@ function Atolye({ onSirketDegis }) {
                             ~{Math.ceil(s.tasDizimSuresiMs/3600000)}sa · {s.tasDizimTasAdet} taş
                           </div>
                         )}
-                        <div style={{ fontSize:8, color:"#7a6f5a", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:3, marginTop:2 }}
+                        <div style={{ fontSize:10, color:"#c0b399", cursor:"pointer", display:"inline-flex", flexDirection:"column", alignItems:"center", gap:1, marginTop:4, padding:"3px 8px", borderRadius:7, border:"1px solid rgba(var(--vurgu-rgb),0.2)", background:"rgba(var(--vurgu-rgb),0.05)" }}
                           onClick={()=>{
-                            const tarihStr = new Date(gec.tarih).toISOString().slice(0,16);
+                            const tarihStr = yerelDT(gec.tarih);
                             setManuelTarihModal({ sipId: s.id, gecmisIdx: gi, durum: gec.durum, durumL: durObj.l, tarih: tarihStr });
                           }}
                           title="Tarihi düzenle">
-                          <span>{new Date(gec.tarih).toLocaleDateString("tr-TR")}</span>
-                          <span style={{ color:"#998a6e", fontSize:10 }}>✏</span>
+                          <span style={{ fontWeight:700 }}>{new Date(gec.tarih).toLocaleDateString("tr-TR", { weekday:"short", day:"2-digit", month:"2-digit", year:"2-digit" })}</span>
+                          <span style={{ fontFamily:"monospace", color:GOLD }}>{new Date(gec.tarih).toLocaleTimeString("tr-TR", { hour:"2-digit", minute:"2-digit" })} ✏</span>
                         </div>
+                        {gecmis.length > 1 && <div><button onClick={()=>gecmisSil(gi)} title={aktif ? "Bu aşamayı geri al" : "Bu kaydı sil"} style={{ marginTop:4, fontSize:9, padding:"2px 8px", borderRadius:6, cursor:"pointer", border:"1px solid rgba(232,90,79,0.35)", background:"rgba(232,90,79,0.08)", color:"#e85a4f", fontWeight:700 }}>{aktif ? "↶ geri al" : "✕ sil"}</button></div>}
                       </div>
                       {gi < gecmis.length - 1 && (
-                        <div style={{ width:30, height:2, background:"rgba(var(--vurgu-rgb),0.3)", flexShrink:0, marginBottom:36 }}/>
+                        <div style={{ color:"#665d4a", fontSize:18, flexShrink:0, marginBottom:44, width:14, textAlign:"center" }}>›</div>
                       )}
                     </div>
                   );
@@ -11449,7 +11472,7 @@ function Atolye({ onSirketDegis }) {
                 {/* Sonraki aşama butonu */}
                 {sonrakiDurum && !tamamlandi && (
                   <div style={{ display:"flex", alignItems:"center", flexShrink:0 }}>
-                    <div style={{ width:30, height:2, background:"rgba(var(--vurgu-rgb),0.12)", flexShrink:0, marginBottom:36 }}/>
+                    <div style={{ color:"#4a4334", fontSize:18, flexShrink:0, marginBottom:44, width:14, textAlign:"center" }}>›</div>
                     <button onClick={()=>{
                       svS(siparisler.map(sp=>sp.id===s.id?{...sp,kalemDurumlar:topluIlerlet(sp, sonrakiDurum.id)}:sp));
                       sipDurumKaydet(s.id, sonrakiDurum.id);
@@ -11465,21 +11488,23 @@ function Atolye({ onSirketDegis }) {
             <div style={{ borderTop:"1px solid rgba(91,155,213,0.15)", paddingTop:12 }}>
               <div style={{ fontSize:10, color:"#5b9bd5", marginBottom:8, fontWeight:700 }}>AŞAMA SÜRELERİ DAĞILIMI</div>
               <div style={{ display:"flex", flexDirection:"column", gap:5 }}>
-                {gecmis.map((gec, gi) => {
-                  const durObj = DURUMLAR.find(d=>d.id===gec.durum)||DURUMLAR[0];
-                  const sonrakiGec = gecmis[gi+1];
-                  const buSure = isGunuSure(gec.tarih, sonrakiGec ? sonrakiGec.tarih : Date.now());
-                  const pct = toplamSure > 0 ? Math.round(buSure/toplamSure*100) : 0;
-                  return (
-                    <div key={gi} style={{ display:"flex", alignItems:"center", gap:8 }}>
-                      <div style={{ width:80, fontSize:9, color:durObj.c, fontWeight:700, flexShrink:0 }}>{durObj.l}</div>
-                      <div style={{ flex:1, height:8, background:"rgba(255,255,255,0.05)", borderRadius:4, overflow:"hidden" }}>
-                        <div style={{ height:"100%", width:pct+"%", background:durObj.c, borderRadius:4, opacity:0.8, transition:"width 0.3s" }}/>
+                {(() => {
+                  const topl = durumSureHesapla(gecmis);
+                  return DURUMLAR.filter(d => topl[d.id] !== undefined).map(durObj => {
+                    const buSure = topl[durObj.id] || 0;
+                    const pct = toplamSure > 0 ? Math.round(buSure/toplamSure*100) : 0;
+                    const kez = gecmis.filter(g => g.durum === durObj.id).length;
+                    return (
+                      <div key={durObj.id} style={{ display:"flex", alignItems:"center", gap:8 }}>
+                        <div style={{ width:90, fontSize:9, color:durObj.c, fontWeight:700, flexShrink:0 }}>{durObj.l}{kez>1 ? " ×"+kez : ""}</div>
+                        <div style={{ flex:1, height:8, background:"rgba(255,255,255,0.05)", borderRadius:4, overflow:"hidden" }}>
+                          <div style={{ height:"100%", width:pct+"%", background:durObj.c, borderRadius:4, opacity:0.8, transition:"width 0.3s" }}/>
+                        </div>
+                        <div style={{ width:120, fontSize:9, color:"#c0b399", textAlign:"right", flexShrink:0, fontWeight:600 }}>{sureFmt(buSure)} <span style={{ color:"#665d4a" }}>({pct}%)</span></div>
                       </div>
-                      <div style={{ width:120, fontSize:9, color:"#c0b399", textAlign:"right", flexShrink:0, fontWeight:600 }}>{sureFmt(buSure)} <span style={{ color:"#665d4a" }}>({pct}%)</span></div>
-                    </div>
-                  );
-                })}
+                    );
+                  });
+                })()}
               </div>
             </div>
           </Modal>
