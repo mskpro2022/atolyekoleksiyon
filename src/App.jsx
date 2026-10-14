@@ -11386,12 +11386,16 @@ function Atolye({ onSirketDegis }) {
           const yeniGecmis = gecmis.filter((_, i) => i !== gi);
           const yeniSon = yeniGecmis[yeniGecmis.length - 1].durum;
           const sonSilindi = gi === gecmis.length - 1;
-          svS(siparisler.map(sp => {
-            if (sp.id !== s.id) return sp;
-            const kd = { ...(sp.kalemDurumlar || {}) };
-            if (sonSilindi) (sp.kalemler || []).forEach(k => { if ((kd[k.id] || k.durum) !== "hurda") kd[k.id] = yeniSon; });
-            return { ...sp, durumGecmisi: yeniGecmis, kalemDurumlar: kd };
-          }));
+          setSiparisler(prev => {
+            const yeni = prev.map(sp => {
+              if (sp.id !== s.id) return sp;
+              const kd = { ...(sp.kalemDurumlar || {}) };
+              if (sonSilindi) (sp.kalemler || []).forEach(k => { if ((kd[k.id] || k.durum) !== "hurda") kd[k.id] = yeniSon; });
+              return { ...sp, durumGecmisi: (sp.durumGecmisi || []).filter((_, i) => i !== gi), kalemDurumlar: kd };
+            });
+            versiyonDamgala("v7s", yeni);
+            return yeni;
+          });
         };
         return (
           <Modal open={!!cizelgeModal} onClose={()=>setCizelgeModal(null)} title={"⏱ Üretim Takibi — " + (s.musteri||"")} wide T={T}>
@@ -11474,8 +11478,12 @@ function Atolye({ onSirketDegis }) {
                   <div style={{ display:"flex", alignItems:"center", flexShrink:0 }}>
                     <div style={{ color:"#4a4334", fontSize:18, flexShrink:0, marginBottom:44, width:14, textAlign:"center" }}>›</div>
                     <button onClick={()=>{
-                      svS(siparisler.map(sp=>sp.id===s.id?{...sp,kalemDurumlar:topluIlerlet(sp, sonrakiDurum.id)}:sp));
                       sipDurumKaydet(s.id, sonrakiDurum.id);
+                      setSiparisler(prev => {
+                        const yeni = prev.map(sp=>sp.id===s.id?{...sp,kalemDurumlar:topluIlerlet(sp, sonrakiDurum.id)}:sp);
+                        versiyonDamgala("v7s", yeni);
+                        return yeni;
+                      });
                     }} style={{ background:sonrakiDurum.c+"22", border:"2px dashed "+sonrakiDurum.c+"66", borderRadius:10, padding:"8px 14px", color:sonrakiDurum.c, fontSize:10, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap", marginBottom:36, textAlign:"center", width:110 }}>
                       → {sonrakiDurum.l}
                     </button>
@@ -11640,14 +11648,14 @@ function Atolye({ onSirketDegis }) {
               <button onClick={()=>{
                 const yeniTarih = new Date(manuelTarihModal.tarih).getTime();
                 if (isNaN(yeniTarih)) { alert("Geçersiz tarih!"); return; }
+                { const sp0 = siparisler.find(x => x.id === manuelTarihModal.sipId); const g0 = (sp0 && sp0.durumGecmisi) || []; const i0 = manuelTarihModal.gecmisIdx;
+                  if ((g0[i0-1] && yeniTarih < g0[i0-1].tarih) || (g0[i0+1] && yeniTarih > g0[i0+1].tarih)) { alert("Tarih, önceki/sonraki aşamanın tarihleri arasında olmalı (sıra bozulmasın)."); return; } }
                 setSiparisler(prev => {
                   const yeni = prev.map(sp => {
                     if (sp.id !== manuelTarihModal.sipId) return sp;
                     const gecmis = [...(sp.durumGecmisi||[])];
                     if (gecmis[manuelTarihModal.gecmisIdx]) {
                       gecmis[manuelTarihModal.gecmisIdx] = { ...gecmis[manuelTarihModal.gecmisIdx], tarih: yeniTarih, manuel: true };
-                      // Tarihe göre yeniden sırala
-                      gecmis.sort((a,b) => a.tarih - b.tarih);
                     }
                     return { ...sp, durumGecmisi: gecmis };
                   });
