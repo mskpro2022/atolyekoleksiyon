@@ -97,6 +97,45 @@ export async function yedekGetir(id) {
   } catch (e) { console.error('yedekGetir hata:', e.message); return null }
 }
 
+// ═══ SİPARİŞ YEDEKLERİ (sık, hafif — yalnız siparişler) ═══
+// Aynı `yedekler` tablosunu, ayrı bir onek ile kullanır (tam günlük yedeği etkilemez). Günde birden çok kayıt tutulur.
+const SIP_YEDEK_TUTULAN = 100
+export async function siparisYedekKaydet(onek, siparisler, neden) {
+  try {
+    if (!Array.isArray(siparisler) || siparisler.length === 0) return false
+    const yo = onek + '__sip'
+    const { error } = await supabase.from('yedekler').insert({
+      onek: yo, tarih: new Date().toISOString().slice(0, 10),
+      veri: { siparisler, neden: neden || 'otomatik', v: Date.now() },
+      model_sayisi: 0, siparis_sayisi: siparisler.length
+    })
+    if (error) { console.error('siparisYedekKaydet:', error.message); return false }
+    const { data: hepsi } = await supabase.from('yedekler').select('id').eq('onek', yo).order('olusturma', { ascending: false })
+    if (hepsi && hepsi.length > SIP_YEDEK_TUTULAN) {
+      await supabase.from('yedekler').delete().in('id', hepsi.slice(SIP_YEDEK_TUTULAN).map(x => x.id))
+    }
+    return true
+  } catch (e) { console.error('siparisYedekKaydet hata:', e.message); return false }
+}
+
+export async function siparisYedekListesi(onek) {
+  try {
+    const { data, error } = await supabase.from('yedekler')
+      .select('id, olusturma, siparis_sayisi')
+      .eq('onek', onek + '__sip').order('olusturma', { ascending: false }).limit(SIP_YEDEK_TUTULAN)
+    if (error) { console.error('siparisYedekListesi:', error.message); return [] }
+    return data || []
+  } catch (e) { return [] }
+}
+
+export async function siparisYedekGetir(id) {
+  try {
+    const { data, error } = await supabase.from('yedekler').select('veri').eq('id', id).maybeSingle()
+    if (error || !data) return null
+    return data.veri
+  } catch (e) { return null }
+}
+
 // Bugün yedek alınmış mı? (günde 1 kez kontrolü için)
 export async function bugunYedekVarMi(onek) {
   try {
