@@ -311,6 +311,32 @@ function hesapla(m, secilenAyar, altinKgUSD, varsayilanMly) {
   };
 }
 
+// ═══ SİPARİŞ KARTI ÖZETİ: gram, taştan/işçilikten kâr (has), toplam kâr, 1 gr kârı, ilerleme, teslim ═══
+// Taştan = taş gramı × ayar oranı (taş milyemden satılır). İşçilikten = işçilik has − maden maliyeti − ek maliyet (zarar olabilir).
+// Hurda/iade/tamir adetleri hesaba katılmaz (siparişin üstündeki mevcut kâr hesabıyla aynı).
+function sipKarOzet(s, kalemDurumlar) {
+  let gram = 0, tasHas = 0, iscNet = 0, karHas = 0, ilSum = 0, ilN = 0, bitenN = 0;
+  (s.kalemler || []).forEach(k => {
+    const hc = hesapla(k, k.secilenAyar || k.refAyar, s.altinKgUSD, s.mc);
+    const du = ((s.kalemHurda) || {})[k.id] || 0, ia = ((s.kalemIade) || {})[k.id] || 0, ta = ((s.kalemTamir) || {})[k.id] || 0;
+    const net = Math.max(0, (k.adet || 1) - du - ia - ta);
+    gram += hc.mamulGram * net; tasHas += hc.tasHas * net; iscNet += (hc.iscilikHas - hc.topMaliyetHas) * net; karHas += hc.karHas * net;
+    const d = (kalemDurumlar || {})[k.id] || k.durum || "baslanmadi";
+    if (d !== "hurda") { const o = DURUMLAR.find(x => x.id === d); ilSum += Math.max(0, o ? o.s : 0) / 9; ilN++; if (d === "tamam" || d === "teslim") bitenN++; }
+  });
+  const hasUSD = (s.altinKgUSD || 0) / 1000;
+  const il = ilN ? ilSum / ilN : 0;
+  const bitti = ilN > 0 && bitenN === ilN;
+  const tesMs = s.teslimTarihi ? new Date(s.teslimTarihi).getTime() : 0;
+  const bugun0 = new Date(); bugun0.setHours(0, 0, 0, 0);
+  const gun = tesMs ? Math.round((tesMs - Date.now()) / 864e5) : null;
+  return {
+    gram, tasHas, iscNet, karHas, karUSD: karHas * hasUSD,
+    mlyGr: gram > 0 ? karHas / gram : 0, usdGr: gram > 0 ? karHas * hasUSD / gram : 0,
+    il, hue: Math.round(il * 120), bitti, gun, gec: !!tesMs && tesMs < bugun0.getTime() && !bitti,
+  };
+}
+
 // ═══ 14K KÂRINI KORUYAN HEDEF FİYAT ═══
 // madenCarpan = MALİYET milyemi. Kâr = gelirHas(taş+işçilik) - maliyetHas.
 // Taşlı üründe düşük ayarda taş has değer kaybeder → aynı kârı korumak için
@@ -7461,7 +7487,7 @@ function Atolye({ onSirketDegis }) {
               ))}
             </div>
             {siparisler.length===0 && <p style={{ color:"#665d4a", textAlign:"center", padding:"30px", fontSize:12 }}>Henuz siparis kaydi yok</p>}
-            <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(270px,1fr))", gap:12, alignItems:"start" }}>
               {[...siparisler].reverse()
                 .filter(s => {
                   if (sipMusF) { const q = sipMusF.toLowerCase(); if (!(s.musteri||"").toLowerCase().includes(q) && !(s.musKod||"").toLowerCase().includes(q)) return false; }
@@ -7505,9 +7531,70 @@ function Atolye({ onSirketDegis }) {
                   }
                 };
 
+                const oz = sipKarOzet(s, kalemDurumlar);
+                const renkNo = "hsl(" + oz.hue + ",62%,48%)";
+                const fotoluKalemler = (s.kalemler||[]).filter(k=>k.foto);
+                const durumSayac = {}; aktifDurumlar.forEach(d => { durumSayac[d] = (durumSayac[d]||0)+1; });
+                const baskinDurum = DURUMLAR.find(d=>d.id===enYaygin) || DURUMLAR[0];
+                const kutu = (baslik, deger, alt, kotu) => (
+                  <div style={{ minWidth:0 }}>
+                    <div style={{ fontSize:8, color:"#7a6f5a", letterSpacing:".04em", textTransform:"uppercase", marginBottom:1 }}>{baslik}</div>
+                    <div style={{ fontSize:12, fontWeight:800, color: kotu ? "#e85a4f" : "#6abf69", fontVariantNumeric:"tabular-nums", whiteSpace:"nowrap" }}>{deger}</div>
+                    {alt && <div style={{ fontSize:9, color: kotu ? "#e85a4f" : "#998a6e" }}>{alt}</div>}
+                  </div>
+                );
+                const karJsx = (
+                  <div>
+                    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8, marginTop:8, paddingTop:8, borderTop:"1px dashed rgba(var(--vurgu-rgb),0.15)" }}>
+                      {kutu("Taştan", fN(oz.tasHas,2)+" has", "", oz.tasHas<0)}
+                      {kutu("İşçilikten", (oz.iscNet<0?"−":"+")+fN(Math.abs(oz.iscNet),2)+" has", oz.iscNet<0?"zarar":"kâr", oz.iscNet<0)}
+                      {kutu("Toplam kâr", fN(oz.karHas,2)+" has", oz.karUSD>0 ? "≈ "+fUSD(oz.karUSD) : "", oz.karHas<0 || (oz.gram>0 && oz.mlyGr<MIN_MLY))}
+                    </div>
+                    <div style={{ fontSize:10, marginTop:5, color:(oz.gram>0 && oz.mlyGr<MIN_MLY)?"#e85a4f":"#998a6e", fontWeight:700 }}>
+                      1 gr'da: {fN(oz.mlyGr*1000,1)} milyem{oz.usdGr ? " · "+fUSD(oz.usdGr)+" / gr" : ""}
+                    </div>
+                  </div>
+                );
+                const teslimRozet = s.teslimTarihi ? (
+                  <span style={{ fontSize:9, fontWeight:700, padding:"1px 7px", borderRadius:5, whiteSpace:"nowrap", background: oz.gec ? "rgba(232,90,79,0.18)" : "rgba(232,131,58,0.12)", color: oz.gec ? "#e85a4f" : "#e8833a" }}>
+                    {oz.bitti ? "✓ hazır" : oz.gec ? Math.abs(oz.gun)+" gün gecikti" : oz.gun<=7 ? oz.gun+" gün kaldı" : new Date(s.teslimTarihi).toLocaleDateString("tr-TR")}
+                  </span>
+                ) : null;
+
                 return (
-                  <div key={s.id} style={{ background:"rgba(var(--vurgu-rgb),0.02)", border:"1px solid rgba(var(--vurgu-rgb),0.1)", borderRadius:12, overflow:"hidden" }}>
-                    {/* Başlık — her zaman görünür, tıklanabilir */}
+                  <div key={s.id} style={{ gridColumn: acik ? "1 / -1" : "auto", minWidth:0, background: oz.gec ? "linear-gradient(180deg,rgba(232,90,79,0.07),rgba(var(--vurgu-rgb),0.02) 70%)" : "linear-gradient(180deg,hsla("+oz.hue+",75%,55%,0.045),rgba(var(--vurgu-rgb),0.02) 70%)", border:"1px solid "+(oz.gec?"rgba(232,90,79,0.40)":"hsla("+oz.hue+",75%,55%,0.28)"), boxShadow: oz.gec ? "0 0 20px rgba(232,90,79,0.20), 0 0 2px rgba(232,90,79,0.45)" : "0 0 18px hsla("+oz.hue+",85%,55%,0.14), 0 0 2px hsla("+oz.hue+",85%,60%,0.35)", borderRadius:12, overflow:"hidden" }}>
+                    {/* Kapalıyken: sade kart */}
+                    {!acik && (
+                      <div onClick={()=>setAcikSiparisler(p=>({...p,[s.id]:true}))} style={{ cursor:"pointer" }}>
+                        <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:2, height:78, background:"rgba(0,0,0,0.25)" }}>
+                          {[0,1,2].map(i => fotoluKalemler[i]
+                            ? <img key={i} src={fotoluKalemler[i].foto} alt="" loading="lazy" style={{ width:"100%", height:78, objectFit:"cover", display:"block" }}/>
+                            : <div key={i} style={{ background:"rgba(255,255,255,0.04)" }}/>)}
+                          <div style={{ display:"flex", alignItems:"center", justifyContent:"center", fontSize:12, fontWeight:700, color:"#998a6e", background:"rgba(255,255,255,0.05)" }}>+{Math.max(0,toplamKalem-3)}</div>
+                        </div>
+                        <div style={{ padding:"10px 13px 12px" }}>
+                          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", gap:8 }}>
+                            <span style={{ fontSize:16, fontWeight:800, color:GOLD, minWidth:0, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{s.musKod||s.musteri||"Isimsiz"}</span>
+                            <span style={{ fontSize:9, color:"#7a6f5a", whiteSpace:"nowrap" }}>{new Date(s.tarih).toLocaleDateString("tr-TR")}</span>
+                          </div>
+                          <div style={{ fontSize:10, color:"#998a6e", margin:"1px 0 7px", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
+                            {s.kaynak==="vitrin" ? "🛍️ Vitrinden · " : ""}{s.musKod && s.musteri && s.musKod!==s.musteri ? s.musteri+" · " : ""}{toplamKalem} kalem · {fN(oz.gram,0)} gr{s.aciklama ? " · "+s.aciklama : ""}
+                          </div>
+                          <div style={{ height:8, background:"rgba(var(--vurgu-rgb),0.1)", borderRadius:5, overflow:"hidden" }}>
+                            <div style={{ height:"100%", width:Math.max(3,oz.il*100)+"%", background: oz.gec ? "#e85a4f" : renkNo, borderRadius:5, transition:"width .3s" }}/>
+                          </div>
+                          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:8, marginTop:6 }}>
+                            <span style={{ fontSize:10, fontWeight:700, color:s.durumGecmisi?.length ? baskinDurum.c : "#7a6f5a" }}>
+                              {s.durumGecmisi?.length ? (durumSayac[enYaygin]||0)+"/"+aktifKalem+" "+baskinDurum.l : "İşleme alınmadı"} <span style={{ fontWeight:400, color:"#7a6f5a" }}>· %{Math.round(oz.il*100)}</span>
+                            </span>
+                            {teslimRozet}
+                          </div>
+                          {karJsx}
+                        </div>
+                      </div>
+                    )}
+                    {/* Açıkken: eski tam başlık (tüm butonlar, toplu aşama, noktalar) */}
+                    {acik && (<>
                     <div onClick={()=>setAcikSiparisler(p=>({...p,[s.id]:!acik}))} style={{ padding:"10px 14px", cursor:"pointer", display:"flex", justifyContent:"space-between", alignItems:"center", gap:8 }}>
                       <div style={{ flex:1, minWidth:0 }}>
                         {/* Satır 1: Müşteri + aksiyon butonları */}
@@ -7637,6 +7724,8 @@ function Atolye({ onSirketDegis }) {
                         </div>
                       </div>
                     </div>
+                    <div style={{ padding:"0 14px 10px" }}>{karJsx}</div>
+                    </>)}
 
                     {/* Açık detay */}
                     {acik && (
