@@ -7643,11 +7643,17 @@ function Atolye({ onSirketDegis }) {
                     {/* Kapalıyken: sade kart */}
                     {!acik && (
                       <div onClick={()=>setAcikSiparisler(p=>({...p,[s.id]:true}))} style={{ cursor:"pointer" }}>
-                        <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:2, height:78, background:"rgba(0,0,0,0.25)" }}>
-                          {[0,1,2].map(i => fotoluKalemler[i]
-                            ? <img key={i} src={fotoluKalemler[i].foto} alt="" loading="lazy" style={{ width:"100%", height:78, objectFit:"cover", display:"block" }}/>
-                            : <div key={i} style={{ background:"rgba(255,255,255,0.04)" }}/>)}
-                          <div style={{ display:"flex", alignItems:"center", justifyContent:"center", fontSize:12, fontWeight:700, color:"#998a6e", background:"rgba(255,255,255,0.05)" }}>+{Math.max(0,toplamKalem-3)}</div>
+                        <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gridAutoRows:"74px", gap:2, background:"rgba(0,0,0,0.25)" }}>
+                          {[0,1,2,3,4,5].map(i => {
+                            const f = fotoluKalemler[i];
+                            const kalan = Math.max(0, toplamKalem - 6);
+                            return (
+                              <div key={i} style={{ position:"relative", background:"rgba(255,255,255,0.04)", overflow:"hidden" }}>
+                                {f && <img src={f.foto} alt="" loading="lazy" style={{ width:"100%", height:"100%", objectFit:"cover", display:"block" }}/>}
+                                {i===5 && kalan>0 && <div style={{ position:"absolute", inset:0, display:"flex", alignItems:"center", justifyContent:"center", fontSize:13, fontWeight:800, color:"#fff", background:"rgba(0,0,0,0.55)" }}>+{kalan}</div>}
+                              </div>
+                            );
+                          })}
                         </div>
                         <div style={{ padding:"10px 13px 12px" }}>
                           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", gap:8 }}>
