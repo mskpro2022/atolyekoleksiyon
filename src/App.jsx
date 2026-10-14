@@ -1,4 +1,4 @@
-import { supabase, dbLoad, dbSave, fotoYukleStorage, vektorDosyaOku, vektorDosyaYaz, yedekKaydet, yedekListesi, yedekGetir, bugunYedekVarMi, tabloModelleriSenkron, tabloModelleriToplu, tabloModelSil, tabloSiparisleriSenkron, tabloSiparisleriToplu, tabloMusterileriYaz, akilliModelOku, akilliSiparisOku, akilliMusteriOku, islemKaydet, islemGecmisiGetir, realtimeBaslat, tabloKoleksiyonlariYaz, tabloKasaYaz, akilliKoleksiyonOku, akilliKasaOku, tabloKoleksiyonlariOku, tabloKasaOku, saglikDenetimi, ekranSunucuFarki, toptanciKaydet, toptancilariGetir, toptanciSil, vitrinGecmisiGetir, vitrinEnCokBakilan, vitrinOzetGetir, vitrinAnaliz, vitrinGetirGuvenli, siparisOlusturGuvenli, vitrinAktiviteKaydetGuvenli, vitrinSupheliCihazlar, vitrinCevrimiciMusteriler, radarTrendleriOku, radarKaynaklariOku, radarKanitlariOku, radarTumKanitlariOku, radarTrendGuncelle, radarTrendSil, radarManuelKanitEkle } from "./supabase.js";
+import { supabase, dbLoad, dbSave, fotoYukleStorage, vektorDosyaOku, vektorDosyaYaz, yedekKaydet, siparisYedekKaydet, siparisYedekListesi, siparisYedekGetir, yedekListesi, yedekGetir, bugunYedekVarMi, tabloModelleriSenkron, tabloModelleriToplu, tabloModelSil, tabloSiparisleriSenkron, tabloSiparisleriToplu, tabloMusterileriYaz, akilliModelOku, akilliSiparisOku, akilliMusteriOku, islemKaydet, islemGecmisiGetir, realtimeBaslat, tabloKoleksiyonlariYaz, tabloKasaYaz, akilliKoleksiyonOku, akilliKasaOku, tabloKoleksiyonlariOku, tabloKasaOku, saglikDenetimi, ekranSunucuFarki, toptanciKaydet, toptancilariGetir, toptanciSil, vitrinGecmisiGetir, vitrinEnCokBakilan, vitrinOzetGetir, vitrinAnaliz, vitrinGetirGuvenli, siparisOlusturGuvenli, vitrinAktiviteKaydetGuvenli, vitrinSupheliCihazlar, vitrinCevrimiciMusteriler, radarTrendleriOku, radarKaynaklariOku, radarKanitlariOku, radarTumKanitlariOku, radarTrendGuncelle, radarTrendSil, radarManuelKanitEkle } from "./supabase.js";
 import { useState, useEffect, useCallback, useMemo, useRef, Fragment } from "react";
 
 const uid = () => "x" + Date.now() + Math.random().toString(36).substr(2, 5);
@@ -385,6 +385,19 @@ function sipListeOzet(list, ayarF) {
     });
   });
   return o;
+}
+
+// Sipariş kodu: elle girilen / kayıtlı siparisNo; yoksa müşteri koduna göre otomatik (MUS-003-002 = o müşterinin 2. siparişi)
+function sipKodu(s, tumu) {
+  if (s.siparisNo) return s.siparisNo;
+  const ayni = (tumu || []).filter(x => (x.musKod || x.musteri) === (s.musKod || s.musteri)).sort((a, b) => (a.tarih || 0) - (b.tarih || 0));
+  const i = ayni.findIndex(x => x.id === s.id);
+  return (s.musKod || "SIP") + "-" + String((i < 0 ? ayni.length : i) + 1).padStart(3, "0");
+}
+// Birebir aynı içerik imzası: aynı modeller + foto + adet + ayar + kalem notları + sipariş açıklaması
+function sipImza(kalemler, aciklama) {
+  const parca = (kalemler || []).map(k => [k.id || k.kod || "", String(k.foto || "").length + ":" + String(k.foto || "").slice(-40), k.adet || 1, k.secilenAyar || k.refAyar || "", (k.renk || ""), (k.sipNot || "").trim().toLowerCase()].join("|")).sort();
+  return parca.join("§") + "§§" + (aciklama || "").trim().toLowerCase();
 }
 
 function sipKarOzet(s, kalemDurumlar) {
@@ -5372,11 +5385,15 @@ function Atolye({ onSirketDegis }) {
   const [pdfModal, setPdfModal] = useState(false);
   const [konfMus,        setKonfMus]        = useState("");
   const [konfSipAciklama, setKonfSipAciklama] = useState(""); // sipariş geneli açıklama
+  const [konfSipNo, setKonfSipNo] = useState(""); // sipariş numarası (boşsa otomatik üretilir)
   const [konfTeslim,     setKonfTeslim]     = useState("");
   const [acikSiparisler, setAcikSiparisler] = useState({});
   const sureModeli = useMemo(() => tahminiSureModeli(siparisler), [siparisler]); // geçmiş teslimlerden çıkış süresi
   const [sipMusF,  setSipMusF]  = useState("");
   const [sipFiltre, setSipFiltre] = useState("tumu"); // tumu, aktif, baslanmadi, dokumde, geciken, tamamlanan
+  const [sipYedekModal, setSipYedekModal] = useState(false);
+  const [sipYedekler, setSipYedekler] = useState([]);   // yedek listesi (veri hariç)
+  const [sipYedekSec, setSipYedekSec] = useState(null); // {id, olusturma, veri}
   const [sipMusSec, setSipMusSec] = useState("");  // müşteri seçici (tam eşleşme)
   const [sipAyarF, setSipAyarF] = useState("");    // ayar filtresi (14K, 925…)
   const [sipTarih1,setSipTarih1]= useState("");
@@ -5964,7 +5981,7 @@ function Atolye({ onSirketDegis }) {
   // Sipariş filtresi (liste + özet + PDF aynı kuralı kullanır). ayarDahil=false → ayar filtresini yok say (ayar çipleri için)
   const sipGecer = (s, ayarDahil = true) => {
     if (sipMusSec && (s.musKod || s.musteri || "?") !== sipMusSec) return false;
-    if (sipMusF) { const q = sipMusF.toLowerCase(); if (!(s.musteri||"").toLowerCase().includes(q) && !(s.musKod||"").toLowerCase().includes(q)) return false; }
+    if (sipMusF) { const q = sipMusF.toLowerCase(); if (!(s.musteri||"").toLowerCase().includes(q) && !(s.musKod||"").toLowerCase().includes(q) && !sipKodu(s, siparisler).toLowerCase().includes(q)) return false; }
     if (sipTarih1 && s.tarih < new Date(sipTarih1).getTime()) return false;
     if (sipTarih2 && s.tarih > new Date(sipTarih2).getTime()+86399999) return false;
     if (ayarDahil && sipAyarF && !(s.kalemler||[]).some(k => (k.secilenAyar || k.refAyar || "14K") === sipAyarF)) return false;
@@ -6091,6 +6108,34 @@ function Atolye({ onSirketDegis }) {
       yaziRenkleri: yaziRenkYedek, tema: temaYedek, v: Date.now(),
     };
   }, [kollar, modeller, siparisler, musteriler, ayarKategoriler]);
+
+  // ═══ SİPARİŞ OTOMATİK YEDEĞİ ═══
+  // • Sipariş sayısı azalırsa → silmeden ÖNCEKİ liste hemen yedeklenir
+  // • Her değişiklikten 45 sn sonra (içerik farklıysa) yedek alınır — son 100 yedek saklanır
+  const sipYedekRef = useRef({ hash: "", onceki: null, timer: null });
+  const sipYedekAl = useCallback(async (liste, neden) => {
+    const ok = await siparisYedekKaydet(AKTIF_SIRKET_ONEK, liste, neden);
+    if (ok) siparisYedekListesi(AKTIF_SIRKET_ONEK).then(setSipYedekler);
+    return ok;
+  }, []);
+  useEffect(() => {
+    if (!loaded) return;
+    const r = sipYedekRef.current;
+    if (r.onceki && r.onceki.length > siparisler.length) sipYedekAl(r.onceki, "silme öncesi (" + r.onceki.length + " → " + siparisler.length + ")");
+    r.onceki = siparisler;
+    if (siparisler.length === 0) return;
+    clearTimeout(r.timer);
+    r.timer = setTimeout(() => {
+      try {
+        const h = siparisler.length + ":" + JSON.stringify(siparisler);
+        if (!r.hash) { r.hash = h; return; } // ilk yükleme = başlangıç noktası, yedeklenmez
+        if (h === r.hash) return;
+        r.hash = h;
+        sipYedekAl(siparisler, "otomatik");
+      } catch (e) { console.error("Sipariş yedek:", e.message); }
+    }, 45000);
+    return () => clearTimeout(r.timer);
+  }, [siparisler, loaded, sipYedekAl]);
 
   // Açılışta günde 1 kez otomatik yedek (bugün alınmamışsa)
   const otoYedekYapildiRef = useRef(false);
@@ -6503,7 +6548,7 @@ function Atolye({ onSirketDegis }) {
   // Konfirmasyon listesini ve ona bağlı tüm seçimleri sıfırlar (sipariş kaydedilmez)
   const konfTemizle = () => {
     if (!window.confirm("Konfirmasyon listesi ve girilen tüm adet/not/ayar bilgileri silinsin mi? (Sipariş kaydedilmez)")) return;
-    setKonfList([]); setKonfAyarlar({}); setKonfRenkler({}); setKonfAdet({}); setKonfNot({}); setKonfNumune({}); setKonfFiyatlar({}); setKonfBoylar({}); setKonfMus(""); setKonfTeslim(""); setKonfAyar("14K"); setKonfSipAciklama("");
+    setKonfList([]); setKonfAyarlar({}); setKonfRenkler({}); setKonfAdet({}); setKonfNot({}); setKonfNumune({}); setKonfFiyatlar({}); setKonfBoylar({}); setKonfMus(""); setKonfTeslim(""); setKonfAyar("14K"); setKonfSipAciklama(""); setKonfSipNo("");
   };
   const togKonf     = m => setKonfList(p => p.find(x => x.id === m.id) ? p.filter(x => x.id !== m.id) : siraliKonfListe([...p, m]));
   // Ayar bazlı işçilik girişi — sadece SEÇİLİ ayar için yazar (10K/14K/18K birbirini ezmez)
@@ -6587,7 +6632,14 @@ function Atolye({ onSirketDegis }) {
 
   const konfKaydet = () => {
     if (konfKalemler.length === 0) return;
-    const musAd = konfMus.trim() || "Isimsiz";
+    if (!konfMus.trim()) { alert("Müşteri adı yazılmadan sipariş kaydedilemez."); return; }
+    const musAd = konfMus.trim();
+    // Birebir aynı içerik (aynı müşteri, aynı foto/model/açıklama) tekrar eklenemez
+    const imza = sipImza(konfKalemler, konfSipAciklama);
+    const kopya = siparisler.find(x => (x.musteri || "") === musAd && sipImza(x.kalemler, x.aciklama) === imza);
+    if (kopya) { alert("Bu sipariş zaten kayıtlı!\n\n" + musAd + " · " + sipKodu(kopya, siparisler) + " · " + new Date(kopya.tarih).toLocaleDateString("tr-TR") + "\nAynı fotoğraf ve açıklamalarla ikinci kez eklenemez."); return; }
+    const girilenNo = konfSipNo.trim();
+    if (girilenNo && siparisler.some(x => sipKodu(x, siparisler).toLowerCase() === girilenNo.toLowerCase())) { alert("\"" + girilenNo + "\" sipariş numarası zaten kullanılıyor. Başka bir numara yazın ya da boş bırakın (otomatik verilir)."); return; }
     let yeniMusteriler = { ...musteriler };
     if (!yeniMusteriler[musAd]) {
       const no = String(Object.keys(yeniMusteriler).length + 1).padStart(3, "0");
@@ -6595,7 +6647,9 @@ function Atolye({ onSirketDegis }) {
       svMus(yeniMusteriler);
     }
     const musKod = yeniMusteriler[musAd];
-    const yeni = { id: uid(), musteri: musAd, musKod, tarih: Date.now(), teslimTarihi: konfTeslim||"", aciklama: konfSipAciklama.trim(), altinKgUSD, mc: madenCarpan, kalemDurumlar: Object.fromEntries(konfKalemler.filter(k => k.cizimde).map(k => [k.id, "cizimde"])), kalemler: konfKalemler, sira: konfSira, gelir: kTop.gelir, maliyet: kTop.maliyet, kar: kTop.kar };
+    let siparisNo = girilenNo;
+    if (!siparisNo) { let n = siparisler.filter(x => (x.musKod || x.musteri) === musKod).length + 1; do { siparisNo = musKod + "-" + String(n++).padStart(3, "0"); } while (siparisler.some(x => sipKodu(x, siparisler).toLowerCase() === siparisNo.toLowerCase())); }
+    const yeni = { id: uid(), musteri: musAd, musKod, siparisNo, tarih: Date.now(), teslimTarihi: konfTeslim||"", aciklama: konfSipAciklama.trim(), altinKgUSD, mc: madenCarpan, kalemDurumlar: Object.fromEntries(konfKalemler.filter(k => k.cizimde).map(k => [k.id, "cizimde"])), kalemler: konfKalemler, sira: konfSira, gelir: kTop.gelir, maliyet: kTop.maliyet, kar: kTop.kar };
     svS([...siparisler, yeni]);
     islemKaydet(AKTIF_SIRKET_ONEK, "ekle", "sipariş", (musAd || "") + " · " + (konfKalemler?.length || 0) + " kalem");
     svMUpsert(modeller.filter(m => konfKalemler.find(x => x.id === m.id)).map(m => ({ ...m, satisSayisi: (m.satisSayisi||0)+1 })));
@@ -6613,7 +6667,7 @@ function Atolye({ onSirketDegis }) {
       });
       svKasa({ ...kasa, musteriModelFiyat: yeniFiyatHafiza });
     }
-    setKonfList([]); setKonfAyarlar({}); setKonfRenkler({}); setKonfAdet({}); setKonfNot({}); setKonfNumune({}); setKonfFiyatlar({}); setKonfBoylar({}); setKonfMus(""); setKonfTeslim(""); setKonfAyar("14K"); setKonfSipAciklama("");
+    setKonfList([]); setKonfAyarlar({}); setKonfRenkler({}); setKonfAdet({}); setKonfNot({}); setKonfNumune({}); setKonfFiyatlar({}); setKonfBoylar({}); setKonfMus(""); setKonfTeslim(""); setKonfAyar("14K"); setKonfSipAciklama(""); setKonfSipNo("");
     sv("v7konfdraft", { liste: [] });
     alert("Siparis kaydedildi!");
   };
@@ -7490,6 +7544,7 @@ function Atolye({ onSirketDegis }) {
                   </datalist>
                 </div>
                 <input type="date" value={konfTeslim} onChange={e=>setKonfTeslim(e.target.value)} style={{ ...IS, width:130, padding:"5px 8px", fontSize:11 }} />
+                <input value={konfSipNo} onChange={e=>setKonfSipNo(e.target.value)} placeholder={"Sipariş no (boşsa otomatik" + (konfMus.trim() && musteriler[konfMus.trim()] ? ": " + musteriler[konfMus.trim()] + "-…" : "") + ")"} title="Sipariş numarası — aynı numara iki kez kullanılamaz" style={{ ...IS, width:150, padding:"5px 8px", fontSize:11 }} />
                 <input value={konfSipAciklama} onChange={e=>setKonfSipAciklama(e.target.value)} placeholder="Sipariş açıklaması..." style={{ ...IS, width:180, padding:"5px 8px", fontSize:11 }} />
                 <select value={konfSira} onChange={e=>konfSiraDegistir(e.target.value)} title="Listeyi sırala" style={{ ...IS, width:"auto", padding:"5px 8px", fontSize:10 }}>
                   {KONF_SIRA_SECENEKLERI.map(o => <option key={o.id} value={o.id}>↕ {o.l}</option>)}
@@ -7772,7 +7827,7 @@ function Atolye({ onSirketDegis }) {
                   <option value="">👤 Tüm müşteriler</option>
                   {(() => { const m = {}; siparisler.forEach(x => { const key = x.musKod || x.musteri || "?"; (m[key] = m[key] || { n: 0, ad: x.musteri || key }).n++; }); return Object.entries(m).sort((a,b)=>b[1].n-a[1].n).map(([key, v]) => <option key={key} value={key}>{key}{v.ad && v.ad !== key ? " · " + v.ad : ""} ({v.n})</option>); })()}
                 </select>
-                <input value={sipMusF} onChange={e=>setSipMusF(e.target.value)} placeholder="Musteri ara..." style={{ ...IS, width:130, padding:"5px 8px", fontSize:10 }}/>
+                <input value={sipMusF} onChange={e=>setSipMusF(e.target.value)} placeholder="Müşteri / sipariş no ara..." style={{ ...IS, width:150, padding:"5px 8px", fontSize:10 }}/>
                 <select value={sipSira} onChange={e=>setSipSira(e.target.value)} title="Kalem sıralaması (görünüm + PDF)" style={{ ...IS, width:"auto", padding:"5px 8px", fontSize:10 }}>
                   {KONF_SIRA_SECENEKLERI.map(o => <option key={o.id} value={o.id}>↕ {o.l}</option>)}
                 </select>
@@ -7780,6 +7835,7 @@ function Atolye({ onSirketDegis }) {
                 <span style={{ color:"#665d4a", fontSize:10 }}>—</span>
                 <input type="date" value={sipTarih2} onChange={e=>setSipTarih2(e.target.value)} style={{ ...IS, width:120, padding:"5px 8px", fontSize:10 }}/>
                 {(sipMusF||sipMusSec||sipAyarF||sipTarih1||sipTarih2||sipFiltre!=="tumu") && <button onClick={()=>{setSipMusF("");setSipMusSec("");setSipAyarF("");setSipTarih1("");setSipTarih2("");setSipFiltre("tumu");}} style={{ ...RD, fontSize:9, padding:"4px 8px" }}>Temizle</button>}
+                <button onClick={() => { setSipYedekSec(null); setSipYedekModal(true); siparisYedekListesi(AKTIF_SIRKET_ONEK).then(setSipYedekler); }} title="Sipariş yedekleri" style={{ ...GH, fontSize:9, padding:"5px 10px" }}>🛟 Yedekler</button>
                 {siparisler.length > 0 && (
                   <button onClick={() => {
                     const goruntulenecek = [...siparisler].reverse().filter(s => sipGecer(s));
@@ -7935,7 +7991,7 @@ function Atolye({ onSirketDegis }) {
                             <span style={{ fontSize:9, color:"#7a6f5a", whiteSpace:"nowrap" }}>{new Date(s.tarih).toLocaleDateString("tr-TR")}</span>
                           </div>
                           <div style={{ fontSize:10, color:"#998a6e", margin:"1px 0 7px", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
-                            {s.kaynak==="vitrin" ? "🛍️ Vitrinden · " : ""}{s.musKod && s.musteri && s.musKod!==s.musteri ? s.musteri+" · " : ""}{toplamKalem} kalem · {fN(oz.gram,0)} gr{numuneSay>0 ? <b style={{ color:"#e8b04f" }}> · 🎁 {numuneSay===toplamKalem ? "Numune siparişi" : numuneSay+" numune"}</b> : null}{s.aciklama ? " · "+s.aciklama : ""}
+                            {s.kaynak==="vitrin" ? "🛍️ Vitrinden · " : ""}<b style={{ color:GOLD, fontFamily:"monospace" }}>#{sipKodu(s, siparisler)}</b> · {s.musKod && s.musteri && s.musKod!==s.musteri ? s.musteri+" · " : ""}{toplamKalem} kalem · {fN(oz.gram,0)} gr{numuneSay>0 ? <b style={{ color:"#e8b04f" }}> · 🎁 {numuneSay===toplamKalem ? "Numune siparişi" : numuneSay+" numune"}</b> : null}{s.aciklama ? " · "+s.aciklama : ""}
                           </div>
                           <div style={{ height:8, background:"rgba(var(--vurgu-rgb),0.1)", borderRadius:5, overflow:"hidden" }}>
                             <div style={{ height:"100%", width:Math.max(3,oz.il*100)+"%", background: oz.gec ? "#e85a4f" : renkNo, borderRadius:5, transition:"width .3s" }}/>
@@ -11685,6 +11741,63 @@ function Atolye({ onSirketDegis }) {
           </div>
         </Modal>
       )}
+
+      {/* SİPARİŞ YEDEKLERİ MODAL */}
+      <Modal open={sipYedekModal} onClose={()=>setSipYedekModal(false)} title="🛟 Sipariş Yedekleri" wide T={T}>
+        <div style={{ fontSize:10, color:"#998a6e", marginBottom:10 }}>
+          Siparişler her değişiklikten ~45 sn sonra, silme öncesinde ise anında otomatik yedeklenir (son 100 yedek saklanır). Bir yedeğin içinden tek tek sipariş geri getirebilirsiniz.
+        </div>
+        <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:10 }}>
+          <button onClick={async()=>{ const ok = await sipYedekAl(siparisler, "elle"); toastGoster(ok?"ok":"hata", ok?"Sipariş yedeği alındı":"Yedek alınamadı"); }} style={{ ...BG, fontSize:10, padding:"6px 12px" }}>💾 Şimdi yedek al ({siparisler.length} sipariş)</button>
+          <button onClick={()=>{ const blob = new Blob([JSON.stringify({ siparisler, v: Date.now() })], { type:"application/json" }); const u = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = u; a.download = "siparisler-" + new Date().toISOString().slice(0,10) + "-" + siparisler.length + ".json"; a.click(); setTimeout(()=>URL.revokeObjectURL(u), 2000); }} style={{ ...GH, fontSize:10, padding:"6px 12px" }}>⬇ Siparişleri PC'ye indir</button>
+        </div>
+        {!sipYedekSec && (
+          <div style={{ display:"flex", flexDirection:"column", gap:5, maxHeight:"50vh", overflowY:"auto" }}>
+            {sipYedekler.length === 0 && <div style={{ fontSize:10, color:"#665d4a" }}>Henüz yedek yok. Bir siparişi değiştirince ~45 sn içinde ilk yedek oluşur.</div>}
+            {sipYedekler.map(y => (
+              <button key={y.id} onClick={async()=>{ const v = await siparisYedekGetir(y.id); if (!v) { toastGoster("hata","Yedek okunamadı"); return; } setSipYedekSec({ id:y.id, olusturma:y.olusturma, veri:v }); }}
+                style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:8, padding:"7px 10px", borderRadius:8, cursor:"pointer", background:"rgba(var(--vurgu-rgb),0.04)", border:"1px solid rgba(var(--vurgu-rgb),0.12)", color:"var(--gold)", fontSize:11, textAlign:"left" }}>
+                <span>{new Date(y.olusturma).toLocaleString("tr-TR", { day:"2-digit", month:"2-digit", hour:"2-digit", minute:"2-digit" })}</span>
+                <span style={{ fontWeight:700 }}>{y.siparis_sayisi} sipariş</span>
+              </button>
+            ))}
+          </div>
+        )}
+        {sipYedekSec && (() => {
+          const liste = (sipYedekSec.veri.siparisler || []);
+          const durum = (ys) => { const m = siparisler.find(x => x.id === ys.id); if (!m) return "silinmis"; return JSON.stringify(m) === JSON.stringify(ys) ? "ayni" : "degismis"; };
+          const geriGetir = (ys) => {
+            if (!window.confirm((durum(ys) === "silinmis" ? "Silinmiş siparişi geri getir" : "Bu siparişi yedekteki haline döndür (şimdiki hali üzerine yazılır)") + ":\n" + (ys.musteri || "") + " · " + sipKodu(ys, liste) + "?")) return;
+            const var_ = siparisler.some(x => x.id === ys.id);
+            svS(var_ ? siparisler.map(x => x.id === ys.id ? ys : x) : [...siparisler, ys].sort((a, b) => (a.tarih || 0) - (b.tarih || 0)));
+            toastGoster("ok", "Sipariş geri getirildi");
+          };
+          const eksikler = liste.filter(ys => durum(ys) === "silinmis");
+          return (
+            <div>
+              <div style={{ display:"flex", gap:6, alignItems:"center", marginBottom:8, flexWrap:"wrap" }}>
+                <button onClick={()=>setSipYedekSec(null)} style={{ ...GH, fontSize:10, padding:"4px 10px" }}>← Listeye dön</button>
+                <span style={{ fontSize:10, color:"#998a6e" }}>{new Date(sipYedekSec.olusturma).toLocaleString("tr-TR")} · {liste.length} sipariş · {sipYedekSec.veri.neden}</span>
+                {eksikler.length > 0 && <button onClick={()=>{ if (!window.confirm(eksikler.length + " silinmiş sipariş geri getirilsin mi? (mevcutlara dokunulmaz)")) return; svS([...siparisler, ...eksikler].sort((a, b) => (a.tarih || 0) - (b.tarih || 0))); toastGoster("ok", eksikler.length + " sipariş geri getirildi"); }} style={{ ...BG, fontSize:10, padding:"4px 10px" }}>↩ Tüm silinenleri geri getir ({eksikler.length})</button>}
+              </div>
+              <div style={{ display:"flex", flexDirection:"column", gap:5, maxHeight:"46vh", overflowY:"auto" }}>
+                {liste.map(ys => { const d = durum(ys); return (
+                  <div key={ys.id} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:8, padding:"6px 10px", borderRadius:8, background:"rgba(var(--vurgu-rgb),0.04)", border:"1px solid rgba(var(--vurgu-rgb),0.1)", fontSize:11 }}>
+                    <div style={{ minWidth:0 }}>
+                      <b style={{ color:"var(--gold)" }}>{ys.musKod || ys.musteri}</b> <span style={{ fontFamily:"monospace", color:"#998a6e", fontSize:10 }}>#{sipKodu(ys, liste)}</span>
+                      <div style={{ fontSize:9, color:"#7a6f5a" }}>{new Date(ys.tarih).toLocaleDateString("tr-TR")} · {(ys.kalemler||[]).length} kalem</div>
+                    </div>
+                    <div style={{ display:"flex", alignItems:"center", gap:6, flexShrink:0 }}>
+                      <span style={{ fontSize:9, fontWeight:700, color: d==="ayni"?"#6abf69": d==="silinmis"?"#e85a4f":"#e8b04f" }}>{d==="ayni"?"✓ aynı": d==="silinmis"?"silinmiş":"değişmiş"}</span>
+                      {d !== "ayni" && <button onClick={()=>geriGetir(ys)} style={{ ...GH, fontSize:9, padding:"3px 8px" }}>↩ Geri getir</button>}
+                    </div>
+                  </div>
+                ); })}
+              </div>
+            </div>
+          );
+        })()}
+      </Modal>
 
       {/* MANUEL TARİH DÜZENLEME MODAL */}
       <Modal open={!!manuelTarihModal} onClose={()=>setManuelTarihModal(null)} title="Aşama Tarihini Düzenle" T={T}>
