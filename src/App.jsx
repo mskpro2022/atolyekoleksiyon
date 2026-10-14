@@ -366,12 +366,13 @@ function tahminiSureModeli(siparisler) {
 // Taştan = taş gramı × ayar oranı (taş milyemden satılır). İşçilikten = işçilik has − maden maliyeti − ek maliyet (zarar olabilir).
 // Hurda/iade/tamir adetleri hesaba katılmaz (siparişin üstündeki mevcut kâr hesabıyla aynı).
 function sipKarOzet(s, kalemDurumlar) {
-  let gram = 0, karGram = 0, tasHas = 0, iscNet = 0, karHas = 0, ilSum = 0, ilN = 0, bitenN = 0;
+  let gumusBorc = 0, gram = 0, karGram = 0, tasHas = 0, iscNet = 0, karHas = 0, ilSum = 0, ilN = 0, bitenN = 0;
   (s.kalemler || []).forEach(k => {
     const hc = hesapla(k, k.secilenAyar || k.refAyar, s.altinKgUSD, s.mc);
     const du = ((s.kalemHurda) || {})[k.id] || 0, ia = ((s.kalemIade) || {})[k.id] || 0, ta = ((s.kalemTamir) || {})[k.id] || 0;
     const net = Math.max(0, (k.adet || 1) - du - ia - ta);
     gram += hc.mamulGram * net;
+    if (k.numune && (k.secilenAyar || k.refAyar) === "925") gumusBorc += hc.mamulGram * net; // müşteri gümüşü geri verecek
     if (!k.numune) { karGram += hc.mamulGram * net; tasHas += hc.tasHas * net; iscNet += (hc.iscilikHas - hc.topMaliyetHas) * net; karHas += hc.karHas * (k.numune?0:1) * net; } // numune kâr hesabına girmez
     const d = (kalemDurumlar || {})[k.id] || k.durum || "baslanmadi";
     if (d !== "hurda") { const o = DURUMLAR.find(x => x.id === d); ilSum += Math.max(0, o ? o.s : 0) / 9; ilN++; if (d === "tamam" || d === "teslim") bitenN++; }
@@ -384,7 +385,7 @@ function sipKarOzet(s, kalemDurumlar) {
   const gun = tesMs ? Math.round((tesMs - Date.now()) / 864e5) : null;
   return {
     gram, tasHas, iscNet, karHas, karUSD: karHas * hasUSD,
-    mlyGr: karGram > 0 ? karHas / karGram : 0, usdGr: karGram > 0 ? karHas * hasUSD / karGram : 0, karGram,
+    mlyGr: karGram > 0 ? karHas / karGram : 0, usdGr: karGram > 0 ? karHas * hasUSD / karGram : 0, karGram, gumusBorc,
     il, hue: Math.round(il * 120), bitti, gun, gec: !!tesMs && tesMs < bugun0.getTime() && !bitti,
   };
 }
@@ -6304,7 +6305,7 @@ function Atolye({ onSirketDegis }) {
       const genelBoyAktif = konfGenelBoy.aktif && konfGenelBoy.deger;
       // Fiyat override — konfFiyatlar > müşteri hafızası > model varsayılanı
       const musHafiza = konfMus ? (kasa.musteriModelFiyat||{})[konfMus]?.[m.id] : null;
-      const temel = { ...iscilikliModel(m, konfAyar, konfFiyatlar[m.id], musHafiza), secilenAyar: konfAyar, renk: konfRenkler[m.id]||"Sari", sipNot: konfNot[m.id]||"", numune: !!konfNumune[m.id], zorluk: undefined, zorlukEtiket: undefined, zorlukTarih: undefined };
+      const temel = { ...iscilikliModel(m, konfAyar, konfFiyatlar[m.id], musHafiza), secilenAyar: konfAyar, renk: konfRenkler[m.id]||"Sari", sipNot: konfNot[m.id]||"", numune: konfNumune[m.id] !== undefined ? !!konfNumune[m.id] : konfAyar === "925", zorluk: undefined, zorlukEtiket: undefined, zorlukTarih: undefined };
       
       // Kolye ve bileklik: tek satır, boyListesi içeride
       if ((m.kategori==="kolye" || m.kategori==="bileklik") && boylar.length > 0) {
@@ -7350,8 +7351,8 @@ function Atolye({ onSirketDegis }) {
                           {m.kategori && <span style={{ fontSize:7, color:"#a78bfa", background:"rgba(167,139,250,0.1)", padding:"1px 5px", borderRadius:3, fontWeight:600 }}>{m.kategori.charAt(0).toUpperCase()+m.kategori.slice(1)}</span>}
                           {/* Manuel not */}
                           <input value={not} onChange={e=>konfNotSec(m.id,e.target.value)} placeholder="Not ekle..." style={{ marginTop:4, width:"100%", background:"transparent", border:"none", borderBottom:"1px dashed rgba(var(--vurgu-rgb),0.2)", color:"var(--gold)", fontSize:9, outline:"none", padding:"1px 0" }}/>
-                          <label style={{ display:"inline-flex", alignItems:"center", gap:4, marginTop:4, fontSize:9, cursor:"pointer", color: konfNumune[m.id] ? "#e8b04f" : "#7a6f5a", fontWeight: konfNumune[m.id] ? 800 : 500 }} title="Bu ürün müşteriye numune olarak verilecek">
-                            <input type="checkbox" checked={!!konfNumune[m.id]} onChange={e=>setKonfNumune(p=>({ ...p, [m.id]: e.target.checked }))} /> 🎁 Numune
+                          <label style={{ display:"inline-flex", alignItems:"center", gap:4, marginTop:4, fontSize:9, cursor:"pointer", color: (konfNumune[m.id] !== undefined ? konfNumune[m.id] : konfAyar==="925") ? "#e8b04f" : "#7a6f5a", fontWeight: (konfNumune[m.id] !== undefined ? konfNumune[m.id] : konfAyar==="925") ? 800 : 500 }} title="Bu ürün müşteriye numune olarak verilecek (925 gümüşte otomatik)">
+                            <input type="checkbox" checked={konfNumune[m.id] !== undefined ? !!konfNumune[m.id] : konfAyar==="925"} onChange={e=>setKonfNumune(p=>({ ...p, [m.id]: e.target.checked }))} /> 🎁 Numune
                           </label>
                           {/* Kayıtlı not şablonları */}
                           {kayitliNotlar.length > 0 && (
@@ -7621,6 +7622,7 @@ function Atolye({ onSirketDegis }) {
                       {kutu("İşçilikten", (oz.iscNet<0?"−":"+")+fN(Math.abs(oz.iscNet),2)+" has", oz.iscNet<0?"zarar":"kâr", oz.iscNet<0)}
                       {kutu("Toplam kâr", fN(oz.karHas,2)+" has", oz.karUSD>0 ? "≈ "+fUSD(oz.karUSD) : "", oz.karHas<0 || (oz.karGram>0 && oz.mlyGr<MIN_MLY))}
                     </div>
+                    {oz.gumusBorc > 0 && <div style={{ fontSize:10, marginTop:5, fontWeight:700, color:"#c0c0c0" }}>🥈 Gümüş borcu: {fN(oz.gumusBorc,1)} gr <span style={{ fontWeight:400, opacity:.8 }}>(müşteri gümüşü geri verecek · numune)</span></div>}
                     <div style={{ fontSize:10, marginTop:5, color:(oz.karGram>0 && oz.mlyGr<MIN_MLY)?"#e85a4f":"#998a6e", fontWeight:700 }}>
                       1 gr'da: {fN(oz.mlyGr*1000,1)} milyem{oz.usdGr ? " · "+fUSD(oz.usdGr)+" / gr" : ""}
                     </div>
