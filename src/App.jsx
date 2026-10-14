@@ -53,6 +53,17 @@ const DURUMLAR = [
 ];
 
 
+// ── CİLA ALT ADIMLARI: Cila aşamasının içinde ürün başına zımpara → tambur → tüy finiş (sp.kalemCila[kalemId]) ──
+const CILA_ADIMLARI = [{ id: "zimpara", l: "Zımpara" }, { id: "tambur", l: "Tambur" }, { id: "tuy", l: "Tüy finiş" }];
+function cilaOzet(sp, kalemDurumlar) {
+  const say = { zimpara: 0, tambur: 0, tuy: 0 };
+  (sp.kalemler || []).forEach(k => {
+    if (((kalemDurumlar || {})[k.id] || k.durum || "baslanmadi") !== "cila") return;
+    say[((sp.kalemCila || {})[k.id]) || "zimpara"]++;
+  });
+  return say;
+}
+
 // ── ÜRETİM ZORLUĞU: teslimde ürün başına 1-5 puan + sebep etiketi (kalem.zorluk, kalem.zorlukEtiket) ──
 const ZORLUK_ADLARI = { 1: "Çok kolay", 2: "Kolay", 3: "Orta", 4: "Zor", 5: "Çok zor" };
 const ZORLUK_RENK = { 1: "#6abf69", 2: "#9bcf69", 3: "#e8b04f", 4: "#e8833a", 5: "#e85a4f" };
@@ -309,6 +320,46 @@ function hesapla(m, secilenAyar, altinKgUSD, varsayilanMly) {
     hasGramUSD,
     gumusMu, gumusIscilikGr, gumusIscilikTop,
   };
+}
+
+// ═══ ÇİZİMDE: katalogda olmayan, çizilecek ürünler sadece "çizimde" aşamasıyla başlar; diğerleri çizimi atlar ═══
+function sonrakiAsama(curId, sp) {
+  const i = DURUMLAR.findIndex(d => d.id === curId);
+  let n = DURUMLAR[i + 1];
+  if (n && n.id === "hurda") return null;
+  if (n && n.id === "cizimde" && !(sp.kalemler || []).some(k => k.cizimde)) n = DURUMLAR[i + 2];
+  return n && n.id !== "hurda" ? n : null;
+}
+// Toplu ilerletme: hurdaya dokunmaz; çizimi süren (cizimde işaretli) ürünler tek tek ilerletilir
+function topluIlerlet(sp, hedef) {
+  const kd = sp.kalemDurumlar || {};
+  return Object.fromEntries((sp.kalemler || []).map(k => {
+    const c = kd[k.id] || k.durum || "baslanmadi";
+    if (c === "hurda") return [k.id, "hurda"];
+    if (k.cizimde && c === "cizimde" && hedef !== "cizimde") return [k.id, c];
+    return [k.id, hedef];
+  }));
+}
+// Çıkış süresi: teslim edilmiş siparişlerin (işleme alma → teslim) süresi ve gramından öğrenilir; veri azsa varsayılan kural
+function tahminiSureModeli(siparisler) {
+  const v = [];
+  (siparisler || []).forEach(sp => {
+    const g = sp.durumGecmisi || []; const son = g[g.length - 1];
+    if (!g.length || !son || son.durum !== "teslim") return;
+    const gun = (son.tarih - g[0].tarih) / 864e5;
+    if (!(gun > 0.5) || gun > 400) return;
+    const gram = sipKarOzet(sp, sp.kalemDurumlar).gram;
+    if (gram > 0) v.push([gram, gun]);
+  });
+  if (v.length >= 3) {
+    const n = v.length, sx = v.reduce((a, x) => a + x[0], 0), sy = v.reduce((a, x) => a + x[1], 0);
+    const sxx = v.reduce((a, x) => a + x[0] * x[0], 0), sxy = v.reduce((a, x) => a + x[0] * x[1], 0);
+    const den = n * sxx - sx * sx;
+    let b = den > 1e-9 ? (n * sxy - sx * sy) / den : 0, a = (sy - b * sx) / n;
+    if (b < 0) { b = 0; a = sy / n; }
+    return { a: Math.max(1, a), b, n, kaynak: n + " teslimden" };
+  }
+  return { a: 7, b: 0.01, n: v.length, kaynak: "varsayılan kural" };
 }
 
 // ═══ SİPARİŞ KARTI ÖZETİ: gram, taştan/işçilikten kâr (has), toplam kâr, 1 gr kârı, ilerleme, teslim ═══
@@ -1547,6 +1598,7 @@ function PdfSiparisModal({ modeller, kollar, onKapat, onUygula, onModelDuzenle }
           adet: adet0, not: k.aciklama || "",
           dahil: eslesti || excel,
           ekle: !eslesti, // eşleşme yoksa varsayılan: yeni model olarak ekle
+          cizimde: !eslesti && !!k.foto, // yeni model, müşteri resmi referans → çizimde olarak eklenir
           yeniKod: excel ? ilkKod : (k.disKod || ""), yeniKategori: psKategoriTahmin(k), yeniGram: k.gramBirim || "",
           ara: "",
         };
@@ -1657,7 +1709,7 @@ function PdfSiparisModal({ modeller, kollar, onKapat, onUygula, onModelDuzenle }
           yeni: s.durum === "yok" && s.ekle,
           model: s.durum === "yok" ? null : (s.adaylar.find(m => m.id === s.secimId) || s.adaylar[0]),
           kalem: s.kalem, adet: Math.max(1, Number(s.adet) || 1), not: s.not,
-          yeniKod: s.yeniKod, yeniKategori: s.yeniKategori, yeniGram: s.yeniGram,
+          yeniKod: s.yeniKod, yeniKategori: s.yeniKategori, yeniGram: s.yeniGram, cizimde: !!s.cizimde,
         };
         if (!ana.yeni && !ana.model) return;
         kalemler.push(ana);
@@ -1868,6 +1920,11 @@ function PdfSiparisModal({ modeller, kollar, onKapat, onUygula, onModelDuzenle }
                           <label style={{ fontSize: 10, display: "flex", gap: 4, alignItems: "center", cursor: "pointer" }}>
                             <input type="checkbox" checked={s.ekle} onChange={e => guncelle(s.id, { ekle: e.target.checked })} /> yeni model olarak ekle
                           </label>
+                          {s.ekle && s.kalem.foto && (
+                            <label style={{ fontSize: 10, display: "flex", gap: 4, alignItems: "center", cursor: "pointer", color: "#e8b04f" }} title="Katalogda 'ÇİZİMDE' olarak görünür, müşteri vitrininde görünmez; müşterinin resmi sadece referans olarak saklanır">
+                              <input type="checkbox" checked={!!s.cizimde} onChange={e => guncelle(s.id, { cizimde: e.target.checked })} /> 🎨 Çizimde olarak ekle
+                            </label>
+                          )}
                         </div>
                         {s.ekle && (
                           <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 6 }}>
@@ -3657,7 +3714,7 @@ function VitrinModu({ kod, onizleme }) {
       if (!onizleme) { try { vitrinAktiviteKaydetGuvenli(musteriKod, onek, "giris", null, null, null, vitrinCihazIdAl(), vitrinCihazEtiketiAl()); } catch {} }
 
       const aktifKollar = veri.koleksiyonlar || [];
-      const guvenliModeller = (veri.modeller || []).map(mod => {
+      const guvenliModeller = (veri.modeller || []).filter(mod => !mod.cizimde).map(mod => {
         const kaynakId = mod.kaynakKi || mod.ki;
         const kaynakKolObj = aktifKollar.find(kk => kk.id === kaynakId);
         return {
@@ -5099,6 +5156,7 @@ function Atolye({ onSirketDegis }) {
   const [konfSipAciklama, setKonfSipAciklama] = useState(""); // sipariş geneli açıklama
   const [konfTeslim,     setKonfTeslim]     = useState("");
   const [acikSiparisler, setAcikSiparisler] = useState({});
+  const sureModeli = useMemo(() => tahminiSureModeli(siparisler), [siparisler]); // geçmiş teslimlerden çıkış süresi
   const [sipMusF,  setSipMusF]  = useState("");
   const [sipFiltre, setSipFiltre] = useState("tumü"); // tumu, aktif, baslanmadi, dokumde, geciken, tamamlanan
   const [sipTarih1,setSipTarih1]= useState("");
@@ -5893,6 +5951,7 @@ function Atolye({ onSirketDegis }) {
       : (Number(fTasGram)||0);
     const obj = { ad: fAd.trim(), kod: fKod.trim().toUpperCase(), kategori: fKategori, gram: Number(fGram)||0, refAyar: fRefAyar, tasGram: hesaplananTasGram, taslar: fTaslar, tasBoy: fTasBoy.trim(), tasSekil: fTasSekil, tasTur: fTasTur, tasBoyut: fTasBoyut, tasAdet: Number(fTasAdet)||0, madenCarpan: Number(fMadenC)||0, iscilikDolar: Number(fIscilikDolar)||0, iscilikBirim: fIscilikBirim, iscilikAyarlar: fIscilikAyarlar, ekMaliyet: Number(fEkMaliyet)||0, ac: fAc.trim(), foto: fFoto, ki: fKolId, durum: fDurum, etiketler: fEtiketler, detayNoktalari: fDetayNoktalari };
     if (!obj.id) obj.olusturma = Date.now();
+    obj.cizimde = !!(editM && editM.cizimde && fDurum === "cizimde"); // çizim bitip durum değişince vitrine açılır
     // Aynı kodlu diğer modeller var mı kontrol et
     // NOT: aynı kod İKİ FARKLI SEBEPLE oluşabilir:
     //  1) AYNI KOLEKSİYON içinde — farklı taş rengi/türü varyantı (ör. ALT160-B yeşil vs mavi) YA DA kaza kopyası.
@@ -6146,20 +6205,24 @@ function Atolye({ onSirketDegis }) {
     const refAyar = (baslik && baslik.ayar && AYARLAR.some(x=>x.id===baslik.ayar)) ? baslik.ayar : "14K";
     const yeniler = [];
     const kalemler = []; // {model, adet, not}
+    const refler = {}; // çizimde modellerin müşteri referans resimleri (vitrine gitmesin diye modelin içine değil kasaya yazılır)
     for (const s of satirlar) {
       if (s.yeni) {
         const hamId = uid();
+        const cz = !!s.cizimde;
         let foto = (s.kalem && s.kalem.foto) || "";
         if (foto.startsWith("data:")) {
-          try { foto = await fotoYukleStorage(foto, hamId, onek); } catch (e) { console.error("foto yüklenemedi:", e); foto = ""; }
+          try { foto = await fotoYukleStorage(foto, cz ? hamId + "-ref" : hamId, onek); } catch (e) { console.error("foto yüklenemedi:", e); foto = ""; }
         }
+        const refUrl = cz ? foto : "";
+        if (cz) { foto = ""; refler[idle(hamId)] = refUrl; refler[hamId] = refUrl; }
         const kod = String(s.yeniKod || "").trim().toUpperCase();
         const m = { id: hamId, ad: "", kod, kategori: s.yeniKategori || "diger", gram: Number(s.yeniGram) || 0, refAyar,
           tasGram: 0, taslar: [], tasBoy: "", tasSekil: "ROUND", tasTur: "N", tasBoyut: "", tasAdet: 0, madenCarpan: 0,
           iscilikDolar: 0, iscilikBirim: "dolar", iscilikAyarlar: {}, ekMaliyet: 0, ac: (s.kalem && s.kalem.aciklama) || "",
-          foto, ki: kolId, durum: "baslanmadi", etiketler: [], detayNoktalari: [], t: Date.now(), olusturma: Date.now() };
+          foto, ki: kolId, durum: cz ? "cizimde" : "baslanmadi", etiketler: [], detayNoktalari: [], t: Date.now(), olusturma: Date.now(), ...(cz ? { cizimde: true } : {}) };
         yeniler.push(m);
-        kalemler.push({ model: { ...m, id: idle(hamId) }, adet: s.adet, not: s.not });
+        kalemler.push({ model: { ...m, id: idle(hamId), ...(cz ? { foto: refUrl } : {}) }, adet: s.adet, not: s.not });
       } else if (s.model) {
         kalemler.push({ model: s.model, adet: s.adet, not: s.not });
       }
@@ -6169,6 +6232,7 @@ function Atolye({ onSirketDegis }) {
       if (r && r.ok === false) throw new Error("Yeni modeller kaydedilemedi: " + r.hata);
       islemKaydet(onek, "ekle", "model", "PDF'ten " + yeniler.length + " yeni model");
     }
+    if (Object.keys(refler).length) svKasa({ ...kasa, cizimRefler: { ...(kasa.cizimRefler || {}), ...refler } });
     // Aynı modeli birleştir (adet topla, not birleştir)
     const birlesik = new Map();
     for (const k of kalemler) {
@@ -6275,7 +6339,7 @@ function Atolye({ onSirketDegis }) {
       svMus(yeniMusteriler);
     }
     const musKod = yeniMusteriler[musAd];
-    const yeni = { id: uid(), musteri: musAd, musKod, tarih: Date.now(), teslimTarihi: konfTeslim||"", aciklama: konfSipAciklama.trim(), altinKgUSD, mc: madenCarpan, kalemler: konfKalemler, sira: konfSira, gelir: kTop.gelir, maliyet: kTop.maliyet, kar: kTop.kar };
+    const yeni = { id: uid(), musteri: musAd, musKod, tarih: Date.now(), teslimTarihi: konfTeslim||"", aciklama: konfSipAciklama.trim(), altinKgUSD, mc: madenCarpan, kalemDurumlar: Object.fromEntries(konfKalemler.filter(k => k.cizimde).map(k => [k.id, "cizimde"])), kalemler: konfKalemler, sira: konfSira, gelir: kTop.gelir, maliyet: kTop.maliyet, kar: kTop.kar };
     svS([...siparisler, yeni]);
     islemKaydet(AKTIF_SIRKET_ONEK, "ekle", "sipariş", (musAd || "") + " · " + (konfKalemler?.length || 0) + " kalem");
     svMUpsert(modeller.filter(m => konfKalemler.find(x => x.id === m.id)).map(m => ({ ...m, satisSayisi: (m.satisSayisi||0)+1 })));
@@ -6980,7 +7044,7 @@ function Atolye({ onSirketDegis }) {
                 return (
                   <div key={m.id} style={{ background:ik?"rgba(var(--vurgu-rgb),0.07)":"rgba(var(--vurgu-rgb),0.02)", border:"1px solid", borderColor:ik?"rgba(var(--vurgu-rgb),0.28)":"rgba(var(--vurgu-rgb),0.07)", borderRadius:11, overflow:"hidden", animation:"cardin .3s ease "+(i*.03)+"s both", gridColumn:"span "+(genisKart ? katSut : 3) }}>
                     <div className={"model-foto-wrap"+(bilMi?" bil-zoom":"")} style={{ position:"relative", ...(bilMi ? (katSut>=3 ? { aspectRatio: (5*katSut)+"/12" } : { height:264 }) : { aspectRatio:"5/4" }), background: bilMi ? "#f3f3f3" : "#f0f0f0", overflow:"hidden" }}>
-                      {m.foto ? <img onClick={()=>openEM(m)} src={m.foto} alt="" style={{ ...(bilMi ? { width:"100%", height:"100%" } : { position:"absolute", top:"8.5%", left:"8.5%", width:"83%", height:"83%", ...FOTO_KENAR_SOLUK }), objectFit:"cover", objectPosition: m.kategori==="kolye" ? "50% 85%" : "center center", display:"block", ...(m.kategori==="kolye" ? { width:"72%", margin:"0 auto", ...FOTO_KENAR_SOLUK } : {}), cursor:"pointer" }}/> : <div onClick={()=>openEM(m)} style={{ width:"100%", height:"100%", display:"flex", alignItems:"center", justifyContent:"center", color:"rgba(var(--vurgu-rgb),0.1)", fontSize:24, cursor:"pointer" }}>-</div>}
+                      {m.foto ? <img onClick={()=>openEM(m)} src={m.foto} alt="" style={{ ...(bilMi ? { width:"100%", height:"100%" } : { position:"absolute", top:"8.5%", left:"8.5%", width:"83%", height:"83%", ...FOTO_KENAR_SOLUK }), objectFit:"cover", objectPosition: m.kategori==="kolye" ? "50% 85%" : "center center", display:"block", ...(m.kategori==="kolye" ? { width:"72%", margin:"0 auto", ...FOTO_KENAR_SOLUK } : {}), cursor:"pointer" }}/> : <div onClick={()=>openEM(m)} style={{ width:"100%", height:"100%", display:"flex", alignItems:"center", justifyContent:"center", color:"rgba(var(--vurgu-rgb),0.1)", fontSize:m.cizimde?12:24, fontWeight:700, cursor:"pointer" }}>{m.cizimde ? "🎨 ÇİZİMDE" : "-"}</div>}
                       {/* Detay noktaları — KÖŞELERDE, büyük (56px). Sağ üst köşe V butonunun altına kaydırıldı ki çakışmasın. */}
                       {m.foto && Array.isArray(m.detayNoktalari) && m.detayNoktalari.filter(n=>(n.tip!=="foto")||n.foto).slice(0,4).map((n,di) => {
                         const ayriFoto = n.tip === "foto";
@@ -7519,7 +7583,7 @@ function Atolye({ onSirketDegis }) {
                   ? aktifDurumlar.sort((a,b) => aktifDurumlar.filter(v=>v===b).length - aktifDurumlar.filter(v=>v===a).length)[0]
                   : "baslanmadi";
                 const enYayginIdx = DURUMLAR.findIndex(d => d.id === enYaygin);
-                const sonrakiDurum = DURUMLAR.find(d => d.s === enYayginIdx + 1 && d.id !== "hurda");
+                const sonrakiDurum = sonrakiAsama(enYaygin, s);
 
                 const durumGuncelle = (sipId, kalemId, yeniDurum) => {
                   svS(siparisler.map(sp => sp.id===sipId ? { ...sp, kalemDurumlar: { ...(sp.kalemDurumlar||{}), [kalemId]: yeniDurum } } : sp));
@@ -7553,6 +7617,19 @@ function Atolye({ onSirketDegis }) {
                     <div style={{ fontSize:10, marginTop:5, color:(oz.gram>0 && oz.mlyGr<MIN_MLY)?"#e85a4f":"#998a6e", fontWeight:700 }}>
                       1 gr'da: {fN(oz.mlyGr*1000,1)} milyem{oz.usdGr ? " · "+fUSD(oz.usdGr)+" / gr" : ""}
                     </div>
+                    {!oz.bitti && oz.gram > 0 && (() => {
+                      const toplamGun = sureModeli.a + sureModeli.b * oz.gram;
+                      const basla = (s.durumGecmisi && s.durumGecmisi[0] && s.durumGecmisi[0].tarih) || Date.now();
+                      const bitisMs = basla + toplamGun * 864e5;
+                      const kalan = Math.ceil((bitisMs - Date.now()) / 864e5);
+                      const tesMs = s.teslimTarihi ? new Date(s.teslimTarihi).getTime() : 0;
+                      const asar = tesMs && bitisMs > tesMs + 864e5;
+                      return (
+                        <div title={"Tahmin: "+sureModeli.kaynak+" · toplam ~"+Math.round(toplamGun)+" gün"} style={{ fontSize:10, marginTop:3, color: asar ? "#e85a4f" : "#998a6e" }}>
+                          ⏳ Tahmini çıkış: {kalan > 0 ? "~"+kalan+" gün · "+new Date(bitisMs).toLocaleDateString("tr-TR") : "süre doldu"}{asar ? " · teslimi aşar" : ""} <span style={{ opacity:.6 }}>({sureModeli.kaynak})</span>
+                        </div>
+                      );
+                    })()}
                   </div>
                 );
                 const teslimRozet = s.teslimTarihi ? (
@@ -7585,7 +7662,7 @@ function Atolye({ onSirketDegis }) {
                           </div>
                           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:8, marginTop:6 }}>
                             <span style={{ fontSize:10, fontWeight:700, color:s.durumGecmisi?.length ? baskinDurum.c : "#7a6f5a" }}>
-                              {s.durumGecmisi?.length ? (durumSayac[enYaygin]||0)+"/"+aktifKalem+" "+baskinDurum.l : "İşleme alınmadı"} <span style={{ fontWeight:400, color:"#7a6f5a" }}>· %{Math.round(oz.il*100)}</span>
+                              {s.durumGecmisi?.length ? (durumSayac[enYaygin]||0)+"/"+aktifKalem+" "+baskinDurum.l + (enYaygin==="cila" ? (() => { const c = cilaOzet(s, kalemDurumlar); return " ("+c.zimpara+" zımpara · "+c.tambur+" tambur · "+c.tuy+" tüy)"; })() : "") : "İşleme alınmadı"} <span style={{ fontWeight:400, color:"#7a6f5a" }}>· %{Math.round(oz.il*100)}</span>
                             </span>
                             {teslimRozet}
                           </div>
@@ -7719,7 +7796,7 @@ function Atolye({ onSirketDegis }) {
                             <button key={d.id} onClick={()=>{ svS(siparisler.map(sp=>sp.id===s.id?{...sp,kalemDurumlar:Object.fromEntries((sp.kalemler||[]).filter(k=>(sp.kalemDurumlar||{})[k.id]!=="hurda").map(k=>[k.id,d.id]).concat(Object.entries(sp.kalemDurumlar||{}).filter(([,v])=>v==="hurda")))}:sp)); if (s.durumGecmisi?.length) sipDurumKaydet(s.id, d.id); }} title={d.l} style={{ width:12, height:12, borderRadius:6, background:enYaygin===d.id?d.c:"rgba(255,255,255,0.06)", border:enYaygin===d.id?"2px solid "+d.c:"1px solid rgba(255,255,255,0.1)", cursor:"pointer", padding:0, flexShrink:0 }}/>
                           ))}
                           {sonrakiDurum && (
-                            <button onClick={()=>{ svS(siparisler.map(sp=>sp.id===s.id?{...sp,kalemDurumlar:Object.fromEntries((sp.kalemler||[]).map(k=>[(k.id),(sp.kalemDurumlar||{})[k.id]==="hurda"?"hurda":sonrakiDurum.id]))}:sp)); if (s.durumGecmisi?.length) sipDurumKaydet(s.id, sonrakiDurum.id); }} style={{ background:"rgba(var(--vurgu-rgb),0.1)", border:"1px solid rgba(var(--vurgu-rgb),0.2)", borderRadius:5, padding:"2px 8px", color:GOLD, fontSize:8, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap", marginLeft:4 }}>→ {sonrakiDurum.l}</button>
+                            <button onClick={()=>{ svS(siparisler.map(sp=>sp.id===s.id?{...sp,kalemDurumlar:topluIlerlet(sp, sonrakiDurum.id)}:sp)); if (s.durumGecmisi?.length) sipDurumKaydet(s.id, sonrakiDurum.id); }} style={{ background:"rgba(var(--vurgu-rgb),0.1)", border:"1px solid rgba(var(--vurgu-rgb),0.2)", borderRadius:5, padding:"2px 8px", color:GOLD, fontSize:8, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap", marginLeft:4 }}>→ {sonrakiDurum.l}</button>
                           )}
                         </div>
                       </div>
@@ -7761,12 +7838,12 @@ function Atolye({ onSirketDegis }) {
                               </button>
                               {/* Sonraki aşama butonu (hızlı erişim) */}
                               {!tamamlandi && (() => {
-                                const sonrakiDurum = DURUMLAR[DURUMLAR.findIndex(d=>d.id===sonGec.durum)+1];
+                                const sonrakiDurum = sonrakiAsama(sonGec.durum, s);
                                 if (!sonrakiDurum) return null;
                                 return (
                                   <button onClick={e=>{
                                     e.stopPropagation();
-                                    svS(siparisler.map(sp=>sp.id===s.id?{...sp,kalemDurumlar:Object.fromEntries((sp.kalemler||[]).map(k=>[(k.id),(sp.kalemDurumlar||{})[k.id]==="hurda"?"hurda":sonrakiDurum.id]))}:sp));
+                                    svS(siparisler.map(sp=>sp.id===s.id?{...sp,kalemDurumlar:topluIlerlet(sp, sonrakiDurum.id)}:sp));
                                     sipDurumKaydet(s.id, sonrakiDurum.id);
                                   }} style={{ background:sonrakiDurum.c+"22", border:"1px solid "+sonrakiDurum.c+"66", borderRadius:6, padding:"4px 10px", color:sonrakiDurum.c, fontSize:9, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap" }}>
                                     → {sonrakiDurum.l}
@@ -7817,6 +7894,13 @@ function Atolye({ onSirketDegis }) {
                                   <button key={d.id} onClick={()=>durumGuncelle(s.id,k.id,d.id)} title={d.l} style={{ width:12, height:12, borderRadius:6, background:mevcDurum===d.id?d.c:"rgba(255,255,255,0.06)", border:mevcDurum===d.id?"2px solid "+d.c:"1px solid rgba(255,255,255,0.1)", cursor:"pointer", padding:0, flexShrink:0 }}/>
                                 ))}
                                 <span style={{ fontSize:8, color:dur.c, fontWeight:700, marginLeft:2, whiteSpace:"nowrap" }}>{dur.l}</span>
+                                {mevcDurum==="cila" && (
+                                  <span style={{ display:"inline-flex", gap:2, marginLeft:4 }}>
+                                    {CILA_ADIMLARI.map(a => { const secili = ((s.kalemCila||{})[k.id]||"zimpara")===a.id; return (
+                                      <button key={a.id} onClick={e=>{ e.stopPropagation(); svS(siparisler.map(sp=>sp.id===s.id?{...sp,kalemCila:{...(sp.kalemCila||{}),[k.id]:a.id}}:sp)); }} style={{ fontSize:8, fontWeight:700, padding:"1px 6px", borderRadius:5, cursor:"pointer", border:"1px solid "+(secili?"var(--vurgu)":"rgba(255,255,255,0.12)"), background:secili?"rgba(var(--vurgu-rgb),0.18)":"transparent", color:secili?"var(--vurgu)":"#7a6f5a" }}>{a.l}</button>
+                                    ); })}
+                                  </span>
+                                )}
                                 {/* Hurda butonu */}
                                 {(() => {
                                   const hurdaAdet = (s.kalemHurda||{})[k.id]||0;
@@ -11065,7 +11149,7 @@ function Atolye({ onSirketDegis }) {
         const toplamSure = isGunuSure(gecmis[0].tarih, Date.now());
         const sonGec = gecmis[gecmis.length-1];
         const tamamlandi = sonGec.durum === "teslim";
-        const sonrakiDurum = DURUMLAR[DURUMLAR.findIndex(d=>d.id===sonGec.durum)+1];
+        const sonrakiDurum = sonrakiAsama(sonGec.durum, s);
         return (
           <Modal open={!!cizelgeModal} onClose={()=>setCizelgeModal(null)} title={"⏱ Üretim Takibi — " + (s.musteri||"")} wide T={T}>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14, padding:"8px 12px", background:"rgba(91,155,213,0.08)", borderRadius:8 }}>
@@ -11145,7 +11229,7 @@ function Atolye({ onSirketDegis }) {
                   <div style={{ display:"flex", alignItems:"center", flexShrink:0 }}>
                     <div style={{ width:30, height:2, background:"rgba(var(--vurgu-rgb),0.12)", flexShrink:0, marginBottom:36 }}/>
                     <button onClick={()=>{
-                      svS(siparisler.map(sp=>sp.id===s.id?{...sp,kalemDurumlar:Object.fromEntries((sp.kalemler||[]).map(k=>[(k.id),(sp.kalemDurumlar||{})[k.id]==="hurda"?"hurda":sonrakiDurum.id]))}:sp));
+                      svS(siparisler.map(sp=>sp.id===s.id?{...sp,kalemDurumlar:topluIlerlet(sp, sonrakiDurum.id)}:sp));
                       sipDurumKaydet(s.id, sonrakiDurum.id);
                     }} style={{ background:sonrakiDurum.c+"22", border:"2px dashed "+sonrakiDurum.c+"66", borderRadius:10, padding:"8px 14px", color:sonrakiDurum.c, fontSize:10, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap", marginBottom:36, textAlign:"center", width:110 }}>
                       → {sonrakiDurum.l}
@@ -11771,6 +11855,12 @@ function Atolye({ onSirketDegis }) {
         </Fl>
         {/* Model Adı kaldırıldı — kod artık tek zorunlu/görünen kimlik alanı. Eski modellerdeki isimler korunur (fAd arka planda yükleniyor). */}
         <Fl label="Uretim Durumu" T={T}><select value={fDurum} onChange={e=>setFDurum(e.target.value)} style={IS}>{DURUMLAR.map(d=><option key={d.id} value={d.id}>{d.l}</option>)}</select></Fl>
+        {editM && editM.cizimde && (
+          <div style={{ margin:"-4px 0 12px", padding:"8px 10px", borderRadius:8, background:"rgba(232,176,79,0.1)", border:"1px solid rgba(232,176,79,0.3)", fontSize:11, color:"#e8b04f" }}>
+            🎨 Bu model ÇİZİMDE — müşteri vitrininde görünmez. Çizim bitince fotoğrafı yükle ve üretim durumunu "Çizimde"den başka bir aşamaya çek; vitrine açılır.
+            {(kasa.cizimRefler||{})[editM.id] && <div style={{ marginTop:6 }}><a href={kasa.cizimRefler[editM.id]} target="_blank" rel="noreferrer" style={{ color:"#e8b04f" }}>Müşteri referans resmi ↗</a></div>}
+          </div>
+        )}
 
         <div style={{ display:"flex", gap:7 }}>
           <div style={{ flex:1 }}><Fl label="Gram (Ref Ayarda)" T={T}><input type="number" value={fGram} onChange={e=>setFGram(e.target.value)} placeholder="0.00" style={IS}/></Fl></div>
