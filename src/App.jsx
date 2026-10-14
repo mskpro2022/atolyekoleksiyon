@@ -365,6 +365,28 @@ function tahminiSureModeli(siparisler) {
 // ═══ SİPARİŞ KARTI ÖZETİ: gram, taştan/işçilikten kâr (has), toplam kâr, 1 gr kârı, ilerleme, teslim ═══
 // Taştan = taş gramı × ayar oranı (taş milyemden satılır). İşçilikten = işçilik has − maden maliyeti − ek maliyet (zarar olabilir).
 // Hurda/iade/tamir adetleri hesaba katılmaz (siparişin üstündeki mevcut kâr hesabıyla aynı).
+// Sipariş listesi özeti: sipariş/adet/gram + ayar bazlı kırılım (ayarF doluysa yalnız o ayarın kalemleri sayılır)
+function sipListeOzet(list, ayarF) {
+  const o = { sip: list.length, adet: 0, gram: 0, karUSD: 0, ayar: {}, musteri: new Set() };
+  list.forEach(s => {
+    o.musteri.add(s.musKod || s.musteri || "?");
+    const hasUSD = (s.altinKgUSD || 0) / 1000;
+    (s.kalemler || []).forEach(k => {
+      const ay = k.secilenAyar || k.refAyar || "14K";
+      if (ayarF && ay !== ayarF) return;
+      const hc = hesapla(k, ay, s.altinKgUSD, s.mc);
+      const du = ((s.kalemHurda) || {})[k.id] || 0, ia = ((s.kalemIade) || {})[k.id] || 0, ta = ((s.kalemTamir) || {})[k.id] || 0;
+      const net = Math.max(0, (k.adet || 1) - du - ia - ta);
+      const g = hc.mamulGram * net;
+      o.adet += net; o.gram += g;
+      if (!k.numune) o.karUSD += hc.karHas * net * hasUSD;
+      const e = o.ayar[ay] || (o.ayar[ay] = { adet: 0, gram: 0 });
+      e.adet += net; e.gram += g;
+    });
+  });
+  return o;
+}
+
 function sipKarOzet(s, kalemDurumlar) {
   let gumusBorc = 0, gram = 0, karGram = 0, tasHas = 0, iscNet = 0, karHas = 0, ilSum = 0, ilN = 0, bitenN = 0;
   (s.kalemler || []).forEach(k => {
@@ -5354,7 +5376,9 @@ function Atolye({ onSirketDegis }) {
   const [acikSiparisler, setAcikSiparisler] = useState({});
   const sureModeli = useMemo(() => tahminiSureModeli(siparisler), [siparisler]); // geçmiş teslimlerden çıkış süresi
   const [sipMusF,  setSipMusF]  = useState("");
-  const [sipFiltre, setSipFiltre] = useState("tumü"); // tumu, aktif, baslanmadi, dokumde, geciken, tamamlanan
+  const [sipFiltre, setSipFiltre] = useState("tumu"); // tumu, aktif, baslanmadi, dokumde, geciken, tamamlanan
+  const [sipMusSec, setSipMusSec] = useState("");  // müşteri seçici (tam eşleşme)
+  const [sipAyarF, setSipAyarF] = useState("");    // ayar filtresi (14K, 925…)
   const [sipTarih1,setSipTarih1]= useState("");
   const [sipTarih2,setSipTarih2]= useState("");
   const [analizMusF,  setAnalizMusF]  = useState("");
@@ -5937,6 +5961,24 @@ function Atolye({ onSirketDegis }) {
       return { ok: false, hata: e.message };
     }
   }, []);
+  // Sipariş filtresi (liste + özet + PDF aynı kuralı kullanır). ayarDahil=false → ayar filtresini yok say (ayar çipleri için)
+  const sipGecer = (s, ayarDahil = true) => {
+    if (sipMusSec && (s.musKod || s.musteri || "?") !== sipMusSec) return false;
+    if (sipMusF) { const q = sipMusF.toLowerCase(); if (!(s.musteri||"").toLowerCase().includes(q) && !(s.musKod||"").toLowerCase().includes(q)) return false; }
+    if (sipTarih1 && s.tarih < new Date(sipTarih1).getTime()) return false;
+    if (sipTarih2 && s.tarih > new Date(sipTarih2).getTime()+86399999) return false;
+    if (ayarDahil && sipAyarF && !(s.kalemler||[]).some(k => (k.secilenAyar || k.refAyar || "14K") === sipAyarF)) return false;
+    const son = (s.durumGecmisi||[]).slice(-1)[0];
+    if (sipFiltre === "aktif") { if (!son||["tamam","teslim","hurda"].includes(son.durum)) return false; }
+    if (sipFiltre === "baslanmadi") { if (s.durumGecmisi?.length) return false; }
+    if (sipFiltre === "dokumde") { if (son?.durum!=="dokum") return false; }
+    if (sipFiltre === "geciken") { if (!son||["tamam","teslim","hurda"].includes(son.durum)||isGunuSure(son.tarih,Date.now())<=7*24*60*60*1000) return false; }
+    if (sipFiltre === "teslimhazir") { if (son?.durum!=="tamam") return false; }
+    if (sipFiltre === "teslimedildi") { if (son?.durum!=="teslim") return false; }
+    if (sipFiltre === "tamamlanan") { if (!["tamam","teslim"].includes(son?.durum)) return false; }
+    return true;
+  };
+
   const svS = useCallback(async d => {
     setSiparisler(d);
     await guvenliKaydet("v7s", d);
@@ -7726,6 +7768,10 @@ function Atolye({ onSirketDegis }) {
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8, flexWrap:"wrap", gap:6 }}>
               <h2 style={{ margin:0, fontSize:14, fontWeight:700, color:"var(--goldtext)" }}>Siparis Gecmisi ({siparisler.length})</h2>
               <div style={{ display:"flex", gap:6, alignItems:"center", flexWrap:"wrap" }}>
+                <select value={sipMusSec} onChange={e=>setSipMusSec(e.target.value)} title="Müşteri seç" style={{ ...IS, width:"auto", maxWidth:170, padding:"5px 8px", fontSize:10 }}>
+                  <option value="">👤 Tüm müşteriler</option>
+                  {(() => { const m = {}; siparisler.forEach(x => { const key = x.musKod || x.musteri || "?"; (m[key] = m[key] || { n: 0, ad: x.musteri || key }).n++; }); return Object.entries(m).sort((a,b)=>b[1].n-a[1].n).map(([key, v]) => <option key={key} value={key}>{key}{v.ad && v.ad !== key ? " · " + v.ad : ""} ({v.n})</option>); })()}
+                </select>
                 <input value={sipMusF} onChange={e=>setSipMusF(e.target.value)} placeholder="Musteri ara..." style={{ ...IS, width:130, padding:"5px 8px", fontSize:10 }}/>
                 <select value={sipSira} onChange={e=>setSipSira(e.target.value)} title="Kalem sıralaması (görünüm + PDF)" style={{ ...IS, width:"auto", padding:"5px 8px", fontSize:10 }}>
                   {KONF_SIRA_SECENEKLERI.map(o => <option key={o.id} value={o.id}>↕ {o.l}</option>)}
@@ -7733,15 +7779,10 @@ function Atolye({ onSirketDegis }) {
                 <input type="date" value={sipTarih1} onChange={e=>setSipTarih1(e.target.value)} style={{ ...IS, width:120, padding:"5px 8px", fontSize:10 }}/>
                 <span style={{ color:"#665d4a", fontSize:10 }}>—</span>
                 <input type="date" value={sipTarih2} onChange={e=>setSipTarih2(e.target.value)} style={{ ...IS, width:120, padding:"5px 8px", fontSize:10 }}/>
-                {(sipMusF||sipTarih1||sipTarih2||sipFiltre!=="tumu") && <button onClick={()=>{setSipMusF("");setSipTarih1("");setSipTarih2("");setSipFiltre("tumu");}} style={{ ...RD, fontSize:9, padding:"4px 8px" }}>Temizle</button>}
+                {(sipMusF||sipMusSec||sipAyarF||sipTarih1||sipTarih2||sipFiltre!=="tumu") && <button onClick={()=>{setSipMusF("");setSipMusSec("");setSipAyarF("");setSipTarih1("");setSipTarih2("");setSipFiltre("tumu");}} style={{ ...RD, fontSize:9, padding:"4px 8px" }}>Temizle</button>}
                 {siparisler.length > 0 && (
                   <button onClick={() => {
-                    const goruntulenecek = [...siparisler].reverse().filter(s => {
-                      if (sipMusF) { const q = sipMusF.toLowerCase(); if (!(s.musteri||"").toLowerCase().includes(q) && !(s.musKod||"").toLowerCase().includes(q)) return false; }
-                      if (sipTarih1 && s.tarih < new Date(sipTarih1).getTime()) return false;
-                      if (sipTarih2 && s.tarih > new Date(sipTarih2).getTime()+86399999) return false;
-                      return true;
-                    });
+                    const goruntulenecek = [...siparisler].reverse().filter(s => sipGecer(s));
                     downloadPDF(buildSipListeRaporuHTML(goruntulenecek, altinKgUSD, madenCarpan), "siparis-listesi-raporu");
                   }} style={{ background:"linear-gradient(135deg,#0a84ff,#0968cc)", border:"none", borderRadius:9, padding:"5px 11px", color:"#0a0a0a", fontSize:9, fontWeight:800, cursor:"pointer", whiteSpace:"nowrap" }}>
                     📊 Rapor PDF
@@ -7767,22 +7808,36 @@ function Atolye({ onSirketDegis }) {
                 </button>
               ))}
             </div>
+            {siparisler.length > 0 && (() => {
+              const tabanListe = siparisler.filter(x => sipGecer(x, false));
+              const ayarCip = sipListeOzet(tabanListe, "").ayar;
+              const oz = sipListeOzet(siparisler.filter(x => sipGecer(x)), sipAyarF);
+              const chipS = (act) => ({ background: act?"rgba(var(--vurgu-rgb),0.18)":"rgba(var(--vurgu-rgb),0.04)", border:"1px solid", borderColor: act?"rgba(var(--vurgu-rgb),0.45)":"rgba(var(--vurgu-rgb),0.12)", borderRadius:7, padding:"4px 9px", color: act?GOLD:"#998a6e", fontSize:9, fontWeight: act?800:500, cursor:"pointer", textAlign:"left" });
+              return (
+                <div style={{ marginBottom:12, padding:"10px 12px", borderRadius:10, background:"rgba(var(--vurgu-rgb),0.04)", border:"1px solid rgba(var(--vurgu-rgb),0.12)" }}>
+                  <div style={{ display:"flex", gap:18, flexWrap:"wrap", alignItems:"flex-end" }}>
+                    {[["Sipariş", oz.sip], ["Müşteri", oz.musteri.size], ["Adet", oz.adet], ["Toplam gram", fN(oz.gram, 1) + " gr"], ["Tahmini kâr", "$" + Math.round(oz.karUSD).toLocaleString("tr-TR")]].map(([l, v]) => (
+                      <div key={l}><div style={{ fontSize:8, color:"#7a6f5a", letterSpacing:0.5 }}>{l.toUpperCase()}</div><div style={{ fontSize:16, fontWeight:800, color:"var(--goldtext)" }}>{v}</div></div>
+                    ))}
+                  </div>
+                  {Object.keys(ayarCip).length > 0 && (
+                    <div style={{ display:"flex", gap:5, flexWrap:"wrap", marginTop:9, alignItems:"center" }}>
+                      <span style={{ fontSize:8, color:"#7a6f5a", fontWeight:700 }}>AYARA GÖRE:</span>
+                      <button onClick={()=>setSipAyarF("")} style={chipS(!sipAyarF)}>Hepsi</button>
+                      {AYARLAR.filter(a => ayarCip[a.id]).map(a => (
+                        <button key={a.id} onClick={()=>setSipAyarF(sipAyarF===a.id?"":a.id)} style={chipS(sipAyarF===a.id)}>
+                          <b>{a.id === "925" ? "925" : a.id}</b> · {ayarCip[a.id].adet} adet · {fN(ayarCip[a.id].gram, 1)} gr
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
             {siparisler.length===0 && <p style={{ color:"#665d4a", textAlign:"center", padding:"30px", fontSize:12 }}>Henuz siparis kaydi yok</p>}
             <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(270px,1fr))", gap:12, alignItems:"start" }}>
               {[...siparisler].reverse()
-                .filter(s => {
-                  if (sipMusF) { const q = sipMusF.toLowerCase(); if (!(s.musteri||"").toLowerCase().includes(q) && !(s.musKod||"").toLowerCase().includes(q)) return false; }
-                  if (sipTarih1 && s.tarih < new Date(sipTarih1).getTime()) return false;
-                  if (sipTarih2 && s.tarih > new Date(sipTarih2).getTime()+86399999) return false;
-                  if (sipFiltre === "aktif") { const son=(s.durumGecmisi||[]).slice(-1)[0]; if (!son||["tamam","teslim","hurda"].includes(son.durum)) return false; }
-                  if (sipFiltre === "baslanmadi") { if (s.durumGecmisi?.length) return false; }
-                  if (sipFiltre === "dokumde") { const son=(s.durumGecmisi||[]).slice(-1)[0]; if (son?.durum!=="dokum") return false; }
-                  if (sipFiltre === "geciken") { const son=(s.durumGecmisi||[]).slice(-1)[0]; if (!son||["tamam","teslim","hurda"].includes(son.durum)||isGunuSure(son.tarih,Date.now())<=7*24*60*60*1000) return false; }
-                  if (sipFiltre === "teslimhazir") { const son=(s.durumGecmisi||[]).slice(-1)[0]; if (son?.durum!=="tamam") return false; }
-                  if (sipFiltre === "teslimedildi") { const son=(s.durumGecmisi||[]).slice(-1)[0]; if (son?.durum!=="teslim") return false; }
-                  if (sipFiltre === "tamamlanan") { const son=(s.durumGecmisi||[]).slice(-1)[0]; if (!["tamam","teslim"].includes(son?.durum)) return false; }
-                  return true;
-                })
+                .filter(s => sipGecer(s))
                 .map(s => {
                 const kalemDurumlar = s.kalemDurumlar || {};
                 const toplamKalem = (s.kalemler||[]).length;
