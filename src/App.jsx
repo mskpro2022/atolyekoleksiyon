@@ -12564,12 +12564,18 @@ function Atolye({ onSirketDegis }) {
                 <input type="number" min="1" value={fTasAdet} onChange={e=>setFTasAdet(e.target.value)} placeholder="Adet" style={{ ...IS, padding:"7px 8px", fontSize:11 }}/>
               </div>
               <button onClick={() => {
-                if (!fTasBoyut || !fTasAdet) return;
-                const yeniTas = { sekil:fTasSekil, tur:fTasTur, boyut:fTasBoyut, adet:Number(fTasAdet)||1, gram:0 };
-                setFTaslar([...fTaslar, yeniTas]);
+                const adetSayi = Math.max(1, Math.floor(Number(fTasAdet) || 1));
+                if (!fTasBoyut) { toastGoster("hata", "Önce taş boyutunu seçin"); return; }
+                const yeniTas = { sekil:fTasSekil, tur:fTasTur, boyut:fTasBoyut, adet:adetSayi, gram:0 };
+                setFTaslar(prev => [...prev, yeniTas]);
                 setFTasBoyut(""); setFTasAdet("");
-              }} disabled={!fTasBoyut || !fTasAdet} style={{ ...GH, padding:"7px 12px", fontSize:11, opacity:(!fTasBoyut||!fTasAdet)?0.4:1, flexShrink:0 }}>+ Ekle</button>
+                toastGoster("ok", "Taş eklendi: " + fTasSekil + " " + fTasBoyut + " × " + adetSayi);
+              }} style={{ ...GH, padding:"7px 12px", fontSize:11, opacity: fTasBoyut ? 1 : 0.5, flexShrink:0 }}>+ Ekle</button>
             </div>
+            {!fTasBoyut && <div style={{ fontSize:9, color:"#7a6f5a", marginBottom:6 }}>Önce boyut seçin (adet boş bırakılırsa 1 sayılır), sonra "+ Ekle".</div>}
+            {fTasBoyut === "" && Object.keys(TAS_GRAM[fTasSekil==="ROUND"?"ROUND_"+fTasTur:fTasSekil]||{}).length === 0 && ozelTaslar.filter(t=>t.sekil===fTasSekil).length === 0 && (
+              <div style={{ fontSize:9, color:"#e8833a", marginBottom:6 }}>⚠ "{fTasSekil}" için hazır boyut tablosu yok. Ayarlar → Özel taş bölümünden boyut ekleyin ya da aşağıdaki "Manuel toplam taş gram" alanını kullanın.</div>
+            )}
             {fTasBoyut && fTasAdet && (() => {
               const gr = tasGramHesapla(fTasSekil, fTasTur, isNaN(Number(fTasBoyut))?fTasBoyut:Number(fTasBoyut), Number(fTasAdet)||1, ozelTaslar, tasGramOverride);
               return gr > 0
