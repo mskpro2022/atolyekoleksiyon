@@ -370,7 +370,7 @@ function tahminiSureModeli(siparisler) {
 // Hurda/iade/tamir adetleri hesaba katılmaz (siparişin üstündeki mevcut kâr hesabıyla aynı).
 // Sipariş listesi özeti: sipariş/adet/gram + ayar bazlı kırılım (ayarF doluysa yalnız o ayarın kalemleri sayılır)
 function sipListeOzet(list, ayarF) {
-  const o = { sip: list.length, adet: 0, gram: 0, karUSD: 0, ayar: {}, musteri: new Set() };
+  const o = { sip: list.length, adet: 0, gram: 0, tasGr: 0, tasHas: 0, tasUSD: 0, karUSD: 0, ayar: {}, musteri: new Set() };
   list.forEach(s => {
     o.musteri.add(s.musKod || s.musteri || "?");
     const hasUSD = (s.altinKgUSD || 0) / 1000;
@@ -382,7 +382,8 @@ function sipListeOzet(list, ayarF) {
       const net = Math.max(0, (k.adet || 1) - du - ia - ta);
       const g = hc.mamulGram * net;
       o.adet += net; o.gram += g;
-      if (!k.numune) o.karUSD += hc.karHas * net * hasUSD;
+      o.tasGr += (Number(k.tasGram) || 0) * net;
+      if (!k.numune) { o.karUSD += hc.karHas * net * hasUSD; o.tasHas += hc.tasHas * net; o.tasUSD += hc.tasHas * net * hasUSD; }
       const e = o.ayar[ay] || (o.ayar[ay] = { adet: 0, gram: 0 });
       e.adet += net; e.gram += g;
     });
@@ -2397,7 +2398,7 @@ function buildKonfHTML(siparis, altinKgUSD, mc, fiyatli, modeller, siraModu) {
   // Aktif şirkete göre marka (MSK / BSP) — PDF ayrı pencerede açıldığı için CSS değişkeni YOK, sabit renk
   const _sirketKisa = AKTIF_SIRKET_ONEK === "bsp2_" ? "BSP" : "MSK";
   const _sirketTam  = AKTIF_SIRKET_ONEK === "bsp2_" ? "BSP Jewelry Design" : "MSK Kuyumculuk";
-  const _logoRenk = "#1a1a1a";
+  const _logoRenk = "#ffffff";
 
   const logoSVG = '<svg viewBox="0 0 160 70" fill="none" xmlns="http://www.w3.org/2000/svg">'
     + '<text x="80" y="48" text-anchor="middle" font-family="Arial" font-size="44" font-weight="300" fill="' + _logoRenk + '" letter-spacing="14">' + _sirketKisa + '</text>'
@@ -7889,7 +7890,7 @@ function Atolye({ onSirketDegis }) {
               return (
                 <div style={{ marginBottom:12, padding:"10px 12px", borderRadius:10, background:"rgba(var(--vurgu-rgb),0.04)", border:"1px solid rgba(var(--vurgu-rgb),0.12)" }}>
                   <div style={{ display:"flex", gap:18, flexWrap:"wrap", alignItems:"flex-end" }}>
-                    {[["Sipariş", oz.sip], ["Müşteri", oz.musteri.size], ["Adet", oz.adet], ["Toplam gram", fN(oz.gram, 1) + " gr"], ["Tahmini kâr", (oz.karUSD < 0 ? "−$" : "$") + Math.abs(Math.round(oz.karUSD)).toLocaleString("tr-TR")]].map(([l, v]) => (
+                    {[["Sipariş", oz.sip], ["Müşteri", oz.musteri.size], ["Adet", oz.adet], ["Toplam gram", fN(oz.gram, 1) + " gr"], ["Taş gramı", fN(oz.tasGr, 2) + " gr"], ["Taş kârı", fIsr(oz.tasHas, 2) + " has" + (oz.tasUSD ? " · " + fUSDi(oz.tasUSD) : "")], ["Tahmini kâr", (oz.karUSD < 0 ? "−$" : "$") + Math.abs(Math.round(oz.karUSD)).toLocaleString("tr-TR")]].map(([l, v]) => (
                       <div key={l}><div style={{ fontSize:8, color:"#7a6f5a", letterSpacing:0.5 }}>{l.toUpperCase()}</div><div style={{ fontSize:16, fontWeight:800, color:"var(--goldtext)" }}>{v}</div></div>
                     ))}
                   </div>
