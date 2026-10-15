@@ -1225,7 +1225,7 @@ function ZorlukModal({ siparis, onKapat, onKaydet }) {
       <div onClick={e => e.stopPropagation()} style={{ background: "#1c1c1e", borderRadius: 16, width: "100%", maxWidth: 820, maxHeight: "92vh", display: "flex", flexDirection: "column", color: "#e8dcc8" }}>
         <div style={{ padding: "14px 18px", borderBottom: "1px solid rgba(255,255,255,0.08)", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
           <div>
-            <div style={{ fontSize: 15, fontWeight: 700, color: "#f5f5f7" }}>⭐ Üretim zorluğu — {siparis.musteri || "Sipariş"}</div>
+            <div style={{ fontSize: 15, fontWeight: 700, color: "#f5f5f7" }}>⭐ Üretim zorluğu — {siparis.musKod || siparis.musteri || "Sipariş"}</div>
             <div style={{ fontSize: 10, color: "#8a7d64", marginTop: 2 }}>Bu ürünlerin üretimi ne kadar zordu? Puanlar model kartında ve Keşfet'te görünür, sonraki siparişlerde uyarı verir.</div>
           </div>
           <button onClick={onKapat} style={{ ...GH, padding: "4px 10px" }}>✕</button>
@@ -2402,7 +2402,7 @@ function buildKonfHTML(siparis, altinKgUSD, mc, fiyatli, modeller, siraModu) {
 
   // BİLGİ BAR
   h += "<div class='info-bar'>";
-  h += "<div class='info-cell'><div class='info-lbl'>Musteri</div><div class='info-val'>" + (siparis.musKod||"—") + "</div><div class='info-sub'>" + (siparis.musteri||"") + "</div></div>";
+  h += "<div class='info-cell'><div class='info-lbl'>Musteri</div><div class='info-val'>" + (siparis.musKod||"—") + "</div></div>";
   h += "<div class='info-cell'><div class='info-lbl'>Ayar</div><div class='info-val'>" + ayarLabel + "</div><div class='info-sub'>" + (ayarLabel==="925"?"Gumus":"Altin") + "</div></div>";
   h += "<div class='info-cell'><div class='info-lbl'>Kalem / Adet</div><div class='info-val'>" + rows.length + " / " + tAdet + "</div><div class='info-sub'>model / parca</div></div>";
   h += "<div class='info-cell'><div class='info-lbl'>Teslim</div><div class='info-val' style='font-size:11px'>" + (siparis.teslimTarihi ? new Date(siparis.teslimTarihi).toLocaleDateString("tr-TR",{day:"2-digit",month:"long",year:"numeric"}) : "—") + "</div><div class='info-sub'>&nbsp;</div></div>";
@@ -2904,7 +2904,7 @@ function buildSipListeRaporuHTML(siparisler, altinKgUSD, mc) {
     const karRenk  = sipKarMly>=0.030 ? "#2d8a4e" : sipKarMly>=0.020 ? "#b8600a" : "#c0392b";
     const tarih    = new Date(s.tarih).toLocaleDateString("tr-TR",{day:"2-digit",month:"2-digit",year:"2-digit"});
     h += "<tr" + (hasKayip?" class='kayip-row'":"") + ">";
-    h += "<td style='font-weight:700'>" + (s.musKod||s.musteri||"İsimsiz") + (s.musKod&&s.musteri&&s.musKod!==s.musteri?"<br><span style='font-size:8px;color:#999'>"+s.musteri+"</span>":"") + "</td>";
+    h += "<td style='font-weight:700'>" + (s.musKod||s.musteri||"İsimsiz") + "</td>";
     h += "<td style='color:#888;font-size:9px'>" + tarih + (s.teslimTarihi?"<br>Teslim: "+new Date(s.teslimTarihi).toLocaleDateString("tr-TR",{day:"2-digit",month:"2-digit",year:"2-digit"}):"") + "</td>";
     h += "<td class='r' style='font-weight:800'>" + sipAdet + "</td>";
     h += "<td class='r'>" + fN(sipGram,2) + " gr</td>";
@@ -7525,9 +7525,9 @@ function Atolye({ onSirketDegis }) {
                 <div style={{ position:"relative" }}>
                   <div style={{ position:"relative" }}>
                   <input
-                    value={konfMus}
-                    onChange={e=>setKonfMus(e.target.value)}
-                    placeholder="Musteri..."
+                    value={musteriler[konfMus] || konfMus}
+                    onChange={e=>{ const v = e.target.value; const e2 = Object.entries(musteriler).find(([, kod]) => kod.toLowerCase() === v.trim().toLowerCase()); setKonfMus(e2 ? e2[0] : v); }}
+                    placeholder="Müşteri kodu (yeni müşteri: ad yaz)..."
                     style={{ ...IS, width:130, padding:"5px 8px", fontSize:11 }}
                     list="konfmus-list"
                   />
@@ -7539,7 +7539,7 @@ function Atolye({ onSirketDegis }) {
                 </div>
                   <datalist id="konfmus-list">
                     {Object.entries(musteriler).sort((a,b)=>a[1].localeCompare(b[1],"tr")).map(([ad, kod]) => (
-                      <option key={ad} value={ad}>{kod} — {ad}</option>
+                      <option key={ad} value={kod} />
                     ))}
                   </datalist>
                 </div>
@@ -7551,8 +7551,8 @@ function Atolye({ onSirketDegis }) {
                 </select>
                 <button onClick={()=>setPdfModal(true)} style={{ ...GH, fontSize:9, padding:"5px 9px", borderColor:"rgba(var(--vurgu-rgb),0.4)" }}>📄 PDF'ten sipariş</button>
                 {konfList.length>0 && <>
-                  <button onClick={()=>downloadPDF(buildKonfHTML({musteri:konfMus,musKod:(musteriler[konfMus]||""),tarih:Date.now(),kalemler:konfKalemler},altinKgUSD,madenCarpan,true,modeller,konfSira),(konfMus||"siparis")+"-musteri")} style={{ ...GH, fontSize:9, padding:"5px 9px" }}>PDF Fiyatli</button>
-                  <button onClick={()=>downloadPDF(buildKonfHTML({musteri:konfMus,musKod:(musteriler[konfMus]||""),tarih:Date.now(),kalemler:konfKalemler},altinKgUSD,madenCarpan,false,modeller,konfSira),(konfMus||"siparis")+"-ic")} style={{ background:"rgba(232,90,79,0.08)", border:"1px solid rgba(232,90,79,0.2)", borderRadius:9, padding:"5px 9px", color:"#e85a4f", fontSize:9, fontWeight:700, cursor:"pointer" }}>PDF Fiyatsiz</button>
+                  <button onClick={()=>downloadPDF(buildKonfHTML({musteri:konfMus,musKod:(musteriler[konfMus]||""),tarih:Date.now(),kalemler:konfKalemler},altinKgUSD,madenCarpan,true,modeller,konfSira),(musteriler[konfMus]||"siparis")+"-musteri")} style={{ ...GH, fontSize:9, padding:"5px 9px" }}>PDF Fiyatli</button>
+                  <button onClick={()=>downloadPDF(buildKonfHTML({musteri:konfMus,musKod:(musteriler[konfMus]||""),tarih:Date.now(),kalemler:konfKalemler},altinKgUSD,madenCarpan,false,modeller,konfSira),(musteriler[konfMus]||"siparis")+"-ic")} style={{ background:"rgba(232,90,79,0.08)", border:"1px solid rgba(232,90,79,0.2)", borderRadius:9, padding:"5px 9px", color:"#e85a4f", fontSize:9, fontWeight:700, cursor:"pointer" }}>PDF Fiyatsiz</button>
                   <button onClick={konfTemizle} title="Listeyi ve girilen bilgileri temizle" style={{ background:"rgba(232,90,79,0.08)", border:"1px solid rgba(232,90,79,0.2)", borderRadius:9, padding:"5px 9px", color:"#e85a4f", fontSize:9, fontWeight:700, cursor:"pointer" }}>🗑 Temizle</button>
                   <button onClick={konfKaydet} style={{ ...BG, padding:"6px 12px", fontSize:10 }}>Kaydet</button>
                 </>}
@@ -7825,7 +7825,7 @@ function Atolye({ onSirketDegis }) {
               <div style={{ display:"flex", gap:6, alignItems:"center", flexWrap:"wrap" }}>
                 <select value={sipMusSec} onChange={e=>setSipMusSec(e.target.value)} title="Müşteri seç" style={{ ...IS, width:"auto", maxWidth:170, padding:"5px 8px", fontSize:10 }}>
                   <option value="">👤 Tüm müşteriler</option>
-                  {(() => { const m = {}; siparisler.forEach(x => { const key = x.musKod || x.musteri || "?"; (m[key] = m[key] || { n: 0, ad: x.musteri || key }).n++; }); return Object.entries(m).sort((a,b)=>b[1].n-a[1].n).map(([key, v]) => <option key={key} value={key}>{key}{v.ad && v.ad !== key ? " · " + v.ad : ""} ({v.n})</option>); })()}
+                  {(() => { const m = {}; siparisler.forEach(x => { const key = x.musKod || x.musteri || "?"; (m[key] = m[key] || { n: 0, ad: x.musteri || key }).n++; }); return Object.entries(m).sort((a,b)=>b[1].n-a[1].n).map(([key, v]) => <option key={key} value={key}>{key} ({v.n})</option>); })()}
                 </select>
                 <input value={sipMusF} onChange={e=>setSipMusF(e.target.value)} placeholder="Müşteri / sipariş no ara..." style={{ ...IS, width:150, padding:"5px 8px", fontSize:10 }}/>
                 <select value={sipSira} onChange={e=>setSipSira(e.target.value)} title="Kalem sıralaması (görünüm + PDF)" style={{ ...IS, width:"auto", padding:"5px 8px", fontSize:10 }}>
@@ -7991,7 +7991,7 @@ function Atolye({ onSirketDegis }) {
                             <span style={{ fontSize:9, color:"#7a6f5a", whiteSpace:"nowrap" }}>{new Date(s.tarih).toLocaleDateString("tr-TR")}</span>
                           </div>
                           <div style={{ fontSize:10, color:"#998a6e", margin:"1px 0 7px", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
-                            {s.kaynak==="vitrin" ? "🛍️ Vitrinden · " : ""}<b style={{ color:GOLD, fontFamily:"monospace" }}>#{sipKodu(s, siparisler)}</b> · {s.musKod && s.musteri && s.musKod!==s.musteri ? s.musteri+" · " : ""}{toplamKalem} kalem · {fN(oz.gram,0)} gr{numuneSay>0 ? <b style={{ color:"#e8b04f" }}> · 🎁 {numuneSay===toplamKalem ? "Numune siparişi" : numuneSay+" numune"}</b> : null}{s.aciklama ? " · "+s.aciklama : ""}
+                            {s.kaynak==="vitrin" ? "🛍️ Vitrinden · " : ""}<b style={{ color:GOLD, fontFamily:"monospace" }}>#{sipKodu(s, siparisler)}</b> · {toplamKalem} kalem · {fN(oz.gram,0)} gr{numuneSay>0 ? <b style={{ color:"#e8b04f" }}> · 🎁 {numuneSay===toplamKalem ? "Numune siparişi" : numuneSay+" numune"}</b> : null}{s.aciklama ? " · "+s.aciklama : ""}
                           </div>
                           <div style={{ height:8, background:"rgba(var(--vurgu-rgb),0.1)", borderRadius:5, overflow:"hidden" }}>
                             <div style={{ height:"100%", width:Math.max(3,oz.il*100)+"%", background: oz.gec ? "#e85a4f" : renkNo, borderRadius:5, transition:"width .3s" }}/>
@@ -8049,8 +8049,8 @@ function Atolye({ onSirketDegis }) {
                                 </div>
                               );
                             })()}
-                            <button onClick={()=>downloadPDF(buildKonfHTML(s,s.altinKgUSD||altinKgUSD,s.mc||madenCarpan,true,modeller,sipSira),(s.musteri||"siparis")+"-fiyatli")} style={{ ...GH, fontSize:8, padding:"3px 7px" }}>Fiyatlı</button>
-                            <button onClick={()=>downloadPDF(buildKonfHTML(s,s.altinKgUSD||altinKgUSD,s.mc||madenCarpan,false,modeller,sipSira),(s.musteri||"siparis")+"-fiyatsiz")} style={{ background:"rgba(232,90,79,0.08)", border:"1px solid rgba(232,90,79,0.2)", borderRadius:9, padding:"3px 7px", color:"#e85a4f", fontSize:8, fontWeight:700, cursor:"pointer" }}>Fiyatsız</button>
+                            <button onClick={()=>downloadPDF(buildKonfHTML(s,s.altinKgUSD||altinKgUSD,s.mc||madenCarpan,true,modeller,sipSira),(s.musKod||"siparis")+"-fiyatli")} style={{ ...GH, fontSize:8, padding:"3px 7px" }}>Fiyatlı</button>
+                            <button onClick={()=>downloadPDF(buildKonfHTML(s,s.altinKgUSD||altinKgUSD,s.mc||madenCarpan,false,modeller,sipSira),(s.musKod||"siparis")+"-fiyatsiz")} style={{ background:"rgba(232,90,79,0.08)", border:"1px solid rgba(232,90,79,0.2)", borderRadius:9, padding:"3px 7px", color:"#e85a4f", fontSize:8, fontWeight:700, cursor:"pointer" }}>Fiyatsız</button>
                             <button onClick={()=>{
                               if (!window.confirm("Sipariş silinip konfirmasyona geri alınacak. Emin misiniz?")) return;
                               // Kalemlerden benzersiz modelleri konfirmasyona al
@@ -8295,14 +8295,14 @@ function Atolye({ onSirketDegis }) {
             (s.kalemler||[]).forEach(k => {
               if (iade[k.id] && iade[k.id] > 0) {
                 iadeKayitlar.push({
-                  sipId: s.id, musteri: s.musteri, kalem: k, adet: iade[k.id],
+                  sipId: s.id, musteri: s.musKod||s.musteri, kalem: k, adet: iade[k.id],
                   neden: iadeNeden[k.id] || "", tur: iadeTuru[k.id] || "para",
                   tarih: s.tarih || s.t
                 });
               }
               if (tamir[k.id] && tamir[k.id] > 0) {
                 tamirKayitlar.push({
-                  sipId: s.id, musteri: s.musteri, kalem: k, adet: tamir[k.id],
+                  sipId: s.id, musteri: s.musKod||s.musteri, kalem: k, adet: tamir[k.id],
                   neden: tamirNeden[k.id] || "", tarih: s.tarih || s.t
                 });
               }
@@ -11509,7 +11509,7 @@ function Atolye({ onSirketDegis }) {
           });
         };
         return (
-          <Modal open={!!cizelgeModal} onClose={()=>setCizelgeModal(null)} title={"⏱ Üretim Takibi — " + (s.musteri||"")} wide T={T}>
+          <Modal open={!!cizelgeModal} onClose={()=>setCizelgeModal(null)} title={"⏱ Üretim Takibi — " + (s.musKod||s.musteri||"")} wide T={T}>
             {(() => {
               const liste = [...siparisler].reverse().filter(x => (x.durumGecmisi||[]).length);
               const idx = liste.findIndex(x => x.id === s.id);
@@ -11527,7 +11527,7 @@ function Atolye({ onSirketDegis }) {
             })()}
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14, padding:"8px 12px", background:"rgba(91,155,213,0.08)", borderRadius:8 }}>
               <div>
-                <div style={{ fontSize:11, color:"#5b9bd5", fontWeight:700 }}>Sipariş: {s.musteri}</div>
+                <div style={{ fontSize:11, color:"#5b9bd5", fontWeight:700 }}>Sipariş: {s.musKod||s.musteri}</div>
                 <div style={{ fontSize:9, color:"#998a6e", marginTop:2 }}>{(s.kalemler||[]).length} kalem · {gecmis.length} aşama</div>
               </div>
               <div style={{ textAlign:"right" }}>
@@ -11767,7 +11767,7 @@ function Atolye({ onSirketDegis }) {
           const liste = (sipYedekSec.veri.siparisler || []);
           const durum = (ys) => { const m = siparisler.find(x => x.id === ys.id); if (!m) return "silinmis"; return JSON.stringify(m) === JSON.stringify(ys) ? "ayni" : "degismis"; };
           const geriGetir = (ys) => {
-            if (!window.confirm((durum(ys) === "silinmis" ? "Silinmiş siparişi geri getir" : "Bu siparişi yedekteki haline döndür (şimdiki hali üzerine yazılır)") + ":\n" + (ys.musteri || "") + " · " + sipKodu(ys, liste) + "?")) return;
+            if (!window.confirm((durum(ys) === "silinmis" ? "Silinmiş siparişi geri getir" : "Bu siparişi yedekteki haline döndür (şimdiki hali üzerine yazılır)") + ":\n" + (ys.musKod || ys.musteri || "") + " · " + sipKodu(ys, liste) + "?")) return;
             const var_ = siparisler.some(x => x.id === ys.id);
             svS(var_ ? siparisler.map(x => x.id === ys.id ? ys : x) : [...siparisler, ys].sort((a, b) => (a.tarih || 0) - (b.tarih || 0)));
             toastGoster("ok", "Sipariş geri getirildi");
