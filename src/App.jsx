@@ -5404,6 +5404,7 @@ function Atolye({ onSirketDegis }) {
   const sureModeli = useMemo(() => tahminiSureModeli(siparisler), [siparisler]); // geçmiş teslimlerden çıkış süresi
   const [sipMusF,  setSipMusF]  = useState("");
   const [sipFiltre, setSipFiltre] = useState("tumu"); // tumu, aktif, baslanmadi, dokumde, geciken, tamamlanan
+  const [sipEkleModal, setSipEkleModal] = useState(null); // { sipId, ara, kol, sec:[model...] } — siparişe sonradan model ekle
   const [sipYedekModal, setSipYedekModal] = useState(false);
   const [sipYedekler, setSipYedekler] = useState([]);   // yedek listesi (veri hariç)
   const [sipYedekSec, setSipYedekSec] = useState(null); // {id, olusturma, veri}
@@ -8157,6 +8158,9 @@ function Atolye({ onSirketDegis }) {
                     {/* Açık detay */}
                     {acik && (
                       <div style={{ padding:"2px 14px 10px", borderTop:"1px solid rgba(var(--vurgu-rgb),0.07)" }}>
+                        <div style={{ display:"flex", justifyContent:"flex-end", margin:"8px 0" }}>
+                          <button onClick={e=>{ e.stopPropagation(); setSipEkleModal({ sipId:s.id, ara:"", kol:"", sec:[] }); }} style={{ ...BG, fontSize:10, padding:"6px 12px" }}>➕ Siparişe model ekle</button>
+                        </div>
 
                         {/* ZAMAN ÇİZELGESİ — özet + buton (detay modal'da) */}
                         {s.durumGecmisi?.length > 0 && (() => {
@@ -11754,6 +11758,74 @@ function Atolye({ onSirketDegis }) {
           </div>
         </Modal>
       )}
+
+      {/* SİPARİŞE MODEL EKLE MODAL */}
+      {sipEkleModal && (() => {
+        const sp = siparisler.find(x => x.id === sipEkleModal.sipId);
+        if (!sp) return null;
+        const ayar = (sp.kalemler || [])[0] ? ((sp.kalemler[0].secilenAyar) || "14K") : "14K";
+        const q = psNorm(sipEkleModal.ara);
+        const mevcutIdler = new Set((sp.kalemler || []).map(k => k.id));
+        let liste = modeller.filter(m => (!sipEkleModal.kol || m.ki === sipEkleModal.kol) && (!q || psNorm(m.kod).includes(q) || psNorm(m.ad).includes(q)));
+        const toplamBulunan = liste.length;
+        liste = liste.slice(0, 48);
+        const secili = (m) => sipEkleModal.sec.some(x => x.id === m.id);
+        const tikla = (m) => setSipEkleModal(p => ({ ...p, sec: p.sec.some(x => x.id === m.id) ? p.sec.filter(x => x.id !== m.id) : [...p.sec, m] }));
+        const ekle = () => {
+          if (!sipEkleModal.sec.length) return;
+          const musHafizaTum = (kasa.musteriModelFiyat || {})[sp.musteri] || {};
+          const yeniKalemler = []; const artanlar = {};
+          sipEkleModal.sec.forEach(m => {
+            if (mevcutIdler.has(m.id)) { artanlar[m.id] = (artanlar[m.id] || 0) + 1; return; }
+            yeniKalemler.push({ ...iscilikliModel(m, ayar, null, musHafizaTum[m.id]), secilenAyar: ayar, renk: "Sari", sipNot: "", numune: ayar === "925", adet: 1, boy: null, zorluk: undefined, zorlukEtiket: undefined, zorlukTarih: undefined });
+          });
+          setSiparisler(prev => {
+            const yeni = prev.map(x => {
+              if (x.id !== sp.id) return x;
+              const kalemler = [...(x.kalemler || []).map(k => artanlar[k.id] ? { ...k, adet: (k.adet || 1) + artanlar[k.id] } : k), ...yeniKalemler];
+              let gelir = 0, maliyet = 0;
+              kalemler.forEach(k => { const h = hesapla(k, k.secilenAyar, x.altinKgUSD || altinKgUSD, x.mc || madenCarpan); gelir += h.gelirHas * (k.adet || 1); maliyet += h.topMaliyetHas * (k.adet || 1); });
+              return { ...x, kalemler, gelir, maliyet, kar: gelir - maliyet };
+            });
+            versiyonDamgala("v7s", yeni);
+            return yeni;
+          });
+          svMUpsert(sipEkleModal.sec.map(m => ({ ...m, satisSayisi: (m.satisSayisi || 0) + 1 })));
+          islemKaydet(AKTIF_SIRKET_ONEK, "güncelle", "sipariş", (sp.musKod || sp.musteri || "") + " · +" + sipEkleModal.sec.length + " model eklendi");
+          toastGoster("ok", sipEkleModal.sec.length + " model siparişe eklendi" + (Object.keys(artanlar).length ? " (zaten olanların adedi +1)" : ""));
+          setSipEkleModal(null);
+        };
+        return (
+          <Modal open onClose={()=>setSipEkleModal(null)} title={"➕ Siparişe model ekle — " + (sp.musKod || sp.musteri || "")} wide T={T}>
+            <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:8 }}>
+              <input autoFocus value={sipEkleModal.ara} onChange={e=>setSipEkleModal(p=>({ ...p, ara:e.target.value }))} placeholder="Model kodu veya adı ara…" style={{ ...IS, flex:"1 1 180px", padding:"6px 9px", fontSize:12 }}/>
+              <select value={sipEkleModal.kol} onChange={e=>setSipEkleModal(p=>({ ...p, kol:e.target.value }))} style={{ ...IS, width:"auto", padding:"6px 9px", fontSize:11 }}>
+                <option value="">Tüm koleksiyonlar</option>
+                {kollar.map(k => <option key={k.id} value={k.id}>{k.ad}</option>)}
+              </select>
+            </div>
+            <div style={{ fontSize:9, color:"#998a6e", marginBottom:6 }}>
+              {toplamBulunan} model{toplamBulunan > 48 ? " (ilk 48 gösteriliyor — aramayı daraltın)" : ""} · eklenecek ayar: <b>{ayar}</b> · her biri 1 adet eklenir (sonra adedi/notu değiştirebilirsiniz)
+            </div>
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(92px,1fr))", gap:6, maxHeight:"46vh", overflowY:"auto", marginBottom:10 }}>
+              {liste.map(m => (
+                <div key={m.id} onClick={()=>tikla(m)} title={m.ad || m.kod} style={{ cursor:"pointer", borderRadius:8, overflow:"hidden", background:"rgba(255,255,255,0.04)", border:"2px solid " + (secili(m) ? "#6abf69" : mevcutIdler.has(m.id) ? "rgba(232,176,79,0.5)" : "rgba(255,255,255,0.08)"), position:"relative" }}>
+                  <div style={{ height:80, background:"#f3f3f3", display:"flex", alignItems:"center", justifyContent:"center" }}>
+                    {m.foto ? <img src={m.foto} alt="" loading="lazy" style={{ maxWidth:"100%", maxHeight:"100%", objectFit:"contain" }}/> : null}
+                  </div>
+                  <div style={{ fontSize:10, fontWeight:700, padding:"2px 4px", color:"#e8dcc8", wordBreak:"break-all" }}>{m.kod}</div>
+                  {mevcutIdler.has(m.id) && <div style={{ fontSize:8, color:"#e8b04f", padding:"0 4px 2px" }}>zaten siparişte</div>}
+                  {secili(m) && <div style={{ position:"absolute", top:3, right:3, background:"#6abf69", color:"#0a0a0a", borderRadius:10, fontSize:10, fontWeight:800, padding:"0 6px" }}>✓</div>}
+                </div>
+              ))}
+            </div>
+            <div style={{ display:"flex", gap:8 }}>
+              <button onClick={()=>setSipEkleModal(null)} style={{ ...GH, flex:1, padding:"9px" }}>İptal</button>
+              <button onClick={ekle} disabled={!sipEkleModal.sec.length} style={{ ...BG, flex:2, padding:"9px", opacity: sipEkleModal.sec.length ? 1 : 0.4 }}>➕ {sipEkleModal.sec.length || ""} modeli siparişe ekle</button>
+            </div>
+          </Modal>
+        );
+      })()}
 
       {/* SİPARİŞ YEDEKLERİ MODAL */}
       <Modal open={sipYedekModal} onClose={()=>setSipYedekModal(false)} title="🛟 Sipariş Yedekleri" wide T={T}>
