@@ -1338,11 +1338,19 @@ function psAdetDagit(toplam, n) {
   return Array.from({ length: n }, (_, i) => Math.max(1, taban + (i < kalan ? 1 : 0)));
 }
 // Aynı model ailesinden (psKodTaban) her renk için bir model seç
+// İki kod aynı model ailesinden mi? FER280 ↔ FER280-Y / FER280Y / FER280B (kısa harfli son ek) — FER28 ↔ FER280 değil
+function psAileUyar(kodA, kodB) {
+  const a = psKodTaban(kodA), b = psKodTaban(kodB);
+  if (!a || !b) return false;
+  if (a === b) return true;
+  const [kisa, uzun] = a.length <= b.length ? [a, b] : [b, a];
+  if (kisa.length < 3 || !/[0-9]$/.test(kisa) || !uzun.startsWith(kisa)) return false;
+  return /^[A-Z][A-Z0-9]{0,2}$/.test(uzun.slice(kisa.length));
+}
 function psAileModelleri(modeller, bulunanKod, adaylar) {
-  const taban = psKodTaban(bulunanKod);
   const aile = []; const gorulen = new Set();
   [...(adaylar || []), ...(modeller || [])].forEach(m => {
-    if (psKodTaban(m.kod) !== taban || aile.some(z => z.id === m.id)) return;
+    if (!psAileUyar(m.kod, bulunanKod) || aile.some(z => z.id === m.id)) return;
     const nk = psTrBuyuk(m.kod);
     if (gorulen.has(nk)) { const i = aile.findIndex(z => psTrBuyuk(z.kod) === nk); if (!aile[i].foto && m.foto) aile[i] = m; return; }
     gorulen.add(nk); aile.push(m);
@@ -1578,7 +1586,7 @@ function PdfSiparisModal({ modeller, kollar, onKapat, onUygula, onModelDuzenle }
         if (istenenRenk) {
           const taban = psKodTaban(bulunanKod);
           const aile = []; const gorulen = new Set();
-          (modeller || []).forEach(m => { if (psKodTaban(m.kod) === taban) { const nk = psNorm(m.kod); if (!gorulen.has(nk) || m.foto) { gorulen.add(nk); aile.push(m); } } });
+          (modeller || []).forEach(m => { if (psAileUyar(m.kod, bulunanKod)) { const nk = psNorm(m.kod); if (!gorulen.has(nk) || m.foto) { gorulen.add(nk); aile.push(m); } } });
           const uyan = [...sirali, ...aile].filter((m, i, a) => a.findIndex(z => z.id === m.id) === i)
             .filter(m => psModelTasRengi(m) === istenenRenk)
             .sort((x, y) => (psNorm(y.kod) === psNorm(bulunanKod) ? 1 : 0) - (psNorm(x.kod) === psNorm(bulunanKod) ? 1 : 0) || (y.foto ? 1 : 0) - (x.foto ? 1 : 0));
@@ -1695,13 +1703,15 @@ function PdfSiparisModal({ modeller, kollar, onKapat, onUygula, onModelDuzenle }
     } catch (e) { console.error("indeks hatası:", e); setVi({ durum: "hata", mesaj: "", yuzde: 0, hata: (e && e.message) || String(e) }); }
   };
   const modelAra = (id, metin) => {
-    const l = kodHaritasi.get(psNorm(metin));
-    if (l && l.length) guncelle(id, { ara: metin, adaylar: l, secimId: l[0].id, durum: l.length > 1 ? "coklu" : "eslesti", ekle: false, dahil: true, renkUyari: "", ekler: [] });
+    let l = kodHaritasi.get(psNorm(metin));
+    // Tam kod yoksa aynı ailenin varyasyonlarından bul (fer280 → FER280-Y, FER280B…)
+    if ((!l || !l.length) && psNorm(metin).length >= 4) l = (modeller || []).filter(m => psAileUyar(m.kod, metin)).sort((a, b) => (b.foto ? 1 : 0) - (a.foto ? 1 : 0));
+    if (l && l.length) guncelle(id, { ara: metin, adaylar: l, secimId: l[0].id, durum: l.length > 1 ? "coklu" : "eslesti", ekle: false, dahil: true, renkUyari: "", ekler: [], bulunanKod: l[0].kod || metin, oneriAcik: false });
     else guncelle(id, { ara: metin });
   };
 
   const modelSec = (satirId, m) => {
-    guncelle(satirId, { adaylar: [m], secimId: m.id, durum: "eslesti", ekle: false, dahil: true, ara: m.kod || "", bulunanKod: m.kod || "", renkUyari: "", ekler: [] });
+    guncelle(satirId, { adaylar: [m], secimId: m.id, durum: "eslesti", ekle: false, dahil: true, ara: m.kod || "", bulunanKod: m.kod || "", renkUyari: "", ekler: [], oneriAcik: false });
     setGozSatir(null); setGozKol(""); setGozAra("");
   };
   const gozAcKapat = () => { setGozSatir(null); setGozKol(""); setGozAra(""); setGozSecim([]); };
@@ -1771,7 +1781,10 @@ function PdfSiparisModal({ modeller, kollar, onKapat, onUygula, onModelDuzenle }
       {s.oneriDurum === "hesapliyor" && <div style={{ fontSize: 10, color: "#a89c84" }}>📷 Benzer modeller aranıyor…</div>}
       {s.oneriDurum === "indeksyok" && <div style={{ fontSize: 10, color: "#e8b04f" }}>📷 Fotoğraf indeksi hazır değil — üstteki "Hazırla" düğmesine basın</div>}
       {s.oneriDurum === "hata" && <div style={{ fontSize: 10, color: "#e85a4f" }}>📷 Benzer arama yapılamadı: {s.oneriHata}</div>}
-      {s.oneriler && s.oneriler.length > 0 && (<>
+      {s.durum !== "yok" && s.oneriler && s.oneriler.length > 0 && (
+        <button onClick={() => guncelle(s.id, { oneriAcik: !s.oneriAcik })} style={{ ...GH, fontSize: 9, padding: "2px 8px", marginBottom: 4 }}>{s.oneriAcik ? "📷 Benzerleri gizle" : "📷 Fotoğrafa göre benzerleri göster (" + s.oneriler.length + ")"}</button>
+      )}
+      {s.oneriler && s.oneriler.length > 0 && (s.durum === "yok" || s.oneriAcik) && (<>
         <div style={{ fontSize: 9, color: "#8a7d64", fontWeight: 700, marginBottom: 3 }}>📷 FOTOĞRAFA GÖRE BENZER MODELLER — tıkla, satıra bağlansın</div>
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
           {s.oneriler.map(o => (
