@@ -384,8 +384,10 @@ function sipListeOzet(list, ayarF) {
       o.adet += net; o.gram += g;
       o.tasGr += (Number(k.tasGram) || 0) * net;
       if (!k.numune) { o.karUSD += hc.karHas * net * hasUSD; o.tasHas += hc.tasHas * net; o.tasUSD += hc.tasHas * net * hasUSD; }
-      const e = o.ayar[ay] || (o.ayar[ay] = { adet: 0, gram: 0 });
+      const e = o.ayar[ay] || (o.ayar[ay] = { adet: 0, gram: 0, tasGr: 0, tasHas: 0, isc: 0, mal: 0, kar: 0, karGram: 0 });
       e.adet += net; e.gram += g;
+      e.tasGr += (Number(k.tasGram) || 0) * net;
+      if (!k.numune) { e.tasHas += hc.tasHas * net; e.isc += hc.iscilikHas * net; e.mal += hc.topMaliyetHas * net; e.kar += hc.karHas * net; e.karGram += g; }
     });
   });
   return o;
@@ -5409,6 +5411,7 @@ function Atolye({ onSirketDegis }) {
   const [sipMusF,  setSipMusF]  = useState("");
   const [sipFiltre, setSipFiltre] = useState("tumu"); // tumu, aktif, baslanmadi, dokumde, geciken, tamamlanan
   const [sipEkleModal, setSipEkleModal] = useState(null); // { sipId, ara, kol, sec:[model...] } — siparişe sonradan model ekle
+  const [sipAyarAnaliz, setSipAyarAnaliz] = useState(false);
   const [sipYedekModal, setSipYedekModal] = useState(false);
   const [sipYedekler, setSipYedekler] = useState([]);   // yedek listesi (veri hariç)
   const [sipYedekSec, setSipYedekSec] = useState(null); // {id, olusturma, veri}
@@ -7894,6 +7897,50 @@ function Atolye({ onSirketDegis }) {
                       <div key={l}><div style={{ fontSize:8, color:"#7a6f5a", letterSpacing:0.5 }}>{l.toUpperCase()}</div><div style={{ fontSize:16, fontWeight:800, color:"var(--goldtext)" }}>{v}</div></div>
                     ))}
                   </div>
+                  {Object.keys(ayarCip).length > 0 && (
+                    <div style={{ marginTop:9 }}>
+                      <button onClick={()=>setSipAyarAnaliz(v=>!v)} style={{ ...GH, fontSize:9, padding:"3px 10px" }}>{sipAyarAnaliz ? "▲ Ayar analizini gizle" : "📊 Ayar / taş analizi (10K · 14K · 18K…)"}</button>
+                      {sipAyarAnaliz && (() => {
+                        const satirlar = AYARLAR.filter(a => ayarCip[a.id]).map(a => ({ a, e: ayarCip[a.id] }));
+                        const th = { fontSize:8, color:"#7a6f5a", fontWeight:700, textAlign:"right", padding:"4px 6px", whiteSpace:"nowrap", letterSpacing:0.3 };
+                        const td = { fontSize:11, fontWeight:700, textAlign:"right", padding:"5px 6px", whiteSpace:"nowrap", fontVariantNumeric:"tabular-nums", color:"var(--goldtext)", borderTop:"1px solid rgba(var(--vurgu-rgb),0.08)" };
+                        const O14 = (AYARLAR.find(x => x.id === "14K") || { o: 0.585 }).o;
+                        return (
+                          <div style={{ marginTop:8, overflowX:"auto" }}>
+                            <table style={{ borderCollapse:"collapse", width:"100%", minWidth:760 }}>
+                              <thead><tr>
+                                <th style={{ ...th, textAlign:"left" }}>AYAR</th><th style={th}>ADET</th><th style={th}>GRAM</th><th style={th}>TAŞ GR</th><th style={th}>TAŞ KÂRI (has)</th><th style={th}>İŞÇİLİK (has)</th><th style={th}>MALİYET (has)</th><th style={th}>TOPLAM KÂR (has)</th><th style={th}>KÂR mly/gr</th><th style={th}>TAŞ KÂRI / TAŞ GR</th><th style={th}>14K'YA GÖRE TAŞ FARKI</th>
+                              </tr></thead>
+                              <tbody>
+                                {satirlar.map(({ a, e }) => {
+                                  const mly = e.karGram > 0 ? e.kar / e.karGram * 1000 : 0;
+                                  const fark = e.tasGr > 0 && a.id !== "14K" && a.id !== "925" ? e.tasGr * (a.o - O14) : null;
+                                  return (
+                                    <tr key={a.id}>
+                                      <td style={{ ...td, textAlign:"left", color:GOLD }}>{a.id}</td>
+                                      <td style={td}>{e.adet}</td>
+                                      <td style={td}>{fN(e.gram,1)}</td>
+                                      <td style={td}>{e.tasGr > 0 ? fN(e.tasGr,2) : "—"}</td>
+                                      <td style={{ ...td, color: e.tasHas < 0 ? "#e85a4f" : "#6abf69" }}>{e.tasGr > 0 ? fIsr(e.tasHas,2) : "—"}</td>
+                                      <td style={td}>{fIsr(e.isc,2)}</td>
+                                      <td style={{ ...td, color:"#e85a4f" }}>−{fN(Math.abs(e.mal),2)}</td>
+                                      <td style={{ ...td, color: e.kar < 0 ? "#e85a4f" : "#6abf69" }}>{fIsr(e.kar,2)}</td>
+                                      <td style={{ ...td, color: (e.karGram > 0 && mly/1000 < MIN_MLY) ? "#e85a4f" : "var(--goldtext)" }}>{e.karGram > 0 ? fIsr(mly,1) : "—"}</td>
+                                      <td style={td}>{e.tasGr > 0 ? fN(e.tasHas / e.tasGr * 1000, 0) + " mly" : "—"}</td>
+                                      <td style={{ ...td, color: fark == null ? "#7a6f5a" : fark < 0 ? "#e85a4f" : "#6abf69" }}>{fark == null ? "—" : fIsr(fark,2) + " has"}</td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                            <div style={{ fontSize:9, color:"#7a6f5a", marginTop:6, lineHeight:1.5 }}>
+                              Taş has değeri = taş gramı × ayar oranı (10K 0.417 · 14K 0.585 · 18K 0.750). Aynı taş gramı düşük ayarda daha az has getirir; "14K'ya göre taş farkı" bu kaybı (veya kazancı) gösterir. Taş kârı ve toplam kâr numuneler hariçtir; seçili filtreler (müşteri, tarih, durum) geçerlidir.
+                            </div>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  )}
                   {Object.keys(ayarCip).length > 0 && (
                     <div style={{ display:"flex", gap:5, flexWrap:"wrap", marginTop:9, alignItems:"center" }}>
                       <span style={{ fontSize:8, color:"#7a6f5a", fontWeight:700 }}>AYARA GÖRE:</span>
