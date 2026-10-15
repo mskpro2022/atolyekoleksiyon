@@ -25,6 +25,9 @@ if (typeof document !== "undefined" && !document.getElementById("atolye-global-r
 
 const fHas = (n) => (Number(n) || 0).toFixed(4) + " has";
 const fUSD = (p) => "$" + (Number(p) || 0).toFixed(2);
+// İşaretli gösterim: negatifte "−" (zarar), pozitifte "+" — milyem altı satışlarda eksi görünsün
+const fIsr = (v, d) => { const n = Number(v) || 0; return (n < 0 ? "−" : "+") + Math.abs(n).toFixed(d == null ? 2 : d); };
+const fUSDi = (p) => { const n = Number(p) || 0; return (n < 0 ? "−$" : "$") + Math.abs(n).toFixed(2); };
 const fN = (n, d) => (Number(n) || 0).toFixed(d || 3);
 
 const AYARLAR = [
@@ -401,14 +404,14 @@ function sipImza(kalemler, aciklama) {
 }
 
 function sipKarOzet(s, kalemDurumlar) {
-  let gumusBorc = 0, gram = 0, karGram = 0, tasHas = 0, iscNet = 0, karHas = 0, ilSum = 0, ilN = 0, bitenN = 0;
+  let gumusBorc = 0, gram = 0, karGram = 0, tasHas = 0, tasGr = 0, iscNet = 0, iscBrut = 0, maliyetHas = 0, karHas = 0, ilSum = 0, ilN = 0, bitenN = 0;
   (s.kalemler || []).forEach(k => {
     const hc = hesapla(k, k.secilenAyar || k.refAyar, s.altinKgUSD, s.mc);
     const du = ((s.kalemHurda) || {})[k.id] || 0, ia = ((s.kalemIade) || {})[k.id] || 0, ta = ((s.kalemTamir) || {})[k.id] || 0;
     const net = Math.max(0, (k.adet || 1) - du - ia - ta);
     gram += hc.mamulGram * net;
     if (k.numune && (k.secilenAyar || k.refAyar) === "925") gumusBorc += hc.mamulGram * net; // müşteri gümüşü geri verecek
-    if (!k.numune) { karGram += hc.mamulGram * net; tasHas += hc.tasHas * net; iscNet += (hc.iscilikHas - hc.topMaliyetHas) * net; karHas += hc.karHas * (k.numune?0:1) * net; } // numune kâr hesabına girmez
+    if (!k.numune) { karGram += hc.mamulGram * net; tasHas += hc.tasHas * net; tasGr += (Number(k.tasGram) || 0) * net; iscNet += (hc.iscilikHas - hc.topMaliyetHas) * net; iscBrut += hc.iscilikHas * net; maliyetHas += hc.topMaliyetHas * net; karHas += hc.karHas * (k.numune?0:1) * net; } // numune kâr hesabına girmez
     const d = (kalemDurumlar || {})[k.id] || k.durum || "baslanmadi";
     if (d !== "hurda") { const o = DURUMLAR.find(x => x.id === d); ilSum += Math.max(0, o ? o.s : 0) / 9; ilN++; if (d === "tamam" || d === "teslim") bitenN++; }
   });
@@ -419,7 +422,7 @@ function sipKarOzet(s, kalemDurumlar) {
   const bugun0 = new Date(); bugun0.setHours(0, 0, 0, 0);
   const gun = tesMs ? Math.round((tesMs - Date.now()) / 864e5) : null;
   return {
-    gram, tasHas, iscNet, karHas, karUSD: karHas * hasUSD,
+    gram, tasHas, tasGr, iscNet, iscBrut, maliyetHas, karHas, karUSD: karHas * hasUSD,
     mlyGr: karGram > 0 ? karHas / karGram : 0, usdGr: karGram > 0 ? karHas * hasUSD / karGram : 0, karGram, gumusBorc,
     il, hue: Math.round(il * 120), bitti, gun, gec: !!tesMs && tesMs < bugun0.getTime() && !bitti,
   };
@@ -7886,7 +7889,7 @@ function Atolye({ onSirketDegis }) {
               return (
                 <div style={{ marginBottom:12, padding:"10px 12px", borderRadius:10, background:"rgba(var(--vurgu-rgb),0.04)", border:"1px solid rgba(var(--vurgu-rgb),0.12)" }}>
                   <div style={{ display:"flex", gap:18, flexWrap:"wrap", alignItems:"flex-end" }}>
-                    {[["Sipariş", oz.sip], ["Müşteri", oz.musteri.size], ["Adet", oz.adet], ["Toplam gram", fN(oz.gram, 1) + " gr"], ["Tahmini kâr", "$" + Math.round(oz.karUSD).toLocaleString("tr-TR")]].map(([l, v]) => (
+                    {[["Sipariş", oz.sip], ["Müşteri", oz.musteri.size], ["Adet", oz.adet], ["Toplam gram", fN(oz.gram, 1) + " gr"], ["Tahmini kâr", (oz.karUSD < 0 ? "−$" : "$") + Math.abs(Math.round(oz.karUSD)).toLocaleString("tr-TR")]].map(([l, v]) => (
                       <div key={l}><div style={{ fontSize:8, color:"#7a6f5a", letterSpacing:0.5 }}>{l.toUpperCase()}</div><div style={{ fontSize:16, fontWeight:800, color:"var(--goldtext)" }}>{v}</div></div>
                     ))}
                   </div>
@@ -7952,14 +7955,15 @@ function Atolye({ onSirketDegis }) {
                 );
                 const karJsx = (
                   <div>
-                    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8, marginTop:8, paddingTop:8, borderTop:"1px dashed rgba(var(--vurgu-rgb),0.15)" }}>
-                      {kutu("Taştan", fN(oz.tasHas,2)+" has", "", oz.tasHas<0)}
-                      {kutu("İşçilikten", (oz.iscNet<0?"−":"+")+fN(Math.abs(oz.iscNet),2)+" has", oz.iscNet<0?"zarar":"kâr", oz.iscNet<0)}
-                      {kutu("Toplam kâr", fN(oz.karHas,2)+" has", oz.karUSD>0 ? "≈ "+fUSD(oz.karUSD) : "", oz.karHas<0 || (oz.karGram>0 && oz.mlyGr<MIN_MLY))}
+                    <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(88px,1fr))", gap:8, marginTop:8, paddingTop:8, borderTop:"1px dashed rgba(var(--vurgu-rgb),0.15)" }}>
+                      {kutu("Taştan", fIsr(oz.tasHas,2)+" has", oz.tasGr>0 ? fN(oz.tasGr,1)+" gr taş" : "", oz.tasHas<0)}
+                      {kutu("İşçilikten", fIsr(oz.iscBrut,2)+" has", "", oz.iscBrut<0)}
+                      {kutu("Maliyet", "−"+fN(Math.abs(oz.maliyetHas),2)+" has", oz.karGram>0 ? fN(oz.maliyetHas/oz.karGram*1000,0)+" mly/gr" : "", true)}
+                      {kutu("Toplam kâr", fIsr(oz.karHas,2)+" has", oz.karUSD ? "≈ "+fUSDi(oz.karUSD) : "", oz.karHas<0 || (oz.karGram>0 && oz.mlyGr<MIN_MLY))}
                     </div>
                     {oz.gumusBorc > 0 && <div style={{ fontSize:10, marginTop:5, fontWeight:700, color:"#c0c0c0" }}>🥈 Gümüş borcu: {fN(oz.gumusBorc,1)} gr <span style={{ fontWeight:400, opacity:.8 }}>(müşteri gümüşü geri verecek · numune)</span></div>}
                     <div style={{ fontSize:10, marginTop:5, color:(oz.karGram>0 && oz.mlyGr<MIN_MLY)?"#e85a4f":"#998a6e", fontWeight:700 }}>
-                      1 gr'da: {fN(oz.mlyGr*1000,1)} milyem{oz.usdGr ? " · "+fUSD(oz.usdGr)+" / gr" : ""}
+                      1 gr'da: {fIsr(oz.mlyGr*1000,1)} milyem{oz.usdGr ? " · "+fUSDi(oz.usdGr)+" / gr" : ""}{oz.karGram>0 && oz.mlyGr<0 ? " · ZARARINA SATIŞ" : ""}
                     </div>
                     {!oz.bitti && oz.gram > 0 && (() => {
                       const toplamGun = sureModeli.a + sureModeli.b * oz.gram;
