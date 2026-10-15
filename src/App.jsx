@@ -8239,9 +8239,46 @@ function Atolye({ onSirketDegis }) {
                                   {k.renk && <span style={{ color:"var(--gold)", marginLeft:6, fontSize:9 }}>{k.renk}</span>}
                                 </div>
                                 <div style={{ fontSize:8, color:"#7a6f5a" }}>
-                                  {k.secilenAyar||k.refAyar} · {fN(k.gram||0)} gr · {k.adet||1} adet
-                                  {k.sipNot && <span style={{ color:"#5b9bd5", marginLeft:4 }}>{k.sipNot}</span>}
+                                  {k.secilenAyar||k.refAyar}
+                                  {k.sipNot && <span style={{ color:"#5b9bd5", marginLeft:6 }}>{k.sipNot}</span>}
                                 </div>
+                              </div>
+                              {(() => { const hc0 = hesapla(k, k.secilenAyar||k.refAyar, s.altinKgUSD, s.mc); const net0 = Math.max(0,(k.adet||1)-(((s.kalemHurda)||{})[k.id]||0)-(((s.kalemIade)||{})[k.id]||0)-(((s.kalemTamir)||{})[k.id]||0)); return (
+                                <div style={{ flexShrink:0, width:112, textAlign:"center", padding:"8px 6px", borderRadius:10, background:"rgba(var(--vurgu-rgb),0.05)", border:"1px solid rgba(var(--vurgu-rgb),0.12)" }}>
+                                  <div style={{ fontSize:8, color:"#7a6f5a", fontWeight:700, letterSpacing:0.5 }}>GRAM</div>
+                                  <div style={{ fontSize:15, fontWeight:800, color:"var(--goldtext)", lineHeight:1.2 }}>{fN(hc0.mamulGram * net0, 1)}<span style={{ fontSize:9, fontWeight:600 }}> gr</span></div>
+                                  <div style={{ fontSize:8, color:"#998a6e", marginTop:2 }}>birim {fN(hc0.mamulGram, 2)} gr</div>
+                                </div>); })()}
+                              <div style={{ flexShrink:0, width:92, textAlign:"center", padding:"8px 6px", borderRadius:10, background:"rgba(var(--vurgu-rgb),0.05)", border:"1px solid rgba(var(--vurgu-rgb),0.12)" }}>
+                                <div style={{ fontSize:8, color:"#7a6f5a", fontWeight:700, letterSpacing:0.5, marginBottom:3 }}>ADET</div>
+                                <div style={{ fontSize:15, fontWeight:800, color:"var(--goldtext)" }}>
+                                  {k.boyListesi && k.boyListesi.length ? <span title="Boy listesi olan kalem: adet boylardan hesaplanır">{k.adet||1}</span> : (
+                                    <input type="number" min="1" key={k.id+":"+(k.adet||1)} defaultValue={k.adet||1}
+                                      onClick={e=>e.stopPropagation()}
+                                      onKeyDown={e=>{ if (e.key==="Enter") e.currentTarget.blur(); }}
+                                      onBlur={e=>{
+                                        const yeniAdet = Math.floor(Number(e.target.value));
+                                        if (!yeniAdet || yeniAdet < 1 || yeniAdet === (k.adet||1)) { e.target.value = k.adet||1; return; }
+                                        const kayip = (((s.kalemHurda)||{})[k.id]||0) + (((s.kalemIade)||{})[k.id]||0) + (((s.kalemTamir)||{})[k.id]||0);
+                                        if (yeniAdet < kayip) { alert("Bu kalemde " + kayip + " adet hurda/iade/tamir kaydı var — adet bunun altına düşemez."); e.target.value = k.adet||1; return; }
+                                        setSiparisler(prev => {
+                                          const yeni = prev.map(x => {
+                                            if (x.id !== s.id) return x;
+                                            const kalemler = (x.kalemler||[]).map(z => z.id === k.id ? { ...z, adet: yeniAdet } : z);
+                                            let gelir = 0, maliyet = 0;
+                                            kalemler.forEach(z => { const h = hesapla(z, z.secilenAyar, x.altinKgUSD || altinKgUSD, x.mc || madenCarpan); gelir += h.gelirHas * (z.adet||1); maliyet += h.topMaliyetHas * (z.adet||1); });
+                                            return { ...x, kalemler, gelir, maliyet, kar: gelir - maliyet };
+                                          });
+                                          versiyonDamgala("v7s", yeni);
+                                          return yeni;
+                                        });
+                                        toastGoster("ok", (k.kod||k.ad||"Model") + ": adet " + (k.adet||1) + " → " + yeniAdet);
+                                      }}
+                                      title="Adedi düzelt (Enter ile kaydet)"
+                                      style={{ width:62, padding:"3px 4px", fontSize:15, fontWeight:800, textAlign:"center", background:"rgba(var(--vurgu-rgb),0.08)", border:"1px solid rgba(var(--vurgu-rgb),0.3)", borderRadius:5, color:"var(--goldtext)" }}/>
+                                  )}
+                                </div>
+                                {((((s.kalemHurda)||{})[k.id]||0)+(((s.kalemIade)||{})[k.id]||0)+(((s.kalemTamir)||{})[k.id]||0)) > 0 && <div style={{ fontSize:8, color:"#e85a4f", marginTop:2 }}>net {Math.max(0,(k.adet||1)-(((s.kalemHurda)||{})[k.id]||0)-(((s.kalemIade)||{})[k.id]||0)-(((s.kalemTamir)||{})[k.id]||0))}</div>}
                               </div>
                               {/* Durum noktaları + hurda */}
                               <div style={{ display:"flex", gap:3, alignItems:"center", flexWrap:"wrap", justifyContent:"flex-end" }}>
