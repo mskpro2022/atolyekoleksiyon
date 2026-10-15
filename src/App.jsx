@@ -8247,12 +8247,6 @@ function Atolye({ onSirketDegis }) {
                                   {k.sipNot && <span style={{ color:"#5b9bd5", marginLeft:6 }}>{k.sipNot}</span>}
                                 </div>
                               </div>
-                              {(() => { const hc0 = hesapla(k, k.secilenAyar||k.refAyar, s.altinKgUSD, s.mc); const net0 = Math.max(0,(k.adet||1)-(((s.kalemHurda)||{})[k.id]||0)-(((s.kalemIade)||{})[k.id]||0)-(((s.kalemTamir)||{})[k.id]||0)); return (
-                                <div style={{ flexShrink:0, width:112, textAlign:"center", padding:"8px 6px", borderRadius:10, background:"rgba(var(--vurgu-rgb),0.05)", border:"1px solid rgba(var(--vurgu-rgb),0.12)" }}>
-                                  <div style={{ fontSize:8, color:"#7a6f5a", fontWeight:700, letterSpacing:0.5 }}>GRAM</div>
-                                  <div style={{ fontSize:15, fontWeight:800, color:"var(--goldtext)", lineHeight:1.2 }}>{fN(hc0.mamulGram * net0, 1)}<span style={{ fontSize:9, fontWeight:600 }}> gr</span></div>
-                                  <div style={{ fontSize:8, color:"#998a6e", marginTop:2 }}>birim {fN(hc0.mamulGram, 2)} gr</div>
-                                </div>); })()}
                               <div style={{ flexShrink:0, width:92, textAlign:"center", padding:"8px 6px", borderRadius:10, background:"rgba(var(--vurgu-rgb),0.05)", border:"1px solid rgba(var(--vurgu-rgb),0.12)" }}>
                                 <div style={{ fontSize:8, color:"#7a6f5a", fontWeight:700, letterSpacing:0.5, marginBottom:3 }}>ADET</div>
                                 <div style={{ fontSize:15, fontWeight:800, color:"var(--goldtext)" }}>
@@ -8284,6 +8278,19 @@ function Atolye({ onSirketDegis }) {
                                 </div>
                                 {((((s.kalemHurda)||{})[k.id]||0)+(((s.kalemIade)||{})[k.id]||0)+(((s.kalemTamir)||{})[k.id]||0)) > 0 && <div style={{ fontSize:8, color:"#e85a4f", marginTop:2 }}>net {Math.max(0,(k.adet||1)-(((s.kalemHurda)||{})[k.id]||0)-(((s.kalemIade)||{})[k.id]||0)-(((s.kalemTamir)||{})[k.id]||0))}</div>}
                               </div>
+                              {(() => { const hc0 = hesapla(k, k.secilenAyar||k.refAyar, s.altinKgUSD, s.mc); const net0 = Math.max(0,(k.adet||1)-(((s.kalemHurda)||{})[k.id]||0)-(((s.kalemIade)||{})[k.id]||0)-(((s.kalemTamir)||{})[k.id]||0)); return (
+                                <>
+                                  <div style={{ flexShrink:0, textAlign:"center", padding:"8px 6px", borderRadius:10, background:"rgba(var(--vurgu-rgb),0.05)", border:"1px solid rgba(var(--vurgu-rgb),0.12)", width:92 }}>
+                                    <div style={{ fontSize:8, color:"#7a6f5a", fontWeight:700, letterSpacing:0.5 }}>ÜRÜN GRAMI</div>
+                                    <div style={{ fontSize:15, fontWeight:800, color:"var(--goldtext)", lineHeight:1.4 }}>{fN(hc0.mamulGram, 2)}<span style={{ fontSize:9, fontWeight:600 }}> gr</span></div>
+                                    <div style={{ fontSize:8, color:"#998a6e" }}>adet başına</div>
+                                  </div>
+                                  <div style={{ flexShrink:0, textAlign:"center", padding:"8px 6px", borderRadius:10, background:"rgba(var(--vurgu-rgb),0.05)", border:"1px solid rgba(var(--vurgu-rgb),0.12)", width:100 }}>
+                                    <div style={{ fontSize:8, color:"#7a6f5a", fontWeight:700, letterSpacing:0.5 }}>TOPLAM GRAM</div>
+                                    <div style={{ fontSize:15, fontWeight:800, color:"var(--goldtext)", lineHeight:1.4 }}>{fN(hc0.mamulGram * net0, 1)}<span style={{ fontSize:9, fontWeight:600 }}> gr</span></div>
+                                    <div style={{ fontSize:8, color:"#998a6e" }}>{net0} adet × {fN(hc0.mamulGram, 2)}</div>
+                                  </div>
+                                </>); })()}
                               {/* Durum noktaları + hurda */}
                               <div style={{ display:"flex", gap:3, alignItems:"center", flexWrap:"wrap", justifyContent:"flex-end" }}>
                                 {DURUMLAR.filter(d=>d.id!=="hurda").map(d => (
