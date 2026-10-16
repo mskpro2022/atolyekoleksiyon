@@ -189,6 +189,15 @@ const KATEGORILER = [
   { id: "diger",    l: "Diger" },
 ];
 
+const TIP_ETIKET = { yuzuk:"Yüzük", kolye:"Kolye", kupe:"Küpe", bilezik:"Bilezik", bileklik:"Bileklik", pendant:"Pendant", set:"Set", diger:"" };
+function tipEtiket(kat) {
+  const k = String(kat||"").trim();
+  if (!k) return "";
+  const key = k.toLowerCase().replace(/ü/g,"u").replace(/ı/g,"i").replace(/ö/g,"o").replace(/ş/g,"s").replace(/ç/g,"c").replace(/ğ/g,"g");
+  if (key in TIP_ETIKET) return TIP_ETIKET[key];
+  return k.charAt(0).toUpperCase()+k.slice(1);
+}
+
 function gramDonustur(refGram, refAyar, hedefAyar, tasGram) {
   if (refAyar === hedefAyar) return refGram;
   // Yoğunluk bazlı dönüşüm (g/cm³) — sektör standardı
@@ -1251,7 +1260,7 @@ function ZorlukModal({ siparis, onKapat, onKaydet }) {
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: "flex", gap: 8, alignItems: "baseline", marginBottom: 6 }}>
                     <b style={{ fontSize: 13, color: GOLD }}>{k.kod || "—"}</b>
-                    <span style={{ fontSize: 10, color: "#8a7d64" }}>{k.ad && k.ad !== k.kod ? k.ad + " · " : ""}{k.adet || 1} adet</span>
+                    <span style={{ fontSize: 10, color: "#8a7d64" }}>{tipEtiket(k.kategori) ? tipEtiket(k.kategori) + " · " : ""}{k.adet || 1} adet</span>
                   </div>
                   <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginBottom: 6 }}>
                     {[1, 2, 3, 4, 5].map(z => (
@@ -1962,7 +1971,7 @@ function PdfSiparisModal({ modeller, kollar, onKapat, onUygula, onModelDuzenle }
                           <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
                             {rozet(s.durum === "coklu" ? "#e8b04f" : "#6abf69", s.durum === "coklu" ? "birden çok model" : "eşleşti")}
                             <b style={{ fontSize: 13, color: "#f5f5f7" }}>{m.kod}</b>
-                            <span style={{ fontSize: 10, color: "#a89c84" }}>{m.ad || ""}</span>
+                            <span style={{ fontSize: 10, color: "#a89c84" }}>{tipEtiket(m.kategori)}</span>
                             {onModelDuzenle && <button onClick={() => onModelDuzenle(m)} title="Model kartını aç: gram, taş, ayar vb. düzenle" style={{ ...GH, fontSize: 10, padding: "2px 8px" }}>✏️ Düzenle</button>}
                           </div>
                           <div style={{ fontSize: 10, color: "#8a7d64", marginTop: 2 }}>{m.gram ? m.gram + " gr · " : ""}{m.refAyar || ""} · {m.kategori || ""} · bulunan: {s.bulunanKod} ({(s.kalem.kodAdaylari.find(a => a.kod === s.bulunanKod) || {}).kaynak || ""})</div>
@@ -2521,7 +2530,7 @@ function buildKonfHTML(siparis, altinKgUSD, mc, fiyatli, modeller, siraModu) {
       // kod/ürün/renk/adet/gram bilgileri fotoğrafın ÜSTÜNDE tek satırda, bilgiler ALTINDA değil üstte yer alır.
       h += "<tr class='bileklik-row'><td colspan='" + kolonSayisi + "' style='padding:10px 14px'>";
       h += "<div class='bileklik-bilgi'>";
-      h += "<div class='bileklik-sol'><span class='kod'>" + (r.kod||"—") + "</span> <span class='model-ad'>" + (r.ad||"") + (r.kategori?" <span style='font-size:8px;color:#8a9bb0'>· "+r.kategori+"</span>":"") + "</span></div>";
+      h += "<div class='bileklik-sol'><span class='kod'>" + (r.kod||"—") + "</span> <span class='model-ad'>" + tipEtiket(r.kategori) + "</span></div>";
       h += "<div class='bileklik-sag'>";
       h += "<span class='" + renkClass + "'>" + (r.renk||"Sari") + "</span>";
       h += "<span>Adet: <b>" + r.adet + "</b></span>";
@@ -2537,7 +2546,7 @@ function buildKonfHTML(siparis, altinKgUSD, mc, fiyatli, modeller, siraModu) {
       h += "<tr>";
       h += "<td class='foto-cell'><div class='foto-wrap'>" + (r.foto?"<img src='"+r.foto+"'/>":"") + "</div></td>";
       h += "<td><div class='kod'>" + (r.kod||"—") + "</div></td>";
-      h += "<td><div class='model-ad'>" + (r.ad||"") + (r.kategori?" <span style='font-size:8px;color:#8a9bb0'>· "+r.kategori+"</span>":"") + "</div>" + (r.sipNot?"<div class='model-nt'>"+r.sipNot+"</div>":"") + boyStr + tasStr + "</td>";
+      h += "<td><div class='model-ad'>" + tipEtiket(r.kategori) + "</div>" + (r.sipNot?"<div class='model-nt'>"+r.sipNot+"</div>":"") + boyStr + tasStr + "</td>";
       h += "<td class='r'><span class='" + renkClass + "'>" + (r.renk||"Sari") + "</span></td>";
       h += "<td class='r'>" + r.adet + "</td>";
       h += "<td class='r'><div class='gram-lbl'>birim</div><div class='gram-birim'>" + fN(birimGram,2) + " gr</div></td>";
@@ -2671,7 +2680,7 @@ function buildSatisRaporuHTML(modeller, siparisler) {
   let toplamHurda = 0, toplamHurdaGr = 0;
   siparisler.forEach(s => {
     (s.kalemler||[]).forEach(k => {
-      if (!mSatis[k.id]) mSatis[k.id] = { ad:k.ad, kod:k.kod||"", foto:k.foto||"", adet:0, kar:0, gram:0, hurda:0 };
+      if (!mSatis[k.id]) mSatis[k.id] = { ad:tipEtiket(k.kategori), kod:k.kod||"", foto:k.foto||"", adet:0, kar:0, gram:0, hurda:0 };
       const hc = hesapla(k, k.secilenAyar||k.refAyar, s.altinKgUSD, s.mc);
       const hurdaAdet = ((s.kalemHurda)||{})[k.id] || 0;
       const iadeAdet  = ((s.kalemIade)||{})[k.id] || 0;
@@ -2779,7 +2788,7 @@ function buildSipListeRaporuHTML(siparisler, altinKgUSD, mc) {
   siparisler.forEach(s => {
     (s.kalemler || []).forEach(k => {
       const key = k.kod || k.id;
-      if (!kayipMap[key]) kayipMap[key] = { ad: k.ad || k.kod || "?", kod: k.kod || "?", hurda:[], iade:[], tamir:[] };
+      if (!kayipMap[key]) kayipMap[key] = { ad: tipEtiket(k.kategori), kod: k.kod || "?", hurda:[], iade:[], tamir:[] };
       const h = ((s.kalemHurda)  || {})[k.id] || 0;
       const ia= ((s.kalemIade)   || {})[k.id] || 0;
       const t = ((s.kalemTamir)  || {})[k.id] || 0;
@@ -3028,7 +3037,7 @@ function buildMusteriDetayHTML(musAd, musKod, siparisler) {
       h += "<tr style='" + (hurda?"background:#fff5f5;":"") + "'>";
       h += "<td>" + (k.foto?"<img src='"+k.foto+"' style='width:30px;height:30px;object-fit:cover;border-radius:4px'/>":"<div style='width:30px;height:30px;background:#f0f0f0;border-radius:4px'></div>") + "</td>";
       h += "<td style='color:#1a1a1a;font-weight:700'>" + (k.kod||"—") + "</td>";
-      h += "<td style='font-weight:600'>" + (k.ad||"") + "</td>";
+      h += "<td style='font-weight:600'>" + tipEtiket(k.kategori) + "</td>";
       h += "<td style='color:"+renkRenk+";font-weight:700'>" + (k.renk||"Sari") + "</td>";
       const hurdaNeden = hurda ? ((s.kalemHurdaNeden||{})[k.id]||"") : "";
       h += "<td style='color:#555;font-size:9px'>" + (k.sipNot||"") + (hurda?" <b style='color:#e85a4f'>[HURDA" + (hurdaNeden?" - "+hurdaNeden:"") + "]</b>":"") + "</td>";
@@ -7675,8 +7684,7 @@ function Atolye({ onSirketDegis }) {
                         </div>
                         {/* Ürün + not */}
                         <div>
-                          <div style={{ fontSize:10, fontWeight:700, color:"var(--goldtext)" }}>{m.ad}</div>
-                          {m.kategori && <span style={{ fontSize:7, color:"#a78bfa", background:"rgba(167,139,250,0.1)", padding:"1px 5px", borderRadius:3, fontWeight:600 }}>{m.kategori.charAt(0).toUpperCase()+m.kategori.slice(1)}</span>}
+                          {tipEtiket(m.kategori) && <span style={{ fontSize:9, color:"#a78bfa", background:"rgba(167,139,250,0.1)", padding:"1px 6px", borderRadius:3, fontWeight:700 }}>{tipEtiket(m.kategori)}</span>}
                           {/* Manuel not */}
                           <input value={not} onChange={e=>konfNotSec(m.id,e.target.value)} placeholder="Not ekle..." style={{ marginTop:4, width:"100%", background:"transparent", border:"none", borderBottom:"1px dashed rgba(var(--vurgu-rgb),0.2)", color:"var(--gold)", fontSize:9, outline:"none", padding:"1px 0" }}/>
                           <label style={{ display:"inline-flex", alignItems:"center", gap:4, marginTop:4, fontSize:9, cursor:"pointer", color: (konfNumune[m.id] !== undefined ? konfNumune[m.id] : konfAyar==="925") ? "#e8b04f" : "#7a6f5a", fontWeight: (konfNumune[m.id] !== undefined ? konfNumune[m.id] : konfAyar==="925") ? 800 : 500 }} title="Bu ürün müşteriye numune olarak verilecek (925 gümüşte otomatik)">
@@ -8286,7 +8294,7 @@ function Atolye({ onSirketDegis }) {
                               )}
                               <div style={{ flex:1, minWidth:0 }}>
                                 <div style={{ fontSize:10, fontWeight:700, color:"var(--goldtext)" }}>
-                                  <span style={{ color:GOLD, marginRight:4 }}>{k.kod||""}</span>{k.ad}
+                                  <span style={{ color:GOLD, marginRight:4 }}>{k.kod||""}</span>{tipEtiket(k.kategori)}
                                   <button onClick={e=>{ e.stopPropagation(); svS(siparisler.map(sp=>sp.id===s.id?{...sp,kalemler:(sp.kalemler||[]).map(x=>x.id===k.id?{...x,numune:!x.numune}:x)}:sp)); }} title="Numune işaretini aç/kapat" style={{ marginLeft:6, fontSize:8, fontWeight:700, padding:"1px 6px", borderRadius:5, cursor:"pointer", border:"1px solid "+(k.numune?"#e8b04f":"rgba(255,255,255,0.12)"), background:k.numune?"rgba(232,176,79,0.18)":"transparent", color:k.numune?"#e8b04f":"#7a6f5a" }}>🎁 {k.numune?"Numune":"numune?"}</button>
                                   {k.renk && <span style={{ color:"var(--gold)", marginLeft:6, fontSize:9 }}>{k.renk}</span>}
                                 </div>
@@ -8360,18 +8368,18 @@ function Atolye({ onSirketDegis }) {
                                   const tamirAdet = (s.kalemTamir||{})[k.id]||0;
                                   return (
                                     <>
-                                      <button onClick={e=>{e.stopPropagation(); setHurdaModal({sipId:s.id, kalemId:k.id, kalemAd:k.ad, maxAdet:k.adet||1, mevcAdet:hurdaAdet, mevcNeden:hurdaNeden});}}
+                                      <button onClick={e=>{e.stopPropagation(); setHurdaModal({sipId:s.id, kalemId:k.id, kalemKod:k.kod, kalemAd:tipEtiket(k.kategori), maxAdet:k.adet||1, mevcAdet:hurdaAdet, mevcNeden:hurdaNeden});}}
                                         style={{ display:"flex", alignItems:"center", gap:3, marginLeft:6, background:hurdaAdet>0?"rgba(232,90,79,0.15)":"rgba(232,90,79,0.06)", border:"1px solid rgba(232,90,79,0.25)", borderRadius:6, padding:"2px 7px", cursor:"pointer" }}>
                                         <span style={{ fontSize:7, color:"#e85a4f", fontWeight:700 }}>🗑 HURDA</span>
                                         {hurdaAdet>0 && <span style={{ fontSize:9, color:"#e85a4f", fontWeight:800 }}>{hurdaAdet}/{k.adet||1}</span>}
                                         {hurdaNeden && <span style={{ fontSize:7, color:"#e85a4f", opacity:0.7, maxWidth:60, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{hurdaNeden}</span>}
                                       </button>
-                                      <button onClick={e=>{e.stopPropagation(); setIadeModal({sipId:s.id, kalemId:k.id, kalemAd:k.ad, kalemKod:k.kod, maxAdet:k.adet||1, mevcAdet:iadeAdet, mevcNeden:(s.kalemIadeNeden||{})[k.id]||"", iadeTuru:(s.kalemIadeTuru||{})[k.id]||"para"});}}
+                                      <button onClick={e=>{e.stopPropagation(); setIadeModal({sipId:s.id, kalemId:k.id, kalemAd:tipEtiket(k.kategori), kalemKod:k.kod, maxAdet:k.adet||1, mevcAdet:iadeAdet, mevcNeden:(s.kalemIadeNeden||{})[k.id]||"", iadeTuru:(s.kalemIadeTuru||{})[k.id]||"para"});}}
                                         style={{ display:"flex", alignItems:"center", gap:3, marginLeft:6, background:iadeAdet>0?"rgba(167,139,250,0.15)":"rgba(167,139,250,0.06)", border:"1px solid rgba(167,139,250,0.25)", borderRadius:6, padding:"2px 7px", cursor:"pointer" }}>
                                         <span style={{ fontSize:7, color:"#a78bfa", fontWeight:700 }}>↩ İADE</span>
                                         {iadeAdet>0 && <span style={{ fontSize:9, color:"#a78bfa", fontWeight:800 }}>{iadeAdet}/{k.adet||1}</span>}
                                       </button>
-                                      <button onClick={e=>{e.stopPropagation(); setTamirModal({sipId:s.id, kalemId:k.id, kalemAd:k.ad, kalemKod:k.kod, maxAdet:k.adet||1, mevcAdet:tamirAdet, mevcNeden:(s.kalemTamirNeden||{})[k.id]||""});}}
+                                      <button onClick={e=>{e.stopPropagation(); setTamirModal({sipId:s.id, kalemId:k.id, kalemAd:tipEtiket(k.kategori), kalemKod:k.kod, maxAdet:k.adet||1, mevcAdet:tamirAdet, mevcNeden:(s.kalemTamirNeden||{})[k.id]||""});}}
                                         style={{ display:"flex", alignItems:"center", gap:3, marginLeft:6, background:tamirAdet>0?"rgba(91,155,213,0.15)":"rgba(91,155,213,0.06)", border:"1px solid rgba(91,155,213,0.25)", borderRadius:6, padding:"2px 7px", cursor:"pointer" }}>
                                         <span style={{ fontSize:7, color:"#5b9bd5", fontWeight:700 }}>🔧 TAMİR</span>
                                         {tamirAdet>0 && <span style={{ fontSize:9, color:"#5b9bd5", fontWeight:800 }}>{tamirAdet}/{k.adet||1}</span>}
@@ -8442,7 +8450,7 @@ function Atolye({ onSirketDegis }) {
                         <div className="model-foto-wrap" style={{ width:80, height:80, borderRadius:8, overflow:"hidden", flexShrink:0, background:"rgba(0,0,0,0.2)" }}>{r.kalem.foto ? <img src={r.kalem.foto} style={{ width:"100%", height:"100%", objectFit:"cover", objectPosition:"center center", display:"block" }}/> : <div style={{ width:"100%", height:"100%", background:"rgba(var(--vurgu-rgb),0.06)" }}/>}</div>
                         <div style={{ flex:1 }}>
                           <div style={{ fontSize:11, fontWeight:700, color:"var(--goldtext)" }}>
-                            <span style={{ color:GOLD, marginRight:5 }}>{r.kalem.kod||""}</span>{r.kalem.ad}
+                            <span style={{ color:GOLD, marginRight:5 }}>{r.kalem.kod||""}</span>{tipEtiket(r.kalem.kategori)}
                           </div>
                           <div style={{ fontSize:9, color:"#998a6e", marginTop:2 }}>
                             Müşteri: <b style={{ color:"#c0b399" }}>{r.musteri}</b> · {new Date(r.tarih).toLocaleDateString("tr-TR")}
@@ -8475,7 +8483,7 @@ function Atolye({ onSirketDegis }) {
                         <div className="model-foto-wrap" style={{ width:80, height:80, borderRadius:8, overflow:"hidden", flexShrink:0, background:"rgba(0,0,0,0.2)" }}>{r.kalem.foto ? <img src={r.kalem.foto} style={{ width:"100%", height:"100%", objectFit:"cover", objectPosition:"center center", display:"block" }}/> : <div style={{ width:"100%", height:"100%", background:"rgba(var(--vurgu-rgb),0.06)" }}/>}</div>
                         <div style={{ flex:1 }}>
                           <div style={{ fontSize:11, fontWeight:700, color:"var(--goldtext)" }}>
-                            <span style={{ color:GOLD, marginRight:5 }}>{r.kalem.kod||""}</span>{r.kalem.ad}
+                            <span style={{ color:GOLD, marginRight:5 }}>{r.kalem.kod||""}</span>{tipEtiket(r.kalem.kategori)}
                           </div>
                           <div style={{ fontSize:9, color:"#998a6e", marginTop:2 }}>
                             Müşteri: <b style={{ color:"#c0b399" }}>{r.musteri}</b> · {new Date(r.tarih).toLocaleDateString("tr-TR")}
@@ -11143,7 +11151,7 @@ function Atolye({ onSirketDegis }) {
       {hurdaModal && (
         <Modal open={!!hurdaModal} onClose={()=>setHurdaModal(null)} title="Hurda Kaydı" T={T}>
           <div style={{ fontSize:11, fontWeight:700, color:"var(--goldtext)", marginBottom:12 }}>
-            {hurdaModal.kalemAd}
+            {hurdaModal.kalemKod && <span style={{ color:GOLD, marginRight:6 }}>{hurdaModal.kalemKod}</span>}{hurdaModal.kalemAd}
           </div>
           {/* Hurda adedi */}
           <Fl label={"Hurda Adedi (max "+hurdaModal.maxAdet+")"} T={T}>
