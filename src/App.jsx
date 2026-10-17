@@ -5145,6 +5145,359 @@ export default function Root() {
   return <Atolye key={sirketKey} onSirketDegis={()=>setSirket(false)} />;
 }
 
+// ═══ KEŞFET: GERÇEK ANALİZ EKRANI — katalog + sipariş + kayıp + müşteri (yalnızca müşteri KODU gösterilir) ═══
+const KS_DONEMLER = [{id:"bu_ay",l:"Bu Ay"},{id:"gecen_ay",l:"Geçen Ay"},{id:"3ay",l:"3 Ay"},{id:"6ay",l:"6 Ay"},{id:"yil",l:"Bu Yıl"},{id:"tum",l:"Tümü"},{id:"ozel",l:"Özel"}];
+function ksAralik(donem, t1, t2) {
+  const n = new Date(); const y = n.getFullYear(), a = n.getMonth();
+  let bas = 0, bit = Date.now();
+  if (donem === "bu_ay") bas = new Date(y, a, 1).getTime();
+  else if (donem === "gecen_ay") { bas = new Date(y, a - 1, 1).getTime(); bit = new Date(y, a, 1).getTime() - 1; }
+  else if (donem === "3ay") bas = new Date(y, a - 2, 1).getTime();
+  else if (donem === "6ay") bas = new Date(y, a - 5, 1).getTime();
+  else if (donem === "yil") bas = new Date(y, 0, 1).getTime();
+  else if (donem === "ozel") { bas = t1 ? new Date(t1).getTime() : 0; bit = t2 ? new Date(t2).getTime() + 86399999 : Date.now(); }
+  return [bas, bit];
+}
+// Her sipariş kaleminden tek satır: net adet, has cinsinden taş/işçilik/maliyet/kâr
+function ksSatirlar(siparisler, musteriler) {
+  const kodHarita = {}; Object.entries(musteriler || {}).forEach(([ad, kod]) => { kodHarita[ad] = kod; });
+  const out = [];
+  siparisler.forEach(s => {
+    const mus = s.musKod || kodHarita[s.musteri] || "—";
+    (s.kalemler || []).forEach(k => {
+      const ayar = k.secilenAyar || k.refAyar || "14K";
+      const hc = hesapla(k, ayar, s.altinKgUSD, s.mc);
+      const adet = k.adet || 1;
+      const h = ((s.kalemHurda) || {})[k.id] || 0, ia = ((s.kalemIade) || {})[k.id] || 0, ta = ((s.kalemTamir) || {})[k.id] || 0;
+      const net = Math.max(0, adet - h - ia - ta);
+      const durum = ((s.kalemDurumlar) || {})[k.id] || k.durum || "baslanmadi";
+      const biten = durum === "tamam" || durum === "teslim";
+      const p = durum === "hurda" ? "x" : biten ? "r" : "a"; // r: gerçekleşen, a: üretimde (beklenen), x: hurda
+      const nm = k.numune ? 0 : 1;
+      out.push({
+        s, k, sid: s.id, tarih: s.tarih || 0, mus, ayar, kat: k.kategori || "diger", ki: k.ki || "", kod: String(k.kod || "").toUpperCase(),
+        adet, net, h, ia, ta, durum, p, numune: !!k.numune, hasUSD: (s.altinKgUSD || 0) / 1000,
+        gram: hc.mamulGram * net, karGram: hc.mamulGram * net * nm, tasGr: (Number(k.tasGram) || 0) * net * nm,
+        tas: hc.tasHas * net * nm, isc: hc.iscilikHas * net * nm, mal: hc.topMaliyetHas * net * nm, kar: hc.karHas * net * nm,
+        hGram: hc.mamulGram * h, iaGram: hc.mamulGram * ia, taGram: hc.mamulGram * ta,
+        neden: { h: ((s.kalemHurdaNeden) || {})[k.id] || "", ia: ((s.kalemIadeNeden) || {})[k.id] || "", ta: ((s.kalemTamirNeden) || {})[k.id] || "" },
+      });
+    });
+  });
+  return out;
+}
+function ksTopla(rows) {
+  const o = { sip: new Set(), verilen: 0, adet: 0, gram: 0, karGram: 0, tasGr: 0, tas: 0, isc: 0, mal: 0, kar: 0, karUSD: 0, beklAdet: 0, beklKar: 0, h: 0, ia: 0, ta: 0, hGram: 0, son: 0 };
+  rows.forEach(r => {
+    o.sip.add(r.sid); o.verilen += r.adet; o.h += r.h; o.ia += r.ia; o.ta += r.ta; o.hGram += r.hGram; o.son = Math.max(o.son, r.tarih);
+    if (r.p === "r") { o.adet += r.net; o.gram += r.gram; o.karGram += r.karGram; o.tasGr += r.tasGr; o.tas += r.tas; o.isc += r.isc; o.mal += r.mal; o.kar += r.kar; o.karUSD += r.kar * r.hasUSD; }
+    else if (r.p === "a") { o.beklAdet += r.net; o.beklKar += r.kar; }
+  });
+  o.sipN = o.sip.size; o.mly = o.karGram > 0 ? o.kar / o.karGram : 0; o.usdGr = o.karGram > 0 ? o.karUSD / o.karGram : 0;
+  o.kayipAdet = o.h + o.ia + o.ta; o.kayipOran = o.verilen > 0 ? o.kayipAdet / o.verilen : 0;
+  return o;
+}
+function ksGrupla(rows, keyFn) {
+  const m = {}; rows.forEach(r => { const k = keyFn(r); if (k == null) return; (m[k] = m[k] || []).push(r); });
+  return Object.entries(m).map(([k, rs]) => ({ key: k, ...ksTopla(rs), rows: rs }));
+}
+const ksG = (n, d) => (Number(n) || 0).toFixed(d == null ? 1 : d);
+const ksYuzde = (n) => ((Number(n) || 0) * 100).toFixed(1) + "%";
+const ksMly = (v) => (Number(v) >= 0 ? "+" : "−") + (Math.abs(Number(v) || 0) * 1000).toFixed(1);
+const ksTip = (kat) => tipEtiket(kat) || "Diğer";
+
+function KsKart({ baslik, deger, alt, renk, T, fark }) {
+  return (
+    <div style={{ background: "rgba(var(--vurgu-rgb),0.04)", border: "1px solid rgba(var(--vurgu-rgb),0.1)", borderRadius: 10, padding: "10px 12px", minWidth: 120, flex: "1 1 120px" }}>
+      <div style={{ fontSize: 8, fontWeight: 800, color: T.sub, letterSpacing: "0.06em", textTransform: "uppercase" }}>{baslik}</div>
+      <div style={{ fontSize: 19, fontWeight: 800, color: renk || T.text, marginTop: 3, lineHeight: 1.1 }}>{deger}</div>
+      {alt != null && <div style={{ fontSize: 9, color: T.sub, marginTop: 3 }}>{alt}</div>}
+      {fark != null && isFinite(fark) && <div style={{ fontSize: 9, fontWeight: 700, marginTop: 2, color: fark >= 0 ? "#6abf69" : "#e85a4f" }}>{fark >= 0 ? "▲" : "▼"} {Math.abs(fark * 100).toFixed(0)}% önceki döneme göre</div>}
+    </div>
+  );
+}
+// Sıralanabilir tablo: kolonlar [{k, l, f(satir)=>gösterim, v(satir)=>sıralama değeri, sol:true}]
+function KsTablo({ kolonlar, satirlar, sira0, limit, T, bos }) {
+  const [sk, setSk] = useState(sira0 || kolonlar[1]?.k);
+  const [yon, setYon] = useState(-1);
+  const [hepsi, setHepsi] = useState(false);
+  const kol = kolonlar.find(c => c.k === sk) || kolonlar[0];
+  const sirali = [...satirlar].sort((a, b) => {
+    const x = kol.v ? kol.v(a) : 0, y = kol.v ? kol.v(b) : 0;
+    if (typeof x === "string") return yon * String(x).localeCompare(String(y), "tr");
+    return yon * ((Number(x) || 0) - (Number(y) || 0));
+  });
+  const goster = hepsi || !limit ? sirali : sirali.slice(0, limit);
+  if (!satirlar.length) return <div style={{ fontSize: 10, color: "#665d4a", padding: "10px 0" }}>{bos || "Veri yok"}</div>;
+  return (
+    <div style={{ overflowX: "auto" }}>
+      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 10 }}>
+        <thead><tr>
+          {kolonlar.map(c => (
+            <th key={c.k} onClick={() => { if (sk === c.k) setYon(-yon); else { setSk(c.k); setYon(c.sol ? 1 : -1); } }}
+              style={{ textAlign: c.sol ? "left" : "right", padding: "6px 8px", fontSize: 8, fontWeight: 800, color: sk === c.k ? GOLD : T.sub, letterSpacing: "0.05em", textTransform: "uppercase", borderBottom: "1px solid rgba(var(--vurgu-rgb),0.15)", cursor: "pointer", whiteSpace: "nowrap" }}>
+              {c.l}{sk === c.k ? (yon < 0 ? " ▼" : " ▲") : ""}
+            </th>
+          ))}
+        </tr></thead>
+        <tbody>
+          {goster.map((s, i) => (
+            <tr key={s.key != null ? s.key : i} style={{ borderBottom: "1px solid rgba(var(--vurgu-rgb),0.06)" }}>
+              {kolonlar.map(c => <td key={c.k} style={{ textAlign: c.sol ? "left" : "right", padding: "6px 8px", color: T.text, whiteSpace: "nowrap", fontWeight: c.sol ? 700 : 500 }}>{c.f ? c.f(s) : ""}</td>)}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {limit && sirali.length > limit && <button onClick={() => setHepsi(!hepsi)} style={{ ...GH, fontSize: 9, padding: "4px 10px", marginTop: 6 }}>{hepsi ? "İlk " + limit + " göster" : "Tümünü göster (" + sirali.length + ")"}</button>}
+    </div>
+  );
+}
+function KsBolum({ baslik, children, T, sag }) {
+  return (
+    <div style={{ background: "rgba(var(--vurgu-rgb),0.03)", border: "1px solid rgba(var(--vurgu-rgb),0.09)", borderRadius: 12, padding: "12px 14px", marginBottom: 12 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, gap: 8, flexWrap: "wrap" }}>
+        <div style={{ fontSize: 10, fontWeight: 800, color: T.sub, letterSpacing: "0.06em", textTransform: "uppercase" }}>{baslik}</div>{sag}
+      </div>
+      {children}
+    </div>
+  );
+}
+// kâr kırılım kolonları (ayar / tür / koleksiyon / müşteri / model tabloları ortak kullanır)
+const ksKarKolonlari = [
+  { k: "adet", l: "Adet", v: r => r.adet, f: r => r.adet },
+  { k: "gram", l: "Gram", v: r => r.gram, f: r => ksG(r.gram) },
+  { k: "tasGr", l: "Taş gr", v: r => r.tasGr, f: r => ksG(r.tasGr) },
+  { k: "tas", l: "Taştan", v: r => r.tas, f: r => ksG(r.tas, 2) },
+  { k: "isc", l: "İşçilikten", v: r => r.isc, f: r => ksG(r.isc, 2) },
+  { k: "mal", l: "Maliyet", v: r => r.mal, f: r => "−" + ksG(r.mal, 2) },
+  { k: "kar", l: "Net kâr (has)", v: r => r.kar, f: r => <b style={{ color: r.kar < 0 ? "#e85a4f" : "#6abf69" }}>{r.kar < 0 ? "−" : ""}{ksG(Math.abs(r.kar), 2)}</b> },
+  { k: "mly", l: "mly/gr", v: r => r.mly, f: r => <span style={{ color: r.mly < 0 ? "#e85a4f" : undefined }}>{ksMly(r.mly)}</span> },
+  { k: "usd", l: "$ kâr", v: r => r.karUSD, f: r => fUSDi(r.karUSD) },
+];
+
+function KesfetEkrani({ siparisler, modeller, kollar, musteriler, T, altinKgUSD, madenCarpan }) {
+  const [donem, setDonem] = useState("3ay");
+  const [t1, setT1] = useState(""); const [t2, setT2] = useState("");
+  const [ayarF, setAyarF] = useState(""); const [musF, setMusF] = useState("");
+  const [sekme, setSekme] = useState("ozet");
+  const [olKat, setOlKat] = useState(""); const [olKol, setOlKol] = useState("");
+
+  const tum = useMemo(() => ksSatirlar(siparisler, musteriler), [siparisler, musteriler]);
+  const [bas, bit] = ksAralik(donem, t1, t2);
+  const uzunluk = Math.max(1, bit - bas);
+  const filtre = (rs, b, e) => rs.filter(r => r.tarih >= b && r.tarih <= e && (!ayarF || r.ayar === ayarF) && (!musF || r.mus === musF));
+  const rows = useMemo(() => filtre(tum, bas, bit), [tum, bas, bit, ayarF, musF]);
+  const oncekiRows = useMemo(() => donem === "tum" ? [] : filtre(tum, bas - uzunluk, bas - 1), [tum, bas, bit, ayarF, musF, donem]);
+  const top = useMemo(() => ksTopla(rows), [rows]);
+  const onc = useMemo(() => ksTopla(oncekiRows), [oncekiRows]);
+  const fark = (a, b) => (donem === "tum" || !(Math.abs(b) > 0.0001)) ? null : (a - b) / Math.abs(b);
+  const musKodlari = useMemo(() => Array.from(new Set(tum.map(r => r.mus))).filter(x => x && x !== "—").sort(), [tum]);
+  const ayarlarVar = useMemo(() => Array.from(new Set(tum.map(r => r.ayar))), [tum]);
+
+  const ayarG = useMemo(() => ksGrupla(rows, r => r.ayar).sort((a, b) => b.kar - a.kar), [rows]);
+  const turG = useMemo(() => ksGrupla(rows, r => r.kat), [rows]);
+  const kolG = useMemo(() => ksGrupla(rows, r => r.ki || "—"), [rows]);
+  const musG = useMemo(() => ksGrupla(rows, r => r.mus), [rows]);
+  const modG = useMemo(() => ksGrupla(rows, r => r.kod || null), [rows]);
+  const kolAd = (id) => (kollar.find(k => k.id === id) || {}).ad || "—";
+
+  // aylık trend (son 12 ay, dönem filtresinden bağımsız ama ayar/müşteri filtreli)
+  const aylik = useMemo(() => {
+    const n = new Date(); const liste = [];
+    for (let i = 11; i >= 0; i--) { const d = new Date(n.getFullYear(), n.getMonth() - i, 1); liste.push({ key: d.getFullYear() + "-" + d.getMonth(), l: d.toLocaleDateString("tr-TR", { month: "short" }), kar: 0, adet: 0 }); }
+    tum.forEach(r => {
+      if (r.p !== "r" || (ayarF && r.ayar !== ayarF) || (musF && r.mus !== musF)) return;
+      const d = new Date(r.tarih); const it = liste.find(x => x.key === d.getFullYear() + "-" + d.getMonth());
+      if (it) { it.kar += r.kar; it.adet += r.net; }
+    });
+    return liste;
+  }, [tum, ayarF, musF]);
+  const aMax = Math.max(0.0001, ...aylik.map(x => Math.abs(x.kar)));
+
+  // katalog bilançosu — tüm zamanlar (dönemden bağımsız)
+  const katalog = useMemo(() => {
+    const sipKod = new Set(tum.map(r => r.kod)); const sipSatan = new Set(tum.filter(r => r.p === "r").map(r => r.kod));
+    const liste = modeller.map(m => ({ m, kod: String(m.kod || "").toUpperCase(), kat: m.kategori || "diger", ki: m.ki }));
+    const olu = liste.filter(x => x.kod && !sipKod.has(x.kod));
+    const bykat = {}; liste.forEach(x => { const o = bykat[x.kat] = bykat[x.kat] || { key: x.kat, model: 0, siparisli: 0, olu: 0 }; o.model++; if (sipKod.has(x.kod)) o.siparisli++; else o.olu++; });
+    const bykol = {}; liste.forEach(x => { const o = bykol[x.ki] = bykol[x.ki] || { key: x.ki, model: 0, siparisli: 0, olu: 0 }; o.model++; if (sipKod.has(x.kod)) o.siparisli++; else o.olu++; });
+    const ayarDag = {}; modeller.forEach(m => { const a = m.refAyar || "14K"; ayarDag[a] = (ayarDag[a] || 0) + 1; });
+    const tasli = modeller.filter(m => (Number(m.tasGram) || 0) > 0).length;
+    const ortGram = modeller.length ? modeller.reduce((s, m) => s + (Number(m.gram) || 0), 0) / modeller.length : 0;
+    return { toplam: modeller.length, siparisli: liste.filter(x => sipKod.has(x.kod)).length, satan: liste.filter(x => sipSatan.has(x.kod)).length, olu, bykat: Object.values(bykat), bykol: Object.values(bykol), ayarDag, tasli, ortGram };
+  }, [modeller, tum]);
+
+  // aşama dağılımı + geciken (anlık durum — dönemden bağımsız)
+  const asama = useMemo(() => {
+    const m = {}; tum.filter(r => r.p === "a").forEach(r => { m[r.durum] = (m[r.durum] || 0) + r.net; });
+    return DURUMLAR.filter(d => d.id !== "hurda" && d.id !== "teslim" && d.id !== "tamam" && m[d.id]).map(d => ({ ...d, adet: m[d.id] }));
+  }, [tum]);
+  const geciken = useMemo(() => siparisler.map(s => ({ s, o: sipKarOzet(s, s.kalemDurumlar) })).filter(x => x.o.gec).sort((a, b) => a.o.gun - b.o.gun).slice(0, 8), [siparisler]);
+  const sure = useMemo(() => {
+    let say = 0, top2 = 0;
+    siparisler.forEach(s => { if (s.tarih < bas || s.tarih > bit) return; const g = s.durumGecmisi; if (!g || !g.length) return; const son = g[g.length - 1]; if (!["tamam", "teslim"].includes(son.durum)) return; say++; top2 += isGunuSure(g[0].tarih, son.tarih); });
+    return say ? top2 / say / 864e5 : 0;
+  }, [siparisler, bas, bit]);
+
+  // kayıp nedenleri
+  const nedenler = useMemo(() => {
+    const m = {}; rows.forEach(r => [["h", "Hurda"], ["ia", "İade"], ["ta", "Tamir"]].forEach(([k, l]) => { if (r[k] > 0) { const n = (r.neden[k] || "").trim() || "(neden yazılmamış)"; const key = l + " · " + n; m[key] = (m[key] || 0) + r[k]; } }));
+    return Object.entries(m).sort((a, b) => b[1] - a[1]).map(([key, adet]) => ({ key, adet }));
+  }, [rows]);
+
+  const sekmeler = [["ozet", "Özet"], ["satis", "Satış & Kâr"], ["katalog", "Katalog"], ["model", "Modeller"], ["musteri", "Müşteriler"], ["kayip", "Kayıplar"], ["uretim", "Üretim"], ["rapor", "Raporlar"]];
+  const sel = { ...IS, width: "auto", padding: "5px 8px", fontSize: 10 };
+  const dbtn = (a) => ({ background: a ? "rgba(var(--vurgu-rgb),0.18)" : "rgba(var(--vurgu-rgb),0.04)", border: "1px solid", borderColor: a ? "rgba(var(--vurgu-rgb),0.4)" : "rgba(var(--vurgu-rgb),0.1)", borderRadius: 6, padding: "4px 10px", color: a ? T.gold : T.sub, fontSize: 9, fontWeight: 700, cursor: "pointer" });
+  const hasYok = !(altinKgUSD > 0);
+
+  return (
+    <div>
+      {/* filtre çubuğu */}
+      <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", marginBottom: 10 }}>
+        {KS_DONEMLER.map(d => <button key={d.id} onClick={() => setDonem(d.id)} style={dbtn(donem === d.id)}>{d.l}</button>)}
+        {donem === "ozel" && <><input type="date" value={t1} onChange={e => setT1(e.target.value)} style={sel} /><span style={{ color: "#665d4a" }}>—</span><input type="date" value={t2} onChange={e => setT2(e.target.value)} style={sel} /></>}
+        <select value={ayarF} onChange={e => setAyarF(e.target.value)} style={sel}><option value="">Tüm ayarlar</option>{ayarlarVar.map(a => <option key={a} value={a}>{a}</option>)}</select>
+        <select value={musF} onChange={e => setMusF(e.target.value)} style={sel}><option value="">Tüm müşteriler</option>{musKodlari.map(k => <option key={k} value={k}>{k}</option>)}</select>
+        {(ayarF || musF) && <button onClick={() => { setAyarF(""); setMusF(""); }} style={{ ...RD, fontSize: 9, padding: "4px 9px" }}>Filtreyi temizle</button>}
+      </div>
+      <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginBottom: 12, borderBottom: "1px solid rgba(var(--vurgu-rgb),0.12)", paddingBottom: 8 }}>
+        {sekmeler.map(([id, l]) => <button key={id} onClick={() => setSekme(id)} style={{ ...dbtn(sekme === id), fontSize: 10, padding: "5px 12px" }}>{l}</button>)}
+      </div>
+
+      {sekme === "ozet" && (<>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
+          <KsKart T={T} baslik="Sipariş" deger={top.sipN} alt={top.verilen + " adet verilen"} fark={fark(top.sipN, onc.sipN)} />
+          <KsKart T={T} baslik="Tamamlanan" deger={top.adet + " adet"} alt={ksG(top.gram) + " gr · " + ksG(top.tasGr) + " gr taş"} fark={fark(top.adet, onc.adet)} />
+          <KsKart T={T} baslik="Net kâr (has)" deger={(top.kar < 0 ? "−" : "") + ksG(Math.abs(top.kar), 2)} renk={top.kar < 0 ? "#e85a4f" : "#6abf69"} alt={hasYok ? "" : fUSDi(top.karUSD)} fark={fark(top.kar, onc.kar)} />
+          <KsKart T={T} baslik="Kârlılık" deger={ksMly(top.mly) + " mly/gr"} renk={top.mly < 0 ? "#e85a4f" : T.text} alt={fUSDi(top.usdGr) + " /gr"} />
+          <KsKart T={T} baslik="Üretimde" deger={top.beklAdet + " adet"} alt={"beklenen kâr " + ksG(top.beklKar, 2) + " has"} />
+          <KsKart T={T} baslik="Kayıp" deger={ksYuzde(top.kayipOran)} renk={top.kayipOran > 0.05 ? "#e85a4f" : T.text} alt={top.h + " hurda · " + top.ia + " iade · " + top.ta + " tamir"} />
+        </div>
+        <KsBolum T={T} baslik="Kâr dağılımı (dönem)">
+          {(() => { const par = [["Taştan", top.tas, "#d4af37"], ["İşçilikten", top.isc, "#5b9bd5"], ["Maliyet (−)", -top.mal, "#e85a4f"], ["Net kâr", top.kar, top.kar < 0 ? "#e85a4f" : "#6abf69"]]; const mx = Math.max(0.0001, ...par.map(p => Math.abs(p[1])));
+            return par.map(([l, v, c]) => (<div key={l} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 5 }}>
+              <div style={{ width: 80, fontSize: 10, color: T.sub }}>{l}</div>
+              <div style={{ flex: 1, height: 12, background: "rgba(255,255,255,0.04)", borderRadius: 4 }}><div style={{ width: Math.abs(v) / mx * 100 + "%", height: "100%", background: c, borderRadius: 4 }} /></div>
+              <div style={{ width: 70, textAlign: "right", fontSize: 10, fontWeight: 700, color: c }}>{v < 0 ? "−" : ""}{ksG(Math.abs(v), 2)}</div></div>)); })()}
+        </KsBolum>
+        <KsBolum T={T} baslik="Son 12 ay · net kâr (has)">
+          <div style={{ display: "flex", alignItems: "flex-end", gap: 5, height: 110 }}>
+            {aylik.map(x => (<div key={x.key} title={x.l + ": " + ksG(x.kar, 2) + " has · " + x.adet + " adet"} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end", height: "100%" }}>
+              <div style={{ fontSize: 8, color: T.sub }}>{x.kar ? ksG(x.kar, 1) : ""}</div>
+              <div style={{ width: "100%", height: Math.max(2, Math.abs(x.kar) / aMax * 80) + "px", background: x.kar < 0 ? "#e85a4f" : "#6abf69", borderRadius: 3, opacity: x.kar ? 1 : 0.2 }} />
+              <div style={{ fontSize: 8, color: T.sub, marginTop: 3 }}>{x.l}</div></div>))}
+          </div>
+        </KsBolum>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(300px,1fr))", gap: 12 }}>
+          <KsBolum T={T} baslik="En kârlı 5 model"><KsTablo T={T} limit={5} sira0="kar" satirlar={modG.map(g => ({ ...g, key: g.key }))} kolonlar={[{ k: "kod", l: "Kod", sol: true, v: r => r.key, f: r => r.key }, { k: "adet", l: "Adet", v: r => r.adet, f: r => r.adet }, { k: "kar", l: "Kâr (has)", v: r => r.kar, f: r => ksG(r.kar, 2) }, { k: "mly", l: "mly/gr", v: r => r.mly, f: r => ksMly(r.mly) }]} /></KsBolum>
+          <KsBolum T={T} baslik="En değerli 5 müşteri (kod)"><KsTablo T={T} limit={5} sira0="kar" satirlar={musG} kolonlar={[{ k: "kod", l: "Kod", sol: true, v: r => r.key, f: r => r.key }, { k: "adet", l: "Adet", v: r => r.adet, f: r => r.adet }, { k: "kar", l: "Kâr (has)", v: r => r.kar, f: r => ksG(r.kar, 2) }, { k: "mly", l: "mly/gr", v: r => r.mly, f: r => ksMly(r.mly) }]} /></KsBolum>
+        </div>
+      </>)}
+
+      {sekme === "satis" && (<>
+        <KsBolum T={T} baslik="Ayara göre">
+          <KsTablo T={T} sira0="kar" satirlar={ayarG} kolonlar={[{ k: "ayar", l: "Ayar", sol: true, v: r => r.key, f: r => r.key }, ...ksKarKolonlari]} />
+          <div style={{ fontSize: 9, color: "#665d4a", marginTop: 6 }}>Ayar düştükçe adet artar ama taş has değeri düşer; mly/gr sütunu hangi ayarın gerçekten kazandırdığını gösterir.</div>
+        </KsBolum>
+        <KsBolum T={T} baslik="Ürün türüne göre">
+          <KsTablo T={T} sira0="kar" satirlar={turG} kolonlar={[{ k: "tur", l: "Tür", sol: true, v: r => ksTip(r.key), f: r => ksTip(r.key) }, ...ksKarKolonlari]} />
+        </KsBolum>
+        <KsBolum T={T} baslik="Koleksiyona göre">
+          <KsTablo T={T} sira0="kar" limit={15} satirlar={kolG} kolonlar={[{ k: "kol", l: "Koleksiyon", sol: true, v: r => kolAd(r.key), f: r => kolAd(r.key) }, ...ksKarKolonlari]} />
+        </KsBolum>
+      </>)}
+
+      {sekme === "katalog" && (<>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
+          <KsKart T={T} baslik="Toplam model" deger={katalog.toplam} alt={"ort. " + ksG(katalog.ortGram) + " gr"} />
+          <KsKart T={T} baslik="Sipariş almış" deger={katalog.siparisli} alt={ksYuzde(katalog.toplam ? katalog.siparisli / katalog.toplam : 0)} />
+          <KsKart T={T} baslik="Teslime ulaşmış" deger={katalog.satan} alt="en az bir adedi tamamlanmış" />
+          <KsKart T={T} baslik="Hiç sipariş almamış" deger={katalog.olu.length} renk={katalog.olu.length ? "#e8833a" : T.text} alt="ölü katalog" />
+          <KsKart T={T} baslik="Taşlı model" deger={katalog.tasli} alt={ksYuzde(katalog.toplam ? katalog.tasli / katalog.toplam : 0)} />
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(300px,1fr))", gap: 12 }}>
+          <KsBolum T={T} baslik="Türe göre katalog"><KsTablo T={T} sira0="model" satirlar={katalog.bykat} kolonlar={[{ k: "tur", l: "Tür", sol: true, v: r => ksTip(r.key), f: r => ksTip(r.key) }, { k: "model", l: "Model", v: r => r.model, f: r => r.model }, { k: "sip", l: "Siparişli", v: r => r.siparisli, f: r => r.siparisli }, { k: "olu", l: "Ölü", v: r => r.olu, f: r => <span style={{ color: r.olu ? "#e8833a" : undefined }}>{r.olu}</span> }]} /></KsBolum>
+          <KsBolum T={T} baslik="Koleksiyona göre katalog"><KsTablo T={T} sira0="model" limit={12} satirlar={katalog.bykol} kolonlar={[{ k: "kol", l: "Koleksiyon", sol: true, v: r => kolAd(r.key), f: r => kolAd(r.key) }, { k: "model", l: "Model", v: r => r.model, f: r => r.model }, { k: "sip", l: "Siparişli", v: r => r.siparisli, f: r => r.siparisli }, { k: "olu", l: "Ölü", v: r => r.olu, f: r => <span style={{ color: r.olu ? "#e8833a" : undefined }}>{r.olu}</span> }]} /></KsBolum>
+        </div>
+        <KsBolum T={T} baslik={"Hiç sipariş almamış modeller (" + katalog.olu.length + ")"} sag={
+          <div style={{ display: "flex", gap: 6 }}>
+            <select value={olKat} onChange={e => setOlKat(e.target.value)} style={sel}><option value="">Tüm türler</option>{katalog.bykat.map(b => <option key={b.key} value={b.key}>{ksTip(b.key)}</option>)}</select>
+            <select value={olKol} onChange={e => setOlKol(e.target.value)} style={sel}><option value="">Tüm koleksiyonlar</option>{kollar.map(k => <option key={k.id} value={k.id}>{k.ad}</option>)}</select>
+          </div>}>
+          <KsTablo T={T} limit={40} sira0="gram" bos="Her modelin en az bir siparişi var 🎉"
+            satirlar={katalog.olu.filter(x => (!olKat || x.kat === olKat) && (!olKol || x.ki === olKol)).map(x => ({ key: x.m.id, kod: x.kod, tur: ksTip(x.kat), kol: kolAd(x.ki), gram: Number(x.m.gram) || 0, ayar: x.m.refAyar || "14K", t: x.m.t || 0 }))}
+            kolonlar={[{ k: "kod", l: "Kod", sol: true, v: r => r.kod, f: r => r.kod }, { k: "tur", l: "Tür", sol: true, v: r => r.tur, f: r => r.tur }, { k: "kol", l: "Koleksiyon", sol: true, v: r => r.kol, f: r => r.kol }, { k: "gram", l: "Gram", v: r => r.gram, f: r => ksG(r.gram) }, { k: "ayar", l: "Ayar", v: r => r.ayar, f: r => r.ayar }, { k: "t", l: "Eklenme", v: r => r.t, f: r => r.t ? new Date(r.t).toLocaleDateString("tr-TR") : "—" }]} />
+        </KsBolum>
+      </>)}
+
+      {sekme === "model" && (
+        <KsBolum T={T} baslik={"Model performansı — dönem (" + modG.length + " model)"}>
+          <KsTablo T={T} limit={30} sira0="kar" satirlar={modG}
+            kolonlar={[{ k: "kod", l: "Kod", sol: true, v: r => r.key, f: r => r.key }, { k: "tur", l: "Tür", sol: true, v: r => ksTip(r.rows[0].kat), f: r => ksTip(r.rows[0].kat) }, ...ksKarKolonlari, { k: "kayip", l: "Kayıp %", v: r => r.kayipOran, f: r => <span style={{ color: r.kayipOran > 0.1 ? "#e85a4f" : undefined }}>{ksYuzde(r.kayipOran)}</span> }]} />
+        </KsBolum>
+      )}
+
+      {sekme === "musteri" && (
+        <KsBolum T={T} baslik={"Müşteri kodları (" + musG.length + ")"}>
+          <KsTablo T={T} sira0="kar" satirlar={musG}
+            kolonlar={[{ k: "kod", l: "Kod", sol: true, v: r => r.key, f: r => r.key }, { k: "sip", l: "Sipariş", v: r => r.sipN, f: r => r.sipN }, ...ksKarKolonlari, { k: "pay", l: "Kâr payı", v: r => r.kar, f: r => top.kar > 0 ? ksYuzde(r.kar / top.kar) : "—" }, { k: "kayip", l: "Kayıp %", v: r => r.kayipOran, f: r => <span style={{ color: r.kayipOran > 0.1 ? "#e85a4f" : undefined }}>{ksYuzde(r.kayipOran)}</span> }, { k: "son", l: "Son sipariş", v: r => r.son, f: r => r.son ? Math.floor((Date.now() - r.son) / 864e5) + " gün önce" : "—" }]} />
+        </KsBolum>
+      )}
+
+      {sekme === "kayip" && (<>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
+          <KsKart T={T} baslik="Hurda" deger={top.h + " adet"} alt={ksG(top.hGram) + " gr"} renk="#e85a4f" />
+          <KsKart T={T} baslik="İade" deger={top.ia + " adet"} renk="#a78bfa" />
+          <KsKart T={T} baslik="Tamir" deger={top.ta + " adet"} renk="#5b9bd5" />
+          <KsKart T={T} baslik="Toplam kayıp oranı" deger={ksYuzde(top.kayipOran)} alt={top.kayipAdet + " / " + top.verilen + " adet"} />
+        </div>
+        <KsBolum T={T} baslik="Modellere göre">
+          <KsTablo T={T} sira0="kayip" bos="Bu dönemde kayıp kaydı yok" limit={20}
+            satirlar={modG.filter(g => g.kayipAdet > 0)}
+            kolonlar={[{ k: "kod", l: "Kod", sol: true, v: r => r.key, f: r => r.key }, { k: "tur", l: "Tür", sol: true, v: r => ksTip(r.rows[0].kat), f: r => ksTip(r.rows[0].kat) }, { k: "ver", l: "Verilen", v: r => r.verilen, f: r => r.verilen }, { k: "h", l: "Hurda", v: r => r.h, f: r => r.h }, { k: "ia", l: "İade", v: r => r.ia, f: r => r.ia }, { k: "ta", l: "Tamir", v: r => r.ta, f: r => r.ta }, { k: "kayip", l: "Oran", v: r => r.kayipOran, f: r => <b style={{ color: r.kayipOran > 0.1 ? "#e85a4f" : undefined }}>{ksYuzde(r.kayipOran)}</b> }]} />
+        </KsBolum>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(300px,1fr))", gap: 12 }}>
+          <KsBolum T={T} baslik="Müşteri koduna göre"><KsTablo T={T} sira0="kayip" bos="Kayıp kaydı yok" satirlar={musG.filter(g => g.kayipAdet > 0)} kolonlar={[{ k: "kod", l: "Kod", sol: true, v: r => r.key, f: r => r.key }, { k: "kayipAdet", l: "Adet", v: r => r.kayipAdet, f: r => r.kayipAdet }, { k: "kayip", l: "Oran", v: r => r.kayipOran, f: r => ksYuzde(r.kayipOran) }]} /></KsBolum>
+          <KsBolum T={T} baslik="Nedenler"><KsTablo T={T} sira0="adet" bos="Neden kaydı yok" satirlar={nedenler} kolonlar={[{ k: "neden", l: "Tür · neden", sol: true, v: r => r.key, f: r => r.key }, { k: "adet", l: "Adet", v: r => r.adet, f: r => r.adet }]} /></KsBolum>
+        </div>
+      </>)}
+
+      {sekme === "uretim" && (<>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
+          <KsKart T={T} baslik="Üretimde" deger={asama.reduce((s, a) => s + a.adet, 0) + " adet"} alt="tüm açık siparişler" />
+          <KsKart T={T} baslik="Geciken sipariş" deger={geciken.length} renk={geciken.length ? "#e85a4f" : T.text} alt="teslim tarihi geçmiş" />
+          <KsKart T={T} baslik="Ort. tamamlanma" deger={ksG(sure) + " iş günü"} alt="sipariş → teslime hazır (dönem)" />
+        </div>
+        <KsBolum T={T} baslik="Aşamalara göre (adet)">
+          {asama.length === 0 ? <div style={{ fontSize: 10, color: "#665d4a" }}>Açık üretim yok</div> : (() => { const mx = Math.max(...asama.map(a => a.adet)); return asama.map(a => (
+            <div key={a.id} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 5 }}>
+              <div style={{ width: 90, fontSize: 10, color: a.c, fontWeight: 700 }}>{a.l}</div>
+              <div style={{ flex: 1, height: 12, background: "rgba(255,255,255,0.04)", borderRadius: 4 }}><div style={{ width: a.adet / mx * 100 + "%", height: "100%", background: a.c, borderRadius: 4 }} /></div>
+              <div style={{ width: 40, textAlign: "right", fontSize: 10, fontWeight: 700, color: T.text }}>{a.adet}</div></div>)); })()}
+        </KsBolum>
+        <KsBolum T={T} baslik="Geciken siparişler">
+          <KsTablo T={T} sira0="gun" bos="Geciken sipariş yok" satirlar={geciken.map(x => ({ key: x.s.id, mus: x.s.musKod || (musteriler || {})[x.s.musteri] || "—", gun: -x.o.gun, il: Math.round(x.o.il * 100), teslim: x.s.teslimTarihi || "" }))}
+            kolonlar={[{ k: "mus", l: "Müşteri", sol: true, v: r => r.mus, f: r => r.mus }, { k: "teslim", l: "Teslim tarihi", v: r => r.teslim, f: r => r.teslim }, { k: "gun", l: "Gecikme", v: r => r.gun, f: r => <b style={{ color: "#e85a4f" }}>{r.gun} gün</b> }, { k: "il", l: "İlerleme", v: r => r.il, f: r => "%" + r.il }]} />
+        </KsBolum>
+      </>)}
+
+      {sekme === "rapor" && (
+        <KsBolum T={T} baslik="PDF raporlar">
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+            <button onClick={() => downloadPDF(buildSatisRaporuHTML(modeller, siparisler), "satis-raporu")} style={{ ...GH, fontSize: 10, padding: "7px 14px" }}>Satış raporu</button>
+            <button disabled={siparisler.length === 0} onClick={() => downloadPDF(buildSipListeRaporuHTML([...siparisler].reverse().filter(s => s.tarih >= bas && s.tarih <= bit && (!musF || (s.musKod || (musteriler || {})[s.musteri]) === musF)), altinKgUSD, madenCarpan), "siparis-listesi-raporu")} style={{ ...GH, fontSize: 10, padding: "7px 14px" }}>Sipariş listesi · karlılık & kayıp (seçili dönem/müşteri)</button>
+            <select value="" onChange={e => { const kod = e.target.value; if (!kod) return; const e2 = Object.entries(musteriler || {}).find(([, k]) => k === kod); downloadPDF(buildMusteriDetayHTML(e2 ? e2[0] : kod, kod, siparisler), kod + "-detay"); }} style={sel}>
+              <option value="">Müşteri raporu…</option>{musKodlari.map(k => <option key={k} value={k}>{k}</option>)}
+            </select>
+          </div>
+        </KsBolum>
+      )}
+      <div style={{ fontSize: 9, color: "#665d4a", marginTop: 4 }}>Kâr yalnızca "Teslime hazır / Teslim edildi" durumundaki, numune olmayan ürünlerden hesaplanır; hurda, iade ve tamir adetleri düşülür. "Üretimde" beklenen kârdır, gerçekleşene dahil değildir.</div>
+    </div>
+  );
+}
+
+
 function Atolye({ onSirketDegis }) {
   // Varsayılan: OTOMATİK (hiç seçim yapılmamışsa). Sadece elle sabit tema seçilmişse ("manuel") o kullanılır.
   const [temaModu, setTemaModu] = useState(() => {
@@ -9395,25 +9748,10 @@ function Atolye({ onSirketDegis }) {
         {/* ANALİZ */}
         {sayfa==="analiz" && (
           <div style={{ animation:"fadein .3s" }}>
-            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14, flexWrap:"wrap", gap:6 }}>
-              <h2 style={{ margin:0, fontSize:14, fontWeight:700, color:T.text }}>Kesfet</h2>
-              <div style={{ display:"flex", gap:6, alignItems:"center" }}>
-                {[{id:"bu_ay",l:"Bu Ay"},{id:"gecen_ay",l:"Geçen Ay"},{id:"3ay",l:"3 Ay"},{id:"yil",l:"Bu Yıl"}].map(d => (
-                  <button key={d.id} onClick={()=>setAnalizDonem(d.id)} style={{ background:analizDonem===d.id?"rgba(var(--vurgu-rgb),0.18)":"rgba(var(--vurgu-rgb),0.04)", border:"1px solid", borderColor:analizDonem===d.id?"rgba(var(--vurgu-rgb),0.4)":"rgba(var(--vurgu-rgb),0.1)", borderRadius:6, padding:"4px 10px", color:analizDonem===d.id?GOLD:"#7a6f5a", fontSize:9, fontWeight:analizDonem===d.id?700:400, cursor:"pointer" }}>{d.l}</button>
-                ))}
-              </div>
-            </div>
-
-            {/* ── RAPORLAR — tüm PDF raporlar tek yerde ── */}
-            <div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap", marginBottom:14, padding:"10px 12px", borderRadius:10, background:"rgba(var(--vurgu-rgb),0.04)", border:"1px solid rgba(var(--vurgu-rgb),0.12)" }}>
-              <span style={{ fontSize:10, fontWeight:800, color:T.sub, letterSpacing:"0.05em", textTransform:"uppercase" }}>📄 Raporlar</span>
-              <button onClick={()=>downloadPDF(buildSatisRaporuHTML(modeller,siparisler),"satis-raporu")} style={{ ...GH, fontSize:9, padding:"5px 10px" }}>Satış raporu</button>
-              <button disabled={siparisler.length===0} onClick={()=>downloadPDF(buildSipListeRaporuHTML([...siparisler].reverse(), altinKgUSD, madenCarpan), "siparis-listesi-raporu")} style={{ ...GH, fontSize:9, padding:"5px 10px" }}>Sipariş listesi · karlılık & kayıp</button>
-              <select value="" onChange={e=>{ const kod=e.target.value; if(!kod) return; const e2=Object.entries(musteriler).find(([,k])=>k===kod); downloadPDF(buildMusteriDetayHTML(e2?e2[0]:kod,kod,siparisler),kod+"-detay"); }} style={{ ...IS, width:"auto", padding:"5px 8px", fontSize:10 }}>
-                <option value="">Müşteri raporu…</option>
-                {Object.entries(musteriler).sort((a,b)=>a[1].localeCompare(b[1],"tr")).map(([ad,kod])=><option key={kod} value={kod}>{kod}</option>)}
-              </select>
-            </div>
+            <div style={{ marginBottom:12 }}><h2 style={{ margin:0, fontSize:14, fontWeight:700, color:T.text }}>Keşfet</h2></div>
+            <KesfetEkrani siparisler={siparisler} modeller={modeller} kollar={kollar} musteriler={musteriler} T={T} altinKgUSD={altinKgUSD} madenCarpan={madenCarpan} />
+            <details style={{ marginTop:18 }}>
+              <summary style={{ cursor:"pointer", fontSize:10, fontWeight:700, color:T.sub, padding:"6px 0" }}>Eski Keşfet görünümü (geçici — yeni ekran doğrulanınca kaldırılacak)</summary>
 
             {/* ── VİTRİN ANALİZİ — müşteriler neye baktı ── */}
             {vitrinAnalizVeri && vitrinAnalizVeri.toplamModel > 0 && (
@@ -9941,6 +10279,7 @@ function Atolye({ onSirketDegis }) {
                 );
               })()}
             </div>
+            </details>
           </div>
         )}
 
