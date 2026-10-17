@@ -6887,7 +6887,7 @@ function Atolye({ onSirketDegis }) {
               <button onClick={()=>{ if (onSirketDegis) onSirketDegis(); }} title="Şirket değiştir" style={{ fontSize:9, fontWeight:800, padding:"3px 10px", borderRadius:20, background: AKTIF_SIRKET_ONEK==="bsp2_" ? "rgba(167,139,250,0.15)" : "rgba(var(--vurgu-rgb),0.15)", border:"1px solid "+(AKTIF_SIRKET_ONEK==="bsp2_" ? "rgba(167,139,250,0.4)" : "rgba(var(--vurgu-rgb),0.4)"), color: AKTIF_SIRKET_ONEK==="bsp2_" ? "#a78bfa" : GOLD, whiteSpace:"nowrap", cursor:"pointer", display:"inline-flex", alignItems:"center", gap:4 }}>{AKTIF_SIRKET_ONEK==="bsp2_" ? "✨ BSP" : "💎 MSK"} <span style={{ fontSize:8, opacity:0.7 }}>⇄</span></button>
             </h1>
             <div style={{ display:"flex", gap:3, flexWrap:"wrap" }}>
-              {["koleksiyonlar","modeller","konfirmasyon","siparisler","pano","iadeler","musteriler","vitrin","kasa","analiz","radar","ayarlar"].map(n => {
+              {["koleksiyonlar","modeller","konfirmasyon","siparisler","musteriler","vitrin","kasa","analiz","radar","ayarlar"].map(n => {
                 let badgeSayi = 0;
                 if (n === "iadeler") {
                   siparisler.forEach(s => {
@@ -6898,7 +6898,7 @@ function Atolye({ onSirketDegis }) {
                 return (
                 <button key={n} onClick={() => { setSayfa(n); if (n==="koleksiyonlar") setAktifKol(null); if (n!=="kasa") setKasaKilitli(true); }}
                   style={{ ...GH, color:sayfa===n?T.gold:T.sub, background:sayfa===n?T.btnBg:"transparent", borderColor:sayfa===n?T.btnBorder:T.border, fontSize:9, padding:"5px 9px", position:"relative" }}>
-                  {{"koleksiyonlar":"Koleksiyonlar","modeller":"Modeller","konfirmasyon":"Konfirmasyon","siparisler":"Siparişler","pano":"🏭 Pano","iadeler":"İadeler","musteriler":"Müşteriler","vitrin":"🛍 Vitrin","kasa":"Kasa","analiz":"Keşfet","radar":"📡 Trend Radar","ayarlar":"Ayarlar"}[n]||n.charAt(0).toUpperCase()+n.slice(1)}
+                  {{"koleksiyonlar":"Koleksiyonlar","modeller":"Modeller","konfirmasyon":"Konfirmasyon","siparisler":"Siparişler","musteriler":"Müşteriler","vitrin":"🛍 Vitrin","kasa":"Kasa","analiz":"Keşfet","radar":"📡 Trend Radar","ayarlar":"Ayarlar"}[n]||n.charAt(0).toUpperCase()+n.slice(1)}
                   {n==="konfirmasyon" && konfList.length>0 && <span style={{ position:"absolute", top:-4, right:-4, background:GOLD, color:DARK, width:13, height:13, borderRadius:7, fontSize:7, fontWeight:800, display:"flex", alignItems:"center", justifyContent:"center" }}>{konfList.length}</span>}
                   {n==="iadeler" && badgeSayi>0 && <span style={{ position:"absolute", top:-4, right:-4, background:"#a78bfa", color:"#fff", width:13, height:13, borderRadius:7, fontSize:7, fontWeight:800, display:"flex", alignItems:"center", justifyContent:"center" }}>{badgeSayi}</span>}
                 </button>
@@ -7865,14 +7865,7 @@ function Atolye({ onSirketDegis }) {
                 <input type="date" value={sipTarih2} onChange={e=>setSipTarih2(e.target.value)} style={{ ...IS, width:120, padding:"5px 8px", fontSize:10 }}/>
                 {(sipMusF||sipMusSec||sipAyarF||sipTarih1||sipTarih2||sipFiltre!=="tumu") && <button onClick={()=>{setSipMusF("");setSipMusSec("");setSipAyarF("");setSipTarih1("");setSipTarih2("");setSipFiltre("tumu");}} style={{ ...RD, fontSize:9, padding:"4px 8px" }}>Temizle</button>}
                 <button onClick={() => { setSipYedekSec(null); setSipYedekModal(true); siparisYedekListesi(AKTIF_SIRKET_ONEK).then(setSipYedekler); }} title="Sipariş yedekleri" style={{ ...GH, fontSize:9, padding:"5px 10px" }}>🛟 Yedekler</button>
-                {siparisler.length > 0 && (
-                  <button onClick={() => {
-                    const goruntulenecek = [...siparisler].reverse().filter(s => sipGecer(s));
-                    downloadPDF(buildSipListeRaporuHTML(goruntulenecek, altinKgUSD, madenCarpan), "siparis-listesi-raporu");
-                  }} style={{ background:"linear-gradient(135deg,#0a84ff,#0968cc)", border:"none", borderRadius:9, padding:"5px 11px", color:"#0a0a0a", fontSize:9, fontWeight:800, cursor:"pointer", whiteSpace:"nowrap" }}>
-                    📊 Rapor PDF
-                  </button>
-                )}
+                
               </div>
             </div>
             {/* Hızlı filtreler */}
@@ -8403,102 +8396,6 @@ function Atolye({ onSirketDegis }) {
 
         {/* MÜŞTERİLER */}
         {/* İADE & TAMİR */}
-        {sayfa==="iadeler" && (() => {
-          // Tüm siparişlerden iade ve tamir kaydı olan kalemleri çıkar
-          const iadeKayitlar = [];
-          const tamirKayitlar = [];
-          siparisler.forEach(s => {
-            const iade = s.kalemIade || {};
-            const iadeNeden = s.kalemIadeNeden || {};
-            const iadeTuru = s.kalemIadeTuru || {};
-            const tamir = s.kalemTamir || {};
-            const tamirNeden = s.kalemTamirNeden || {};
-            (s.kalemler||[]).forEach(k => {
-              if (iade[k.id] && iade[k.id] > 0) {
-                iadeKayitlar.push({
-                  sipId: s.id, musteri: s.musKod||s.musteri, kalem: k, adet: iade[k.id],
-                  neden: iadeNeden[k.id] || "", tur: iadeTuru[k.id] || "para",
-                  tarih: s.tarih || s.t
-                });
-              }
-              if (tamir[k.id] && tamir[k.id] > 0) {
-                tamirKayitlar.push({
-                  sipId: s.id, musteri: s.musKod||s.musteri, kalem: k, adet: tamir[k.id],
-                  neden: tamirNeden[k.id] || "", tarih: s.tarih || s.t
-                });
-              }
-            });
-          });
-          
-          return (
-            <div style={{ animation:"fadein .3s" }}>
-              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
-                <h2 style={{ margin:0, fontSize:15, fontWeight:700, color:"var(--goldtext)" }}>İade & Tamir Kayıtları</h2>
-              </div>
-
-              {/* İade Bölümü */}
-              <div style={{ marginBottom:18 }}>
-                <h3 style={{ fontSize:12, color:"#a78bfa", marginBottom:8, fontWeight:700 }}>↩ İadeler ({iadeKayitlar.length})</h3>
-                {iadeKayitlar.length === 0 ? (
-                  <div style={{ background:"rgba(167,139,250,0.03)", border:"1px solid rgba(167,139,250,0.1)", borderRadius:10, padding:"24px", textAlign:"center", color:"#665d4a", fontSize:11 }}>
-                    İade kaydı yok
-                  </div>
-                ) : (
-                  <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-                    {iadeKayitlar.map((r, i) => (
-                      <div key={i} style={{ background:"rgba(167,139,250,0.04)", border:"1px solid rgba(167,139,250,0.15)", borderRadius:10, padding:"10px 12px", display:"flex", alignItems:"center", gap:10 }}>
-                        <div className="model-foto-wrap" style={{ width:80, height:80, borderRadius:8, overflow:"hidden", flexShrink:0, background:"rgba(0,0,0,0.2)" }}>{r.kalem.foto ? <img src={r.kalem.foto} style={{ width:"100%", height:"100%", objectFit:"cover", objectPosition:"center center", display:"block" }}/> : <div style={{ width:"100%", height:"100%", background:"rgba(var(--vurgu-rgb),0.06)" }}/>}</div>
-                        <div style={{ flex:1 }}>
-                          <div style={{ fontSize:11, fontWeight:700, color:"var(--goldtext)" }}>
-                            <span style={{ color:GOLD, marginRight:5 }}>{r.kalem.kod||""}</span>{tipEtiket(r.kalem.kategori)}
-                          </div>
-                          <div style={{ fontSize:9, color:"#998a6e", marginTop:2 }}>
-                            Müşteri: <b style={{ color:"#c0b399" }}>{r.musteri}</b> · {new Date(r.tarih).toLocaleDateString("tr-TR")}
-                          </div>
-                          {r.neden && <div style={{ fontSize:9, color:"#a78bfa", marginTop:3, fontStyle:"italic" }}>"{r.neden}"</div>}
-                        </div>
-                        <div style={{ display:"flex", flexDirection:"column", gap:3, alignItems:"flex-end" }}>
-                          <span style={{ background:"rgba(167,139,250,0.15)", color:"#a78bfa", padding:"2px 8px", borderRadius:5, fontSize:9, fontWeight:700 }}>
-                            {r.tur === "degisim" ? "🔄 Değişim" : "💵 Para"}
-                          </span>
-                          <span style={{ fontSize:10, color:"#a78bfa", fontWeight:800 }}>{r.adet}/{r.kalem.adet||1} adet</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* Tamir Bölümü */}
-              <div>
-                <h3 style={{ fontSize:12, color:"#5b9bd5", marginBottom:8, fontWeight:700 }}>🔧 Tamirler ({tamirKayitlar.length})</h3>
-                {tamirKayitlar.length === 0 ? (
-                  <div style={{ background:"rgba(91,155,213,0.03)", border:"1px solid rgba(91,155,213,0.1)", borderRadius:10, padding:"24px", textAlign:"center", color:"#665d4a", fontSize:11 }}>
-                    Tamir kaydı yok
-                  </div>
-                ) : (
-                  <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-                    {tamirKayitlar.map((r, i) => (
-                      <div key={i} style={{ background:"rgba(91,155,213,0.04)", border:"1px solid rgba(91,155,213,0.15)", borderRadius:10, padding:"10px 12px", display:"flex", alignItems:"center", gap:10 }}>
-                        <div className="model-foto-wrap" style={{ width:80, height:80, borderRadius:8, overflow:"hidden", flexShrink:0, background:"rgba(0,0,0,0.2)" }}>{r.kalem.foto ? <img src={r.kalem.foto} style={{ width:"100%", height:"100%", objectFit:"cover", objectPosition:"center center", display:"block" }}/> : <div style={{ width:"100%", height:"100%", background:"rgba(var(--vurgu-rgb),0.06)" }}/>}</div>
-                        <div style={{ flex:1 }}>
-                          <div style={{ fontSize:11, fontWeight:700, color:"var(--goldtext)" }}>
-                            <span style={{ color:GOLD, marginRight:5 }}>{r.kalem.kod||""}</span>{tipEtiket(r.kalem.kategori)}
-                          </div>
-                          <div style={{ fontSize:9, color:"#998a6e", marginTop:2 }}>
-                            Müşteri: <b style={{ color:"#c0b399" }}>{r.musteri}</b> · {new Date(r.tarih).toLocaleDateString("tr-TR")}
-                          </div>
-                          {r.neden && <div style={{ fontSize:9, color:"#5b9bd5", marginTop:3, fontStyle:"italic" }}>"{r.neden}"</div>}
-                        </div>
-                        <span style={{ fontSize:10, color:"#5b9bd5", fontWeight:800 }}>{r.adet}/{r.kalem.adet||1} adet</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          );
-        })()}
 
         {sayfa==="musteriler" && (
           <div style={{ animation:"fadein .3s" }}>
@@ -9504,8 +9401,18 @@ function Atolye({ onSirketDegis }) {
                 {[{id:"bu_ay",l:"Bu Ay"},{id:"gecen_ay",l:"Geçen Ay"},{id:"3ay",l:"3 Ay"},{id:"yil",l:"Bu Yıl"}].map(d => (
                   <button key={d.id} onClick={()=>setAnalizDonem(d.id)} style={{ background:analizDonem===d.id?"rgba(var(--vurgu-rgb),0.18)":"rgba(var(--vurgu-rgb),0.04)", border:"1px solid", borderColor:analizDonem===d.id?"rgba(var(--vurgu-rgb),0.4)":"rgba(var(--vurgu-rgb),0.1)", borderRadius:6, padding:"4px 10px", color:analizDonem===d.id?GOLD:"#7a6f5a", fontSize:9, fontWeight:analizDonem===d.id?700:400, cursor:"pointer" }}>{d.l}</button>
                 ))}
-                <button onClick={()=>downloadPDF(buildSatisRaporuHTML(modeller,siparisler),"satis-raporu")} style={{ ...GH, fontSize:9, padding:"5px 10px" }}>PDF Rapor</button>
               </div>
+            </div>
+
+            {/* ── RAPORLAR — tüm PDF raporlar tek yerde ── */}
+            <div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap", marginBottom:14, padding:"10px 12px", borderRadius:10, background:"rgba(var(--vurgu-rgb),0.04)", border:"1px solid rgba(var(--vurgu-rgb),0.12)" }}>
+              <span style={{ fontSize:10, fontWeight:800, color:T.sub, letterSpacing:"0.05em", textTransform:"uppercase" }}>📄 Raporlar</span>
+              <button onClick={()=>downloadPDF(buildSatisRaporuHTML(modeller,siparisler),"satis-raporu")} style={{ ...GH, fontSize:9, padding:"5px 10px" }}>Satış raporu</button>
+              <button disabled={siparisler.length===0} onClick={()=>downloadPDF(buildSipListeRaporuHTML([...siparisler].reverse(), altinKgUSD, madenCarpan), "siparis-listesi-raporu")} style={{ ...GH, fontSize:9, padding:"5px 10px" }}>Sipariş listesi · karlılık & kayıp</button>
+              <select value="" onChange={e=>{ const kod=e.target.value; if(!kod) return; const e2=Object.entries(musteriler).find(([,k])=>k===kod); downloadPDF(buildMusteriDetayHTML(e2?e2[0]:kod,kod,siparisler),kod+"-detay"); }} style={{ ...IS, width:"auto", padding:"5px 8px", fontSize:10 }}>
+                <option value="">Müşteri raporu…</option>
+                {Object.entries(musteriler).sort((a,b)=>a[1].localeCompare(b[1],"tr")).map(([ad,kod])=><option key={kod} value={kod}>{kod}</option>)}
+              </select>
             </div>
 
             {/* ── VİTRİN ANALİZİ — müşteriler neye baktı ── */}
@@ -9769,8 +9676,8 @@ function Atolye({ onSirketDegis }) {
                 const enCokHurda = Object.entries(hurdaModeller).sort((a,b)=>b[1]-a[1]).slice(0,2);
                 const enCokIade  = Object.entries(iadeModeller).sort((a,b)=>b[1]-a[1]).slice(0,2);
                 return (
-                  <div onClick={()=>setSayfa("iadeler")} style={{ background:"rgba(232,90,79,0.02)", border:"1px solid rgba(232,90,79,0.08)", borderRadius:12, padding:"12px 16px", cursor:"pointer" }}>
-                    <div style={{ fontSize:10, fontWeight:700, color:"#e85a4f", marginBottom:10 }}>Hurda & İade <span style={{ fontSize:8, color:"#5b9bd5", marginLeft:4 }}>→ Git</span></div>
+                  <div style={{ background:"rgba(232,90,79,0.02)", border:"1px solid rgba(232,90,79,0.08)", borderRadius:12, padding:"12px 16px" }}>
+                    <div style={{ fontSize:10, fontWeight:700, color:"#e85a4f", marginBottom:10 }}>Hurda & İade</div>
                     <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:10 }}>
                       <div style={{ textAlign:"center", padding:"8px", background:"rgba(232,90,79,0.06)", borderRadius:8, border:"1px solid rgba(232,90,79,0.15)" }}>
                         <div style={{ fontSize:22, fontWeight:800, color:"#e85a4f" }}>{hurdaAdet}</div>
@@ -10697,8 +10604,7 @@ function Atolye({ onSirketDegis }) {
         )}
 
         {/* TREND RADAR */}
-        {sayfa==="pano" && <UretimPanosu siparisler={siparisler} kollar={kollar} onTasi={panoTasi} onCila={panoCila} onSiparisAc={(id)=>{ setSayfa("siparisler"); setAcikSiparisler(p=>({...p,[id]:true})); }} />}
-        {sayfa==="radar" && <TrendRadarSayfasi T={T} modeller={modeller} />}
+                {sayfa==="radar" && <TrendRadarSayfasi T={T} modeller={modeller} />}
       </div>
 
       {/* TOPLU KOPYALA MODAL */}
