@@ -5275,7 +5275,7 @@ const ksKarKolonlari = [
   { k: "usd", l: "$ kâr", v: r => r.karUSD, f: r => fUSDi(r.karUSD) },
 ];
 
-function KesfetEkrani({ siparisler, modeller, kollar, musteriler, T, altinKgUSD, madenCarpan }) {
+function KesfetEkrani({ siparisler, modeller, kollar, musteriler, T, altinKgUSD, madenCarpan, ek }) {
   const [donem, setDonem] = useState("3ay");
   const [t1, setT1] = useState(""); const [t2, setT2] = useState("");
   const [ayarF, setAyarF] = useState(""); const [musF, setMusF] = useState("");
@@ -5345,7 +5345,7 @@ function KesfetEkrani({ siparisler, modeller, kollar, musteriler, T, altinKgUSD,
     return Object.entries(m).sort((a, b) => b[1] - a[1]).map(([key, adet]) => ({ key, adet }));
   }, [rows]);
 
-  const sekmeler = [["ozet", "Özet"], ["satis", "Satış & Kâr"], ["katalog", "Katalog"], ["model", "Modeller"], ["musteri", "Müşteriler"], ["kayip", "Kayıplar"], ["uretim", "Üretim"], ["rapor", "Raporlar"]];
+  const sekmeler = [["ozet", "Özet"], ["satis", "Satış & Kâr"], ["katalog", "Katalog"], ["model", "Modeller"], ["musteri", "Müşteriler"], ["kayip", "Kayıplar"], ["uretim", "Üretim"], ["rapor", "Raporlar"], ...((ek || []).map(x => [x.id, x.l]))];
   const sel = { ...IS, width: "auto", padding: "5px 8px", fontSize: 10 };
   const dbtn = (a) => ({ background: a ? "rgba(var(--vurgu-rgb),0.18)" : "rgba(var(--vurgu-rgb),0.04)", border: "1px solid", borderColor: a ? "rgba(var(--vurgu-rgb),0.4)" : "rgba(var(--vurgu-rgb),0.1)", borderRadius: 6, padding: "4px 10px", color: a ? T.gold : T.sub, fontSize: 9, fontWeight: 700, cursor: "pointer" });
   const hasYok = !(altinKgUSD > 0);
@@ -5492,7 +5492,8 @@ function KesfetEkrani({ siparisler, modeller, kollar, musteriler, T, altinKgUSD,
           </div>
         </KsBolum>
       )}
-      <div style={{ fontSize: 9, color: "#665d4a", marginTop: 4 }}>Kâr yalnızca "Teslime hazır / Teslim edildi" durumundaki, numune olmayan ürünlerden hesaplanır; hurda, iade ve tamir adetleri düşülür. "Üretimde" beklenen kârdır, gerçekleşene dahil değildir.</div>
+      {(ek || []).map(x => sekme === x.id ? <div key={x.id}>{x.node}</div> : null)}
+      {!(ek || []).some(x => x.id === sekme) && <div style={{ fontSize: 9, color: "#665d4a", marginTop: 4 }}>Kâr yalnızca "Teslime hazır / Teslim edildi" durumundaki, numune olmayan ürünlerden hesaplanır; hurda, iade ve tamir adetleri düşülür. "Üretimde" beklenen kârdır, gerçekleşene dahil değildir.</div>}
     </div>
   );
 }
@@ -9749,10 +9750,10 @@ function Atolye({ onSirketDegis }) {
         {sayfa==="analiz" && (
           <div style={{ animation:"fadein .3s" }}>
             <div style={{ marginBottom:12 }}><h2 style={{ margin:0, fontSize:14, fontWeight:700, color:T.text }}>Keşfet</h2></div>
-            <KesfetEkrani siparisler={siparisler} modeller={modeller} kollar={kollar} musteriler={musteriler} T={T} altinKgUSD={altinKgUSD} madenCarpan={madenCarpan} />
-            <details style={{ marginTop:18 }}>
-              <summary style={{ cursor:"pointer", fontSize:10, fontWeight:700, color:T.sub, padding:"6px 0" }}>Eski Keşfet görünümü (geçici — yeni ekran doğrulanınca kaldırılacak)</summary>
-
+            <KesfetEkrani siparisler={siparisler} modeller={modeller} kollar={kollar} musteriler={musteriler} T={T} altinKgUSD={altinKgUSD} madenCarpan={madenCarpan}
+            ek={[
+              { id:"vitrin", l:"Vitrin", node:(
+<>
             {/* ── VİTRİN ANALİZİ — müşteriler neye baktı ── */}
             {vitrinAnalizVeri && vitrinAnalizVeri.toplamModel > 0 && (
               <div style={{ background:T.card, border:"1px solid "+T.border, borderRadius:14, padding:"16px 18px", marginBottom:16 }}>
@@ -9830,105 +9831,10 @@ function Atolye({ onSirketDegis }) {
               </div>
             )}
 
-            {/* ── 4 ANA METRİK ── */}
-            {(() => {
-              // Aktif siparişler (tamam/teslim/hurda dışı)
-              const aktifSip = siparisler.filter(s => {
-                const son = (s.durumGecmisi||[]).slice(-1)[0];
-                return son && !["tamam","teslim","hurda"].includes(son.durum);
-              });
-              // Başlamamış (durumGecmisi yok veya ilk durum)
-              const baslamamisSip = siparisler.filter(s => !s.durumGecmisi?.length);
-              // Aktif gram
-              let aktifGram = 0;
-              aktifSip.forEach(s => (s.kalemler||[]).forEach(k => {
-                const hc = hesapla(k, k.secilenAyar||k.refAyar, s.altinKgUSD||altinKgUSD, s.mc||madenCarpan);
-                aktifGram += hc.mamulGram * (k.adet||1);
-              }));
-              // Tamamlanan (dönem)
-              const tamGram = Object.values(analiz.aylikKar).reduce((s,d)=>s+d.gram,0);
-
-              return (
-                <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:8, marginBottom:14 }}>
-                  {[
-                    { lbl:"Aktif Üretim", val:aktifSip.length+" sipariş", sub:fN(aktifGram,1)+" gr üretimde", c:"#5b9bd5", bc:"rgba(91,155,213,0.3)", nav:"aktif" },
-                    { lbl:"Dönemde Tamamlanan", val:analiz.siparisSayisi+" sipariş", sub:fN(tamGram,1)+" gr · "+fN(analiz.tKar,2)+" has kâr", c:"#6abf69", bc:"rgba(106,191,105,0.3)" },
-                    { lbl:"Üretime Girmemiş", val:baslamamisSip.length+" sipariş", sub:"işleme alınmayı bekliyor", c:"#e8833a", bc:"rgba(232,131,58,0.3)", nav:"baslanmadi" },
-                    { lbl:"Toplam Aktif Gram", val:fN(aktifGram,1)+" gr", sub:altinKgUSD>0?"≈"+fUSD(aktifGram*(altinKgUSD/1000))+" altın değeri":"Fiyat girilmedi", c:GOLD, bc:"rgba(var(--vurgu-rgb),0.3)" },
-                  ].map((k,i) => (
-                    <div key={i} onClick={()=>{ if(k.nav){setSayfa("siparisler");setSipFiltre(k.nav);} }} style={{ background:"rgba(0,0,0,0.15)", border:"1px solid rgba(255,255,255,0.06)", borderLeft:"3px solid "+k.bc, borderRadius:10, padding:"12px 14px", cursor:k.nav?"pointer":"default" }}>
-                      <div style={{ fontSize:8, color:"#8a7d64", textTransform:"uppercase", letterSpacing:".06em", marginBottom:6 }}>{k.lbl}</div>
-                      <div style={{ fontSize:18, fontWeight:800, color:k.c, lineHeight:1, marginBottom:4 }}>{k.val}</div>
-                      <div style={{ fontSize:9, color:"#665d4a" }}>{k.sub}</div>
-                    </div>
-                  ))}
-                </div>
-              );
-            })()}
-
-            {/* ── ORTA: AŞAMA DAĞILIMI + GECİKENLER ── */}
-            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:14 }}>
-              {/* Aşama dağılımı */}
-              {(() => {
-                const aktifSip = siparisler.filter(s => {
-                  const son = (s.durumGecmisi||[]).slice(-1)[0];
-                  return son && !["tamam","teslim","hurda"].includes(son.durum);
-                });
-                const durumSayilari = {};
-                aktifSip.forEach(s => {
-                  const son = (s.durumGecmisi||[]).slice(-1)[0];
-                  if (son) durumSayilari[son.durum] = (durumSayilari[son.durum]||0) + 1;
-                });
-                const maxSayi = Math.max(...Object.values(durumSayilari), 1);
-                return (
-                  <div style={{ background:"rgba(var(--vurgu-rgb),0.02)", border:"1px solid rgba(var(--vurgu-rgb),0.08)", borderRadius:12, padding:"12px 16px" }}>
-                    <div style={{ fontSize:10, fontWeight:700, color:GOLD, marginBottom:12 }}>Aktif Siparişler — Aşama Dağılımı</div>
-                    {DURUMLAR.filter(d=>d.id!=="hurda").map(d => {
-                      const sayi = durumSayilari[d.id] || 0;
-                      if (!sayi && !["baslanmadi","cizimde","dokum","tezgah","tamam"].includes(d.id)) return null;
-                      return (
-                        <div key={d.id} style={{ display:"flex", alignItems:"center", gap:8, marginBottom:6 }}>
-                          <div style={{ width:8, height:8, borderRadius:4, background:d.c, flexShrink:0 }}/>
-                          <span style={{ fontSize:10, color:"#998a6e", width:80, flexShrink:0 }}>{d.l}</span>
-                          <div style={{ flex:1, height:6, background:"rgba(255,255,255,0.05)", borderRadius:3, overflow:"hidden" }}>
-                            <div style={{ height:"100%", width:(sayi/maxSayi*100)+"%", background:d.c, borderRadius:3, opacity:.85 }}/>
-                          </div>
-                          <span style={{ fontSize:10, fontWeight:700, color:sayi>0?d.c:"#444", width:24, textAlign:"right" }}>{sayi}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                );
-              })()}
-
-              {/* Geciken siparişler */}
-              <div style={{ background:"rgba(232,90,79,0.02)", border:"1px solid rgba(232,90,79,0.1)", borderRadius:12, padding:"12px 16px" }}>
-                <div style={{ fontSize:10, fontWeight:700, color:"#e85a4f", marginBottom:12 }}>Dikkat — Geciken / Bekleyen</div>
-                {analiz.takildi.length === 0 && (
-                  <div style={{ fontSize:11, color:"#6abf69", padding:"8px 0" }}>✓ Tüm siparişler zamanında ilerliyor</div>
-                )}
-                {analiz.takildi.map((x,i) => {
-                  const durObj = DURUMLAR.find(d=>d.id===x.durum)||DURUMLAR[0];
-                  const gun = Math.round(x.bekleme/86400000);
-                  return (
-                    <div key={i} onClick={()=>{ setSayfa("siparisler"); setSipFiltre("geciken"); setAcikSiparisler(p=>({...p,[x.id]:true})); }} style={{ display:"flex", alignItems:"center", gap:8, padding:"8px 10px", background:"rgba(232,90,79,0.04)", borderRadius:8, border:"1px solid rgba(232,90,79,0.1)", marginBottom:6, cursor:"pointer" }}
-                      onMouseOver={e=>e.currentTarget.style.background="rgba(232,90,79,0.1)"}
-                      onMouseOut={e=>e.currentTarget.style.background="rgba(232,90,79,0.04)"}>
-                      <div style={{ width:8, height:8, borderRadius:4, background:durObj.c, flexShrink:0 }}/>
-                      <div style={{ flex:1 }}>
-                        <div style={{ fontSize:11, fontWeight:700, color:"var(--goldtext)" }}>{x.musteri}</div>
-                        <div style={{ fontSize:9, color:durObj.c }}>{durObj.l}</div>
-                      </div>
-                      <div style={{ textAlign:"right" }}>
-                        <div style={{ fontSize:11, fontWeight:800, color:gun>7?"#e85a4f":"#e8833a" }}>{gun} gün</div>
-                        <div style={{ fontSize:8, color:"#5b9bd5" }}>→ Git</div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
+</>
+              ) },
+              { id:"finans", l:"Dökümcü & Alacak", node:(
+<>
             {/* ── ALT: DÖKÜMCÜ + MÜŞTERİ ALACAK + HURDA/İADE ── */}
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:10 }}>
 
@@ -10034,61 +9940,10 @@ function Atolye({ onSirketDegis }) {
               })()}
             </div>
 
-            {/* ── DASHBOARD — ÜRETİM & KARLILIK ÖZETİ ── */}
-            {(() => {
-              const hasGramUSD = altinKgUSD>0 ? altinKgUSD/1000 : 0;
-              // Tüm siparişlerden topla
-              let toplamGram=0, satilanGram=0, bitenGram=0;
-              let aktifAdet=0, dokumdeAdet=0, tamamAdet=0;
-              let satilanKarHas=0, bekleyenKarHas=0;
-              siparisler.forEach(s => {
-                (s.kalemler||[]).forEach(k => {
-                  const hc = hesapla(k, k.secilenAyar||k.refAyar, s.altinKgUSD||altinKgUSD, s.mc||madenCarpan);
-                  const dur = (s.kalemDurumlar||{})[k.id] || k.durum || "baslanmadi";
-                  const hurda=((s.kalemHurda)||{})[k.id]||0, iade=((s.kalemIade)||{})[k.id]||0, tamir=((s.kalemTamir)||{})[k.id]||0;
-                  const net = Math.max(0,(k.adet||1)-hurda-iade-tamir);
-                  const gram = hc.mamulGram*net;
-                  toplamGram += gram;
-                  if (["tamam","teslim"].includes(dur)) { bitenGram += gram; tamamAdet += net; }
-                  if (dur==="teslim") { satilanGram += gram; satilanKarHas += hc.karHas*(k.numune?0:1)*net; }
-                  else { bekleyenKarHas += hc.karHas*(k.numune?0:1)*net; }
-                  const son=(s.durumGecmisi||[]).slice(-1)[0];
-                  if (son && !["tamam","teslim","hurda"].includes(son.durum)) aktifAdet += net;
-                  if (son?.durum==="dokum") dokumdeAdet += net;
-                });
-              });
-              const toplamKarHas = satilanKarHas + bekleyenKarHas;
-              const kart = (lbl, ana, alt, renk) => (
-                <div style={{ background:"rgba(0,0,0,0.15)", border:"1px solid rgba(255,255,255,0.06)", borderLeft:"3px solid "+renk, borderRadius:10, padding:"10px 14px" }}>
-                  <div style={{ fontSize:7, color:"#8a7d64", textTransform:"uppercase", letterSpacing:".05em", marginBottom:5 }}>{lbl}</div>
-                  <div style={{ fontSize:16, fontWeight:800, color:renk, lineHeight:1 }}>{ana}</div>
-                  {alt && <div style={{ fontSize:8, color:"#665d4a", marginTop:3 }}>{alt}</div>}
-                </div>
-              );
-              return (
-                <div style={{ marginTop:14 }}>
-                  {/* KG / GRAM satırı */}
-                  <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:8, marginBottom:8 }}>
-                    {kart("Toplam Sipariş", fN(toplamGram/1000,3)+" kg", fN(toplamGram,1)+" gr", "#5b9bd5")}
-                    {kart("Üretimi Biten", fN(bitenGram/1000,3)+" kg", fN(bitenGram,1)+" gr · "+tamamAdet+" adet", "#6abf69")}
-                    {kart("Teslim Edilen", fN(satilanGram/1000,3)+" kg", fN(satilanGram,1)+" gr satıldı", GOLD)}
-                  </div>
-                  {/* ADET satırı */}
-                  <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:8, marginBottom:8 }}>
-                    {kart("Aktif Üretim", aktifAdet+" adet", "üretimde olan parça", "#e8833a")}
-                    {kart("Dökümde", dokumdeAdet+" adet", "dökümcüde bekleyen", "#e8a74f")}
-                    {kart("Tamamlanan", tamamAdet+" adet", "biten parça", "#6abf69")}
-                  </div>
-                  {/* KARLILIK satırı */}
-                  <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:8 }}>
-                    {kart("Satılan Karlılık", fN(satilanKarHas,2)+" has", hasGramUSD>0?"≈"+fUSD(satilanKarHas*hasGramUSD)+" (teslim edilen)":"teslim edilen kâr", "#6abf69")}
-                    {kart("Bekleyen Karlılık", fN(bekleyenKarHas,2)+" has", hasGramUSD>0?"≈"+fUSD(bekleyenKarHas*hasGramUSD)+" (üretimdeki)":"henüz teslim edilmeyen", "#e8833a")}
-                    {kart("Toplam Potansiyel", fN(toplamKarHas,2)+" has", hasGramUSD>0?"≈"+fUSD(toplamKarHas*hasGramUSD)+" (hepsi satılırsa)":"hepsi satılırsa", GOLD)}
-                  </div>
-                </div>
-              );
-            })()}
-
+</>
+              ) },
+              { id:"kesif", l:"Model Keşfi", node:(
+<>
             {/* ── SEKMELİ MODEL PANELİ ── */}
             <div style={{ background:"rgba(255,255,255,0.02)", border:"1px solid rgba(255,255,255,0.06)", borderRadius:12, padding:"12px 16px", marginTop:14 }}>
               {/* Sekme butonları */}
@@ -10279,7 +10134,10 @@ function Atolye({ onSirketDegis }) {
                 );
               })()}
             </div>
-            </details>
+</>
+              ) },
+            ]}
+            />
           </div>
         )}
 
