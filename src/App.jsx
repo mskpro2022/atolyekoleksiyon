@@ -581,6 +581,98 @@ const fotoCevirIsle = async (fFoto, setFFoto, fDetayNoktalari, setFDetayNoktalar
   } catch (e) { console.error(e); return false; }
 };
 
+// ═══ ZEMİN EŞİTLE: fotoğrafın düz, açık, nötr zeminini tam #f3f3f3 yapar (mücevher/yansımalara dokunmaz) ═══
+// d: RGBA Uint8ClampedArray. Dönüş: { oran } (değiştirilen zemin oranı) veya null (düz zemin bulunamadı).
+function zeminEsitleVeri(d, w, h, hedef) {
+  const T = hedef || 243, N = w * h;
+  // 1) kenar piksellerinin ortancası = zemin rengi
+  const kenar = [[], [], []];
+  const kal = Math.max(1, Math.round(Math.min(w, h) * 0.015));
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    if (x >= kal && x < w - kal && y >= kal && y < h - kal) { x = w - kal - 1; continue; }
+    const i = (y * w + x) * 4; kenar[0].push(d[i]); kenar[1].push(d[i + 1]); kenar[2].push(d[i + 2]);
+  }
+  const med = a => { a.sort((p, q) => p - q); return a[a.length >> 1]; };
+  const bg = [med(kenar[0]), med(kenar[1]), med(kenar[2])];
+  if (Math.min(bg[0], bg[1], bg[2]) < 200 || Math.max(bg[0], bg[1], bg[2]) - Math.min(bg[0], bg[1], bg[2]) > 12) return null; // açık ve nötr zemin değil
+  const yakin = (i, tol) => Math.abs(d[i] - bg[0]) <= tol && Math.abs(d[i + 1] - bg[1]) <= tol && Math.abs(d[i + 2] - bg[2]) <= tol && Math.max(d[i], d[i + 1], d[i + 2]) - Math.min(d[i], d[i + 1], d[i + 2]) <= 7;
+  const adim = (i, j) => Math.abs(d[i] - d[j]) <= 3 && Math.abs(d[i + 1] - d[j + 1]) <= 3 && Math.abs(d[i + 2] - d[j + 2]) <= 3;
+  const mask = new Uint8Array(N), seen = new Uint8Array(N), stack = new Int32Array(N);
+  const komsu = [1, -1, w, -w];
+  const doldur = (baslangic, tol, comp) => {
+    let sp = 0; stack[sp++] = baslangic; seen[baslangic] = 1;
+    while (sp > 0) {
+      const p = stack[--sp]; comp.push(p);
+      const x = p % w;
+      for (let k = 0; k < 4; k++) {
+        const q = p + komsu[k];
+        if (q < 0 || q >= N) continue;
+        if (k === 0 && x === w - 1) continue; if (k === 1 && x === 0) continue;
+        if (seen[q]) continue;
+        const qi = q * 4, pi = p * 4;
+        if (yakin(qi, tol) && adim(pi, qi)) { seen[q] = 1; stack[sp++] = q; }
+      }
+    }
+  };
+  // 2) kenardan erişilen düz zemin (tolerans geniş: vinyet/yumuşak kenar dahil)
+  for (let x = 0; x < w; x++) for (const y of [0, h - 1]) { const p = y * w + x; if (!seen[p] && yakin(p * 4, 16)) { const c = []; doldur(p, 16, c); for (const q of c) mask[q] = 1; } }
+  for (let y = 0; y < h; y++) for (const x of [0, w - 1]) { const p = y * w + x; if (!seen[p] && yakin(p * 4, 16)) { const c = []; doldur(p, 16, c); for (const q of c) mask[q] = 1; } }
+  // 3) kapalı iç boşluklar (halka içi vb.): yeterince büyük düz zemin parçaları
+  const MIN = Math.max(1500, Math.round(N * 0.0012));
+  for (let p = 0; p < N; p++) {
+    if (seen[p] || !yakin(p * 4, 8)) continue;
+    const c = []; doldur(p, 8, c);
+    if (c.length >= MIN) for (const q of c) mask[q] = 1;
+  }
+  let say = 0; for (let p = 0; p < N; p++) if (mask[p]) say++;
+  if (say < N * 0.03) return null;
+  // 4) zemin pikselleri = hedef; ürünün kenarındaki 3 piksellik halka zemine yakınlığa göre yumuşakça kaydırılır (hale olmasın)
+  const dist = new Int8Array(N); // 0: zemin, 1..3: halka, -1: diğer
+  const kuyruk = new Int32Array(N); let bas = 0, son = 0;
+  for (let p = 0; p < N; p++) { if (mask[p]) { dist[p] = 0; kuyruk[son++] = p; } else dist[p] = -1; }
+  while (bas < son) {
+    const p = kuyruk[bas++]; if (dist[p] >= 3) continue; const x = p % w;
+    for (let k = 0; k < 4; k++) { const q = p + komsu[k]; if (q < 0 || q >= N) continue; if (k === 0 && x === w - 1) continue; if (k === 1 && x === 0) continue; if (dist[q] === -1) { dist[q] = dist[p] + 1; kuyruk[son++] = q; } }
+  }
+  for (let p = 0; p < N; p++) {
+    const i = p * 4;
+    if (dist[p] === 0) { d[i] = T; d[i + 1] = T; d[i + 2] = T; }
+    else if (dist[p] > 0) {
+      const fark = Math.max(Math.abs(d[i] - bg[0]), Math.abs(d[i + 1] - bg[1]), Math.abs(d[i + 2] - bg[2]));
+      const wgt = Math.max(0, 1 - fark / 80) * (1 - (dist[p] - 1) / 3);
+      for (let c = 0; c < 3; c++) d[i + c] = Math.max(0, Math.min(255, Math.round(d[i + c] + (T - bg[c]) * wgt)));
+    }
+  }
+  return { oran: say / N };
+}
+async function resimZeminEsitle(src) {
+  let kaynak = src;
+  if (!String(src).startsWith("data:")) {
+    const r = await fetch(src, { mode: "cors", cache: "no-store" });
+    if (!r.ok) throw new Error("foto okunamadı");
+    kaynak = URL.createObjectURL(await r.blob());
+  }
+  const img = await new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = () => rej(new Error("foto açılamadı")); im.src = kaynak; });
+  const c = document.createElement("canvas"); c.width = img.naturalWidth; c.height = img.naturalHeight;
+  const ctx = c.getContext("2d"); ctx.fillStyle = "#f3f3f3"; ctx.fillRect(0, 0, c.width, c.height); ctx.drawImage(img, 0, 0);
+  if (kaynak !== src) URL.revokeObjectURL(kaynak);
+  const id = ctx.getImageData(0, 0, c.width, c.height);
+  const sonuc = zeminEsitleVeri(id.data, c.width, c.height, 243);
+  if (!sonuc) return null;
+  ctx.putImageData(id, 0, 0);
+  return c.toDataURL("image/jpeg", 0.97);
+}
+const fotoZeminIsle = async (fFoto, setFFoto) => {
+  try {
+    const yeni = await resimZeminEsitle(fFoto);
+    if (!yeni) return "yok";
+    _fotoGecmis = null; // yeni taban: sonraki çevir/zoom bu fotoğraftan devam eder
+    setFFoto(yeni);
+    return "ok";
+  } catch (e) { console.error(e); return "hata"; }
+};
+const zeminMesaj = (r) => r === "ok" ? "🎨 Zemin #f3f3f3 yapıldı — Kaydet'e basınca kalıcı olur" : r === "yok" ? "Düz, açık bir zemin bulunamadı (zemin gölgeli/renkli olabilir)" : "Foto işlenemedi";
+
 // Bir data-URL fotoğrafın (x,y,w,h) — 0..1 fraksiyon — bölgesini kırpıp aynı kalite standardıyla döndürür
 // Detay lensi için <img> stili — GERÇEK img elemanı + yüzde bazlı width/height/left/top.
 // (CSS background-position yerine bunu kullanıyoruz: matematik burada tam kontrolümüzde,
@@ -11459,6 +11551,7 @@ function Atolye({ onSirketDegis }) {
                 );
               })}
               <div style={{ position:"absolute", bottom:8, right:8, display:"flex", gap:6 }}>
+                {fFoto && <div onClick={async e=>{ e.stopPropagation(); const r = await fotoZeminIsle(fFoto, setFFoto); toastGoster(r==="ok"?"ok":"hata", zeminMesaj(r)); }} title="Fotoğrafın düz zeminini #f3f3f3 yap" style={{ background:"rgba(0,0,0,0.6)", color:"#fff", fontSize:10, fontWeight:600, padding:"5px 11px", borderRadius:7, display:"flex", alignItems:"center", gap:5, cursor:"pointer" }}>🎨 Zemin</div>}
                 {fFoto && [["in","＋","Yakınlaştır"],["out","−","Uzaklaştır"]].map(([md,sm,tt]) => <div key={md} title={tt} onClick={async e=>{ e.stopPropagation(); const ok = await fotoCevirIsle(fFoto, setFFoto, fDetayNoktalari, setFDetayNoktalari, md); if(!ok) toastGoster("hata","Foto işlenemedi"); }} style={{ background:"rgba(0,0,0,0.6)", color:"#fff", fontSize:13, fontWeight:700, width:28, height:26, borderRadius:7, display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer", userSelect:"none" }}>{sm}</div>)}
                 {fFoto && <div onClick={async e=>{ e.stopPropagation(); const ok = await fotoCevirIsle(fFoto, setFFoto, fDetayNoktalari, setFDetayNoktalari); toastGoster(ok?"ok":"hata", ok?"↔ Foto çevrildi — Kaydet'e basınca kalıcı olur":"Foto çevrilemedi"); }} title="Fotoğrafı soldan sağa çevir (ayna)" style={{ background:"rgba(0,0,0,0.6)", color:"#fff", fontSize:10, fontWeight:600, padding:"5px 11px", borderRadius:7, display:"flex", alignItems:"center", gap:5, cursor:"pointer" }}>↔ Çevir</div>}
                 {fFoto && <div onClick={e=>{ e.stopPropagation(); setKirpModal(fFoto); }} style={{ background:"rgba(0,0,0,0.6)", color:"#fff", fontSize:10, fontWeight:600, padding:"5px 11px", borderRadius:7, display:"flex", alignItems:"center", gap:5, cursor:"pointer" }}>✂️ Kırp</div>}
@@ -11489,6 +11582,7 @@ function Atolye({ onSirketDegis }) {
           <div onClick={()=>fileRef.current&&fileRef.current.click()} style={{ width:"100%", height:120, borderRadius:10, overflow:"hidden", cursor:"pointer", background:fFoto?"transparent":"rgba(var(--vurgu-rgb),0.04)", border:"2px dashed "+(fFoto?"rgba(var(--vurgu-rgb),0.2)":"rgba(var(--vurgu-rgb),0.13)"), display:"flex", alignItems:"center", justifyContent:"center", position:"relative" }}>
             {fFoto ? <img src={fFoto} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }}/> : <div style={{ textAlign:"center", color:"#7a6f5a" }}><div style={{ fontSize:20 }}>+</div><div style={{ fontSize:9 }}>Fotograf yukleyin</div></div>}
             {fFoto && <button onClick={e=>{e.stopPropagation();setFFoto("");}} style={{ position:"absolute", top:4, right:4, background:"rgba(0,0,0,0.6)", border:"none", borderRadius:4, width:18, height:18, color:"#fff", fontSize:9, cursor:"pointer" }}>X</button>}
+            {fFoto && <div onClick={async e=>{ e.stopPropagation(); const r = await fotoZeminIsle(fFoto, setFFoto); toastGoster(r==="ok"?"ok":"hata", zeminMesaj(r)); }} title="Fotoğrafın düz zeminini #f3f3f3 yap" style={{ position:"absolute", bottom:4, right:190, background:"rgba(0,0,0,0.6)", color:"#fff", fontSize:9, fontWeight:600, padding:"3px 8px", borderRadius:5, cursor:"pointer" }}>🎨 Zemin</div>}
             {fFoto && [["in","＋",164],["out","−",140]].map(([md,sm,rt]) => <div key={md} onClick={async e=>{ e.stopPropagation(); const ok = await fotoCevirIsle(fFoto, setFFoto, fDetayNoktalari, setFDetayNoktalari, md); if(!ok) toastGoster("hata","Foto işlenemedi"); }} style={{ position:"absolute", bottom:4, right:rt, background:"rgba(0,0,0,0.6)", color:"#fff", fontSize:11, fontWeight:700, width:20, height:20, borderRadius:5, display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer" }}>{sm}</div>)}
             {fFoto && <div onClick={async e=>{ e.stopPropagation(); const ok = await fotoCevirIsle(fFoto, setFFoto, fDetayNoktalari, setFDetayNoktalari); toastGoster(ok?"ok":"hata", ok?"↔ Foto çevrildi":"Foto çevrilemedi"); }} title="Fotoğrafı soldan sağa çevir (ayna)" style={{ position:"absolute", bottom:4, right:62, background:"rgba(0,0,0,0.6)", color:"#fff", fontSize:9, fontWeight:600, padding:"3px 8px", borderRadius:5, cursor:"pointer" }}>↔ Çevir</div>}
             {fFoto && <div onClick={e=>{ e.stopPropagation(); setKirpModal(fFoto); }} style={{ position:"absolute", bottom:4, right:4, background:"rgba(0,0,0,0.6)", color:"#fff", fontSize:9, fontWeight:600, padding:"3px 8px", borderRadius:5, cursor:"pointer" }}>✂️ Kırp</div>}
