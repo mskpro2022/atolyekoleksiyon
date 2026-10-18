@@ -4267,7 +4267,7 @@ function VitrinModu({ kod, onizleme }) {
                 className="vm-card" style={{ display:"flex", alignItems:"center", gap:16, background:"rgba(var(--voverlay-rgb),0.06)", border:"1.5px solid rgba(var(--voverlay-rgb),0.10)", borderRadius:16, padding:"14px 18px", cursor:"pointer" }}>
                 <div style={{ width:78, height:58, borderRadius:10, overflow:"hidden", background:"#f7f7f8", display:"grid", gridTemplateColumns:"1fr 1fr", gridTemplateRows:"1fr 1fr", gap:1, flexShrink:0 }}>
                   {[0,1,2,3].map(i => (
-                    <div key={i} style={{ overflow:"hidden", background:"#f0f0f0" }}>
+                    <div key={i} style={{ overflow:"hidden", background:"#f3f3f3" }}>
                       {tumKapaklar[i] ? <img src={tumKapaklar[i]} alt="" style={{ width:"100%", height:"100%", objectFit:"cover", display:"block" }}/> : null}
                     </div>
                   ))}
@@ -4302,7 +4302,7 @@ function VitrinModu({ kod, onizleme }) {
                 )}
                 <div style={{ aspectRatio:"4/3", background:"#f7f7f8", display:"grid", gridTemplateColumns:"1fr 1fr", gridTemplateRows:"1fr 1fr", gap:1 }}>
                   {kapaklar.length > 0 ? [0,1,2,3].map(i => (
-                    <div key={i} style={{ overflow:"hidden", background:"#f0f0f0" }}>
+                    <div key={i} style={{ overflow:"hidden", background:"#f3f3f3" }}>
                       {kapaklar[i] ? <img src={kapaklar[i]} alt="" style={{ width:"100%", height:"100%", objectFit:"cover", display:"block" }}/> : <div style={{ width:"100%", height:"100%", background:"#eee" }}/>}
                     </div>
                   )) : <div style={{ gridColumn:"1/-1", gridRow:"1/-1", display:"flex", alignItems:"center", justifyContent:"center", color:"#d2d2d7", fontSize:32 }}>◇</div>}
@@ -7836,7 +7836,7 @@ function Atolye({ onSirketDegis }) {
                 const genisKart = bilMi && katSut >= 3; // ızgara 3×sütun ince sütun: normal = 3, bileklik/kolye = sütun sayısı → satırda 3 bileklik
                 return (
                   <div key={m.id} style={{ background:ik?"rgba(var(--vurgu-rgb),0.07)":"rgba(var(--vurgu-rgb),0.02)", border:"1px solid", borderColor:ik?"rgba(var(--vurgu-rgb),0.28)":"rgba(var(--vurgu-rgb),0.07)", borderRadius:11, overflow:"hidden", animation:"cardin .3s ease "+(i*.03)+"s both", gridColumn:"span "+(genisKart ? katSut : 3) }}>
-                    <div className={"model-foto-wrap"+(bilMi?" bil-zoom":"")} style={{ position:"relative", ...(bilMi ? (katSut>=3 ? { aspectRatio: (5*katSut)+"/12" } : { height:264 }) : { aspectRatio:"5/4" }), background: bilMi ? "#f3f3f3" : "#f0f0f0", overflow:"hidden" }}>
+                    <div className={"model-foto-wrap"+(bilMi?" bil-zoom":"")} style={{ position:"relative", ...(bilMi ? (katSut>=3 ? { aspectRatio: (5*katSut)+"/12" } : { height:264 }) : { aspectRatio:"5/4" }), background:"#f3f3f3", overflow:"hidden" }}>
                       {m.foto ? <img onClick={()=>openEM(m)} src={m.foto} alt="" style={{ ...(bilMi ? { width:"100%", height:"100%" } : { position:"absolute", top:"8.5%", left:"8.5%", width:"83%", height:"83%", ...FOTO_KENAR_SOLUK }), objectFit:"cover", objectPosition: m.kategori==="kolye" ? "50% 85%" : "center center", display:"block", ...(m.kategori==="kolye" ? { width:"72%", margin:"0 auto", ...FOTO_KENAR_SOLUK } : {}), cursor:"pointer" }}/> : <div onClick={()=>openEM(m)} style={{ width:"100%", height:"100%", display:"flex", alignItems:"center", justifyContent:"center", color:"rgba(var(--vurgu-rgb),0.1)", fontSize:m.cizimde?12:24, fontWeight:700, cursor:"pointer" }}>{m.cizimde ? "🎨 ÇİZİMDE" : "-"}</div>}
                       {/* Detay noktaları — KÖŞELERDE, büyük (56px). Sağ üst köşe V butonunun altına kaydırıldı ki çakışmasın. */}
                       {m.foto && Array.isArray(m.detayNoktalari) && m.detayNoktalari.filter(n=>(n.tip!=="foto")||n.foto).slice(0,4).map((n,di) => {
