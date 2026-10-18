@@ -530,7 +530,7 @@ function resizeImg(file) {
 }
 
 // Fotoğrafı soldan sağa aynalar (yatay flip). URL ya da data-URL alır, yüksek kaliteli JPEG data-URL döner.
-async function resimCevir(src) {
+async function resimDonustur(src, flip, zoom) {
   let kaynak = src;
   if (!String(src).startsWith("data:")) {
     const r = await fetch(src, { mode: "cors", cache: "no-store" });
@@ -542,17 +542,34 @@ async function resimCevir(src) {
   c.width = img.naturalWidth; c.height = img.naturalHeight;
   const ctx = c.getContext("2d");
   ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "high";
-  ctx.translate(c.width, 0); ctx.scale(-1, 1);
+  const z = zoom || 1;
+  if (z < 1) { // uzaklaştır: kenar rengiyle (sol-üst köşe örneği) doldur
+    const t = document.createElement("canvas"); t.width = 1; t.height = 1;
+    const tc = t.getContext("2d"); tc.drawImage(img, 0, 0, 4, 4, 0, 0, 1, 1);
+    const [r, g, b] = tc.getImageData(0, 0, 1, 1).data;
+    ctx.fillStyle = "rgb(" + r + "," + g + "," + b + ")"; ctx.fillRect(0, 0, c.width, c.height);
+  }
+  if (flip) { ctx.translate(c.width, 0); ctx.scale(-1, 1); }
+  // merkez etrafında ölçekle (z>1 yakınlaştır/kırpar, z<1 uzaklaştırır)
+  ctx.translate(c.width / 2, c.height / 2); ctx.scale(z, z); ctx.translate(-c.width / 2, -c.height / 2);
   ctx.drawImage(img, 0, 0);
   if (kaynak !== src) URL.revokeObjectURL(kaynak);
   return c.toDataURL("image/jpeg", 0.94);
 }
-const fotoCevirIsle = async (fFoto, setFFoto, fDetayNoktalari, setFDetayNoktalari) => {
+const fotoCevirIsle = async (fFoto, setFFoto, fDetayNoktalari, setFDetayNoktalari, mod) => {
   try {
-    const yeni = await resimCevir(fFoto);
+    const flip = !mod || mod === "flip";
+    const z = mod === "in" ? 1.05 : mod === "out" ? 1 / 1.05 : 1;
+    const yeni = await resimDonustur(fFoto, flip, z);
     setFFoto(yeni);
-    // kırpma tipi detay noktaları foto üzerinde durduğu için yatayda aynalanır
-    if (Array.isArray(fDetayNoktalari) && fDetayNoktalari.length) setFDetayNoktalari(fDetayNoktalari.map(n => n.tip === "foto" ? n : { ...n, cx: 1 - (n.cx == null ? 0.5 : n.cx) }));
+    // kırpma tipi detay noktaları foto üzerinde durduğu için aynı dönüşümü izler
+    if (Array.isArray(fDetayNoktalari) && fDetayNoktalari.length) setFDetayNoktalari(fDetayNoktalari.map(n => {
+      if (n.tip === "foto") return n;
+      let cx = n.cx == null ? 0.5 : n.cx, cy = n.cy == null ? 0.5 : n.cy;
+      if (flip) cx = 1 - cx;
+      cx = Math.min(1, Math.max(0, 0.5 + (cx - 0.5) * z)); cy = Math.min(1, Math.max(0, 0.5 + (cy - 0.5) * z));
+      return { ...n, cx, cy };
+    }));
     return true;
   } catch (e) { console.error(e); return false; }
 };
@@ -11435,6 +11452,7 @@ function Atolye({ onSirketDegis }) {
                 );
               })}
               <div style={{ position:"absolute", bottom:8, right:8, display:"flex", gap:6 }}>
+                {fFoto && [["in","＋","Yakınlaştır"],["out","−","Uzaklaştır"]].map(([md,sm,tt]) => <div key={md} title={tt} onClick={async e=>{ e.stopPropagation(); const ok = await fotoCevirIsle(fFoto, setFFoto, fDetayNoktalari, setFDetayNoktalari, md); if(!ok) toastGoster("hata","Foto işlenemedi"); }} style={{ background:"rgba(0,0,0,0.6)", color:"#fff", fontSize:13, fontWeight:700, width:28, height:26, borderRadius:7, display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer", userSelect:"none" }}>{sm}</div>)}
                 {fFoto && <div onClick={async e=>{ e.stopPropagation(); const ok = await fotoCevirIsle(fFoto, setFFoto, fDetayNoktalari, setFDetayNoktalari); toastGoster(ok?"ok":"hata", ok?"↔ Foto çevrildi — Kaydet'e basınca kalıcı olur":"Foto çevrilemedi"); }} title="Fotoğrafı soldan sağa çevir (ayna)" style={{ background:"rgba(0,0,0,0.6)", color:"#fff", fontSize:10, fontWeight:600, padding:"5px 11px", borderRadius:7, display:"flex", alignItems:"center", gap:5, cursor:"pointer" }}>↔ Çevir</div>}
                 {fFoto && <div onClick={e=>{ e.stopPropagation(); setKirpModal(fFoto); }} style={{ background:"rgba(0,0,0,0.6)", color:"#fff", fontSize:10, fontWeight:600, padding:"5px 11px", borderRadius:7, display:"flex", alignItems:"center", gap:5, cursor:"pointer" }}>✂️ Kırp</div>}
                 <div style={{ background:"rgba(0,0,0,0.6)", color:"#fff", fontSize:10, fontWeight:600, padding:"5px 11px", borderRadius:7, display:"flex", alignItems:"center", gap:5 }}>📷 Fotoğrafı değiştir</div>
@@ -11464,6 +11482,7 @@ function Atolye({ onSirketDegis }) {
           <div onClick={()=>fileRef.current&&fileRef.current.click()} style={{ width:"100%", height:120, borderRadius:10, overflow:"hidden", cursor:"pointer", background:fFoto?"transparent":"rgba(var(--vurgu-rgb),0.04)", border:"2px dashed "+(fFoto?"rgba(var(--vurgu-rgb),0.2)":"rgba(var(--vurgu-rgb),0.13)"), display:"flex", alignItems:"center", justifyContent:"center", position:"relative" }}>
             {fFoto ? <img src={fFoto} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }}/> : <div style={{ textAlign:"center", color:"#7a6f5a" }}><div style={{ fontSize:20 }}>+</div><div style={{ fontSize:9 }}>Fotograf yukleyin</div></div>}
             {fFoto && <button onClick={e=>{e.stopPropagation();setFFoto("");}} style={{ position:"absolute", top:4, right:4, background:"rgba(0,0,0,0.6)", border:"none", borderRadius:4, width:18, height:18, color:"#fff", fontSize:9, cursor:"pointer" }}>X</button>}
+            {fFoto && [["in","＋",164],["out","−",140]].map(([md,sm,rt]) => <div key={md} onClick={async e=>{ e.stopPropagation(); const ok = await fotoCevirIsle(fFoto, setFFoto, fDetayNoktalari, setFDetayNoktalari, md); if(!ok) toastGoster("hata","Foto işlenemedi"); }} style={{ position:"absolute", bottom:4, right:rt, background:"rgba(0,0,0,0.6)", color:"#fff", fontSize:11, fontWeight:700, width:20, height:20, borderRadius:5, display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer" }}>{sm}</div>)}
             {fFoto && <div onClick={async e=>{ e.stopPropagation(); const ok = await fotoCevirIsle(fFoto, setFFoto, fDetayNoktalari, setFDetayNoktalari); toastGoster(ok?"ok":"hata", ok?"↔ Foto çevrildi":"Foto çevrilemedi"); }} title="Fotoğrafı soldan sağa çevir (ayna)" style={{ position:"absolute", bottom:4, right:62, background:"rgba(0,0,0,0.6)", color:"#fff", fontSize:9, fontWeight:600, padding:"3px 8px", borderRadius:5, cursor:"pointer" }}>↔ Çevir</div>}
             {fFoto && <div onClick={e=>{ e.stopPropagation(); setKirpModal(fFoto); }} style={{ position:"absolute", bottom:4, right:4, background:"rgba(0,0,0,0.6)", color:"#fff", fontSize:9, fontWeight:600, padding:"3px 8px", borderRadius:5, cursor:"pointer" }}>✂️ Kırp</div>}
           </div>
