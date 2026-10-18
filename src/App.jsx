@@ -520,6 +520,7 @@ function resizeImg(file) {
         const ctx = c.getContext("2d");
         ctx.imageSmoothingEnabled = true;
         ctx.imageSmoothingQuality = "high";
+        ctx.fillStyle = "#f3f3f3"; ctx.fillRect(0, 0, w, h); // saydam (PNG) alanlar standart zemin rengiyle dolsun — JPEG'te siyaha dönmesin
         ctx.drawImage(img, 0, 0, w, h);
         resolve(c.toDataURL("image/jpeg", 0.94));
       };
