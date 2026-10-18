@@ -538,36 +538,42 @@ async function resimDonustur(src, flip, zoom) {
     kaynak = URL.createObjectURL(await r.blob());
   }
   const img = await new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = () => rej(new Error("foto açılamadı")); im.src = kaynak; });
-  const c = document.createElement("canvas");
-  c.width = img.naturalWidth; c.height = img.naturalHeight;
+  const nw = img.naturalWidth, nh = img.naturalHeight, z = zoom || 1;
+  // Yakınlaştırma/uzaklaştırma = tuvali küçültüp/büyütmek (merkezden kırp/genişlet). Piksel ÖLÇEKLENMEZ → bulanıklaşma yok.
+  const W = Math.max(1, Math.round(nw / z)), H = Math.max(1, Math.round(nh / z));
+  const ox = Math.round((W - nw) / 2), oy = Math.round((H - nh) / 2);
+  const c = document.createElement("canvas"); c.width = W; c.height = H;
   const ctx = c.getContext("2d");
-  ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "high";
-  const z = zoom || 1;
   if (z < 1) { // uzaklaştır: kenar rengiyle (sol-üst köşe örneği) doldur
     const t = document.createElement("canvas"); t.width = 1; t.height = 1;
     const tc = t.getContext("2d"); tc.drawImage(img, 0, 0, 4, 4, 0, 0, 1, 1);
     const [r, g, b] = tc.getImageData(0, 0, 1, 1).data;
-    ctx.fillStyle = "rgb(" + r + "," + g + "," + b + ")"; ctx.fillRect(0, 0, c.width, c.height);
+    ctx.fillStyle = "rgb(" + r + "," + g + "," + b + ")"; ctx.fillRect(0, 0, W, H);
   }
-  if (flip) { ctx.translate(c.width, 0); ctx.scale(-1, 1); }
-  // merkez etrafında ölçekle (z>1 yakınlaştır/kırpar, z<1 uzaklaştırır)
-  ctx.translate(c.width / 2, c.height / 2); ctx.scale(z, z); ctx.translate(-c.width / 2, -c.height / 2);
-  ctx.drawImage(img, 0, 0);
+  if (flip) { ctx.translate(W, 0); ctx.scale(-1, 1); }
+  ctx.drawImage(img, ox, oy);
   if (kaynak !== src) URL.revokeObjectURL(kaynak);
-  return c.toDataURL("image/jpeg", 0.94);
+  return c.toDataURL("image/jpeg", 0.97);
 }
+// Her işlem ORİJİNAL fotoğraftan tek seferde yapılır (üst üste sıkıştırma yok): son sonuç hatırlanır, sonraki adım orijinale uygulanır.
+let _fotoGecmis = null;
 const fotoCevirIsle = async (fFoto, setFFoto, fDetayNoktalari, setFDetayNoktalari, mod) => {
   try {
-    const flip = !mod || mod === "flip";
-    const z = mod === "in" ? 1.05 : mod === "out" ? 1 / 1.05 : 1;
-    const yeni = await resimDonustur(fFoto, flip, z);
+    const adimFlip = !mod || mod === "flip";
+    const adimZ = mod === "in" ? 1.05 : mod === "out" ? 1 / 1.05 : 1;
+    const devam = _fotoGecmis && _fotoGecmis.son === fFoto;
+    const orj = devam ? _fotoGecmis.orj : fFoto;
+    const flipToplam = adimFlip ? !(devam ? _fotoGecmis.flip : false) : (devam ? _fotoGecmis.flip : false);
+    const zToplam = Math.round((devam ? _fotoGecmis.z : 1) * adimZ * 1e6) / 1e6;
+    const yeni = await resimDonustur(orj, flipToplam, Math.abs(zToplam - 1) < 1e-4 ? 1 : zToplam);
+    _fotoGecmis = { orj, son: yeni, flip: flipToplam, z: zToplam };
     setFFoto(yeni);
     // kırpma tipi detay noktaları foto üzerinde durduğu için aynı dönüşümü izler
     if (Array.isArray(fDetayNoktalari) && fDetayNoktalari.length) setFDetayNoktalari(fDetayNoktalari.map(n => {
       if (n.tip === "foto") return n;
       let cx = n.cx == null ? 0.5 : n.cx, cy = n.cy == null ? 0.5 : n.cy;
-      if (flip) cx = 1 - cx;
-      cx = Math.min(1, Math.max(0, 0.5 + (cx - 0.5) * z)); cy = Math.min(1, Math.max(0, 0.5 + (cy - 0.5) * z));
+      if (adimFlip) cx = 1 - cx;
+      cx = Math.min(1, Math.max(0, 0.5 + (cx - 0.5) * adimZ)); cy = Math.min(1, Math.max(0, 0.5 + (cy - 0.5) * adimZ));
       return { ...n, cx, cy };
     }));
     return true;
