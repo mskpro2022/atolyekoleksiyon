@@ -728,7 +728,7 @@ async function arkaPlanSilAI(src, ilerle, golge) {
         ctx.save();
         if ("filter" in ctx) ctx.filter = "blur(" + Math.max(3, Math.round(bw * 0.028)) + "px)";
         ctx.globalAlpha = 0.11;
-        ctx.drawImage(sil, x0, y0, bw, bh, x0 + bw * 0.03, altY - yassi, bw, yassi);
+        ctx.drawImage(sil, x0, y0, bw, bh, x0 + bw * 0.10, altY - yassi, bw, yassi);
         ctx.restore();
       }
     } catch (e) { console.warn("gölge eklenemedi", e); }
