@@ -702,7 +702,7 @@ async function arkaPlanSilAI(src, ilerle) {
 }
 const fotoAIIsle = async (fFoto, setFFoto, setDurum) => {
   try {
-    const yeni = await arkaPlanSilAI(fFoto, (k, c, t) => { setDurum(t > 0 ? "Yapay zekâ modeli indiriliyor… %" + Math.round(c / t * 100) : "İşleniyor…"); });
+    const yeni = await arkaPlanSilAI(fFoto, (k, c, t) => { setDurum(String(k).indexOf("compute") === 0 ? "Arka plan siliniyor… (10–40 sn sürebilir, bekle)" : (t > 0 && c < t ? "Model indiriliyor… %" + Math.round(c / t * 100) : "İşleniyor…")); });
     fotoGeriKaydet(fFoto, null); _fotoGecmis = null; setFFoto(yeni);
     return "ok";
   } catch (e) { console.error(e); return e && e.message ? e.message : "hata"; }
