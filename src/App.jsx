@@ -2315,7 +2315,7 @@ function buildKatalogHTML(kol, modeller, sutun, hedefAyar, kollar, gruplu, tamKa
     + ".r1{display:flex;justify-content:space-between;align-items:baseline}"
     + ".kod{font-size:13px;color:#1a1a1a;font-weight:700;letter-spacing:.04em}"
     + ".gram{font-size:10px;font-weight:700;color:#333}"
-    + ".ac{font-size:8px;color:#aaa;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}"
+    + ".ac{font-size:8px;line-height:11px;min-height:11px;height:11px;color:#aaa;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}"
     + ".set-parcalar{font-size:7.5px;font-weight:700;color:#444;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}"
     + ".ft{display:flex;justify-content:space-between;align-items:center;padding:5px 3px 0;border-top:1px solid #e0e0e0;flex-shrink:0}"
     + ".ft span{font-size:7px;color:#666;font-weight:700;letter-spacing:.08em;text-transform:uppercase}"
@@ -2378,7 +2378,8 @@ function buildKatalogHTML(kol, modeller, sutun, hedefAyar, kollar, gruplu, tamKa
     h += "<span class='kod'>" + (m.kod || "—") + "</span>";
     h += "<span class='gram'>" + gosterGram + "gr · " + gosterAyar + "</span>";
     h += "</div>";
-    if (m.ac) h += "<div class='ac'>" + m.ac + "</div>";
+    // Açıklama olsun olmasın aynı yükseklik: boşsa görünmez satır yer tutar (kart boyları değişmesin)
+    h += "<div class='ac'>" + (m.ac ? m.ac : "&nbsp;") + "</div>";
     if (isSet) {
       h += "<div class='set-parcalar'>" + setParcaGramlari.map(p =>
         p.bulunamadi ? (p.kod + ": —") : (p.kod + " (" + p.kat + "): " + p.gram.toFixed(2) + "gr")
