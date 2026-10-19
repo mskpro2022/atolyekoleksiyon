@@ -699,15 +699,28 @@ const fotoGeriAl = (setFFoto, setFDetayNoktalari) => {
 };
 // ── YAPAY ZEKÂ ARKA PLAN SİLME (tarayıcıda çalışan hazır model; ilk kullanımda model iner) ──
 let _imglyModul = null;
-let _koruMaske = null; // { foto, canvas } — "🖌 İşaretle" ile korunacak bölgeler; sadece o fotoğraf için geçerli
-async function arkaPlanSilAI(src, ilerle, golge, koru) {
+let _aiCihaz = "gpu"; // önce ekran kartı (WebGPU) denenir; olmazsa kendiliğinden işlemciye (cpu) düşer
+async function aiModulYukle() {
   if (!_imglyModul) {
     try { _imglyModul = await import(/* @vite-ignore */ "https://esm.sh/@imgly/background-removal@1.5.8"); }
     catch (e) { throw new Error("Yapay zekâ modülü yüklenemedi (internet bağlantısı?)"); }
   }
+  return _imglyModul;
+}
+// Daha önce kullanıldıysa model arka planda önceden indirilir/ısıtılır — butona basınca bekleme kalmaz
+function arkaPlanOnYukle() {
+  aiModulYukle().then(m => { try { if (m.preload) return m.preload({ model: "isnet_fp16", device: _aiCihaz }); } catch (e) {} }).catch(() => {});
+}
+let _koruMaske = null; // { foto, canvas } — "🖌 İşaretle" ile korunacak bölgeler; sadece o fotoğraf için geçerli
+async function arkaPlanSilAI(src, ilerle, golge, koru) {
+  await aiModulYukle();
   const fn = _imglyModul.removeBackground || (_imglyModul.default && _imglyModul.default.removeBackground) || _imglyModul.default;
   const blob = await (await fetch(src, { mode: "cors", cache: "no-store" })).blob();
-  const out = await fn(blob, { model: "isnet_fp16", output: { format: "image/png", type: "foreground" }, progress: (k, c, t) => { if (ilerle) ilerle(k, c, t); } });
+  const secenek = (cihaz) => ({ model: "isnet_fp16", device: cihaz, output: { format: "image/png", type: "foreground" }, progress: (k, c, t) => { if (ilerle) ilerle(k, c, t); } });
+  let out;
+  try { out = await fn(blob, secenek(_aiCihaz)); }
+  catch (e) { if (_aiCihaz === "gpu") { console.warn("GPU ile olmadı, işlemciye geçiliyor", e); _aiCihaz = "cpu"; out = await fn(blob, secenek("cpu")); } else throw e; }
+  try { localStorage.setItem("aiBg", "1"); } catch (e) {}
   const url = URL.createObjectURL(out);
   const img = await new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = () => rej(new Error("sonuç açılamadı")); im.src = url; });
   const c = document.createElement("canvas"); c.width = img.naturalWidth; c.height = img.naturalHeight;
@@ -6184,6 +6197,48 @@ function Atolye({ onSirketDegis }) {
   const [fFoto,        setFFoto]       = useState("");
   const [fotoDurum,    setFotoDurum]   = useState(""); // foto işlenirken kutuda gösterilen durum (ör. yapay zekâ)
   const [koruModal,    setKoruModal]   = useState(false); // 🖌 İşaretle penceresi
+  useEffect(() => { try { if (localStorage.getItem("aiBg") === "1") { const t = setTimeout(arkaPlanOnYukle, 4000); return () => clearTimeout(t); } } catch (e) {} }, []);
+  // ── KART ÜSTÜ FOTO ARAÇLARI (geçici): kartı açmadan ✨ arka plan sil / 🖌 işaretle; sonuç ANINDA kaydedilir, ↩ ile (bu oturumda) eski foto geri yüklenir ──
+  const [kartGeri,  setKartGeri]  = useState({}); // modelId -> { orj: önceki fotoğraf (dataURL), temiz: önceki fotoTemiz }
+  const [kartDurum, setKartDurum] = useState({}); // modelId -> işlem yazısı (çalışırken)
+  const [kartKoru,  setKartKoru]  = useState(null); // 🖌 işaretle penceresi açık olan modelId
+  const kartDurumYaz = (id, t) => setKartDurum(p => { const n = { ...p }; if (t) n[id] = t; else delete n[id]; return n; });
+  const fotoDataUrlYap = async (u) => {
+    if (!u || u.startsWith("data:")) return u;
+    const blob = await (await fetch(u, { mode: "cors", cache: "no-store" })).blob();
+    return await new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = rej; fr.readAsDataURL(blob); });
+  };
+  const kartFotoAI = async (m) => {
+    const cur = m.foto;
+    if (!cur || kartDurum[m.id]) return;
+    kartDurumYaz(m.id, "Yapay zekâ çalışıyor…");
+    try {
+      const orj = await fotoDataUrlYap(cur); // geri alma için eski foto (kaydedince Storage'daki üstüne yazılır)
+      const koru = _koruMaske && _koruMaske.foto === cur ? _koruMaske.canvas : null;
+      let yeni = null;
+      const r = await fotoAIIsle(cur, (v) => { yeni = v; }, (t) => kartDurumYaz(m.id, t), m.kategori !== "kolye", koru);
+      if (r !== "ok" || !yeni) { toastGoster("hata", "Arka plan silinemedi: " + r); kartDurumYaz(m.id, ""); return; }
+      kartDurumYaz(m.id, "Kaydediliyor…");
+      const url = await fotoYukleStorage(yeni, m.id, AKTIF_SIRKET_ONEK);
+      svMUpsert([{ ...m, foto: url, fotoTemiz: true }]);
+      islemKaydet(AKTIF_SIRKET_ONEK, "düzenle", "model", (m.kod || "") + " · arka plan temizlendi (kart)");
+      setKartGeri(p => ({ ...p, [m.id]: { orj, temiz: !!m.fotoTemiz } }));
+      toastGoster("ok", "✨ " + (m.kod || "") + " temizlendi ve kaydedildi");
+    } catch (e) { console.error(e); toastGoster("hata", "Olmadı: " + (e && e.message ? e.message : "hata")); }
+    kartDurumYaz(m.id, "");
+  };
+  const kartFotoGeriAl = async (m) => {
+    const g = kartGeri[m.id]; if (!g || kartDurum[m.id]) return;
+    kartDurumYaz(m.id, "Eski foto geri yükleniyor…");
+    try {
+      const url = await fotoYukleStorage(g.orj, m.id, AKTIF_SIRKET_ONEK);
+      svMUpsert([{ ...m, foto: url, fotoTemiz: g.temiz }]);
+      islemKaydet(AKTIF_SIRKET_ONEK, "düzenle", "model", (m.kod || "") + " · foto geri alındı (kart)");
+      setKartGeri(p => { const n = { ...p }; delete n[m.id]; return n; });
+      toastGoster("ok", "↩ " + (m.kod || "") + " eski fotoğrafına döndü");
+    } catch (e) { console.error(e); toastGoster("hata", "Geri alınamadı: " + (e && e.message ? e.message : "hata")); }
+    kartDurumYaz(m.id, "");
+  };
   const [kirpModal,    setKirpModal]   = useState(null); // foto kırpma aracı — data-URL tutuyor, null=kapalı
   // Büyük foto önizlemesi (220px) editördeki 4:3 kutudan FARKLI bir en/boy oranında —
   // bu yüzden nokta konumunu bu kutunun KENDİ letterbox'ına göre ayrıca düzeltmek gerekiyor.
@@ -8104,6 +8159,19 @@ function Atolye({ onSirketDegis }) {
                   <div key={m.id} style={{ background:ik?"rgba(var(--vurgu-rgb),0.07)":(T.id==="beyaz"?"#f1f1f2":"rgba(var(--vurgu-rgb),0.02)"), border:"1px solid", borderColor:ik?"rgba(var(--vurgu-rgb),0.28)":"rgba(var(--vurgu-rgb),0.07)", borderRadius:11, overflow:"hidden", animation:"cardin .3s ease "+(i*.03)+"s both", gridColumn:"span "+(genisKart ? katSut : 3) }}>
                     <div className={"model-foto-wrap"+(bilMi?" bil-zoom":"")} style={{ position:"relative", ...(bilMi ? (katSut>=3 ? { aspectRatio: (5*katSut)+"/12" } : { height:264 }) : { aspectRatio:"5/4" }), background:"#f3f3f3", overflow:"hidden" }}>
                       {m.foto ? <img onClick={()=>openEM(m)} src={m.foto} alt="" style={{ ...(bilMi ? { width:"100%", height:"100%" } : { position:"absolute", top:"8.5%", left:"8.5%", width:"83%", height:"83%", ...FOTO_KENAR_SOLUK }), objectFit:"cover", objectPosition: m.kategori==="kolye" ? "50% 85%" : "center center", display:"block", ...(m.kategori==="kolye" ? { width:"72%", margin:"0 auto", ...FOTO_KENAR_SOLUK } : {}), cursor:"pointer" }}/> : <div onClick={()=>openEM(m)} style={{ width:"100%", height:"100%", display:"flex", alignItems:"center", justifyContent:"center", color:"rgba(var(--vurgu-rgb),0.1)", fontSize:m.cizimde?12:24, fontWeight:700, cursor:"pointer" }}>{m.cizimde ? "🎨 ÇİZİMDE" : "-"}</div>}
+                      {m.foto && (() => {
+                        const gr = kartGeri[m.id], dur = kartDurum[m.id];
+                        const B = { color:"#fff", fontSize:10, fontWeight:700, padding:"4px 9px", borderRadius:6, cursor:"pointer", whiteSpace:"nowrap" };
+                        return (
+                          <div onClick={e=>e.stopPropagation()} style={{ position:"absolute", left:"50%", bottom:5, transform:"translateX(-50%)", zIndex:6, display:"flex", gap:4 }}>
+                            {dur ? <div style={{ ...B, background:"rgba(255,255,255,0.88)", color:"#1d1d1f" }}>✨ {dur}</div> : <>
+                              <div onClick={()=>kartFotoAI(m)} title="Yapay zekâ ile arka planı sil, #f3f3f3 yap + gölge — ANINDA KAYDEDİLİR" style={{ ...B, background:"rgba(124,58,237,0.88)" }}>✨</div>
+                              <div onClick={()=>setKartKoru(m.id)} title="Korunacak bölgeyi işaretle (beyaz taş vb.), sonra ✨" style={{ ...B, background:"rgba(14,165,233,0.88)" }}>🖌{_koruMaske && _koruMaske.foto === m.foto ? "✓" : ""}</div>
+                              {gr && <div onClick={()=>kartFotoGeriAl(m)} title="Eski fotoğrafı geri yükle (sadece bu oturumda)" style={{ ...B, background:"rgba(0,0,0,0.65)" }}>↩</div>}
+                            </>}
+                          </div>
+                        );
+                      })()}
                       {m.foto && m.fotoTemiz && <div title="Arka plan temiz — tekrar uğraşmaya gerek yok" style={{ position:"absolute", top:7, left:7, width:11, height:11, borderRadius:"50%", background:"#34c759", border:"2px solid #fff", boxShadow:"0 1px 4px rgba(0,0,0,0.35)", zIndex:5, pointerEvents:"none" }}/>}
                       {/* Detay noktaları — KÖŞELERDE, büyük (56px). Sağ üst köşe V butonunun altına kaydırıldı ki çakışmasın. */}
                       {m.foto && Array.isArray(m.detayNoktalari) && m.detayNoktalari.filter(n=>(n.tip!=="foto")||n.foto).slice(0,4).map((n,di) => {
@@ -11683,6 +11751,13 @@ function Atolye({ onSirketDegis }) {
           onIptal={()=>setKoruModal(false)}
           onTamam={(cv)=>{ _koruMaske = cv ? { foto: fFoto, canvas: cv } : null; setKoruModal(false); toastGoster("ok", cv ? "🖌 İşaretlenen bölge korunacak — şimdi ✨ Arka planı sil'e bas" : "İşaret yok"); }}/>
       )}
+      {kartKoru && (() => {
+        const km = modeller.find(x => x.id === kartKoru); const cur = km && km.foto;
+        if (!cur) return null;
+        return <FotoKoruModal src={cur} baslangic={_koruMaske && _koruMaske.foto === cur ? _koruMaske.canvas : null}
+          onIptal={()=>setKartKoru(null)}
+          onTamam={(cv)=>{ _koruMaske = cv ? { foto: cur, canvas: cv } : null; setKartKoru(null); toastGoster("ok", cv ? "🖌 İşaretlenen bölge korunacak — şimdi kartta ✨ 'e bas" : "İşaret yok"); }}/>;
+      })()}
       {kirpModal && (
         <FotoKirpModal src={kirpModal}
           onCancel={()=>setKirpModal(null)}
