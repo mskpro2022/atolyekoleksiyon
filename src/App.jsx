@@ -723,12 +723,12 @@ async function arkaPlanSilAI(src, ilerle, golge) {
         const bw = x1 - x0, bh = y1 - y0;
         const sil = document.createElement("canvas"); sil.width = W; sil.height = H;
         const sc = sil.getContext("2d"); sc.drawImage(img, 0, 0); sc.globalCompositeOperation = "source-in"; sc.fillStyle = "#000"; sc.fillRect(0, 0, W, H);
-        const yassi = bh * 0.14;                       // gölgenin yüksekliği
+        const yassi = bh * 0.2;                       // gölgenin yüksekliği
         const altY = y1 + bh * 0.02;                   // gölgenin alt çizgisi (ürünün hemen altı)
         ctx.save();
-        if ("filter" in ctx) ctx.filter = "blur(" + Math.max(3, Math.round(bw * 0.028)) + "px)";
-        ctx.globalAlpha = 0.11;
-        ctx.drawImage(sil, x0, y0, bw, bh, x0 + bw * 0.10, altY - yassi, bw, yassi);
+        if ("filter" in ctx) ctx.filter = "blur(" + Math.max(3, Math.round(bw * 0.05)) + "px)";
+        ctx.globalAlpha = 0.16;
+        ctx.drawImage(sil, x0, y0, bw, bh, x0 + bw * 0.07, altY - yassi, bw, yassi);
         ctx.restore();
       }
     } catch (e) { console.warn("gölge eklenemedi", e); }
