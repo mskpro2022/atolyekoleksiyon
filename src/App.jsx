@@ -727,7 +727,7 @@ async function arkaPlanSilAI(src, ilerle, golge) {
         const altY = y1 + bh * 0.03;                   // gölgenin alt çizgisi (ürünün hemen altı)
         ctx.save();
         if ("filter" in ctx) ctx.filter = "blur(" + Math.max(3, Math.round(bw * 0.022)) + "px)";
-        ctx.globalAlpha = 0.17;
+        ctx.globalAlpha = 0.145;
         ctx.drawImage(sil, x0, y0, bw, bh, x0 + bw * 0.07, altY - yassi, bw * 0.85, yassi);
         ctx.restore();
       }
