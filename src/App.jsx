@@ -506,6 +506,11 @@ function sirketAnahtar(k) {
 async function ld(k, f) { try { const r = await dbLoad(sirketAnahtar(k), f); return r ?? f; } catch { return f; } }
 async function sv(k, d) { try { await dbSave(sirketAnahtar(k), d); } catch(e) { console.error("sv error:", e); } }
 
+// "Arka planı temiz" fotoğraflar (PNG saydam yüklendi / yapay zekâyla silindi / zemin eşitlendi): kart sol üstte yeşil nokta.
+// Aynı fotoğraf verisi (string) küme içindeyse temiz sayılır; çevir/zoom/kırp yeni veriyi de kümeye taşır, geri al doğal olarak çalışır.
+const _temizFotolar = new Set();
+let _sonYuklemeSaydam = false;
+const fotoTemizTasi = (eski, yeni) => { if (eski && yeni && _temizFotolar.has(eski)) _temizFotolar.add(yeni); };
 function resizeImg(file) {
   return new Promise(resolve => {
     const rd = new FileReader();
@@ -520,6 +525,13 @@ function resizeImg(file) {
         const ctx = c.getContext("2d");
         ctx.imageSmoothingEnabled = true;
         ctx.imageSmoothingQuality = "high";
+        try { // PNG'de saydam alan var mı? küçültülmüş kopyada alfa kontrolü
+          const k = document.createElement("canvas"); k.width = 64; k.height = 64;
+          const kc = k.getContext("2d"); kc.drawImage(img, 0, 0, 64, 64);
+          const kd = kc.getImageData(0, 0, 64, 64).data; let say = 0;
+          for (let i = 3; i < kd.length; i += 4) if (kd[i] < 200) say++;
+          _sonYuklemeSaydam = say > 64 * 64 * 0.02;
+        } catch (er) { _sonYuklemeSaydam = false; }
         ctx.fillStyle = "#f3f3f3"; ctx.fillRect(0, 0, w, h); // saydam (PNG) alanlar standart zemin rengiyle dolsun — JPEG'te siyaha dönmesin
         ctx.drawImage(img, 0, 0, w, h);
         resolve(c.toDataURL("image/jpeg", 0.94));
@@ -569,6 +581,7 @@ const fotoCevirIsle = async (fFoto, setFFoto, fDetayNoktalari, setFDetayNoktalar
     const zToplam = Math.round((devam ? _fotoGecmis.z : 1) * adimZ * 1e6) / 1e6;
     const yeni = await resimDonustur(orj, flipToplam, Math.abs(zToplam - 1) < 1e-4 ? 1 : zToplam);
     _fotoGecmis = { orj, son: yeni, flip: flipToplam, z: zToplam };
+    fotoTemizTasi(fFoto, yeni);
     setFFoto(yeni);
     // kırpma tipi detay noktaları foto üzerinde durduğu için aynı dönüşümü izler
     if (Array.isArray(fDetayNoktalari) && fDetayNoktalari.length) setFDetayNoktalari(fDetayNoktalari.map(n => {
@@ -669,6 +682,7 @@ const fotoZeminIsle = async (fFoto, setFFoto) => {
     if (!yeni) return "yok";
     fotoGeriKaydet(fFoto, null);
     _fotoGecmis = null; // yeni taban: sonraki çevir/zoom bu fotoğraftan devam eder
+    _temizFotolar.add(yeni);
     setFFoto(yeni);
     return "ok";
   } catch (e) { console.error(e); return "hata"; }
@@ -703,7 +717,7 @@ async function arkaPlanSilAI(src, ilerle) {
 const fotoAIIsle = async (fFoto, setFFoto, setDurum) => {
   try {
     const yeni = await arkaPlanSilAI(fFoto, (k, c, t) => { setDurum(String(k).indexOf("compute") === 0 ? "Arka plan siliniyor… (10–40 sn sürebilir, bekle)" : (t > 0 && c < t ? "Model indiriliyor… %" + Math.round(c / t * 100) : "İşleniyor…")); });
-    fotoGeriKaydet(fFoto, null); _fotoGecmis = null; setFFoto(yeni);
+    fotoGeriKaydet(fFoto, null); _fotoGecmis = null; _temizFotolar.add(yeni); setFFoto(yeni);
     return "ok";
   } catch (e) { console.error(e); return e && e.message ? e.message : "hata"; }
 };
@@ -6804,7 +6818,7 @@ function Atolye({ onSirketDegis }) {
     const hesaplananTasGram = fTaslar.length > 0 && toplamTasGram > 0
       ? toplamTasGram
       : (Number(fTasGram)||0);
-    const obj = { ad: fAd.trim(), kod: fKod.trim().toUpperCase(), kategori: fKategori, gram: Number(fGram)||0, refAyar: fRefAyar, tasGram: hesaplananTasGram, taslar: fTaslar, tasBoy: fTasBoy.trim(), tasSekil: fTasSekil, tasTur: fTasTur, tasBoyut: fTasBoyut, tasAdet: Number(fTasAdet)||0, madenCarpan: Number(fMadenC)||0, iscilikDolar: Number(fIscilikDolar)||0, iscilikBirim: fIscilikBirim, iscilikAyarlar: fIscilikAyarlar, ekMaliyet: Number(fEkMaliyet)||0, ac: fAc.trim(), foto: fFoto, ki: fKolId, durum: fDurum, etiketler: fEtiketler, detayNoktalari: fDetayNoktalari };
+    const obj = { ad: fAd.trim(), kod: fKod.trim().toUpperCase(), kategori: fKategori, gram: Number(fGram)||0, refAyar: fRefAyar, tasGram: hesaplananTasGram, taslar: fTaslar, tasBoy: fTasBoy.trim(), tasSekil: fTasSekil, tasTur: fTasTur, tasBoyut: fTasBoyut, tasAdet: Number(fTasAdet)||0, madenCarpan: Number(fMadenC)||0, iscilikDolar: Number(fIscilikDolar)||0, iscilikBirim: fIscilikBirim, iscilikAyarlar: fIscilikAyarlar, ekMaliyet: Number(fEkMaliyet)||0, ac: fAc.trim(), foto: fFoto, fotoTemiz: _temizFotolar.has(fFoto), ki: fKolId, durum: fDurum, etiketler: fEtiketler, detayNoktalari: fDetayNoktalari };
     if (!obj.id) obj.olusturma = Date.now();
     obj.cizimde = !!(editM && editM.cizimde && fDurum === "cizimde"); // çizim bitip durum değişince vitrine açılır
     // Aynı kodlu diğer modeller var mı kontrol et
@@ -6927,7 +6941,7 @@ function Atolye({ onSirketDegis }) {
     setFAd(m.ad); setFKod(m.kod||""); setFGram(String(m.gram||"")); setFRefAyar(m.refAyar||"14K");
     setFTasGram(String(m.tasGram||"")); setFTasBoy(m.tasBoy||""); setFTaslar(m.taslar||[]); setFTasSekil(m.tasSekil||"ROUND"); setFTasTur(m.tasTur||"N"); setFTasBoyut(m.tasBoyut||""); setFTasAdet(String(m.tasAdet||"")); setFMadenC(String(m.madenCarpan||""));
     setFIscilikDolar(String(m.iscilikDolar||"")); setFIscilikBirim(m.iscilikBirim||"dolar"); setFIscilikAyarlar(m.iscilikAyarlar||{}); setFEkMaliyet(String(m.ekMaliyet||""));
-    fotoGeriSifirla(); setFAc(m.ac||""); setFFoto(m.foto||""); setFKolId(m.ki||""); setFDurum(m.durum||"baslanmadi");
+    fotoGeriSifirla(); if (m.fotoTemiz && m.foto) _temizFotolar.add(m.foto); setFAc(m.ac||""); setFFoto(m.foto||""); setFKolId(m.ki||""); setFDurum(m.durum||"baslanmadi");
     setFKategori(m.kategori||"yuzuk"); setFEtiketler(m.etiketler||[]); setFDetayNoktalari(m.detayNoktalari||[]); setEditM(m); setShowMM(true);
     setFSetModu(false); setFSetKod1(""); setFSetKod2(""); setFSetM1(null); setFSetM2(null); // her model açılışında SET modu sıfırlansın — bir önceki modelden yapışık kalmasın
   };
@@ -6936,7 +6950,7 @@ function Atolye({ onSirketDegis }) {
     const f = e.target.files && e.target.files[0];
     e.target.value = ""; // SIFIRLA — aynı/yeni dosya tekrar seçilebilsin (yoksa onChange tetiklenmez)
     if (!f) return;
-    fotoGeriSifirla(); setFFoto(await resizeImg(f)); // direkt yüklenir — kırpmak istersen "✂️ Kırp" butonuyla sonradan aç
+    fotoGeriSifirla(); { const yf = await resizeImg(f); if (_sonYuklemeSaydam) _temizFotolar.add(yf); setFFoto(yf); } // direkt yüklenir — kırpmak istersen "✂️ Kırp" butonuyla sonradan aç
   };
   const handleKod  = v => {
     setFKod(v);
@@ -7976,6 +7990,7 @@ function Atolye({ onSirketDegis }) {
                   <div key={m.id} style={{ background:ik?"rgba(var(--vurgu-rgb),0.07)":(T.id==="beyaz"?"#f1f1f2":"rgba(var(--vurgu-rgb),0.02)"), border:"1px solid", borderColor:ik?"rgba(var(--vurgu-rgb),0.28)":"rgba(var(--vurgu-rgb),0.07)", borderRadius:11, overflow:"hidden", animation:"cardin .3s ease "+(i*.03)+"s both", gridColumn:"span "+(genisKart ? katSut : 3) }}>
                     <div className={"model-foto-wrap"+(bilMi?" bil-zoom":"")} style={{ position:"relative", ...(bilMi ? (katSut>=3 ? { aspectRatio: (5*katSut)+"/12" } : { height:264 }) : { aspectRatio:"5/4" }), background:"#f3f3f3", overflow:"hidden" }}>
                       {m.foto ? <img onClick={()=>openEM(m)} src={m.foto} alt="" style={{ ...(bilMi ? { width:"100%", height:"100%" } : { position:"absolute", top:"8.5%", left:"8.5%", width:"83%", height:"83%", ...FOTO_KENAR_SOLUK }), objectFit:"cover", objectPosition: m.kategori==="kolye" ? "50% 85%" : "center center", display:"block", ...(m.kategori==="kolye" ? { width:"72%", margin:"0 auto", ...FOTO_KENAR_SOLUK } : {}), cursor:"pointer" }}/> : <div onClick={()=>openEM(m)} style={{ width:"100%", height:"100%", display:"flex", alignItems:"center", justifyContent:"center", color:"rgba(var(--vurgu-rgb),0.1)", fontSize:m.cizimde?12:24, fontWeight:700, cursor:"pointer" }}>{m.cizimde ? "🎨 ÇİZİMDE" : "-"}</div>}
+                      {m.foto && m.fotoTemiz && <div title="Arka plan temiz — tekrar uğraşmaya gerek yok" style={{ position:"absolute", top:7, left:7, width:11, height:11, borderRadius:"50%", background:"#34c759", border:"2px solid #fff", boxShadow:"0 1px 4px rgba(0,0,0,0.35)", zIndex:5, pointerEvents:"none" }}/>}
                       {/* Detay noktaları — KÖŞELERDE, büyük (56px). Sağ üst köşe V butonunun altına kaydırıldı ki çakışmasın. */}
                       {m.foto && Array.isArray(m.detayNoktalari) && m.detayNoktalari.filter(n=>(n.tip!=="foto")||n.foto).slice(0,4).map((n,di) => {
                         const ayriFoto = n.tip === "foto";
@@ -11552,7 +11567,7 @@ function Atolye({ onSirketDegis }) {
       {kirpModal && (
         <FotoKirpModal src={kirpModal}
           onCancel={()=>setKirpModal(null)}
-          onConfirm={(sonuc)=>{ fotoGeriKaydet(fFoto, null); setFFoto(sonuc); setKirpModal(null); }}/>
+          onConfirm={(sonuc)=>{ fotoGeriKaydet(fFoto, null); fotoTemizTasi(fFoto, sonuc); setFFoto(sonuc); setKirpModal(null); }}/>
       )}
 
       {/* MODEL MODAL — SOL/SAĞ GEZİNME OKLARI (sadece düzenlerken, ekrandaki sıraya göre) */}
@@ -11798,7 +11813,7 @@ function Atolye({ onSirketDegis }) {
                 setFTasGram(String(m.tasGram||"")); setFTasBoy(m.tasBoy||""); setFIscilikDolar(String(m.iscilikDolar||""));
                 setFEkMaliyet(String(m.ekMaliyet||"")); setFMadenC(String(m.madenCarpan||""));
                 setFKategori(m.kategori||"yuzuk"); setFKolId(m.ki||""); setFDurum(m.durum||"baslanmadi");
-                setFEtiketler(m.etiketler||[]); setFFoto(m.foto||""); setFDetayNoktalari(m.detayNoktalari||[]);
+                setFEtiketler(m.etiketler||[]); if (m.fotoTemiz && m.foto) _temizFotolar.add(m.foto); setFFoto(m.foto||""); setFDetayNoktalari(m.detayNoktalari||[]);
               }} style={{ background:"rgba(232,90,79,0.15)", border:"1px solid rgba(232,90,79,0.3)", borderRadius:6, padding:"4px 12px", color:"#e85a4f", fontSize:9, fontWeight:700, cursor:"pointer" }}>✏ Mevcut modeli düzenle</button>
             </div>
             <div style={{ fontSize:8, color:"#998a6e", marginBottom:4 }}>Veya versiyon olarak kaydet:</div>
