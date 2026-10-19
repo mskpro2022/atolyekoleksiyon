@@ -699,7 +699,7 @@ const fotoGeriAl = (setFFoto, setFDetayNoktalari) => {
 };
 // ── YAPAY ZEKÂ ARKA PLAN SİLME (tarayıcıda çalışan hazır model; ilk kullanımda model iner) ──
 let _imglyModul = null;
-async function arkaPlanSilAI(src, ilerle, golge) {
+async function arkaPlanSilAI(src, ilerle, golge, tasKoru) {
   if (!_imglyModul) {
     try { _imglyModul = await import(/* @vite-ignore */ "https://esm.sh/@imgly/background-removal@1.5.8"); }
     catch (e) { throw new Error("Yapay zekâ modülü yüklenemedi (internet bağlantısı?)"); }
@@ -710,19 +710,47 @@ async function arkaPlanSilAI(src, ilerle, golge) {
   const url = URL.createObjectURL(out);
   const img = await new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = () => rej(new Error("sonuç açılamadı")); im.src = url; });
   const c = document.createElement("canvas"); c.width = img.naturalWidth; c.height = img.naturalHeight;
+  let kaynak = img;
+  if (tasKoru) { // TAŞ KORU: ürünün İÇİNDE kalan boşluklar (ör. sedef/beyaz taş) yapay zekâca "arka plan" sanılıp silinmişse orijinal pikselleri geri koy
+    try {
+      const W = c.width, H = c.height;
+      const orjImg = await new Promise((res, rej) => { const im = new Image(); im.crossOrigin = "anonymous"; im.onload = () => res(im); im.onerror = () => rej(new Error("orijinal açılamadı")); im.src = src; });
+      const kc = document.createElement("canvas"); kc.width = W; kc.height = H;
+      const kx = kc.getContext("2d"); kx.drawImage(img, 0, 0);
+      const kd = kx.getImageData(0, 0, W, H);
+      const oc = document.createElement("canvas"); oc.width = W; oc.height = H;
+      const ox = oc.getContext("2d"); ox.drawImage(orjImg, 0, 0, W, H);
+      const od = ox.getImageData(0, 0, W, H).data;
+      const d = kd.data, N = W * H;
+      // kenardan başlayıp bağlı tüm saydam pikselleri "dış" işaretle; geri kalan saydamlar ürünün içindeki delikler
+      const dis = new Uint8Array(N); const yig = new Int32Array(N); let sp = 0;
+      const ekle = (i) => { if (!dis[i] && d[i * 4 + 3] < 128) { dis[i] = 1; yig[sp++] = i; } };
+      for (let x = 0; x < W; x++) { ekle(x); ekle((H - 1) * W + x); }
+      for (let y = 0; y < H; y++) { ekle(y * W); ekle(y * W + W - 1); }
+      while (sp > 0) {
+        const i = yig[--sp], x = i % W, y = (i / W) | 0;
+        if (x > 0) ekle(i - 1); if (x < W - 1) ekle(i + 1); if (y > 0) ekle(i - W); if (y < H - 1) ekle(i + W);
+      }
+      for (let i = 0; i < N; i++) {
+        if (!dis[i] && d[i * 4 + 3] < 250) { d[i * 4] = od[i * 4]; d[i * 4 + 1] = od[i * 4 + 1]; d[i * 4 + 2] = od[i * 4 + 2]; d[i * 4 + 3] = 255; }
+      }
+      kx.putImageData(kd, 0, 0);
+      kaynak = kc;
+    } catch (e) { console.warn("taş koru uygulanamadı", e); }
+  }
   const ctx = c.getContext("2d"); ctx.fillStyle = "#f3f3f3"; ctx.fillRect(0, 0, c.width, c.height);
   if (golge) { // yumuşak yer gölgesi: ürün siluetini siyaha boyayıp yassılaştır, bulanıklaştır, ürünün altına koy
     try {
       const W = c.width, H = c.height;
       const al = document.createElement("canvas"); al.width = W; al.height = H;
-      const ac = al.getContext("2d"); ac.drawImage(img, 0, 0);
+      const ac = al.getContext("2d"); ac.drawImage(kaynak, 0, 0);
       const d = ac.getImageData(0, 0, W, H).data;
       let x0 = W, x1 = -1, y0 = H, y1 = -1;
       for (let y = 0; y < H; y += 2) for (let x = 0; x < W; x += 2) { if (d[(y * W + x) * 4 + 3] > 128) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; } }
       if (x1 > x0 && y1 > y0) {
         const bw = x1 - x0, bh = y1 - y0;
         const sil = document.createElement("canvas"); sil.width = W; sil.height = H;
-        const sc = sil.getContext("2d"); sc.drawImage(img, 0, 0); sc.globalCompositeOperation = "source-in"; sc.fillStyle = "#000"; sc.fillRect(0, 0, W, H);
+        const sc = sil.getContext("2d"); sc.drawImage(kaynak, 0, 0); sc.globalCompositeOperation = "source-in"; sc.fillStyle = "#000"; sc.fillRect(0, 0, W, H);
         // gölge, ürünün sadece ALT kısmından (zemine en yakın şerit) türetilir: halka nerede yere basıyorsa gölge orada olur
         const serit = bh * 0.30;                        // alt şerit yüksekliği (kaynak)
         const yassi = bh * 0.05;                        // gölgenin yüksekliği
@@ -734,13 +762,13 @@ async function arkaPlanSilAI(src, ilerle, golge) {
       }
     } catch (e) { console.warn("gölge eklenemedi", e); }
   }
-  ctx.drawImage(img, 0, 0);
+  ctx.drawImage(kaynak, 0, 0);
   URL.revokeObjectURL(url);
   return c.toDataURL("image/jpeg", 0.97);
 }
-const fotoAIIsle = async (fFoto, setFFoto, setDurum, golge) => {
+const fotoAIIsle = async (fFoto, setFFoto, setDurum, golge, tasKoru) => {
   try {
-    const yeni = await arkaPlanSilAI(fFoto, (k, c, t) => { setDurum(String(k).indexOf("compute") === 0 ? "Arka plan siliniyor… (10–40 sn sürebilir, bekle)" : (t > 0 && c < t ? "Model indiriliyor… %" + Math.round(c / t * 100) : "İşleniyor…")); }, golge);
+    const yeni = await arkaPlanSilAI(fFoto, (k, c, t) => { setDurum(String(k).indexOf("compute") === 0 ? "Arka plan siliniyor… (10–40 sn sürebilir, bekle)" : (t > 0 && c < t ? "Model indiriliyor… %" + Math.round(c / t * 100) : "İşleniyor…")); }, golge, tasKoru);
     fotoGeriKaydet(fFoto, null); _fotoGecmis = null; _temizFotolar.add(yeni); setFFoto(yeni);
     return "ok";
   } catch (e) { console.error(e); return e && e.message ? e.message : "hata"; }
@@ -11632,6 +11660,7 @@ function Atolye({ onSirketDegis }) {
               <div style={{ position:"absolute", bottom:8, right:8, display:"flex", gap:6 }}>
                 {fFoto && _fotoUndo.length>0 && <div onClick={e=>{ e.stopPropagation(); fotoGeriAl(setFFoto, setFDetayNoktalari); }} title="Son foto işlemini geri al" style={{ background:"rgba(0,0,0,0.6)", color:"#fff", fontSize:10, fontWeight:600, padding:"5px 11px", borderRadius:7, display:"flex", alignItems:"center", gap:5, cursor:"pointer" }}>↩ Geri al</div>}
                 {fFoto && <div onClick={async e=>{ e.stopPropagation(); if (fotoDurum) return; setFotoDurum("Yapay zekâ çalışıyor… (ilk seferde model iner)"); const r = await fotoAIIsle(fFoto, setFFoto, setFotoDurum, fKategori !== "kolye"); setFotoDurum(""); toastGoster(r==="ok"?"ok":"hata", r==="ok" ? "✨ Arka plan silindi, #f3f3f3 yapıldı — beğenmezsen ↩ Geri al" : "Arka plan silinemedi: "+r); }} title="Yapay zekâ ile arka planı sil, #f3f3f3 yap" style={{ background:"rgba(124,58,237,0.85)", color:"#fff", fontSize:10, fontWeight:700, padding:"5px 11px", borderRadius:7, display:"flex", alignItems:"center", gap:5, cursor:"pointer" }}>✨ Arka planı sil</div>}
+                {fFoto && <div onClick={async e=>{ e.stopPropagation(); if (fotoDurum) return; setFotoDurum("Yapay zekâ çalışıyor… (taş korunuyor)"); const r = await fotoAIIsle(fFoto, setFFoto, setFotoDurum, fKategori !== "kolye", true); setFotoDurum(""); toastGoster(r==="ok"?"ok":"hata", r==="ok" ? "💎 Arka plan silindi, taşlar korundu — beğenmezsen ↩ Geri al" : "Arka plan silinemedi: "+r); }} title="Arka planı sil ama ürünün içindeki beyaz/açık taşları (sedef vb.) koru" style={{ background:"rgba(14,165,233,0.85)", color:"#fff", fontSize:10, fontWeight:700, padding:"5px 11px", borderRadius:7, display:"flex", alignItems:"center", gap:5, cursor:"pointer" }}>💎 Taşı koru</div>}
                 {fFoto && <div onClick={async e=>{ e.stopPropagation(); const r = await fotoZeminIsle(fFoto, setFFoto); toastGoster(r==="ok"?"ok":"hata", zeminMesaj(r)); }} title="Fotoğrafın düz zeminini #f3f3f3 yap" style={{ background:"rgba(0,0,0,0.6)", color:"#fff", fontSize:10, fontWeight:600, padding:"5px 11px", borderRadius:7, display:"flex", alignItems:"center", gap:5, cursor:"pointer" }}>🎨 Zemin</div>}
                 {fFoto && [["in","＋","Yakınlaştır"],["out","−","Uzaklaştır"]].map(([md,sm,tt]) => <div key={md} title={tt} onClick={async e=>{ e.stopPropagation(); const ok = await fotoCevirIsle(fFoto, setFFoto, fDetayNoktalari, setFDetayNoktalari, md); if(!ok) toastGoster("hata","Foto işlenemedi"); }} style={{ background:"rgba(0,0,0,0.6)", color:"#fff", fontSize:13, fontWeight:700, width:28, height:26, borderRadius:7, display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer", userSelect:"none" }}>{sm}</div>)}
                 {fFoto && <div onClick={async e=>{ e.stopPropagation(); const ok = await fotoCevirIsle(fFoto, setFFoto, fDetayNoktalari, setFDetayNoktalari); toastGoster(ok?"ok":"hata", ok?"↔ Foto çevrildi — Kaydet'e basınca kalıcı olur":"Foto çevrilemedi"); }} title="Fotoğrafı soldan sağa çevir (ayna)" style={{ background:"rgba(0,0,0,0.6)", color:"#fff", fontSize:10, fontWeight:600, padding:"5px 11px", borderRadius:7, display:"flex", alignItems:"center", gap:5, cursor:"pointer" }}>↔ Çevir</div>}
@@ -11664,7 +11693,8 @@ function Atolye({ onSirketDegis }) {
             {fFoto ? <img src={fFoto} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }}/> : <div style={{ textAlign:"center", color:"#7a6f5a" }}><div style={{ fontSize:20 }}>+</div><div style={{ fontSize:9 }}>Fotograf yukleyin</div></div>}
             {fFoto && <button onClick={e=>{e.stopPropagation();setFFoto("");}} style={{ position:"absolute", top:4, right:4, background:"rgba(0,0,0,0.6)", border:"none", borderRadius:4, width:18, height:18, color:"#fff", fontSize:9, cursor:"pointer" }}>X</button>}
             {fFoto && <div onClick={async e=>{ e.stopPropagation(); if (fotoDurum) return; setFotoDurum("Yapay zekâ çalışıyor…"); const r = await fotoAIIsle(fFoto, setFFoto, setFotoDurum, fKategori !== "kolye"); setFotoDurum(""); toastGoster(r==="ok"?"ok":"hata", r==="ok" ? "✨ Arka plan silindi" : "Arka plan silinemedi: "+r); }} title="Yapay zekâ ile arka planı sil" style={{ position:"absolute", top:4, left:4, background:"rgba(124,58,237,0.85)", color:"#fff", fontSize:9, fontWeight:700, padding:"3px 8px", borderRadius:5, cursor:"pointer" }}>✨ Arka planı sil</div>}
-            {fFoto && _fotoUndo.length>0 && <div onClick={e=>{ e.stopPropagation(); fotoGeriAl(setFFoto, setFDetayNoktalari); }} title="Son foto işlemini geri al" style={{ position:"absolute", top:4, left:104, background:"rgba(0,0,0,0.6)", color:"#fff", fontSize:9, fontWeight:600, padding:"3px 8px", borderRadius:5, cursor:"pointer" }}>↩ Geri al</div>}
+            {fFoto && <div onClick={async e=>{ e.stopPropagation(); if (fotoDurum) return; setFotoDurum("Yapay zekâ çalışıyor… (taş korunuyor)"); const r = await fotoAIIsle(fFoto, setFFoto, setFotoDurum, fKategori !== "kolye", true); setFotoDurum(""); toastGoster(r==="ok"?"ok":"hata", r==="ok" ? "💎 Taşlar korundu" : "Arka plan silinemedi: "+r); }} title="Arka planı sil, açık renkli taşları koru" style={{ position:"absolute", top:4, left:104, background:"rgba(14,165,233,0.85)", color:"#fff", fontSize:9, fontWeight:700, padding:"3px 8px", borderRadius:5, cursor:"pointer" }}>💎 Taşı koru</div>}
+            {fFoto && _fotoUndo.length>0 && <div onClick={e=>{ e.stopPropagation(); fotoGeriAl(setFFoto, setFDetayNoktalari); }} title="Son foto işlemini geri al" style={{ position:"absolute", top:4, left:184, background:"rgba(0,0,0,0.6)", color:"#fff", fontSize:9, fontWeight:600, padding:"3px 8px", borderRadius:5, cursor:"pointer" }}>↩ Geri al</div>}
             {fotoDurum && <div style={{ position:"absolute", inset:0, background:"rgba(255,255,255,0.78)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:6, fontSize:10, fontWeight:700, color:"#1d1d1f", textAlign:"center", padding:10 }}>✨ {fotoDurum}</div>}
             {fFoto && <div onClick={async e=>{ e.stopPropagation(); const r = await fotoZeminIsle(fFoto, setFFoto); toastGoster(r==="ok"?"ok":"hata", zeminMesaj(r)); }} title="Fotoğrafın düz zeminini #f3f3f3 yap" style={{ position:"absolute", bottom:4, right:190, background:"rgba(0,0,0,0.6)", color:"#fff", fontSize:9, fontWeight:600, padding:"3px 8px", borderRadius:5, cursor:"pointer" }}>🎨 Zemin</div>}
             {fFoto && [["in","＋",164],["out","−",140]].map(([md,sm,rt]) => <div key={md} onClick={async e=>{ e.stopPropagation(); const ok = await fotoCevirIsle(fFoto, setFFoto, fDetayNoktalari, setFDetayNoktalari, md); if(!ok) toastGoster("hata","Foto işlenemedi"); }} style={{ position:"absolute", bottom:4, right:rt, background:"rgba(0,0,0,0.6)", color:"#fff", fontSize:11, fontWeight:700, width:20, height:20, borderRadius:5, display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer" }}>{sm}</div>)}
