@@ -2288,8 +2288,8 @@ function buildKatalogHTML(kol, modeller, sutun, hedefAyar, kollar, gruplu, tamKa
   const cols = sutun || 3;
   const perPage = cols === 4 ? 16 : 12;
 
-  const css = "*{margin:0;padding:0;box-sizing:border-box}"
-    + "body{font-family:Arial,Helvetica,sans-serif;background:#f3f3f3;color:#1a1a1a}"
+  const css = "*{margin:0;padding:0;box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}"
+    + "html{background:#f3f3f3}body{font-family:Arial,Helvetica,sans-serif;background:#f3f3f3;color:#1a1a1a}"
     + "@media print{.np{display:none!important}@page{size:A4 portrait;margin:6mm}}"
     + ".cv{height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;page-break-after:always;background:#f3f3f3}"
     + ".cv .ln{width:44px;height:1px;background:#1a1a1a;margin:14px 0}"
@@ -5894,6 +5894,7 @@ function Atolye({ onSirketDegis }) {
   const [showYedek, setShowYedek] = useState(false);
   const [katalogSiralaModal, setKatalogSiralaModal] = useState(false);
   const [katalogSiraliModeller, setKatalogSiraliModeller] = useState([]);
+  const [katKodTers, setKatKodTers] = useState(null); // "Koda Göre" her basışta yön değiştirir
   const [katalogSutun, setKatalogSutun] = useState(3);
   const [katalogKol, setKatalogKol] = useState(null);
   const [katalogAyar, setKatalogAyar] = useState("14K");
@@ -10664,7 +10665,7 @@ function Atolye({ onSirketDegis }) {
         <div style={{ fontSize:9, color:T.sub, marginBottom:6, display:"flex", justifyContent:"space-between", alignItems:"center", gap:8, flexWrap:"wrap" }}>
           <span><b style={{ color:T.gold }}>{katalogSiraliModeller.length}</b> model seçili — PDF'e girecek</span>
           <div style={{ display:"flex", gap:5 }}>
-            <button onClick={() => setKatalogSiraliModeller([...katalogSiraliModeller].sort(dogalSirala))} style={{ background:"rgba(91,155,213,0.1)", border:"1px solid rgba(91,155,213,0.2)", borderRadius:5, padding:"4px 10px", color:"#5b9bd5", fontSize:9, fontWeight:700, cursor:"pointer" }}>↕ Koda Göre</button>
+            <button onClick={() => { const yeniTers = katKodTers === null ? false : !katKodTers; setKatKodTers(yeniTers); setKatalogSiraliModeller([...katalogSiraliModeller].sort((a, b) => dogalSirala(a, b, yeniTers))); }} style={{ background:"rgba(91,155,213,0.1)", border:"1px solid rgba(91,155,213,0.2)", borderRadius:5, padding:"4px 10px", color:"#5b9bd5", fontSize:9, fontWeight:700, cursor:"pointer" }}>↕ Koda Göre {katKodTers === null ? "" : katKodTers ? "↓ büyük→küçük" : "↑ küçük→büyük"}</button>
             <button onClick={() => {
               // Koleksiyona göre grupla — kaynakKi varsa o, yoksa ki
               const sortByKol = [...katalogSiraliModeller].sort((a, b) => {
