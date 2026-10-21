@@ -6106,6 +6106,9 @@ function Atolye({ onSirketDegis }) {
   const [sipMusSec, setSipMusSec] = useState("");  // müşteri seçici (tam eşleşme)
   const [sipAyarF, setSipAyarF] = useState("");    // ayar filtresi (14K, 925…)
   const [sipTarih1,setSipTarih1]= useState("");
+  const [sipYil, setSipYil] = useState("tumu");   // aylık grafik: seçili yıl ("tumu" = yıllara göre toplam)
+  const [sipAylar, setSipAylar] = useState([]);    // seçili aylar (0-11), boşsa hepsi
+  const [sipGrafikAcik, setSipGrafikAcik] = useState(true);
   const [sipTarih2,setSipTarih2]= useState("");
   const [analizMusF,  setAnalizMusF]  = useState("");
   const [analizTarih1,setAnalizTarih1]= useState("");
@@ -6732,7 +6735,8 @@ function Atolye({ onSirketDegis }) {
     }
   }, []);
   // Sipariş filtresi (liste + özet + PDF aynı kuralı kullanır). ayarDahil=false → ayar filtresini yok say (ayar çipleri için)
-  const sipGecer = (s, ayarDahil = true) => {
+  const sipGecer = (s, ayarDahil = true, tarihDahil = true) => {
+    if (tarihDahil && sipYil !== "tumu") { const d = new Date(s.tarih || 0); if (d.getFullYear() !== sipYil) return false; if (sipAylar.length && !sipAylar.includes(d.getMonth())) return false; }
     if (sipMusSec && (s.musKod || s.musteri || "?") !== sipMusSec) return false;
     if (sipMusF) { const q = sipMusF.toLowerCase(); if (!(s.musteri||"").toLowerCase().includes(q) && !(s.musKod||"").toLowerCase().includes(q) && !sipKodu(s, siparisler).toLowerCase().includes(q)) return false; }
     if (sipTarih1 && s.tarih < new Date(sipTarih1).getTime()) return false;
@@ -8651,11 +8655,72 @@ function Atolye({ onSirketDegis }) {
                 <input type="date" value={sipTarih1} onChange={e=>setSipTarih1(e.target.value)} style={{ ...IS, width:120, padding:"5px 8px", fontSize:10 }}/>
                 <span style={{ color:"#665d4a", fontSize:10 }}>—</span>
                 <input type="date" value={sipTarih2} onChange={e=>setSipTarih2(e.target.value)} style={{ ...IS, width:120, padding:"5px 8px", fontSize:10 }}/>
-                {(sipMusF||sipMusSec||sipAyarF||sipTarih1||sipTarih2||sipFiltre!=="tumu") && <button onClick={()=>{setSipMusF("");setSipMusSec("");setSipAyarF("");setSipTarih1("");setSipTarih2("");setSipFiltre("tumu");}} style={{ ...RD, fontSize:9, padding:"4px 8px" }}>Temizle</button>}
+                {(sipMusF||sipMusSec||sipAyarF||sipTarih1||sipTarih2||sipFiltre!=="tumu"||sipYil!=="tumu"||sipAylar.length>0) && <button onClick={()=>{setSipMusF("");setSipMusSec("");setSipAyarF("");setSipTarih1("");setSipTarih2("");setSipFiltre("tumu");setSipYil("tumu");setSipAylar([]);}} style={{ ...RD, fontSize:9, padding:"4px 8px" }}>Temizle</button>}
                 <button onClick={() => { setSipYedekSec(null); setSipYedekModal(true); siparisYedekListesi(AKTIF_SIRKET_ONEK).then(setSipYedekler); }} title="Sipariş yedekleri" style={{ ...GH, fontSize:9, padding:"5px 10px" }}>🛟 Yedekler</button>
                 
               </div>
             </div>
+            {/* AYLIK GRAFİK: satış gramı + kâr — sütuna tıkla = o ayı filtrele; yıl seçimi / tümü */}
+            {siparisler.length > 0 && (() => {
+              const AY = ["Oca","Şub","Mar","Nis","May","Haz","Tem","Ağu","Eyl","Eki","Kas","Ara"];
+              const liste = siparisler.filter(x => sipGecer(x, true, false));
+              const yillar = [...new Set(siparisler.map(x => new Date(x.tarih || 0).getFullYear()).filter(y => y > 2000))].sort();
+              const yilModu = sipYil === "tumu";
+              const sut = yilModu ? yillar.map(y => ({ k: y, l: String(y), gram: 0, kar: 0, n: 0 })) : AY.map((l, i) => ({ k: i, l: l + " '" + String(sipYil).slice(2), gram: 0, kar: 0, n: 0 }));
+              liste.forEach(x => {
+                const d = new Date(x.tarih || 0); const y = d.getFullYear();
+                const hedef = yilModu ? sut.find(c => c.k === y) : (y === sipYil ? sut[d.getMonth()] : null);
+                if (!hedef) return;
+                const o = sipKarOzet(x, x.kalemDurumlar);
+                hedef.gram += o.gram; hedef.kar += o.karUSD; hedef.n++;
+              });
+              const maxG = Math.max(1, ...sut.map(c => c.gram)), maxK = Math.max(1, ...sut.map(c => Math.max(0, c.kar)));
+              const topG = sut.reduce((a, c) => a + c.gram, 0), topK = sut.reduce((a, c) => a + c.kar, 0), topN = sut.reduce((a, c) => a + c.n, 0);
+              const tikla = (c) => {
+                if (yilModu) { setSipYil(c.k); setSipAylar([]); return; }
+                setSipAylar(p => p.includes(c.k) ? p.filter(x => x !== c.k) : [...p, c.k]);
+              };
+              const yBtn = (act) => ({ background: act ? "rgba(var(--vurgu-rgb),0.2)" : "rgba(var(--vurgu-rgb),0.05)", border:"1px solid", borderColor: act ? "rgba(var(--vurgu-rgb),0.5)" : "rgba(var(--vurgu-rgb),0.12)", borderRadius:6, padding:"3px 10px", color: act ? "var(--goldtext)" : "#8a7f68", fontSize:10, fontWeight:700, cursor:"pointer" });
+              return (
+                <div style={{ marginBottom:10, padding:"10px 12px", borderRadius:10, background:"rgba(var(--vurgu-rgb),0.03)", border:"1px solid rgba(var(--vurgu-rgb),0.1)" }}>
+                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:8, marginBottom: sipGrafikAcik ? 8 : 0 }}>
+                    <div style={{ display:"flex", alignItems:"center", gap:10, flexWrap:"wrap" }}>
+                      <button onClick={()=>setSipGrafikAcik(v=>!v)} style={{ ...GH, fontSize:10, padding:"3px 9px" }}>{sipGrafikAcik ? "▾" : "▸"} Satış dağılımı</button>
+                      <span style={{ fontSize:10, color:"#8a7f68" }}>{yilModu ? "Yıllara göre" : sipYil + " — aylara göre"} · <b style={{ color:"var(--goldtext)" }}>{fN(topG,1)} gr</b> · kâr <b style={{ color: topK < 0 ? "#e85a4f" : "#6abf69" }}>{topK < 0 ? "−" : ""}${Math.abs(topK).toFixed(0)}</b> · {topN} sipariş</span>
+                    </div>
+                    <div style={{ display:"flex", gap:4 }}>
+                      {yillar.map(y => <button key={y} onClick={()=>{ setSipYil(y); setSipAylar([]); }} style={yBtn(sipYil === y)}>{y}</button>)}
+                      <button onClick={()=>{ setSipYil("tumu"); setSipAylar([]); }} style={yBtn(yilModu)}>TÜMÜ</button>
+                    </div>
+                  </div>
+                  {sipGrafikAcik && (
+                    <>
+                      <div style={{ display:"flex", gap:12, fontSize:9, color:"#8a7f68", marginBottom:4 }}>
+                        <span><span style={{ display:"inline-block", width:9, height:9, borderRadius:2, background:"#4aa3df", marginRight:4 }}/>Satış gramı</span>
+                        <span><span style={{ display:"inline-block", width:9, height:9, borderRadius:2, background:"#6abf69", marginRight:4 }}/>Kâr ($)</span>
+                        <span style={{ marginLeft:"auto" }}>{yilModu ? "Yıla tıkla → o yılın ayları" : "Aya tıkla → listeyi filtrele (birden fazla seçilebilir)"}</span>
+                      </div>
+                      <div style={{ display:"grid", gridTemplateColumns:`repeat(${Math.max(1, sut.length)},1fr)`, gap:6, alignItems:"end" }}>
+                        {sut.map(c => {
+                          const sec = !yilModu && sipAylar.includes(c.k); const soluk = !yilModu && sipAylar.length > 0 && !sec;
+                          return (
+                            <div key={c.k} onClick={()=>tikla(c)} title={c.l + " · " + c.n + " sipariş · " + fN(c.gram,1) + " gr · kâr $" + c.kar.toFixed(0)}
+                              style={{ cursor:"pointer", opacity: soluk ? 0.35 : 1, borderRadius:6, padding:"4px 2px 3px", background: sec ? "rgba(var(--vurgu-rgb),0.12)" : "transparent", border: sec ? "1px solid rgba(var(--vurgu-rgb),0.4)" : "1px solid transparent", textAlign:"center" }}>
+                              <div style={{ height:86, display:"flex", alignItems:"flex-end", justifyContent:"center", gap:3 }}>
+                                <div style={{ width:"36%", maxWidth:22, height: Math.max(c.gram > 0 ? 2 : 0, c.gram / maxG * 78), background:"#4aa3df", borderRadius:"3px 3px 0 0" }}/>
+                                <div style={{ width:"36%", maxWidth:22, height: Math.max(c.kar > 0 ? 2 : 0, Math.max(0, c.kar) / maxK * 78), background:"#6abf69", borderRadius:"3px 3px 0 0" }}/>
+                              </div>
+                              <div style={{ fontSize:9, fontWeight:700, color:"var(--goldtext)", marginTop:3 }}>{c.l}</div>
+                              <div style={{ fontSize:8, color:"#8a7f68", lineHeight:1.3 }}>{c.n ? <>{fN(c.gram,0)} gr<br/><span style={{ color: c.kar < 0 ? "#e85a4f" : "#6abf69" }}>${c.kar.toFixed(0)}</span></> : "—"}</div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </>
+                  )}
+                </div>
+              );
+            })()}
             {/* Hızlı filtreler */}
             <div style={{ display:"flex", gap:4, flexWrap:"wrap", marginBottom:10 }}>
               {[
