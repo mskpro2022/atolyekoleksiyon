@@ -2439,7 +2439,7 @@ function buildKatalogHTML(kol, modeller, sutun, hedefAyar, kollar, gruplu, tamKa
     + ".pg:last-child{page-break-after:auto}"
     + ".grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px;flex:1;min-height:0;grid-auto-rows:minmax(0,calc((99vh - 50px) / 4));align-content:start}"
     + ".grid4{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:4px;flex:1;min-height:0;grid-auto-rows:minmax(0,calc((99vh - 50px) / 4));align-content:start}"
-    + ".cd{background:#f3f3f3;border:1px solid #e0e0e0;border-radius:12px;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 2px 8px rgba(0,0,0,0.10)}"
+    + ".cd{background:#f3f3f3;border:none;border-radius:12px;overflow:hidden;display:flex;flex-direction:column;box-shadow:none}"
     + ".cd-bileklik{grid-column:1/-1}"
     + ".cd-kolye-3{grid-column:span 3;grid-row:span 2}"
     + ".cd-kolye-4{grid-column:span 4;grid-row:span 2}"
@@ -2451,7 +2451,7 @@ function buildKatalogHTML(kol, modeller, sutun, hedefAyar, kollar, gruplu, tamKa
     + ".dn-ico{display:flex;align-items:center;justify-content:center;font-size:20px;background:#1a1a1a}"
     + ".cd-bileklik .ph img{object-fit:cover;transform:translate(-50%,-50%);width:100%;height:100%}" // bileklik kartın tüm genişliğini doldursun (fotonun boş üst/alt kısmı kırpılır, bilezik ortada kalır)
     + ".cd-kolye-3 .ph img,.cd-kolye-4 .ph img{width:105%;height:105%;object-fit:contain}"
-    + ".inf{padding:6px 9px 7px 10px;flex-shrink:0;background:#f3f3f3;border-top:none;border-left:3px solid #1a1a1a}"
+    + ".inf{padding:6px 9px 7px 10px;flex-shrink:0;background:#fff;border-top:none;border-left:3px solid #1a1a1a}"
     + ".r1{display:flex;justify-content:space-between;align-items:baseline}"
     + ".kod{font-size:13px;color:#1a1a1a;font-weight:700;letter-spacing:.04em}"
     + ".gram{font-size:10px;font-weight:700;color:#333}"
