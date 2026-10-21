@@ -2451,7 +2451,7 @@ function buildKatalogHTML(kol, modeller, sutun, hedefAyar, kollar, gruplu, tamKa
     + ".dn-ico{display:flex;align-items:center;justify-content:center;font-size:20px;background:#1a1a1a}"
     + ".cd-bileklik .ph img{object-fit:cover;transform:translate(-50%,-50%);width:100%;height:100%}" // bileklik kartın tüm genişliğini doldursun (fotonun boş üst/alt kısmı kırpılır, bilezik ortada kalır)
     + ".cd-kolye-3 .ph img,.cd-kolye-4 .ph img{width:105%;height:105%;object-fit:contain}"
-    + ".inf{padding:6px 9px 7px 10px;flex-shrink:0;background:#f9f9f9;border-top:none;border-left:3px solid #1a1a1a}"
+    + ".inf{padding:6px 9px 7px 10px;flex-shrink:0;background:#f9f9f9;border-top:none;border-left:3px solid #5c5c5c}"
     + ".r1{display:flex;justify-content:space-between;align-items:baseline}"
     + ".kod{font-size:13px;color:#1a1a1a;font-weight:700;letter-spacing:.04em}"
     + ".gram{font-size:10px;font-weight:700;color:#333}"
