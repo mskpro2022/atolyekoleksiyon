@@ -2144,6 +2144,7 @@ function VitrinModu({ kod, onizleme }) {
     window.addEventListener("resize", f);
     return () => window.removeEventListener("resize", f);
   }, []);
+  const [sipKapali, setSipKapali] = useState({});         // { siparisId: true/false } — kart aç/kapa (varsayılan: devam edenler açık)
   const [sipFiltre, setSipFiltre] = useState("tumu");   // tumu | acik | teslim | iptal
   const [sipFoto, setSipFoto] = useState(null);           // büyütülen kalem
   const [sipListeAcik, setSipListeAcik] = useState(false);   // "Siparişlerim" sayfası
@@ -3146,10 +3147,11 @@ function VitrinModu({ kod, onizleme }) {
       {/* ═══ SİPARİŞLERİM — müşteri kendi siparişlerinin durumunu görür ═══ */}
       {sipListeAcik && (() => {
         const t3 = (tr, en, es) => vitrinDil==="en" ? en : vitrinDil==="es" ? es : tr;
-        const ADIMLAR = [t3("İşleme alındı","In process","En proceso"), t3("Makineye atıldı","Sent to machine","En máquina"), t3("Müşteriye teslim edildi","Delivered","Entregado")];
+        const ADIMLAR = [t3("İşleme alındı","In process","En proceso"), t3("Makineye atıldı","Sent to machine","En máquina"), t3("Teslim edildi","Delivered","Entregado")];
         const adimNo = (d) => { if (d==="baslanmadi"||d==="cizimde") return 0; if (d==="tamam"||d==="teslim") return 2; if (d==="hurda") return -1; return 1; };
-        const tarihYaz = (t) => { const n = Number(t); if (!n) return ""; try { return new Date(n).toLocaleDateString(vitrinDil==="en"?"en-GB":vitrinDil==="es"?"es-ES":"tr-TR", { day:"2-digit", month:"long", year:"numeric" }); } catch { return ""; } };
-        const YESIL = "#2e9e4f", SARI = "#d99a1d", KIRMIZI = "#e85a4f", MAVI = "#3b82f6";
+        const loc = vitrinDil==="en"?"en-GB":vitrinDil==="es"?"es-ES":"tr-TR";
+        const tarihYaz = (t, kisa) => { const n = Number(t); if (!n) return ""; try { return new Date(n).toLocaleDateString(loc, kisa ? { day:"2-digit", month:"short", year:"numeric" } : { day:"numeric", month:"long", year:"numeric" }); } catch { return ""; } };
+        const YESIL = "#1f9d55", SARI = "#c98a0b", KIRMIZI = "#d64545", GRI = "var(--vt3)";
         const liste = Array.isArray(sipListe) ? sipListe : [];
         const sinif = (sp) => {
           if (sp.onayDurum === "iptal" || sp.onayDurum === "red") return "iptal";
@@ -3165,140 +3167,149 @@ function VitrinModu({ kod, onizleme }) {
           if (sipFiltre === "acik") return c === "bekliyor" || c === "islemde";
           return c === sipFiltre;
         });
-        const sinifBilgi = {
-          bekliyor: { renk:SARI, yazi:"⏳ " + t3("Onay bekleniyor","Awaiting approval","Pendiente de aprobación") },
-          islemde:  { renk:MAVI, yazi:"● " + t3("İşleme alındı","In process","En proceso") },
-          teslim:   { renk:YESIL, yazi:"✓ " + t3("Teslim edildi","Delivered","Entregado") },
-          iptal:    { renk:KIRMIZI, yazi:"✕ " + t3("İptal / Reddedildi","Cancelled / Declined","Cancelado / Rechazado") },
-        };
         const boyYaz = (k) => k.boyListesi && k.boyListesi.length
           ? k.boyListesi.map(b => (b.uzunluk ? b.uzunluk+" "+(b.birim||"cm") : (b.sistem+" "+b.deger)) + " ×" + (b.adet||1)).join(", ")
           : (k.boy && (k.boy.deger || k.boy.uzunluk) ? ((k.boy.uzunluk ? k.boy.uzunluk+" "+(k.boy.birim||"cm") : k.boy.sistem+" "+k.boy.deger) + " ×" + (k.adet||1)) : "");
-        const Adimlar = ({ adim, kucuk }) => (
-          <div style={{ display:"flex", alignItems:"flex-start", width:"100%" }}>
-            {ADIMLAR.map((a, ai) => (
-              <div key={ai} style={{ flex:1, textAlign:"center", position:"relative" }}>
-                <div style={{ height:3, background: ai<=adim ? YESIL : "rgba(var(--voverlay-rgb),0.12)", position:"absolute", top:kucuk?8:10, left: ai===0?"50%":0, right: ai===ADIMLAR.length-1?"50%":0, zIndex:0 }}/>
-                <div style={{ width:kucuk?19:23, height:kucuk?19:23, borderRadius:"50%", margin:"0 auto", position:"relative", zIndex:1, background: ai<=adim ? YESIL : "var(--vcard)", border:"2px solid "+(ai<=adim ? YESIL : "rgba(var(--voverlay-rgb),0.25)"), color:"#fff", fontSize:kucuk?11:13, lineHeight:kucuk?"15px":"19px", fontWeight:800 }}>{ai<=adim ? "✓" : ""}</div>
-                <div style={{ fontSize:kucuk?10:11, marginTop:6, color: ai===adim ? "var(--vt1)" : "var(--vt3)", fontWeight: ai===adim ? 700 : 400, lineHeight:1.25 }}>{a}</div>
+        // Sade yatay ilerleme: ince hat + noktalar
+        const Adimlar = ({ adim, buyuk }) => (
+          <div style={{ display:"flex", width:"100%" }}>
+            {ADIMLAR.map((a, ai) => {
+              const dolu = ai <= adim;
+              const simdi = ai === adim && adim < ADIMLAR.length-1;
+              return (
+              <div key={ai} style={{ flex:1, position:"relative", textAlign: ai===0 ? "left" : ai===ADIMLAR.length-1 ? "right" : "center" }}>
+                <div style={{ position:"absolute", top:(buyuk?7:6), left: ai===0 ? 7 : 0, right: ai===ADIMLAR.length-1 ? 7 : 0, height:2, background: ai < adim ? YESIL : "rgba(var(--voverlay-rgb),0.12)" }}/>
+                <div style={{ position:"relative", display:"inline-block", width:buyuk?16:13, height:buyuk?16:13, borderRadius:"50%", background: dolu ? YESIL : "var(--vcard)", border:"2px solid "+(dolu ? YESIL : "rgba(var(--voverlay-rgb),0.2)"), boxShadow: simdi ? "0 0 0 4px rgba(31,157,85,0.18)" : "none", verticalAlign:"top" }}/>
+                <div style={{ fontSize: buyuk?12:11, marginTop:8, color: dolu ? "var(--vt1)" : GRI, fontWeight: ai===adim ? 600 : 400, letterSpacing:"-0.005em" }}>{a}</div>
               </div>
-            ))}
+              );
+            })}
           </div>
         );
         const sekme = (id, yazi, adet) => (
-          <button key={id} onClick={()=>setSipFiltre(id)} style={{ background: sipFiltre===id ? "var(--vt1)" : "rgba(var(--voverlay-rgb),0.07)", color: sipFiltre===id ? "var(--vb)" : "var(--vt1)", border:"none", borderRadius:980, padding:"8px 16px", fontSize:13, fontWeight:600, cursor:"pointer" }}>{yazi}{adet!=null ? " · "+adet : ""}</button>
+          <button key={id} onClick={()=>setSipFiltre(id)} style={{ background:"transparent", border:"none", borderBottom:"2px solid "+(sipFiltre===id ? "var(--vt1)" : "transparent"), color: sipFiltre===id ? "var(--vt1)" : "var(--vt2)", padding:"10px 2px", marginRight:22, fontSize:14, fontWeight: sipFiltre===id ? 600 : 500, cursor:"pointer" }}>{yazi}<span style={{ marginLeft:6, fontSize:12, color:"var(--vt3)", fontWeight:500 }}>{adet}</span></button>
         );
-        const stat = (renk, sayi, yazi) => (
-          <div style={{ flex:"1 1 150px", background:"var(--vcard)", border:"1px solid rgba(var(--voverlay-rgb),0.08)", borderRadius:14, padding:"14px 16px", borderTop:"3px solid "+renk }}>
-            <div style={{ fontSize:28, fontWeight:700, letterSpacing:"-0.02em", color:"var(--vt1)", lineHeight:1 }}>{sayi}</div>
-            <div style={{ fontSize:12, color:"var(--vt2)", marginTop:6 }}>{yazi}</div>
-          </div>
-        );
+        const dugme = { background:"transparent", border:"1px solid rgba(var(--voverlay-rgb),0.18)", borderRadius:8, padding:"7px 14px", color:"var(--vt1)", fontSize:13, fontWeight:500, cursor:"pointer" };
         return (
-        <div style={{ position:"fixed", inset:0, zIndex:111, background:"var(--vb)", overflow:"auto", color:"var(--vt1)" }}>
-          <div style={{ maxWidth:1040, margin:"0 auto", padding:"0 20px 70px" }}>
-            <div style={{ position:"sticky", top:0, zIndex:5, background:"var(--vb)", padding:"18px 0 14px", display:"flex", alignItems:"center", gap:12, flexWrap:"wrap", borderBottom:"1px solid rgba(var(--voverlay-rgb),0.08)" }}>
-              <button onClick={()=>setSipListeAcik(false)} style={{ background:"var(--vcard)", border:"1px solid rgba(var(--voverlay-rgb),0.12)", borderRadius:980, padding:"8px 16px", color:"var(--vt1)", fontSize:13, fontWeight:600, cursor:"pointer" }}>‹ {ce("geri")}</button>
-              <div>
-                <div style={{ fontSize:22, fontWeight:700, letterSpacing:"-0.02em", lineHeight:1.1 }}>{t3("Siparişlerim","My Orders","Mis pedidos")}</div>
-                {vitrinMusteri && <div style={{ fontSize:12, color:"var(--vt3)", marginTop:3 }}>{t3("Müşteri kodu","Customer code","Código de cliente")}: <b style={{ color:"var(--vt2)" }}>{vitrinMusteri.kod}</b></div>}
-              </div>
+        <div style={{ position:"fixed", inset:0, zIndex:111, background:"var(--vb)", overflow:"auto", color:"var(--vt1)", letterSpacing:"-0.005em" }}>
+          <div style={{ maxWidth:920, margin:"0 auto", padding:"0 22px 80px" }}>
+            <div style={{ display:"flex", alignItems:"center", padding:"22px 0 6px", gap:12 }}>
+              <button onClick={()=>setSipListeAcik(false)} style={{ ...dugme, borderRadius:980, padding:"7px 14px" }}>‹ {ce("geri")}</button>
               <div style={{ flex:1 }}/>
-              <button onClick={sipListeYukle} disabled={sipListeYukleniyor} style={{ background:"var(--vcard)", border:"1px solid rgba(var(--voverlay-rgb),0.12)", borderRadius:980, padding:"8px 16px", color:"var(--vt1)", fontSize:13, fontWeight:600, cursor:"pointer" }}>{sipListeYukleniyor ? "…" : "↻ " + t3("Yenile","Refresh","Actualizar")}</button>
+              <button onClick={sipListeYukle} disabled={sipListeYukleniyor} style={dugme}>{sipListeYukleniyor ? "…" : "↻ " + t3("Yenile","Refresh","Actualizar")}</button>
+            </div>
+            <div style={{ padding:"14px 0 8px" }}>
+              <div style={{ fontSize:34, fontWeight:700, letterSpacing:"-0.03em", lineHeight:1.1 }}>{t3("Siparişlerim","My Orders","Mis pedidos")}</div>
+              {vitrinMusteri && <div style={{ fontSize:14, color:"var(--vt2)", marginTop:8 }}>{t3("Müşteri kodu","Customer code","Código de cliente")} · <span style={{ color:"var(--vt1)", fontWeight:600 }}>{vitrinMusteri.kod}</span></div>}
             </div>
 
             {sipListe === null && <div style={{ padding:"60px 0", textAlign:"center", color:"var(--vt2)" }}>…</div>}
             {sipListe === "hata" && <div style={{ padding:"60px 0", textAlign:"center", color:KIRMIZI }}>{t3("Siparişler yüklenemedi. Lütfen tekrar deneyin.","Orders could not be loaded. Please try again.","No se pudieron cargar los pedidos.")}</div>}
 
-            {Array.isArray(sipListe) && liste.length > 0 && (<>
-              <div style={{ display:"flex", gap:12, flexWrap:"wrap", margin:"18px 0 14px" }}>
-                {stat(SARI, sayim.bekliyor, t3("Onay bekleyen","Awaiting approval","Pendientes"))}
-                {stat(MAVI, sayim.islemde, t3("İşlemde","In process","En proceso"))}
-                {stat(YESIL, sayim.teslim, t3("Teslim edilen","Delivered","Entregados"))}
-              </div>
-              <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginBottom:6 }}>
+            {Array.isArray(sipListe) && liste.length > 0 && (
+              <div style={{ display:"flex", flexWrap:"wrap", borderBottom:"1px solid rgba(var(--voverlay-rgb),0.1)", margin:"14px 0 22px" }}>
                 {sekme("tumu", t3("Tümü","All","Todos"), liste.length)}
-                {sekme("acik", t3("Açık","Open","Abiertos"), sayim.bekliyor + sayim.islemde)}
+                {sekme("acik", t3("Devam eden","In progress","En curso"), sayim.bekliyor + sayim.islemde)}
                 {sekme("teslim", t3("Teslim edilen","Delivered","Entregados"), sayim.teslim)}
                 {sekme("iptal", t3("İptal","Cancelled","Cancelados"), sayim.iptal)}
               </div>
-            </>)}
-            {Array.isArray(sipListe) && liste.length === 0 && <div style={{ padding:"70px 0", textAlign:"center", color:"var(--vt2)" }}><div style={{ fontSize:40, marginBottom:10 }}>📋</div>{t3("Henüz siparişiniz yok.","You have no orders yet.","Aún no tiene pedidos.")}</div>}
-            {Array.isArray(sipListe) && liste.length > 0 && gorunen.length === 0 && <div style={{ padding:"50px 0", textAlign:"center", color:"var(--vt3)" }}>{t3("Bu görünümde sipariş yok.","No orders in this view.","No hay pedidos en esta vista.")}</div>}
+            )}
+            {Array.isArray(sipListe) && liste.length === 0 && <div style={{ padding:"90px 0", textAlign:"center", color:"var(--vt2)", fontSize:15 }}>{t3("Henüz siparişiniz yok.","You have no orders yet.","Aún no tiene pedidos.")}</div>}
+            {Array.isArray(sipListe) && liste.length > 0 && gorunen.length === 0 && <div style={{ padding:"60px 0", textAlign:"center", color:"var(--vt3)", fontSize:14 }}>{t3("Bu görünümde sipariş yok.","No orders in this view.","No hay pedidos en esta vista.")}</div>}
 
             {gorunen.map((sp) => {
               const sirNo = liste.length - liste.indexOf(sp);
               const kalemler = sp.kalemler || [];
               const toplamAdet = kalemler.reduce((t,k)=>t+(Number(k.adet)||1),0);
-              const c = sinif(sp), bilgi = sinifBilgi[c];
-              const kapali = c === "iptal";
+              const c = sinif(sp);
+              const adimlar = kalemler.map(k => adimNo(k.durum)).filter(x => x >= 0);
+              const genelAdim = adimlar.length ? Math.min(...adimlar) : 0;
+              const teslimSay = adimlar.filter(x => x === 2).length;
+              const acik = sipKapali[sp.id] === undefined ? (c === "bekliyor" || c === "islemde") : !sipKapali[sp.id];
+              const baslik = c === "bekliyor" ? t3("Onayınız bekleniyor","Awaiting approval","Pendiente de aprobación")
+                : c === "teslim" ? t3("Teslim edildi","Delivered","Entregado")
+                : c === "iptal" ? (sp.onayDurum === "red" ? t3("Sipariş reddedildi","Order declined","Pedido rechazado") : t3("Sipariş iptal edildi","Order cancelled","Pedido cancelado"))
+                : ADIMLAR[genelAdim];
+              const baslikRenk = c === "iptal" ? KIRMIZI : c === "bekliyor" ? SARI : YESIL;
+              const altYazi = c === "bekliyor" ? t3("Siparişiniz inceleniyor. Onaylandığında teslim tarihi burada görünecek.","Your order is being reviewed. The delivery date will appear here once approved.","Su pedido está en revisión.")
+                : (c === "islemde" || c === "teslim") && sp.teslimTarihi ? t3("Teslim tarihi","Delivery date","Fecha de entrega") + " · " + tarihYaz(new Date(sp.teslimTarihi).getTime())
+                : c === "iptal" && sp.redNot ? sp.redNot : "";
               return (
-              <div key={sp.id} style={{ background:"var(--vcard)", border:"1px solid rgba(var(--voverlay-rgb),0.08)", borderLeft:"4px solid "+bilgi.renk, borderRadius:16, padding:"18px 20px", marginTop:16, opacity: kapali ? 0.82 : 1, boxShadow:"0 1px 3px rgba(0,0,0,0.04)" }}>
-                <div style={{ display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" }}>
-                  <div>
-                    <div style={{ fontSize:12, color:"var(--vt3)", fontWeight:600, letterSpacing:"0.06em", textTransform:"uppercase" }}>{t3("Sipariş","Order","Pedido")} #{sirNo}</div>
-                    <div style={{ fontSize:17, fontWeight:700, marginTop:2 }}>{tarihYaz(sp.tarih)}</div>
-                  </div>
-                  <span style={{ fontSize:12, fontWeight:700, color:bilgi.renk, background:"rgba(var(--voverlay-rgb),0.06)", border:"1px solid "+bilgi.renk, borderRadius:980, padding:"4px 12px", whiteSpace:"nowrap" }}>{bilgi.yazi}</span>
-                  <div style={{ flex:1 }}/>
-                  {(sp.onayDurum === "iptal" || sp.onayDurum === "red") && <button onClick={()=>sipListedenKaldir(sp.id)} style={{ background:"rgba(232,90,79,0.08)", border:"1px solid rgba(232,90,79,0.3)", borderRadius:9, padding:"7px 14px", color:KIRMIZI, fontSize:12, fontWeight:600, cursor:"pointer" }}>🗑 {t3("Listeden kaldır","Remove from list","Quitar de la lista")}</button>}
-                  {c === "bekliyor" && <button onClick={()=>sipIptalEt(sp.id)} style={{ background:"rgba(232,90,79,0.08)", border:"1px solid rgba(232,90,79,0.3)", borderRadius:9, padding:"7px 14px", color:KIRMIZI, fontSize:12, fontWeight:600, cursor:"pointer" }}>{t3("Siparişi iptal et","Cancel order","Cancelar pedido")}</button>}
-                </div>
-
-                <div style={{ display:"flex", gap:22, flexWrap:"wrap", marginTop:14, padding:"12px 0", borderTop:"1px solid rgba(var(--voverlay-rgb),0.07)", borderBottom:"1px solid rgba(var(--voverlay-rgb),0.07)" }}>
-                  <div><div style={{ fontSize:11, color:"var(--vt3)" }}>{t3("Model","Models","Modelos")}</div><div style={{ fontSize:15, fontWeight:700 }}>{kalemler.length}</div></div>
-                  <div><div style={{ fontSize:11, color:"var(--vt3)" }}>{t3("Toplam adet","Total qty","Cantidad total")}</div><div style={{ fontSize:15, fontWeight:700 }}>{toplamAdet}</div></div>
-                  {sp.teslimTarihi && <div><div style={{ fontSize:11, color:"var(--vt3)" }}>{(c==="bekliyor"||kapali) ? t3("İstenen teslim","Requested delivery","Entrega deseada") : t3("Teslim tarihi","Delivery date","Fecha de entrega")}</div><div style={{ fontSize:15, fontWeight:700, color: (c==="bekliyor"||kapali) ? "var(--vt1)" : YESIL }}>{tarihYaz(new Date(sp.teslimTarihi).getTime())}</div></div>}
-                  {sp.aciklama && <div style={{ flex:"1 1 200px", minWidth:0 }}><div style={{ fontSize:11, color:"var(--vt3)" }}>{t3("Not","Note","Nota")}</div><div style={{ fontSize:13, color:"var(--vt2)" }}>{sp.aciklama}</div></div>}
-                </div>
-                {sp.onayDurum === "red" && sp.redNot && <div style={{ marginTop:12, fontSize:13, color:KIRMIZI, background:"rgba(232,90,79,0.07)", borderRadius:9, padding:"9px 12px" }}>{t3("Açıklama","Reason","Motivo")}: {sp.redNot}</div>}
-
-                <div style={{ marginTop:14, display:"flex", flexDirection:"column", gap:10 }}>
-                  {kalemler.map((k, ki) => {
-                    const adim = (c==="bekliyor" || kapali) ? -2 : adimNo(k.durum);
-                    const boyYazi = boyYaz(k);
-                    const uzun = k.kategori==="bileklik" || k.kategori==="kolye";
-                    return (
-                    <div key={(k.id||"")+ki} style={{ background:"rgba(var(--voverlay-rgb),0.035)", borderRadius:13, padding:"10px 12px" }}>
-                      <div style={{ display:"flex", gap:14, alignItems:"center", flexWrap:"wrap" }}>
-                        <div onClick={()=>k.foto && setSipFoto({ ...k, adim, boyYazi })} style={{ position:"relative", width: uzun ? 150 : 96, height:96, borderRadius:11, overflow:"hidden", background:"#f3f3f3", flexShrink:0, cursor: k.foto ? "zoom-in" : "default" }}>
-                          {k.foto ? <img src={k.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"contain", transform: uzun ? "none" : "scale(1.2)" }}/> : null}
-                          {k.foto && <div style={{ position:"absolute", right:5, bottom:5, background:"rgba(0,0,0,0.55)", color:"#fff", width:22, height:22, borderRadius:"50%", display:"flex", alignItems:"center", justifyContent:"center", fontSize:11 }}>🔍</div>}
-                        </div>
-                        <div style={{ flex:"1 1 200px", minWidth:0 }}>
-                          <div style={{ fontSize:16, fontWeight:700 }}>{k.kod}</div>
-                          <div style={{ fontSize:13, color:"var(--vt2)", marginTop:3 }}>{k.secilenAyar ? k.secilenAyar.replace("K","K")+" · " : ""}{k.adet||1} {ce("adet")}</div>
-                          {boyYazi && <div style={{ fontSize:12, color:"var(--vt2)", marginTop:3 }}>{ce("boy")}: <b style={{ color:"var(--vt1)" }}>{boyYazi}</b></div>}
-                          {k.sipNot && <div style={{ fontSize:12, color:"var(--vt3)", marginTop:3 }}>“{k.sipNot}”</div>}
-                        </div>
-                      </div>
-                      <div style={{ marginTop:12, padding:"0 4px" }}>
-                        {adim >= 0 ? <Adimlar adim={adim} kucuk/> : <div style={{ fontSize:12, color:"var(--vt3)" }}>{adim === -1 ? "—" : (c==="bekliyor" ? t3("Onayınız bekleniyor — işleme alınınca burada takip edebilirsiniz.","Waiting for approval — you can track progress here once processing starts.","Pendiente de aprobación.") : "")}</div>}
-                      </div>
+              <div key={sp.id} style={{ background:"var(--vcard)", border:"1px solid rgba(var(--voverlay-rgb),0.09)", borderRadius:18, marginBottom:18, overflow:"hidden", opacity: c==="iptal" ? 0.85 : 1 }}>
+                <div onClick={()=>setSipKapali(p=>({ ...p, [sp.id]: acik }))} style={{ padding:"22px 26px 20px", cursor:"pointer" }}>
+                  <div style={{ display:"flex", alignItems:"flex-start", gap:12 }}>
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <div style={{ fontSize:12, color:"var(--vt3)", fontWeight:500, marginBottom:6 }}>{t3("Sipariş","Order","Pedido")} #{sirNo} · {tarihYaz(sp.tarih, true)}</div>
+                      <div style={{ fontSize:24, fontWeight:700, letterSpacing:"-0.02em", color:baslikRenk, lineHeight:1.15 }}>{baslik}</div>
+                      {altYazi && <div style={{ fontSize:14, color:"var(--vt2)", marginTop:6, lineHeight:1.4 }}>{altYazi}</div>}
                     </div>
-                    );
-                  })}
+                    <div style={{ fontSize:13, color:"var(--vt3)", whiteSpace:"nowrap", paddingTop:2 }}>{acik ? "▲" : "▼"}</div>
+                  </div>
+                  {(c === "islemde" || c === "teslim") && (
+                    <div style={{ marginTop:22 }}>
+                      <Adimlar adim={c === "teslim" ? 2 : genelAdim} buyuk/>
+                      {c === "islemde" && kalemler.length > 1 && teslimSay > 0 && <div style={{ fontSize:12, color:"var(--vt3)", marginTop:12 }}>{teslimSay} / {kalemler.length} {t3("model teslim edildi","models delivered","modelos entregados")}</div>}
+                    </div>
+                  )}
                 </div>
+
+                {!acik && (
+                  <div style={{ padding:"0 26px 20px", display:"flex", gap:8, alignItems:"center" }}>
+                    {kalemler.filter(k=>k.foto).slice(0,7).map((k,i)=>(<div key={i} style={{ width:46, height:46, borderRadius:9, overflow:"hidden", background:"#f3f3f3", flexShrink:0 }}><img src={k.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"contain", transform:"scale(1.2)" }}/></div>))}
+                    <div style={{ fontSize:12, color:"var(--vt3)", marginLeft:4 }}>{kalemler.length} {t3("model","models","modelos")} · {toplamAdet} {ce("adet")}</div>
+                  </div>
+                )}
+
+                {acik && (<>
+                  <div style={{ borderTop:"1px solid rgba(var(--voverlay-rgb),0.08)" }}>
+                    {kalemler.map((k, ki) => {
+                      const adim = (c==="bekliyor" || c==="iptal") ? -2 : adimNo(k.durum);
+                      const boyYazi = boyYaz(k);
+                      const uzun = k.kategori==="bileklik" || k.kategori==="kolye";
+                      return (
+                      <div key={(k.id||"")+ki} style={{ display:"flex", alignItems:"center", gap:16, padding:"14px 26px", borderBottom: ki < kalemler.length-1 ? "1px solid rgba(var(--voverlay-rgb),0.06)" : "none" }}>
+                        <div onClick={()=>k.foto && setSipFoto({ ...k, adim, boyYazi })} style={{ width: uzun ? 118 : 76, height:76, borderRadius:12, overflow:"hidden", background:"#f3f3f3", flexShrink:0, cursor: k.foto ? "zoom-in" : "default" }}>
+                          {k.foto ? <img src={k.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"contain", transform: uzun ? "none" : "scale(1.2)" }}/> : null}
+                        </div>
+                        <div style={{ flex:1, minWidth:0 }}>
+                          <div style={{ fontSize:15, fontWeight:600 }}>{k.kod}</div>
+                          <div style={{ fontSize:13, color:"var(--vt2)", marginTop:3 }}>
+                            {k.secilenAyar ? k.secilenAyar + " · " : ""}{k.adet||1} {ce("adet")}{boyYazi ? " · " + boyYazi : ""}
+                          </div>
+                          {k.sipNot && <div style={{ fontSize:12, color:"var(--vt3)", marginTop:3, fontStyle:"italic" }}>{k.sipNot}</div>}
+                        </div>
+                        {adim >= 0 && c !== "teslim" && <div style={{ fontSize:12, fontWeight:600, color: adim === 2 ? YESIL : "var(--vt2)", whiteSpace:"nowrap" }}>{ADIMLAR[adim]}</div>}
+                      </div>
+                      );
+                    })}
+                  </div>
+                  <div style={{ borderTop:"1px solid rgba(var(--voverlay-rgb),0.08)", padding:"16px 26px", display:"flex", alignItems:"center", gap:22, flexWrap:"wrap", background:"rgba(var(--voverlay-rgb),0.025)" }}>
+                    <div><div style={{ fontSize:11, color:"var(--vt3)" }}>{t3("Model","Models","Modelos")}</div><div style={{ fontSize:15, fontWeight:600, marginTop:2 }}>{kalemler.length}</div></div>
+                    <div><div style={{ fontSize:11, color:"var(--vt3)" }}>{t3("Toplam adet","Total qty","Cantidad total")}</div><div style={{ fontSize:15, fontWeight:600, marginTop:2 }}>{toplamAdet}</div></div>
+                    {sp.teslimTarihi && (c === "bekliyor" || c === "iptal") && <div><div style={{ fontSize:11, color:"var(--vt3)" }}>{t3("İstenen teslim","Requested delivery","Entrega deseada")}</div><div style={{ fontSize:15, fontWeight:600, marginTop:2 }}>{tarihYaz(new Date(sp.teslimTarihi).getTime(), true)}</div></div>}
+                    {sp.aciklama && <div style={{ flex:"1 1 180px", minWidth:0 }}><div style={{ fontSize:11, color:"var(--vt3)" }}>{t3("Sipariş notu","Order note","Nota")}</div><div style={{ fontSize:13, color:"var(--vt2)", marginTop:2 }}>{sp.aciklama}</div></div>}
+                    <div style={{ flex:1 }}/>
+                    {c === "bekliyor" && <button onClick={()=>sipIptalEt(sp.id)} style={{ ...dugme, color:KIRMIZI, borderColor:"rgba(214,69,69,0.4)" }}>{t3("Siparişi iptal et","Cancel order","Cancelar pedido")}</button>}
+                    {c === "iptal" && <button onClick={()=>sipListedenKaldir(sp.id)} style={{ ...dugme, color:KIRMIZI, borderColor:"rgba(214,69,69,0.4)" }}>{t3("Listeden kaldır","Remove from list","Quitar de la lista")}</button>}
+                  </div>
+                </>)}
               </div>
               );
             })}
           </div>
 
-          {/* Büyük foto — modele tıklayınca */}
           {sipFoto && (
-            <div onClick={()=>setSipFoto(null)} style={{ position:"fixed", inset:0, zIndex:120, background:"rgba(0,0,0,0.82)", backdropFilter:"blur(14px)", display:"flex", alignItems:"center", justifyContent:"center", padding:16, cursor:"zoom-out" }}>
-              <div onClick={e=>e.stopPropagation()} style={{ background:"var(--vcard)", borderRadius:20, width:"100%", maxWidth:760, maxHeight:"94vh", overflow:"auto", cursor:"default", position:"relative" }}>
-                <button onClick={()=>setSipFoto(null)} style={{ position:"absolute", top:12, right:12, zIndex:2, width:36, height:36, borderRadius:"50%", border:"none", background:"rgba(0,0,0,0.55)", color:"#fff", fontSize:18, cursor:"pointer" }}>✕</button>
+            <div onClick={()=>setSipFoto(null)} style={{ position:"fixed", inset:0, zIndex:120, background:"rgba(0,0,0,0.78)", backdropFilter:"blur(16px)", display:"flex", alignItems:"center", justifyContent:"center", padding:16, cursor:"zoom-out" }}>
+              <div onClick={e=>e.stopPropagation()} style={{ background:"var(--vcard)", borderRadius:22, width:"100%", maxWidth:780, maxHeight:"94vh", overflow:"auto", cursor:"default", position:"relative" }}>
+                <button onClick={()=>setSipFoto(null)} style={{ position:"absolute", top:14, right:14, zIndex:2, width:34, height:34, borderRadius:"50%", border:"none", background:"rgba(0,0,0,0.5)", color:"#fff", fontSize:16, cursor:"pointer" }}>✕</button>
                 <div style={{ background:"#f3f3f3", display:"flex", alignItems:"center", justifyContent:"center" }}>
-                  <img src={sipFoto.foto} alt="" style={{ width:"100%", maxHeight:"68vh", objectFit:"contain", display:"block" }}/>
+                  <img src={sipFoto.foto} alt="" style={{ width:"100%", maxHeight:"70vh", objectFit:"contain", display:"block" }}/>
                 </div>
-                <div style={{ padding:"16px 20px 20px" }}>
-                  <div style={{ display:"flex", alignItems:"baseline", gap:10, flexWrap:"wrap" }}>
-                    <div style={{ fontSize:20, fontWeight:700 }}>{sipFoto.kod}</div>
-                    <div style={{ fontSize:13, color:"var(--vt2)" }}>{sipFoto.secilenAyar ? sipFoto.secilenAyar+" · " : ""}{sipFoto.adet||1} {ce("adet")}{sipFoto.boyYazi ? " · " + ce("boy") + ": " + sipFoto.boyYazi : ""}</div>
-                  </div>
-                  {sipFoto.sipNot && <div style={{ fontSize:13, color:"var(--vt3)", marginTop:6 }}>“{sipFoto.sipNot}”</div>}
-                  {sipFoto.adim >= 0 && <div style={{ marginTop:16 }}><Adimlar adim={sipFoto.adim}/></div>}
+                <div style={{ padding:"18px 24px 24px" }}>
+                  <div style={{ fontSize:22, fontWeight:700, letterSpacing:"-0.02em" }}>{sipFoto.kod}</div>
+                  <div style={{ fontSize:14, color:"var(--vt2)", marginTop:4 }}>{sipFoto.secilenAyar ? sipFoto.secilenAyar+" · " : ""}{sipFoto.adet||1} {ce("adet")}{sipFoto.boyYazi ? " · " + ce("boy") + ": " + sipFoto.boyYazi : ""}</div>
+                  {sipFoto.sipNot && <div style={{ fontSize:13, color:"var(--vt3)", marginTop:8, fontStyle:"italic" }}>{sipFoto.sipNot}</div>}
+                  {sipFoto.adim >= 0 && <div style={{ marginTop:22 }}><Adimlar adim={sipFoto.adim} buyuk/></div>}
                 </div>
               </div>
             </div>
