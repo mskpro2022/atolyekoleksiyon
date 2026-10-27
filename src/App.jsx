@@ -6629,7 +6629,7 @@ function Atolye({ onSirketDegis }) {
                       <div style={{ padding:"2px 14px 10px", borderTop:"1px solid rgba(var(--vurgu-rgb),0.07)" }}>
 
                         {/* ZAMAN ÇİZELGESİ — özet + buton (detay modal'da) */}
-                        {s.durumGecmisi?.length > 0 && (() => {
+                        {AKTIF_SIRKET_ONEK !== "bsp2_" && s.durumGecmisi?.length > 0 && (() => {
                           const gecmis = s.durumGecmisi;
                           const toplamSure = isGunuSure(gecmis[0].tarih, Date.now());
                           const sonGec = gecmis[gecmis.length-1];
