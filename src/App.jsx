@@ -2132,6 +2132,7 @@ function VitrinModu({ kod, onizleme }) {
   const [siparisBoySonra, setSiparisBoySonra] = useState({}); // { modelId: true } — boyu sonra bildirecek
   const [siparisUrunNot, setSiparisUrunNot] = useState({});   // { modelId: "not" }
   const [siparisHata, setSiparisHata] = useState("");
+  const [genelBoy, setGenelBoy] = useState({ sistem:"US", deger:"" });
   const [siparisTeslim, setSiparisTeslim] = useState(""); // istenen teslim tarihi (yyyy-mm-dd)
   const [siparisGonderiliyor, setSiparisGonderiliyor] = useState(false);
   const [siparisBasarili, setSiparisBasarili] = useState(false);
@@ -2198,6 +2199,16 @@ function VitrinModu({ kod, onizleme }) {
     uzunluk: { tr:"Uzunluk", en:"Length", es:"Longitud" },
     urun_notu: { tr:"Bu ürün için not (opsiyonel)", en:"Note for this item (optional)", es:"Nota para este artículo (opcional)" },
     teslim_tarihi: { tr:"İstenen teslim tarihi (opsiyonel)", en:"Requested delivery date (optional)", es:"Fecha de entrega deseada (opcional)" },
+    geri: { tr:"Geri", en:"Back", es:"Volver" },
+    ayar: { tr:"Ayar", en:"Karat", es:"Quilates" },
+    kod: { tr:"Kod", en:"Code", es:"Código" },
+    urun_not: { tr:"Ürün / Not", en:"Item / Note", es:"Artículo / Nota" },
+    top_gr: { tr:"Top. Gr", en:"Total g", es:"Total g" },
+    genel_boy: { tr:"Genel boy", en:"Size for all", es:"Talla general" },
+    tum_yuzuklere_uygula: { tr:"Tüm yüzüklere uygula", en:"Apply to all rings", es:"Aplicar a todos los anillos" },
+    boy_sonra_kisa: { tr:"Boy sonra bildirilecek", en:"Size to be confirmed", es:"Talla por confirmar" },
+    cikar: { tr:"Listeden çıkar", en:"Remove", es:"Quitar" },
+    siparis_notu: { tr:"Sipariş notu (opsiyonel)...", en:"Order note (optional)...", es:"Nota del pedido (opcional)..." },
     liste_gram: { tr:"Toplam gram", en:"Total weight", es:"Peso total" },
     tas_orani: { tr:"Taş oranı", en:"Stone ratio", es:"Proporción de piedra" },
     tas: { tr:"Taş", en:"Stone", es:"Piedra" },
@@ -2908,111 +2919,168 @@ function VitrinModu({ kod, onizleme }) {
 
       {/* ═══ SİPARİŞ MODALI — müşteri kendi siparişini oluşturur (BSP) ═══ */}
       {siparisModal && (
-        <div onClick={()=>{ if(!siparisGonderiliyor){ setSiparisModal(false); setSiparisBasarili(false); } }} style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.75)", zIndex:110, display:"flex", alignItems:"center", justifyContent:"center", padding:20, backdropFilter:"blur(20px)" }}>
-          <div onClick={e=>e.stopPropagation()} style={{ background:"var(--vcard)", borderRadius:18, maxWidth:1180, width:"100%", maxHeight:"95vh", overflow:"auto" }}>
-            {siparisBasarili ? (
-              <div style={{ padding:"40px 28px", textAlign:"center" }}>
-                <div style={{ fontSize:44, marginBottom:14 }}>✓</div>
-                <div style={{ fontSize:18, fontWeight:600, color:"var(--vt1)", marginBottom:8 }}>{ce("siparis_alindi")}</div>
-                <div style={{ fontSize:14, color:"var(--vt2)", marginBottom:24 }}>{ce("en_kisa_surede")}</div>
-                <button onClick={()=>{ setSiparisModal(false); setSiparisBasarili(false); }} style={{ background:"var(--vcard)", border:"none", borderRadius:11, padding:"12px 28px", color:"var(--vt1)", fontSize:14, fontWeight:600, cursor:"pointer" }}>Tamam</button>
+        <div style={{ position:"fixed", inset:0, zIndex:110, background:"var(--vb)", overflow:"auto", color:"var(--vt1)" }}>
+          <style>{".vs-row{display:grid;grid-template-columns:132px 96px 1fr 270px 84px 92px 44px;gap:10px;align-items:start;padding:12px 14px}.vs-hd{display:grid;grid-template-columns:132px 96px 1fr 270px 84px 92px 44px;gap:10px;padding:8px 14px}@media(max-width:860px){.vs-hd{display:none}.vs-row{grid-template-columns:104px 1fr}.vs-row>.vs-boy,.vs-row>.vs-adet,.vs-row>.vs-top,.vs-row>.vs-sil{grid-column:1/-1}.vs-top,.vs-sil,.vs-adet{text-align:left!important}}"}</style>
+          {siparisBasarili ? (
+            <div style={{ maxWidth:520, margin:"18vh auto 0", padding:"40px 28px", textAlign:"center" }}>
+              <div style={{ fontSize:48, marginBottom:14 }}>✓</div>
+              <div style={{ fontSize:20, fontWeight:600, color:"var(--vt1)", marginBottom:8 }}>{ce("siparis_alindi")}</div>
+              <div style={{ fontSize:14, color:"var(--vt2)", marginBottom:24 }}>{ce("en_kisa_surede")}</div>
+              <button onClick={()=>{ setSiparisModal(false); setSiparisBasarili(false); }} style={{ background:"var(--vcard)", border:"1px solid rgba(var(--voverlay-rgb),0.15)", borderRadius:11, padding:"12px 28px", color:"var(--vt1)", fontSize:14, fontWeight:600, cursor:"pointer" }}>Tamam</button>
+            </div>
+          ) : (() => {
+            const kutu = { background:"rgba(var(--voverlay-rgb),0.07)", border:"none", borderRadius:8, padding:"7px 9px", color:"var(--vt1)", fontSize:13, outline:"none", fontFamily:"inherit" };
+            const adetBtn = { width:28, height:28, borderRadius:8, border:"none", background:"rgba(var(--voverlay-rgb),0.1)", color:"var(--vt1)", fontSize:16, cursor:"pointer" };
+            const etiket = { fontSize:9, color:"var(--vt3)", fontWeight:700, letterSpacing:"0.06em", textTransform:"uppercase" };
+            const toplamAdet = seciliModeller.reduce((t,m)=>t+satirAdet(m),0);
+            const genelUygula = () => {
+              if (!genelBoy.deger) return;
+              setSiparisBoySonra(p => { const y={...p}; seciliModeller.forEach(m=>{ if (m.kategori==="yuzuk") delete y[m.id]; }); return y; });
+              setSiparisBoylar(p => { const y={...p}; seciliModeller.forEach(m=>{ if (m.kategori==="yuzuk") y[m.id]=[{ sistem:genelBoy.sistem, deger:genelBoy.deger, adet:Math.max(1,(p[m.id]||[]).reduce((t,b)=>t+(Number(b.adet)||1),0)) }]; }); return y; });
+            };
+            return (
+            <div style={{ maxWidth:1280, margin:"0 auto", padding:"0 20px 120px" }}>
+              {/* Başlık */}
+              <div style={{ position:"sticky", top:0, zIndex:5, background:"var(--vb)", padding:"18px 0 12px", display:"flex", alignItems:"center", gap:12, flexWrap:"wrap", borderBottom:"1px solid rgba(var(--voverlay-rgb),0.08)" }}>
+                <button onClick={()=>{ if(!siparisGonderiliyor) setSiparisModal(false); }} style={{ background:"var(--vcard)", border:"1px solid rgba(var(--voverlay-rgb),0.12)", borderRadius:980, padding:"8px 16px", color:"var(--vt1)", fontSize:13, fontWeight:600, cursor:"pointer" }}>‹ {ce("geri")}</button>
+                <div style={{ fontSize:22, fontWeight:700, letterSpacing:"-0.02em" }}>{ce("siparis_ver")}</div>
+                {vitrinMusteri && <div style={{ fontSize:13, color:"var(--vt2)", background:"rgba(var(--voverlay-rgb),0.07)", borderRadius:8, padding:"5px 10px", fontWeight:600 }}>{vitrinMusteri.kod}</div>}
+                <div style={{ flex:1 }}/>
+                <label style={{ display:"flex", alignItems:"center", gap:8, fontSize:12, color:"var(--vt2)" }}>{ce("teslim_tarihi")}
+                  <input type="date" value={siparisTeslim} min={new Date().toISOString().slice(0,10)} onChange={e=>setSiparisTeslim(e.target.value)} style={{ ...kutu, fontSize:13, colorScheme:"light dark" }}/>
+                </label>
               </div>
-            ) : (
-              <div style={{ padding:"22px 24px 24px", display:"flex", flexWrap:"wrap", gap:24, alignItems:"flex-start" }}>
-               <div style={{ flex:"1 1 520px", minWidth:0 }}>
-                <div style={{ fontSize:18, fontWeight:600, color:"var(--vt1)", marginBottom:4 }}>{ce("siparis_ver")}</div>
-                <div style={{ fontSize:13, color:"var(--vt2)", marginBottom:18 }}>{seciliModeller.length} model{bspMi ? "" : " — " + aktifAyar.replace("K"," Ayar")}</div>
-                <div style={{ display:"flex", flexDirection:"column", gap:10, marginBottom:4 }}>
-                  {seciliModeller.map(m => {
-                    const boyli = boyGerekli(m);
-                    const uzunUrun = m.kategori === "bileklik" || m.kategori === "kolye"; // yatay/uzun ürünler tam genişlikte görünsün
-                    const sonra = !!siparisBoySonra[m.id];
-                    const boylar = siparisBoylar[m.id] || [];
-                    const eksik = boyEksikMi(m) && !!siparisHata;
-                    const kutu = { background:"rgba(var(--voverlay-rgb),0.07)", border:"none", borderRadius:8, padding:"7px 8px", color:"var(--vt1)", fontSize:13, outline:"none" };
-                    const adetBtn = { width:26, height:26, borderRadius:7, border:"none", background:"rgba(var(--voverlay-rgb),0.1)", color:"var(--vt1)", fontSize:15, cursor:"pointer" };
-                    return (
-                    <div key={m.id} style={{ background:"rgba(var(--voverlay-rgb),0.05)", border: eksik ? "1px solid #e85a4f" : "1px solid transparent", borderRadius:11, padding:"9px 12px" }}>
-                      <div style={{ display:"flex", alignItems: uzunUrun ? "stretch" : "center", flexDirection: uzunUrun ? "column" : "row", gap: uzunUrun ? 8 : 14 }}>
-                        <div style={{ width: uzunUrun ? "100%" : "min(210px,40vw)", height: uzunUrun ? "min(190px,34vw)" : "min(210px,40vw)", borderRadius:12, overflow:"hidden", background:"#f7f7f8", flexShrink:0 }}>
-                          {m.foto ? <img src={m.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"contain" }}/> : null}
+
+              {/* Araç çubuğu — konfirmasyondaki AYAR / GENEL BOY gibi */}
+              <div style={{ display:"flex", gap:18, flexWrap:"wrap", alignItems:"center", background:"var(--vcard)", border:"1px solid rgba(var(--voverlay-rgb),0.08)", borderRadius:12, padding:"10px 14px", margin:"14px 0" }}>
+                <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                  <span style={etiket}>{ce("ayar")}</span>
+                  <div style={{ display:"inline-flex", background:"rgba(var(--voverlay-rgb),0.07)", borderRadius:9, padding:3 }}>
+                    {VITRIN_AYARLAR.map(a => { const on = aktifAyar === a.id; return (
+                      <button key={a.id} onClick={()=>setAktifAyar(a.id)} style={{ padding:"6px 16px", fontSize:13, color: on?"var(--vt1)":"var(--vt2)", background: on?"var(--vb)":"transparent", border:"none", borderRadius:6, fontWeight: on?600:400, cursor:"pointer" }}>{a.id.replace("K","")}K</button>
+                    ); })}
+                  </div>
+                </div>
+                {seciliModeller.some(m=>m.kategori==="yuzuk") && (
+                  <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
+                    <span style={etiket}>{ce("genel_boy")}</span>
+                    <select value={genelBoy.sistem} onChange={e=>setGenelBoy({ sistem:e.target.value, deger:"" })} style={{ ...kutu, width:92 }}>
+                      {Object.keys(BOY_YUZUK).map(x=><option key={x} value={x}>{x}</option>)}
+                    </select>
+                    <select value={genelBoy.deger} onChange={e=>setGenelBoy(p=>({ ...p, deger:e.target.value }))} style={{ ...kutu, width:78 }}>
+                      <option value="">—</option>
+                      {(BOY_YUZUK[genelBoy.sistem]||[]).map(v=><option key={v} value={v}>{v}</option>)}
+                    </select>
+                    <button onClick={genelUygula} disabled={!genelBoy.deger} style={{ ...kutu, cursor: genelBoy.deger?"pointer":"default", opacity: genelBoy.deger?1:0.45, fontWeight:600 }}>{ce("tum_yuzuklere_uygula")}</button>
+                  </div>
+                )}
+                <div style={{ flex:1 }}/>
+                <div style={{ fontSize:13, color:"var(--vt2)" }}>{seciliModeller.length} model · {toplamAdet} {ce("adet")}</div>
+              </div>
+
+              {/* Ana tablo */}
+              <div style={{ background:"var(--vcard)", border:"1px solid rgba(var(--voverlay-rgb),0.08)", borderRadius:14, overflow:"hidden" }}>
+                <div className="vs-hd" style={{ background:"rgba(var(--voverlay-rgb),0.05)", borderBottom:"1px solid rgba(var(--voverlay-rgb),0.08)" }}>
+                  {["", ce("kod"), ce("urun_not"), ce("boy"), ce("adet"), ce("top_gr"), ""].map((t,i)=>(<div key={i} style={{ ...etiket, textAlign: i>=4?"center":"left" }}>{t}</div>))}
+                </div>
+                {seciliModeller.map((m, idx) => {
+                  const boyli = boyGerekli(m);
+                  const uzunUrun = m.kategori === "bileklik" || m.kategori === "kolye";
+                  const sonra = !!siparisBoySonra[m.id];
+                  const boylar = siparisBoylar[m.id] || [];
+                  const eksik = boyEksikMi(m) && !!siparisHata;
+                  return (
+                  <div key={m.id} style={{ borderBottom: idx < seciliModeller.length-1 ? "1px solid rgba(var(--voverlay-rgb),0.07)" : "none", outline: eksik ? "2px solid #e85a4f" : "none", outlineOffset:-2 }}>
+                    {uzunUrun && m.foto && (
+                      <div style={{ padding:"12px 14px 0" }}>
+                        <div style={{ width:"100%", height:"min(170px,32vw)", borderRadius:10, overflow:"hidden", background:"#f3f3f3" }}>
+                          <img src={m.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"contain", display:"block" }}/>
                         </div>
-                        <div style={{ flex: uzunUrun ? "none" : 1, minWidth:0 }}>
-                          <div style={{ fontSize:16, color:"var(--vt1)", fontWeight:600, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{m.kod}</div>
-                          <div style={{ fontSize:13, color:"var(--vt2)" }}>{ayarliGram(m)} g{satirAdet(m) > 1 ? " × " + satirAdet(m) + " = " : ""}{satirAdet(m) > 1 && <b style={{ color:"var(--vt1)" }}>{satirGram(m).toFixed(2)} g</b>}</div>
-                        </div>
-                        {(!boyli || sonra) && (
-                          <div style={{ display:"flex", alignItems:"center", gap:6, flexShrink:0 }}>
-                            <button onClick={()=>setSiparisAdetler(p=>({...p,[m.id]:Math.max(1,(Number(p[m.id])||1)-1)}))} style={adetBtn}>−</button>
-                            <span style={{ fontSize:13, color:"var(--vt1)", fontWeight:600, minWidth:16, textAlign:"center" }}>{Number(siparisAdetler[m.id])||1}</span>
-                            <button onClick={()=>setSiparisAdetler(p=>({...p,[m.id]:Math.max(1,(Number(p[m.id])||1)+1)}))} style={adetBtn}>+</button>
-                          </div>
-                        )}
-                        {boyli && !sonra && <div style={{ fontSize:12, color:"var(--vt2)", flexShrink:0 }}>{boylar.reduce((t,b)=>t+(Number(b.adet)||1),0)} {ce("adet")}</div>}
                       </div>
-                      {boyli && !sonra && (
-                        <div style={{ marginTop:10 }}>
-                          <div style={{ fontSize:10, color:"var(--vt2)", fontWeight:600, letterSpacing:"0.04em", textTransform:"uppercase", marginBottom:6 }}>{ce("boy")}</div>
+                    )}
+                    <div className="vs-row">
+                      {uzunUrun ? <div/> : (
+                        <div style={{ width:"min(120px,26vw)", height:"min(120px,26vw)", borderRadius:10, overflow:"hidden", background:"#f3f3f3" }}>
+                          {m.foto ? <img src={m.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"contain", display:"block" }}/> : null}
+                        </div>
+                      )}
+                      <div style={{ paddingTop:2 }}>
+                        <div style={{ fontSize:15, fontWeight:700 }}>{m.kod||"—"}</div>
+                        <div style={{ fontSize:12, color:"var(--vt2)", marginTop:3 }}>{ayarliGram(m)} g</div>
+                        {m.kategori && <div style={{ fontSize:10, color:"var(--vt3)", marginTop:3 }}>{kategoriEtiket(m.kategori)}</div>}
+                      </div>
+                      <div style={{ minWidth:0 }}>
+                        {m.ad && <div style={{ fontSize:13, fontWeight:600, color:"var(--vt1)" }}>{urunCevir(m.ad)}</div>}
+                        <input value={siparisUrunNot[m.id]||""} onChange={e=>setSiparisUrunNot(p=>({...p,[m.id]:e.target.value}))} placeholder={ce("urun_notu")}
+                          style={{ ...kutu, width:"100%", marginTop:6, fontSize:12 }}/>
+                        {boyli && (
+                          <label style={{ display:"flex", alignItems:"center", gap:7, marginTop:8, fontSize:12, color:"var(--vt2)", cursor:"pointer" }}>
+                            <input type="checkbox" checked={sonra} onChange={e=>setSiparisBoySonra(p=>({...p,[m.id]:e.target.checked}))}/>
+                            {ce("boy_sonra")}
+                          </label>
+                        )}
+                      </div>
+                      <div className="vs-boy">
+                        {boyli && !sonra ? (<>
                           {boylar.map((b, bi) => (
                             <div key={bi} style={{ display:"flex", gap:6, alignItems:"center", marginBottom:6, flexWrap:"wrap" }}>
                               {m.kategori === "bileklik" ? (<>
-                                <input type="number" inputMode="decimal" placeholder={ce("uzunluk")} value={b.uzunluk||""} onChange={e=>boyGuncelle(m.id,bi,"uzunluk",e.target.value)} style={{ ...kutu, width:80 }}/>
-                                <select value={b.birim||"cm"} onChange={e=>boyGuncelle(m.id,bi,"birim",e.target.value)} style={{ ...kutu, width:62 }}>
-                                  <option value="cm">cm</option><option value="mm">mm</option>
-                                </select>
+                                <input type="number" inputMode="decimal" placeholder={ce("uzunluk")} value={b.uzunluk||""} onChange={e=>boyGuncelle(m.id,bi,"uzunluk",e.target.value)} style={{ ...kutu, width:78 }}/>
+                                <select value={b.birim||"cm"} onChange={e=>boyGuncelle(m.id,bi,"birim",e.target.value)} style={{ ...kutu, width:60 }}><option value="cm">cm</option><option value="mm">mm</option></select>
                               </>) : (<>
-                                <select value={b.sistem} onChange={e=>{ boyGuncelle(m.id,bi,"sistem",e.target.value); boyGuncelle(m.id,bi,"deger",""); }} style={{ ...kutu, width: m.kategori==="yuzuk" ? 84 : 120 }}>
+                                <select value={b.sistem} onChange={e=>{ boyGuncelle(m.id,bi,"sistem",e.target.value); boyGuncelle(m.id,bi,"deger",""); }} style={{ ...kutu, width: m.kategori==="yuzuk" ? 76 : 116 }}>
                                   {Object.keys(m.kategori==="yuzuk" ? BOY_YUZUK : BOY_BILEZIK).map(x=><option key={x} value={x}>{x}</option>)}
                                 </select>
-                                <select value={b.deger} onChange={e=>boyGuncelle(m.id,bi,"deger",e.target.value)} style={{ ...kutu, width:78 }}>
+                                <select value={b.deger} onChange={e=>boyGuncelle(m.id,bi,"deger",e.target.value)} style={{ ...kutu, width:70 }}>
                                   <option value="">—</option>
                                   {((m.kategori==="yuzuk" ? BOY_YUZUK : BOY_BILEZIK)[b.sistem]||[]).map(v=><option key={v} value={v}>{v}</option>)}
                                 </select>
-                                {m.kategori==="yuzuk" && b.deger && b.sistem!=="mm" && <span style={{ fontSize:10, color:"var(--vt3)" }}>≈{boyToMM(b.sistem,b.deger)} mm</span>}
+                                {m.kategori==="yuzuk" && b.deger && b.sistem!=="mm" && <span style={{ fontSize:10, color:"var(--vt3)" }}>≈{boyToMM(b.sistem,b.deger)}</span>}
                               </>)}
-                              <div style={{ display:"flex", alignItems:"center", gap:5, marginLeft:"auto" }}>
-                                <button onClick={()=>boyGuncelle(m.id,bi,"adet",Math.max(1,(Number(b.adet)||1)-1))} style={adetBtn}>−</button>
-                                <span style={{ fontSize:13, color:"var(--vt1)", fontWeight:600, minWidth:16, textAlign:"center" }}>{Number(b.adet)||1}</span>
-                                <button onClick={()=>boyGuncelle(m.id,bi,"adet",(Number(b.adet)||1)+1)} style={adetBtn}>+</button>
-                                {boylar.length > 1 && <button onClick={()=>boySil(m.id,bi)} style={{ background:"none", border:"none", color:"#e85a4f", cursor:"pointer", fontSize:16, padding:"0 4px" }}>×</button>}
-                              </div>
+                              <button onClick={()=>boyGuncelle(m.id,bi,"adet",Math.max(1,(Number(b.adet)||1)-1))} style={{ ...adetBtn, width:24, height:24, fontSize:14 }}>−</button>
+                              <span style={{ fontSize:13, fontWeight:700, minWidth:14, textAlign:"center" }}>{Number(b.adet)||1}</span>
+                              <button onClick={()=>boyGuncelle(m.id,bi,"adet",(Number(b.adet)||1)+1)} style={{ ...adetBtn, width:24, height:24, fontSize:14 }}>+</button>
+                              {boylar.length > 1 && <button onClick={()=>boySil(m.id,bi)} style={{ background:"none", border:"none", color:"#e85a4f", cursor:"pointer", fontSize:16, padding:"0 2px" }}>×</button>}
                             </div>
                           ))}
-                          <button onClick={()=>boyEkle(m)} style={{ background:"transparent", border:"1px dashed rgba(var(--voverlay-rgb),0.25)", borderRadius:8, padding:"5px 12px", color:"var(--vt2)", fontSize:12, cursor:"pointer" }}>+ {ce("boy_ekle")}</button>
-                        </div>
-                      )}
-                      {boyli && (
-                        <label style={{ display:"flex", alignItems:"center", gap:7, marginTop:9, fontSize:12, color:"var(--vt2)", cursor:"pointer" }}>
-                          <input type="checkbox" checked={sonra} onChange={e=>setSiparisBoySonra(p=>({...p,[m.id]:e.target.checked}))}/>
-                          {ce("boy_sonra")}
-                        </label>
-                      )}
-                      <input value={siparisUrunNot[m.id]||""} onChange={e=>setSiparisUrunNot(p=>({...p,[m.id]:e.target.value}))} placeholder={ce("urun_notu")}
-                        style={{ ...kutu, width:"100%", marginTop:9, fontSize:12 }}/>
+                          <button onClick={()=>boyEkle(m)} style={{ background:"transparent", border:"1px dashed rgba(var(--voverlay-rgb),0.25)", borderRadius:8, padding:"4px 12px", color:"var(--vt2)", fontSize:12, cursor:"pointer" }}>+ {ce("boy_ekle")}</button>
+                        </>) : <span style={{ fontSize:12, color:"var(--vt3)" }}>{boyli ? ce("boy_sonra_kisa") : "—"}</span>}
+                      </div>
+                      <div className="vs-adet" style={{ textAlign:"center" }}>
+                        {boyli && !sonra ? (
+                          <div><div style={{ fontSize:15, fontWeight:800 }}>{satirAdet(m)}</div><div style={{ fontSize:10, color:"var(--vt3)" }}>{boylar.length} {ce("boy").toLowerCase()}</div></div>
+                        ) : (
+                          <input type="number" min="1" value={Number(siparisAdetler[m.id])||1} onChange={e=>setSiparisAdetler(p=>({...p,[m.id]:Math.max(1,Number(e.target.value)||1)}))} style={{ ...kutu, width:68, textAlign:"center", fontWeight:700 }}/>
+                        )}
+                      </div>
+                      <div className="vs-top" style={{ textAlign:"center", fontSize:14, fontWeight:700 }}>{satirGram(m).toFixed(2)} g</div>
+                      <div className="vs-sil" style={{ textAlign:"center" }}>
+                        <button onClick={()=>{ setSecili(p=>{ const y=new Set(p); y.delete(m.id); return y; }); if (seciliModeller.length<=1) setSiparisModal(false); }} title={ce("cikar")} style={{ background:"rgba(232,90,79,0.08)", border:"1px solid rgba(232,90,79,0.2)", borderRadius:7, padding:"4px 9px", color:"#e85a4f", fontSize:12, cursor:"pointer" }}>✕</button>
+                      </div>
                     </div>
-                    );
-                  })}
-                </div>
-               </div>
-               <div style={{ flex:"0 1 340px", minWidth:260, position:"sticky", top:0, alignSelf:"flex-start", width:"100%" }}>
-                <div style={{ fontSize:12, color:"var(--vt2)", fontWeight:600, marginBottom:6 }}>{ce("teslim_tarihi")}</div>
-                <input type="date" value={siparisTeslim} min={new Date().toISOString().slice(0,10)} onChange={e=>setSiparisTeslim(e.target.value)}
-                  style={{ width:"100%", background:"rgba(var(--voverlay-rgb),0.07)", border:"none", borderRadius:11, padding:"11px 13px", color:"var(--vt1)", fontSize:14, outline:"none", fontFamily:"inherit", marginBottom:14, colorScheme:"light dark" }}/>
-                <textarea value={siparisNot} onChange={e=>setSiparisNot(e.target.value)} placeholder="Not eklemek isterseniz (opsiyonel)..."
-                  style={{ width:"100%", minHeight:110, background:"rgba(var(--voverlay-rgb),0.07)", border:"none", borderRadius:11, padding:"11px 13px", color:"var(--vt1)", fontSize:13, outline:"none", resize:"vertical", fontFamily:"inherit", marginBottom:16 }}/>
-                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", margin:"0 2px 12px", fontSize:14, color:"var(--vt2)" }}>
-                  <span>{seciliModeller.reduce((t,m)=>t+satirAdet(m),0)} {ce("adet")} · {ce("liste_gram")} · {aktifAyar.replace("K"," Ayar")}</span>
-                  <span style={{ fontSize:18, fontWeight:700, color:"var(--vt1)" }}>{listeGram().toFixed(2)} g</span>
-                </div>
-                {siparisHata && <div style={{ fontSize:12, color:"#e85a4f", marginBottom:10 }}>{siparisHata}</div>}
-                <button disabled={siparisGonderiliyor} onClick={siparisGonder}
-                  style={{ width:"100%", background: siparisGonderiliyor?"rgba(var(--voverlay-rgb),0.15)":"var(--vurgu)", border:"none", borderRadius:11, padding:"14px", color:"#1d1d1f", fontSize:15, fontWeight:600, cursor: siparisGonderiliyor?"default":"pointer" }}>
-                  {siparisGonderiliyor ? ce("gonderiliyor") : ce("siparisi_gonder")}
-                </button>
-               </div>
+                  </div>
+                  );
+                })}
               </div>
-            )}
-          </div>
+
+              {/* Genel not */}
+              <textarea value={siparisNot} onChange={e=>setSiparisNot(e.target.value)} placeholder={ce("siparis_notu")}
+                style={{ ...kutu, width:"100%", minHeight:84, borderRadius:12, padding:"12px 14px", resize:"vertical", marginTop:14 }}/>
+            </div>
+            );
+          })()}
+          {/* Alt çubuk — toplam + gönder */}
+          {!siparisBasarili && (
+            <div style={{ position:"fixed", left:0, right:0, bottom:0, zIndex:6, background:"var(--vcard)", borderTop:"1px solid rgba(var(--voverlay-rgb),0.12)", padding:"12px 20px", display:"flex", alignItems:"center", gap:16, flexWrap:"wrap", justifyContent:"flex-end" }}>
+              {siparisHata && <div style={{ flex:"1 1 260px", fontSize:12, color:"#e85a4f" }}>{siparisHata}</div>}
+              <div style={{ fontSize:13, color:"var(--vt2)" }}>{seciliModeller.reduce((t,m)=>t+satirAdet(m),0)} {ce("adet")} · {ce("liste_gram")} · {aktifAyar.replace("K"," Ayar")}</div>
+              <div style={{ fontSize:20, fontWeight:700 }}>{listeGram().toFixed(2)} g</div>
+              <button disabled={siparisGonderiliyor} onClick={siparisGonder}
+                style={{ background: siparisGonderiliyor?"rgba(var(--voverlay-rgb),0.15)":"var(--vurgu)", border:"none", borderRadius:11, padding:"13px 34px", color:"#1d1d1f", fontSize:15, fontWeight:700, cursor: siparisGonderiliyor?"default":"pointer" }}>
+                {siparisGonderiliyor ? ce("gonderiliyor") : ce("siparisi_gonder")}
+              </button>
+            </div>
+          )}
         </div>
       )}
 
