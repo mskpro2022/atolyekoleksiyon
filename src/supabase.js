@@ -700,6 +700,14 @@ export async function siparisIptalGuvenli(kod, onek, id) {
     return data || { basarili: false }
   } catch (e) { console.error('siparisIptalGuvenli:', e.message); return { basarili: false } }
 }
+// Müşteri, iptal/red edilmiş siparişi kendi listesinden kaldırır (kayıt sende kalır, sadece müşteriye gizlenir)
+export async function siparisMusteriGizleGuvenli(kod, onek, id) {
+  try {
+    const { data, error } = await supabase.rpc('siparis_musteri_gizle', { p_kod: kod, p_onek: onek, p_id: id })
+    if (error) { console.error('siparisMusteriGizleGuvenli:', error.message); return { basarili: false } }
+    return data || { basarili: false }
+  } catch (e) { console.error('siparisMusteriGizleGuvenli:', e.message); return { basarili: false } }
+}
 // Vitrin aktivite kaydı — sunucu tarafında müşteri kodu doğrulanır
 export async function vitrinAktiviteKaydetGuvenli(kod, onek, eylem, koleksiyon, modelKod, modelAd, cihazId, cihazBilgi) {
   try {
