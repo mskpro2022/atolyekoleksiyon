@@ -1,4 +1,4 @@
-import { supabase, dbLoad, dbSave, fotoYukleStorage, vektorDosyaOku, vektorDosyaYaz, yedekKaydet, siparisYedekKaydet, siparisYedekListesi, siparisYedekGetir, yedekListesi, yedekGetir, bugunYedekVarMi, tabloModelleriSenkron, tabloModelleriToplu, tabloModelSil, tabloSiparisleriSenkron, tabloSiparisleriToplu, tabloMusterileriYaz, akilliModelOku, akilliSiparisOku, akilliMusteriOku, islemKaydet, islemGecmisiGetir, realtimeBaslat, tabloKoleksiyonlariYaz, tabloKasaYaz, akilliKoleksiyonOku, akilliKasaOku, tabloKoleksiyonlariOku, tabloKasaOku, saglikDenetimi, ekranSunucuFarki, toptanciKaydet, toptancilariGetir, toptanciSil, vitrinGecmisiGetir, vitrinEnCokBakilan, vitrinOzetGetir, vitrinAnaliz, vitrinGetirGuvenli, siparisOlusturGuvenli, vitrinAktiviteKaydetGuvenli, vitrinSupheliCihazlar, vitrinCevrimiciMusteriler, radarTrendleriOku, radarKaynaklariOku, radarKanitlariOku, radarTumKanitlariOku, radarTrendGuncelle, radarTrendSil, radarManuelKanitEkle } from "./supabase.js";
+import { supabase, dbLoad, dbSave, fotoYukleStorage, yedekKaydet, yedekListesi, yedekGetir, bugunYedekVarMi, tabloModelleriSenkron, tabloModelleriToplu, tabloModelSil, tabloSiparisleriSenkron, tabloSiparisleriToplu, tabloMusterileriYaz, akilliModelOku, akilliSiparisOku, akilliMusteriOku, islemKaydet, islemGecmisiGetir, realtimeBaslat, tabloKoleksiyonlariYaz, tabloKasaYaz, akilliKoleksiyonOku, akilliKasaOku, tabloKoleksiyonlariOku, tabloKasaOku, saglikDenetimi, ekranSunucuFarki, toptanciKaydet, toptancilariGetir, toptanciSil, vitrinGecmisiGetir, vitrinEnCokBakilan, vitrinOzetGetir, vitrinAnaliz, vitrinGetirGuvenli, siparisOlusturGuvenli, vitrinAktiviteKaydetGuvenli, vitrinSupheliCihazlar, vitrinCevrimiciMusteriler, radarTrendleriOku, radarKaynaklariOku, radarKanitlariOku, radarTumKanitlariOku, radarTrendGuncelle, radarTrendSil, radarManuelKanitEkle } from "./supabase.js";
 import { useState, useEffect, useCallback, useMemo, useRef, Fragment } from "react";
 
 const uid = () => "x" + Date.now() + Math.random().toString(36).substr(2, 5);
@@ -25,9 +25,6 @@ if (typeof document !== "undefined" && !document.getElementById("atolye-global-r
 
 const fHas = (n) => (Number(n) || 0).toFixed(4) + " has";
 const fUSD = (p) => "$" + (Number(p) || 0).toFixed(2);
-// İşaretli gösterim: negatifte "−" (zarar), pozitifte "+" — milyem altı satışlarda eksi görünsün
-const fIsr = (v, d) => { const n = Number(v) || 0; return (n < 0 ? "−" : "+") + Math.abs(n).toFixed(d == null ? 2 : d); };
-const fUSDi = (p) => { const n = Number(p) || 0; return (n < 0 ? "−$" : "$") + Math.abs(n).toFixed(2); };
 const fN = (n, d) => (Number(n) || 0).toFixed(d || 3);
 
 const AYARLAR = [
@@ -47,46 +44,13 @@ const DURUMLAR = [
   { id: "mum_tas",    l: "Muma Tas",      c: "#f59e0b", s: 2 },
   { id: "dokum",      l: "Dokumde",       c: "#e8833a", s: 3 },
   { id: "tezgah",     l: "Tezgahta",      c: "#5b9bd5", s: 4 },
-  { id: "cila",       l: "Cilada",        c: "#d4af37", s: 5 },
+  { id: "cila",       l: "Cilada",        c: "var(--vurgu)", s: 5 },
   { id: "tas_dus",    l: "Tas Dusuk",     c: "#c27ba0", s: 6 },
   { id: "kalite",     l: "Kalite",        c: "#9b59b6", s: 7 },
-  { id: "tamam",      l: "Teslime Hazir", c: "#6abf69", s: 8 },
-  { id: "teslim",     l: "Teslim Edildi", c: "#2ecc71", s: 9 },
+  { id: "tamam",      l: "Tamamlandi",    c: "#6abf69", s: 8 },
+  { id: "teslim",     l: "Teslime Hazir", c: "#2ecc71", s: 9 },
   { id: "hurda",      l: "Hurda",         c: "#e85a4f", s: -1 },
 ];
-
-
-// ── CİLA ALT ADIMLARI: Cila aşamasının içinde ürün başına zımpara → tambur → tüy finiş (sp.kalemCila[kalemId]) ──
-const CILA_ADIMLARI = [{ id: "zimpara", l: "Zımpara" }, { id: "tambur", l: "Tambur" }, { id: "tuy", l: "Tüy finiş" }];
-function cilaOzet(sp, kalemDurumlar) {
-  const say = { zimpara: 0, tambur: 0, tuy: 0 };
-  (sp.kalemler || []).forEach(k => {
-    if (((kalemDurumlar || {})[k.id] || k.durum || "baslanmadi") !== "cila") return;
-    say[((sp.kalemCila || {})[k.id]) || "zimpara"]++;
-  });
-  return say;
-}
-
-// ── ÜRETİM ZORLUĞU: teslimde ürün başına 1-5 puan + sebep etiketi (kalem.zorluk, kalem.zorlukEtiket) ──
-const ZORLUK_ADLARI = { 1: "Çok kolay", 2: "Kolay", 3: "Orta", 4: "Zor", 5: "Çok zor" };
-const ZORLUK_RENK = { 1: "#6abf69", 2: "#9bcf69", 3: "#e8b04f", 4: "#e8833a", 5: "#e85a4f" };
-const ZORLUK_ETIKETLERI = ["Taş dizimi zor", "Döküm hatası", "Tekrar yapıldı", "Kalıp / mum sorunu", "Lehim / montaj zor", "Cila / tezgah zor", "Ölçü / boy sorunu", "Taş uyumsuzluğu", "Müşteri değişikliği", "Gecikti"];
-// siparişlerden kod → { ort, say, etiketler:{sebep:adet}, son }
-function zorlukOzetle(siparisler) {
-  const h = new Map();
-  (siparisler || []).forEach(sp => (sp.kalemler || []).forEach(k => {
-    const z = Number(k.zorluk);
-    if (!(z >= 1 && z <= 5)) return;
-    const kod = String(k.kod || "").toUpperCase();
-    if (!kod) return;
-    let e = h.get(kod);
-    if (!e) { e = { toplam: 0, say: 0, etiketler: {}, son: 0, ort: 0 }; h.set(kod, e); }
-    e.toplam += z; e.say += 1; e.ort = e.toplam / e.say;
-    (k.zorlukEtiket || []).forEach(t => { e.etiketler[t] = (e.etiketler[t] || 0) + 1; });
-    e.son = Math.max(e.son, k.zorlukTarih || 0);
-  }));
-  return h;
-}
 
 const MIN_KAR = 0.05;
 const MIN_MLY = 0.020; // milyem/gr — bu altındaki modeller düşük karlı sayılır
@@ -188,15 +152,6 @@ const KATEGORILER = [
   { id: "set",      l: "Set" },
   { id: "diger",    l: "Diger" },
 ];
-
-const TIP_ETIKET = { yuzuk:"Yüzük", kolye:"Kolye", kupe:"Küpe", bilezik:"Bilezik", bileklik:"Bileklik", pendant:"Pendant", set:"Set", diger:"" };
-function tipEtiket(kat) {
-  const k = String(kat||"").trim();
-  if (!k) return "";
-  const key = k.toLowerCase().replace(/ü/g,"u").replace(/ı/g,"i").replace(/ö/g,"o").replace(/ş/g,"s").replace(/ç/g,"c").replace(/ğ/g,"g");
-  if (key in TIP_ETIKET) return TIP_ETIKET[key];
-  return k.charAt(0).toUpperCase()+k.slice(1);
-}
 
 function gramDonustur(refGram, refAyar, hedefAyar, tasGram) {
   if (refAyar === hedefAyar) return refGram;
@@ -334,112 +289,6 @@ function hesapla(m, secilenAyar, altinKgUSD, varsayilanMly) {
   };
 }
 
-// ═══ ÇİZİMDE: katalogda olmayan, çizilecek ürünler sadece "çizimde" aşamasıyla başlar; diğerleri çizimi atlar ═══
-function sonrakiAsama(curId, sp) {
-  const i = DURUMLAR.findIndex(d => d.id === curId);
-  let n = DURUMLAR[i + 1];
-  if (n && n.id === "hurda") return null;
-  if (n && n.id === "cizimde" && !(sp.kalemler || []).some(k => k.cizimde)) n = DURUMLAR[i + 2];
-  return n && n.id !== "hurda" ? n : null;
-}
-// Toplu ilerletme: hurdaya dokunmaz; çizimi süren (cizimde işaretli) ürünler tek tek ilerletilir
-function topluIlerlet(sp, hedef) {
-  const kd = sp.kalemDurumlar || {};
-  return Object.fromEntries((sp.kalemler || []).map(k => {
-    const c = kd[k.id] || k.durum || "baslanmadi";
-    if (c === "hurda") return [k.id, "hurda"];
-    if (k.cizimde && c === "cizimde" && hedef !== "cizimde") return [k.id, c];
-    return [k.id, hedef];
-  }));
-}
-// Çıkış süresi: teslim edilmiş siparişlerin (işleme alma → teslim) süresi ve gramından öğrenilir; veri azsa varsayılan kural
-function tahminiSureModeli(siparisler) {
-  const v = [];
-  (siparisler || []).forEach(sp => {
-    const g = sp.durumGecmisi || []; const son = g[g.length - 1];
-    if (!g.length || !son || son.durum !== "teslim") return;
-    const gun = (son.tarih - g[0].tarih) / 864e5;
-    if (!(gun > 0.5) || gun > 400) return;
-    const gram = sipKarOzet(sp, sp.kalemDurumlar).gram;
-    if (gram > 0) v.push([gram, gun]);
-  });
-  if (v.length >= 3) {
-    const n = v.length, sx = v.reduce((a, x) => a + x[0], 0), sy = v.reduce((a, x) => a + x[1], 0);
-    const sxx = v.reduce((a, x) => a + x[0] * x[0], 0), sxy = v.reduce((a, x) => a + x[0] * x[1], 0);
-    const den = n * sxx - sx * sx;
-    let b = den > 1e-9 ? (n * sxy - sx * sy) / den : 0, a = (sy - b * sx) / n;
-    if (b < 0) { b = 0; a = sy / n; }
-    return { a: Math.max(1, a), b, n, kaynak: n + " teslimden" };
-  }
-  return { a: 7, b: 0.01, n: v.length, kaynak: "varsayılan kural" };
-}
-
-// ═══ SİPARİŞ KARTI ÖZETİ: gram, taştan/işçilikten kâr (has), toplam kâr, 1 gr kârı, ilerleme, teslim ═══
-// Taştan = taş gramı × ayar oranı (taş milyemden satılır). İşçilikten = işçilik has − maden maliyeti − ek maliyet (zarar olabilir).
-// Hurda/iade/tamir adetleri hesaba katılmaz (siparişin üstündeki mevcut kâr hesabıyla aynı).
-// Sipariş listesi özeti: sipariş/adet/gram + ayar bazlı kırılım (ayarF doluysa yalnız o ayarın kalemleri sayılır)
-function sipListeOzet(list, ayarF) {
-  const o = { sip: list.length, adet: 0, gram: 0, tasGr: 0, tasHas: 0, tasUSD: 0, karUSD: 0, ayar: {}, musteri: new Set() };
-  list.forEach(s => {
-    o.musteri.add(s.musKod || s.musteri || "?");
-    const hasUSD = (s.altinKgUSD || 0) / 1000;
-    (s.kalemler || []).forEach(k => {
-      const ay = k.secilenAyar || k.refAyar || "14K";
-      if (ayarF && ay !== ayarF) return;
-      const hc = hesapla(k, ay, s.altinKgUSD, s.mc);
-      const du = ((s.kalemHurda) || {})[k.id] || 0, ia = ((s.kalemIade) || {})[k.id] || 0, ta = ((s.kalemTamir) || {})[k.id] || 0;
-      const net = Math.max(0, (k.adet || 1) - du - ia - ta);
-      const g = hc.mamulGram * net;
-      o.adet += net; o.gram += g;
-      o.tasGr += (Number(k.tasGram) || 0) * net;
-      if (!k.numune) { o.karUSD += hc.karHas * net * hasUSD; o.tasHas += hc.tasHas * net; o.tasUSD += hc.tasHas * net * hasUSD; }
-      const e = o.ayar[ay] || (o.ayar[ay] = { adet: 0, gram: 0, tasGr: 0, tasHas: 0, isc: 0, mal: 0, kar: 0, karGram: 0 });
-      e.adet += net; e.gram += g;
-      e.tasGr += (Number(k.tasGram) || 0) * net;
-      if (!k.numune) { e.tasHas += hc.tasHas * net; e.isc += hc.iscilikHas * net; e.mal += hc.topMaliyetHas * net; e.kar += hc.karHas * net; e.karGram += g; }
-    });
-  });
-  return o;
-}
-
-// Sipariş kodu: elle girilen / kayıtlı siparisNo; yoksa müşteri koduna göre otomatik (MUS-003-002 = o müşterinin 2. siparişi)
-function sipKodu(s, tumu) {
-  if (s.siparisNo) return s.siparisNo;
-  const ayni = (tumu || []).filter(x => (x.musKod || x.musteri) === (s.musKod || s.musteri)).sort((a, b) => (a.tarih || 0) - (b.tarih || 0));
-  const i = ayni.findIndex(x => x.id === s.id);
-  return (s.musKod || "SIP") + "-" + String((i < 0 ? ayni.length : i) + 1).padStart(3, "0");
-}
-// Birebir aynı içerik imzası: aynı modeller + foto + adet + ayar + kalem notları + sipariş açıklaması
-function sipImza(kalemler, aciklama) {
-  const parca = (kalemler || []).map(k => [k.id || k.kod || "", String(k.foto || "").length + ":" + String(k.foto || "").slice(-40), k.adet || 1, k.secilenAyar || k.refAyar || "", (k.renk || ""), (k.sipNot || "").trim().toLowerCase()].join("|")).sort();
-  return parca.join("§") + "§§" + (aciklama || "").trim().toLowerCase();
-}
-
-function sipKarOzet(s, kalemDurumlar) {
-  let gumusBorc = 0, gram = 0, karGram = 0, tasHas = 0, tasGr = 0, iscNet = 0, iscBrut = 0, maliyetHas = 0, karHas = 0, ilSum = 0, ilN = 0, bitenN = 0;
-  (s.kalemler || []).forEach(k => {
-    const hc = hesapla(k, k.secilenAyar || k.refAyar, s.altinKgUSD, s.mc);
-    const du = ((s.kalemHurda) || {})[k.id] || 0, ia = ((s.kalemIade) || {})[k.id] || 0, ta = ((s.kalemTamir) || {})[k.id] || 0;
-    const net = Math.max(0, (k.adet || 1) - du - ia - ta);
-    gram += hc.mamulGram * net;
-    if (k.numune && (k.secilenAyar || k.refAyar) === "925") gumusBorc += hc.mamulGram * net; // müşteri gümüşü geri verecek
-    if (!k.numune) { karGram += hc.mamulGram * net; tasHas += hc.tasHas * net; tasGr += (Number(k.tasGram) || 0) * net; iscNet += (hc.iscilikHas - hc.topMaliyetHas) * net; iscBrut += hc.iscilikHas * net; maliyetHas += hc.topMaliyetHas * net; karHas += hc.karHas * (k.numune?0:1) * net; } // numune kâr hesabına girmez
-    const d = (kalemDurumlar || {})[k.id] || k.durum || "baslanmadi";
-    if (d !== "hurda") { const o = DURUMLAR.find(x => x.id === d); ilSum += Math.max(0, o ? o.s : 0) / 9; ilN++; if (d === "tamam" || d === "teslim") bitenN++; }
-  });
-  const hasUSD = (s.altinKgUSD || 0) / 1000;
-  const il = ilN ? ilSum / ilN : 0;
-  const bitti = ilN > 0 && bitenN === ilN;
-  const tesMs = s.teslimTarihi ? new Date(s.teslimTarihi).getTime() : 0;
-  const bugun0 = new Date(); bugun0.setHours(0, 0, 0, 0);
-  const gun = tesMs ? Math.round((tesMs - Date.now()) / 864e5) : null;
-  return {
-    gram, tasHas, tasGr, iscNet, iscBrut, maliyetHas, karHas, karUSD: karHas * hasUSD,
-    mlyGr: karGram > 0 ? karHas / karGram : 0, usdGr: karGram > 0 ? karHas * hasUSD / karGram : 0, karGram, gumusBorc,
-    il, hue: Math.round(il * 120), bitti, gun, gec: !!tesMs && tesMs < bugun0.getTime() && !bitti,
-  };
-}
-
 // ═══ 14K KÂRINI KORUYAN HEDEF FİYAT ═══
 // madenCarpan = MALİYET milyemi. Kâr = gelirHas(taş+işçilik) - maliyetHas.
 // Taşlı üründe düşük ayarda taş has değer kaybeder → aynı kârı korumak için
@@ -506,11 +355,6 @@ function sirketAnahtar(k) {
 async function ld(k, f) { try { const r = await dbLoad(sirketAnahtar(k), f); return r ?? f; } catch { return f; } }
 async function sv(k, d) { try { await dbSave(sirketAnahtar(k), d); } catch(e) { console.error("sv error:", e); } }
 
-// "Arka planı temiz" fotoğraflar (PNG saydam yüklendi / yapay zekâyla silindi / zemin eşitlendi): kart sol üstte yeşil nokta.
-// Aynı fotoğraf verisi (string) küme içindeyse temiz sayılır; çevir/zoom/kırp yeni veriyi de kümeye taşır, geri al doğal olarak çalışır.
-const _temizFotolar = new Set();
-let _sonYuklemeSaydam = false;
-const fotoTemizTasi = (eski, yeni) => { if (eski && yeni && _temizFotolar.has(eski)) _temizFotolar.add(yeni); };
 function resizeImg(file) {
   return new Promise(resolve => {
     const rd = new FileReader();
@@ -525,14 +369,6 @@ function resizeImg(file) {
         const ctx = c.getContext("2d");
         ctx.imageSmoothingEnabled = true;
         ctx.imageSmoothingQuality = "high";
-        try { // PNG'de saydam alan var mı? küçültülmüş kopyada alfa kontrolü
-          const k = document.createElement("canvas"); k.width = 64; k.height = 64;
-          const kc = k.getContext("2d"); kc.drawImage(img, 0, 0, 64, 64);
-          const kd = kc.getImageData(0, 0, 64, 64).data; let say = 0;
-          for (let i = 3; i < kd.length; i += 4) if (kd[i] < 200) say++;
-          _sonYuklemeSaydam = say > 64 * 64 * 0.02;
-        } catch (er) { _sonYuklemeSaydam = false; }
-        ctx.fillStyle = "#f3f3f3"; ctx.fillRect(0, 0, w, h); // saydam (PNG) alanlar standart zemin rengiyle dolsun — JPEG'te siyaha dönmesin
         ctx.drawImage(img, 0, 0, w, h);
         resolve(c.toDataURL("image/jpeg", 0.94));
       };
@@ -541,256 +377,6 @@ function resizeImg(file) {
     rd.readAsDataURL(file);
   });
 }
-
-// Fotoğrafı soldan sağa aynalar (yatay flip). URL ya da data-URL alır, yüksek kaliteli JPEG data-URL döner.
-async function resimDonustur(src, flip, zoom) {
-  let kaynak = src;
-  if (!String(src).startsWith("data:")) {
-    const r = await fetch(src, { mode: "cors", cache: "no-store" });
-    if (!r.ok) throw new Error("foto okunamadı");
-    kaynak = URL.createObjectURL(await r.blob());
-  }
-  const img = await new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = () => rej(new Error("foto açılamadı")); im.src = kaynak; });
-  const nw = img.naturalWidth, nh = img.naturalHeight, z = zoom || 1;
-  // Yakınlaştırma/uzaklaştırma = tuvali küçültüp/büyütmek (merkezden kırp/genişlet). Piksel ÖLÇEKLENMEZ → bulanıklaşma yok.
-  const W = Math.max(1, Math.round(nw / z)), H = Math.max(1, Math.round(nh / z));
-  const ox = Math.round((W - nw) / 2), oy = Math.round((H - nh) / 2);
-  const c = document.createElement("canvas"); c.width = W; c.height = H;
-  const ctx = c.getContext("2d");
-  if (z < 1) { // uzaklaştır: kenar rengiyle (sol-üst köşe örneği) doldur
-    const t = document.createElement("canvas"); t.width = 1; t.height = 1;
-    const tc = t.getContext("2d"); tc.drawImage(img, 0, 0, 4, 4, 0, 0, 1, 1);
-    const [r, g, b] = tc.getImageData(0, 0, 1, 1).data;
-    ctx.fillStyle = "rgb(" + r + "," + g + "," + b + ")"; ctx.fillRect(0, 0, W, H);
-  }
-  if (flip) { ctx.translate(W, 0); ctx.scale(-1, 1); }
-  ctx.drawImage(img, ox, oy);
-  if (kaynak !== src) URL.revokeObjectURL(kaynak);
-  return c.toDataURL("image/jpeg", 0.97);
-}
-// Her işlem ORİJİNAL fotoğraftan tek seferde yapılır (üst üste sıkıştırma yok): son sonuç hatırlanır, sonraki adım orijinale uygulanır.
-let _fotoGecmis = null;
-const fotoCevirIsle = async (fFoto, setFFoto, fDetayNoktalari, setFDetayNoktalari, mod) => {
-  try {
-    fotoGeriKaydet(fFoto, fDetayNoktalari);
-    const adimFlip = !mod || mod === "flip";
-    const adimZ = mod === "in" ? 1.05 : mod === "out" ? 1 / 1.05 : 1;
-    const devam = _fotoGecmis && _fotoGecmis.son === fFoto;
-    const orj = devam ? _fotoGecmis.orj : fFoto;
-    const flipToplam = adimFlip ? !(devam ? _fotoGecmis.flip : false) : (devam ? _fotoGecmis.flip : false);
-    const zToplam = Math.round((devam ? _fotoGecmis.z : 1) * adimZ * 1e6) / 1e6;
-    const yeni = await resimDonustur(orj, flipToplam, Math.abs(zToplam - 1) < 1e-4 ? 1 : zToplam);
-    _fotoGecmis = { orj, son: yeni, flip: flipToplam, z: zToplam };
-    fotoTemizTasi(fFoto, yeni);
-    setFFoto(yeni);
-    // kırpma tipi detay noktaları foto üzerinde durduğu için aynı dönüşümü izler
-    if (Array.isArray(fDetayNoktalari) && fDetayNoktalari.length) setFDetayNoktalari(fDetayNoktalari.map(n => {
-      if (n.tip === "foto") return n;
-      let cx = n.cx == null ? 0.5 : n.cx, cy = n.cy == null ? 0.5 : n.cy;
-      if (adimFlip) cx = 1 - cx;
-      cx = Math.min(1, Math.max(0, 0.5 + (cx - 0.5) * adimZ)); cy = Math.min(1, Math.max(0, 0.5 + (cy - 0.5) * adimZ));
-      return { ...n, cx, cy };
-    }));
-    return true;
-  } catch (e) { console.error(e); return false; }
-};
-
-// ═══ ZEMİN EŞİTLE: fotoğrafın düz, açık, nötr zeminini tam #f3f3f3 yapar (mücevher/yansımalara dokunmaz) ═══
-// d: RGBA Uint8ClampedArray. Dönüş: { oran } (değiştirilen zemin oranı) veya null (düz zemin bulunamadı).
-function zeminEsitleVeri(d, w, h, hedef) {
-  const T = hedef || 243, N = w * h;
-  // 1) kenar piksellerinin ortancası = zemin rengi
-  const kenar = [[], [], []];
-  const kal = Math.max(1, Math.round(Math.min(w, h) * 0.015));
-  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
-    if (x >= kal && x < w - kal && y >= kal && y < h - kal) { x = w - kal - 1; continue; }
-    const i = (y * w + x) * 4; kenar[0].push(d[i]); kenar[1].push(d[i + 1]); kenar[2].push(d[i + 2]);
-  }
-  const med = a => { a.sort((p, q) => p - q); return a[a.length >> 1]; };
-  const bg = [med(kenar[0]), med(kenar[1]), med(kenar[2])];
-  if (Math.min(bg[0], bg[1], bg[2]) < 200 || Math.max(bg[0], bg[1], bg[2]) - Math.min(bg[0], bg[1], bg[2]) > 12) return null; // açık ve nötr zemin değil
-  const yakin = (i, tol) => Math.abs(d[i] - bg[0]) <= tol && Math.abs(d[i + 1] - bg[1]) <= tol && Math.abs(d[i + 2] - bg[2]) <= tol && Math.max(d[i], d[i + 1], d[i + 2]) - Math.min(d[i], d[i + 1], d[i + 2]) <= 7;
-  const adim = (i, j) => Math.abs(d[i] - d[j]) <= 3 && Math.abs(d[i + 1] - d[j + 1]) <= 3 && Math.abs(d[i + 2] - d[j + 2]) <= 3;
-  const mask = new Uint8Array(N), seen = new Uint8Array(N), stack = new Int32Array(N);
-  const komsu = [1, -1, w, -w];
-  const doldur = (baslangic, tol, comp) => {
-    let sp = 0; stack[sp++] = baslangic; seen[baslangic] = 1;
-    while (sp > 0) {
-      const p = stack[--sp]; comp.push(p);
-      const x = p % w;
-      for (let k = 0; k < 4; k++) {
-        const q = p + komsu[k];
-        if (q < 0 || q >= N) continue;
-        if (k === 0 && x === w - 1) continue; if (k === 1 && x === 0) continue;
-        if (seen[q]) continue;
-        const qi = q * 4, pi = p * 4;
-        if (yakin(qi, tol) && adim(pi, qi)) { seen[q] = 1; stack[sp++] = q; }
-      }
-    }
-  };
-  // 2) kenardan erişilen düz zemin (tolerans geniş: vinyet/yumuşak kenar dahil)
-  for (let x = 0; x < w; x++) for (const y of [0, h - 1]) { const p = y * w + x; if (!seen[p] && yakin(p * 4, 16)) { const c = []; doldur(p, 16, c); for (const q of c) mask[q] = 1; } }
-  for (let y = 0; y < h; y++) for (const x of [0, w - 1]) { const p = y * w + x; if (!seen[p] && yakin(p * 4, 16)) { const c = []; doldur(p, 16, c); for (const q of c) mask[q] = 1; } }
-  // 3) kapalı iç boşluklar (halka içi vb.): yeterince büyük düz zemin parçaları
-  const MIN = Math.max(1500, Math.round(N * 0.0012));
-  for (let p = 0; p < N; p++) {
-    if (seen[p] || !yakin(p * 4, 8)) continue;
-    const c = []; doldur(p, 8, c);
-    if (c.length >= MIN) for (const q of c) mask[q] = 1;
-  }
-  let say = 0; for (let p = 0; p < N; p++) if (mask[p]) say++;
-  if (say < N * 0.03) return null;
-  // 4) zemin pikselleri = hedef; ürünün kenarındaki 3 piksellik halka zemine yakınlığa göre yumuşakça kaydırılır (hale olmasın)
-  const dist = new Int8Array(N); // 0: zemin, 1..3: halka, -1: diğer
-  const kuyruk = new Int32Array(N); let bas = 0, son = 0;
-  for (let p = 0; p < N; p++) { if (mask[p]) { dist[p] = 0; kuyruk[son++] = p; } else dist[p] = -1; }
-  while (bas < son) {
-    const p = kuyruk[bas++]; if (dist[p] >= 3) continue; const x = p % w;
-    for (let k = 0; k < 4; k++) { const q = p + komsu[k]; if (q < 0 || q >= N) continue; if (k === 0 && x === w - 1) continue; if (k === 1 && x === 0) continue; if (dist[q] === -1) { dist[q] = dist[p] + 1; kuyruk[son++] = q; } }
-  }
-  for (let p = 0; p < N; p++) {
-    const i = p * 4;
-    if (dist[p] === 0) { d[i] = T; d[i + 1] = T; d[i + 2] = T; }
-    else if (dist[p] > 0) {
-      const fark = Math.max(Math.abs(d[i] - bg[0]), Math.abs(d[i + 1] - bg[1]), Math.abs(d[i + 2] - bg[2]));
-      const wgt = Math.max(0, 1 - fark / 80) * (1 - (dist[p] - 1) / 3);
-      for (let c = 0; c < 3; c++) d[i + c] = Math.max(0, Math.min(255, Math.round(d[i + c] + (T - bg[c]) * wgt)));
-    }
-  }
-  return { oran: say / N };
-}
-async function resimZeminEsitle(src) {
-  let kaynak = src;
-  if (!String(src).startsWith("data:")) {
-    const r = await fetch(src, { mode: "cors", cache: "no-store" });
-    if (!r.ok) throw new Error("foto okunamadı");
-    kaynak = URL.createObjectURL(await r.blob());
-  }
-  const img = await new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = () => rej(new Error("foto açılamadı")); im.src = kaynak; });
-  const c = document.createElement("canvas"); c.width = img.naturalWidth; c.height = img.naturalHeight;
-  const ctx = c.getContext("2d"); ctx.fillStyle = "#f3f3f3"; ctx.fillRect(0, 0, c.width, c.height); ctx.drawImage(img, 0, 0);
-  if (kaynak !== src) URL.revokeObjectURL(kaynak);
-  const id = ctx.getImageData(0, 0, c.width, c.height);
-  const sonuc = zeminEsitleVeri(id.data, c.width, c.height, 243);
-  if (!sonuc) return null;
-  ctx.putImageData(id, 0, 0);
-  return c.toDataURL("image/jpeg", 0.97);
-}
-const fotoZeminIsle = async (fFoto, setFFoto) => {
-  try {
-    const yeni = await resimZeminEsitle(fFoto);
-    if (!yeni) return "yok";
-    fotoGeriKaydet(fFoto, null);
-    _fotoGecmis = null; // yeni taban: sonraki çevir/zoom bu fotoğraftan devam eder
-    _temizFotolar.add(yeni);
-    setFFoto(yeni);
-    return "ok";
-  } catch (e) { console.error(e); return "hata"; }
-};
-// ── GERİ AL: foto işlemlerinden önceki hal bellekte tutulur (kaydedilene kadar hiçbir şeye dokunulmaz) ──
-const _fotoUndo = [];
-const fotoGeriKaydet = (foto, noktalar) => { _fotoUndo.push({ foto, noktalar: noktalar == null ? null : noktalar }); if (_fotoUndo.length > 6) _fotoUndo.shift(); };
-const fotoGeriSifirla = () => { _fotoUndo.length = 0; _fotoGecmis = null; };
-const fotoGeriAl = (setFFoto, setFDetayNoktalari) => {
-  const son = _fotoUndo.pop(); if (!son) return false;
-  _fotoGecmis = null; setFFoto(son.foto);
-  if (son.noktalar) setFDetayNoktalari(son.noktalar);
-  return true;
-};
-// ── YAPAY ZEKÂ ARKA PLAN SİLME (tarayıcıda çalışan hazır model; ilk kullanımda model iner) ──
-let _imglyModul = null;
-let _aiCihaz = "gpu"; // önce ekran kartı (WebGPU) denenir; olmazsa kendiliğinden işlemciye (cpu) düşer
-async function aiModulYukle() {
-  if (!_imglyModul) {
-    try { _imglyModul = await import(/* @vite-ignore */ "https://esm.sh/@imgly/background-removal@1.5.8"); }
-    catch (e) { throw new Error("Yapay zekâ modülü yüklenemedi (internet bağlantısı?)"); }
-  }
-  return _imglyModul;
-}
-// Daha önce kullanıldıysa model arka planda önceden indirilir/ısıtılır — butona basınca bekleme kalmaz
-function arkaPlanOnYukle() {
-  aiModulYukle().then(m => { try { if (m.preload) return m.preload({ model: "isnet_fp16", device: _aiCihaz }); } catch (e) {} }).catch(() => {});
-}
-let _koruMaske = null; // { foto, canvas } — "🖌 İşaretle" ile korunacak bölgeler; sadece o fotoğraf için geçerli
-async function arkaPlanSilAI(src, ilerle, golge, koru) {
-  await aiModulYukle();
-  const fn = _imglyModul.removeBackground || (_imglyModul.default && _imglyModul.default.removeBackground) || _imglyModul.default;
-  const blob = await (await fetch(src, { mode: "cors", cache: "no-store" })).blob();
-  const secenek = (cihaz) => ({ model: "isnet_fp16", device: cihaz, output: { format: "image/png", type: "foreground" }, progress: (k, c, t) => { if (ilerle) ilerle(k, c, t); } });
-  let out;
-  try { out = await fn(blob, secenek(_aiCihaz)); }
-  catch (e) { if (_aiCihaz === "gpu") { console.warn("GPU ile olmadı, işlemciye geçiliyor", e); _aiCihaz = "cpu"; out = await fn(blob, secenek("cpu")); } else throw e; }
-  try { localStorage.setItem("aiBg", "1"); } catch (e) {}
-  const url = URL.createObjectURL(out);
-  const img = await new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = () => rej(new Error("sonuç açılamadı")); im.src = url; });
-  const c = document.createElement("canvas"); c.width = img.naturalWidth; c.height = img.naturalHeight;
-  let kaynak = img;
-  if (koru) { // İŞARETLE: kullanıcının fırçayla işaretlediği bölgeler yapay zekâya bırakılmaz, orijinal pikseller aynen korunur (kenarı yumuşak)
-    try {
-      const W = c.width, H = c.height;
-      const orjImg = await new Promise((res, rej) => { const im = new Image(); im.crossOrigin = "anonymous"; im.onload = () => res(im); im.onerror = () => rej(new Error("orijinal açılamadı")); im.src = src; });
-      const kc = document.createElement("canvas"); kc.width = W; kc.height = H;
-      const kx = kc.getContext("2d"); kx.drawImage(img, 0, 0);
-      const kd = kx.getImageData(0, 0, W, H);
-      const oc = document.createElement("canvas"); oc.width = W; oc.height = H;
-      const ox = oc.getContext("2d"); ox.drawImage(orjImg, 0, 0, W, H);
-      const od = ox.getImageData(0, 0, W, H).data;
-      const mc = document.createElement("canvas"); mc.width = W; mc.height = H;
-      const mx = mc.getContext("2d");
-      if ("filter" in mx) mx.filter = "blur(" + Math.max(2, Math.round(W * 0.004)) + "px)"; // yumuşak kenar
-      mx.drawImage(koru, 0, 0, W, H);
-      const md = mx.getImageData(0, 0, W, H).data;
-      const d = kd.data, N = W * H;
-      for (let i = 0; i < N; i++) {
-        const m = md[i * 4 + 3] / 255; if (m <= 0) continue;
-        const ca = d[i * 4 + 3] / 255;                       // yapay zekânın bıraktığı opaklık
-        const oa = m * (1 - ca);                              // orijinalin altta katkısı
-        const na = ca + oa; if (na <= 0) continue;
-        d[i * 4]     = (d[i * 4]     * ca + od[i * 4]     * oa) / na;
-        d[i * 4 + 1] = (d[i * 4 + 1] * ca + od[i * 4 + 1] * oa) / na;
-        d[i * 4 + 2] = (d[i * 4 + 2] * ca + od[i * 4 + 2] * oa) / na;
-        d[i * 4 + 3] = na * 255;
-      }
-      kx.putImageData(kd, 0, 0);
-      kaynak = kc;
-    } catch (e) { console.warn("işaretli bölge uygulanamadı", e); }
-  }
-  const ctx = c.getContext("2d"); ctx.fillStyle = "#f3f3f3"; ctx.fillRect(0, 0, c.width, c.height);
-  if (golge) { // yumuşak yer gölgesi: ürün siluetini siyaha boyayıp yassılaştır, bulanıklaştır, ürünün altına koy
-    try {
-      const W = c.width, H = c.height;
-      const al = document.createElement("canvas"); al.width = W; al.height = H;
-      const ac = al.getContext("2d"); ac.drawImage(kaynak, 0, 0);
-      const d = ac.getImageData(0, 0, W, H).data;
-      let x0 = W, x1 = -1, y0 = H, y1 = -1;
-      for (let y = 0; y < H; y += 2) for (let x = 0; x < W; x += 2) { if (d[(y * W + x) * 4 + 3] > 128) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; } }
-      if (x1 > x0 && y1 > y0) {
-        const bw = x1 - x0, bh = y1 - y0;
-        const sil = document.createElement("canvas"); sil.width = W; sil.height = H;
-        const sc = sil.getContext("2d"); sc.drawImage(kaynak, 0, 0); sc.globalCompositeOperation = "source-in"; sc.fillStyle = "#000"; sc.fillRect(0, 0, W, H);
-        // gölge, ürünün sadece ALT kısmından (zemine en yakın şerit) türetilir: halka nerede yere basıyorsa gölge orada olur
-        const serit = bh * 0.30;                        // alt şerit yüksekliği (kaynak)
-        const yassi = bh * 0.05;                        // gölgenin yüksekliği
-        ctx.save();
-        if ("filter" in ctx) ctx.filter = "blur(" + Math.max(3, Math.round(bw * 0.02)) + "px)";
-        ctx.globalAlpha = 0.16;
-        ctx.drawImage(sil, x0, y1 - serit, bw, serit, x0 + bw * 0.025, y1 - yassi * 0.55, bw, yassi);
-        ctx.restore();
-      }
-    } catch (e) { console.warn("gölge eklenemedi", e); }
-  }
-  ctx.drawImage(kaynak, 0, 0);
-  URL.revokeObjectURL(url);
-  return c.toDataURL("image/jpeg", 0.97);
-}
-const fotoAIIsle = async (fFoto, setFFoto, setDurum, golge, koru) => {
-  try {
-    const yeni = await arkaPlanSilAI(fFoto, (k, c, t) => { setDurum(String(k).indexOf("compute") === 0 ? "Arka plan siliniyor… (10–40 sn sürebilir, bekle)" : (t > 0 && c < t ? "Model indiriliyor… %" + Math.round(c / t * 100) : "İşleniyor…")); }, golge, koru);
-    fotoGeriKaydet(fFoto, null); _fotoGecmis = null; _temizFotolar.add(yeni); _koruMaske = null; setFFoto(yeni);
-    return "ok";
-  } catch (e) { console.error(e); return e && e.message ? e.message : "hata"; }
-};
-const zeminMesaj = (r) => r === "ok" ? "🎨 Zemin #f3f3f3 yapıldı — Kaydet'e basınca kalıcı olur" : r === "yok" ? "Düz, açık bir zemin bulunamadı (zemin gölgeli/renkli olabilir)" : "Foto işlenemedi";
 
 // Bir data-URL fotoğrafın (x,y,w,h) — 0..1 fraksiyon — bölgesini kırpıp aynı kalite standardıyla döndürür
 // Detay lensi için <img> stili — GERÇEK img elemanı + yüzde bazlı width/height/left/top.
@@ -901,63 +487,6 @@ function FotoKirpModal({ src, onConfirm, onCancel }) {
   );
 }
 
-function FotoKoruModal({ src, baslangic, onTamam, onIptal }) {
-  const cvRef = useRef(null);
-  const [fircaBoy, setFircaBoy] = useState(40);
-  const [silgi, setSilgi] = useState(false);
-  const cizim = useRef({ aktif: false, x: 0, y: 0 });
-  const yuklendi = (e) => {
-    const cv = cvRef.current; if (!cv) return;
-    const nw = e.target.naturalWidth || 1000, nh = e.target.naturalHeight || 700;
-    const k = Math.min(1, 1400 / Math.max(nw, nh));
-    cv.width = Math.round(nw * k); cv.height = Math.round(nh * k);
-    if (baslangic) { try { cv.getContext("2d").drawImage(baslangic, 0, 0, cv.width, cv.height); } catch {} }
-  };
-  const nokta = (e) => { const cv = cvRef.current, r = cv.getBoundingClientRect(); return { x: (e.clientX - r.left) * cv.width / r.width, y: (e.clientY - r.top) * cv.height / r.height, k: cv.width / r.width }; };
-  const boya = (a, b, k) => {
-    const cv = cvRef.current, ctx = cv.getContext("2d");
-    ctx.globalCompositeOperation = silgi ? "destination-out" : "source-over";
-    ctx.strokeStyle = "#ff2fa8"; ctx.fillStyle = "#ff2fa8"; ctx.lineCap = "round"; ctx.lineJoin = "round"; ctx.lineWidth = fircaBoy * k;
-    ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
-  };
-  const basla = (e) => { e.preventDefault(); try { e.currentTarget.setPointerCapture(e.pointerId); } catch {} const n = nokta(e); cizim.current = { aktif: true, x: n.x, y: n.y }; boya(n, n, n.k); };
-  const hareket = (e) => { if (!cizim.current.aktif) return; const n = nokta(e); boya(cizim.current, n, n.k); cizim.current.x = n.x; cizim.current.y = n.y; };
-  const birak = () => { cizim.current.aktif = false; };
-  const temizle = () => { const cv = cvRef.current; cv.getContext("2d").clearRect(0, 0, cv.width, cv.height); };
-  const tamam = () => {
-    const cv = cvRef.current;
-    const kucuk = document.createElement("canvas"); kucuk.width = 64; kucuk.height = 64;
-    const kx = kucuk.getContext("2d"); kx.drawImage(cv, 0, 0, 64, 64);
-    const d = kx.getImageData(0, 0, 64, 64).data; let var_ = false;
-    for (let i = 3; i < d.length; i += 4) if (d[i] > 20) { var_ = true; break; }
-    onTamam(var_ ? cv : null);
-  };
-  return (
-    <div onClick={onIptal} style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.85)", zIndex:210, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
-      <div onClick={e=>e.stopPropagation()} style={{ background:"#1c1c1e", borderRadius:16, maxWidth:820, width:"100%", padding:18, maxHeight:"96vh", overflow:"auto" }}>
-        <div style={{ fontSize:15, fontWeight:600, color:"#f5f5f7", marginBottom:4 }}>🖌 Korunacak Bölgeyi İşaretle</div>
-        <div style={{ fontSize:11, color:"#86868b", marginBottom:10 }}>Arka plan silinirken dokunulmasın istediğin yerleri (beyaz/sedef taş, parlak yüzey) boya. Pembe boyalı alanlar aynen kalır.</div>
-        <div style={{ position:"relative", width:"100%", background:"#f3f3f3", borderRadius:10, overflow:"hidden", touchAction:"none", lineHeight:0 }}>
-          <img src={src} alt="" onLoad={yuklendi} style={{ width:"100%", display:"block", userSelect:"none" }} draggable={false}/>
-          <canvas ref={cvRef} onPointerDown={basla} onPointerMove={hareket} onPointerUp={birak} onPointerCancel={birak}
-            style={{ position:"absolute", inset:0, width:"100%", height:"100%", opacity:0.5, cursor:"crosshair", touchAction:"none" }}/>
-        </div>
-        <div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap", margin:"12px 0" }}>
-          <button onClick={()=>setSilgi(false)} style={{ background:!silgi?"var(--vurgu)":"rgba(255,255,255,0.08)", border:"none", borderRadius:8, padding:"8px 14px", color:"#fff", fontSize:12, fontWeight:600, cursor:"pointer" }}>🖌 Fırça</button>
-          <button onClick={()=>setSilgi(true)} style={{ background:silgi?"var(--vurgu)":"rgba(255,255,255,0.08)", border:"none", borderRadius:8, padding:"8px 14px", color:"#fff", fontSize:12, fontWeight:600, cursor:"pointer" }}>◻ Silgi</button>
-          <span style={{ fontSize:11, color:"#86868b", marginLeft:6 }}>Kalınlık</span>
-          <input type="range" min={8} max={140} value={fircaBoy} onChange={e=>setFircaBoy(Number(e.target.value))} style={{ width:140 }}/>
-          <button onClick={temizle} style={{ background:"rgba(255,255,255,0.08)", border:"none", borderRadius:8, padding:"8px 14px", color:"#f5f5f7", fontSize:12, cursor:"pointer", marginLeft:"auto" }}>Hepsini sil</button>
-        </div>
-        <div style={{ display:"flex", gap:8 }}>
-          <button onClick={onIptal} style={{ flex:1, background:"rgba(255,255,255,0.08)", border:"none", borderRadius:10, padding:"12px", color:"#f5f5f7", fontSize:13, fontWeight:600, cursor:"pointer" }}>Vazgeç</button>
-          <button onClick={tamam} style={{ flex:2, background:"var(--vurgu)", border:"none", borderRadius:10, padding:"12px", color:"#fff", fontSize:13, fontWeight:600, cursor:"pointer" }}>✓ Tamam — sonra ✨ Arka planı sil'e bas</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // PDF — blob download (popup yok)
 // ═══ ÜRETİM TAKİP YARDIMCILARI ═══
 
@@ -1016,12 +545,6 @@ function durumSureHesapla(gecmis) {
     sonuclar[d.durum] = (sonuclar[d.durum] || 0) + sure;
   }
   return sonuclar;
-}
-
-// datetime-local alanı için YEREL saat dizgesi (toISOString UTC verdiği için saat 3 saat kayıyordu)
-function yerelDT(ms) {
-  const d = new Date(ms), p2 = n => String(n).padStart(2, "0");
-  return d.getFullYear() + "-" + p2(d.getMonth() + 1) + "-" + p2(d.getDate()) + "T" + p2(d.getHours()) + ":" + p2(d.getMinutes());
 }
 
 function downloadPDF(html, filename) {
@@ -1090,1319 +613,6 @@ function kodOnEk(kod) {
   return m ? m[1].toUpperCase() : "—";
 }
 
-// ═══ PDF'TEN SİPARİŞ — ayrıştırıcı (tarayıcı + node'da çalışır) ═══
-// İki müşteri formatını okur:
-//   1) "excel"  : Excel'den PDF — satır başına: Code (109KP-FB141), Photo, Unit Gram, Quantity, Explanation
-//   2) "fabor"  : Fabor işemri — kutu (kart) başına: "NNN # KOD" veya "ModelID : N | Kod : KOD", Adet, Dikkat notu, foto
-// Sadece yapıyı çıkarır (metin + foto kutuları). Fotoğrafları kırpma ve model eşleştirme App.jsx tarafında.
-
-const PS_KOD_ONEK = /^(\d{1,4}[A-Z]{1,3})-(.+)$/; // 109KP-FB141 → ön ek + bizim kod
-
-function psNorm(s) {
-  return String(s || "").toUpperCase().replace(/[\s\-_.,;:]/g, "");
-}
-
-function psSayi(s) {
-  const n = parseFloat(String(s || "").replace(",", "."));
-  return isNaN(n) ? 0 : n;
-}
-
-// Metinden olası model kodlarını çıkar: "ALT 104R", "RP 24", "ALT 157 - S", "ALT212-R" ...
-// Her aday için uzun → kısa varyantlar döner (örn. ALT104R, ALT104). Hangisinin gerçekten var olduğuna eşleştirme karar verir.
-const PS_KARA_ONEK = new Set(["ALTIN","GIBI","GİBİ","PCS","BOY","ADET","SZ","US","CM","MM","GR","RENK","BOYU","NO","KG"]);
-function psKodAdaylariCikar(metin) {
-  const out = [];
-  const t = String(metin || "").toUpperCase();
-  const re = /(^|[^A-ZÇĞİÖŞÜ0-9])([A-ZÇĞİÖŞÜ]{1,5})\s?(\d{1,4})(?:\s?-\s?([A-Z0-9]{1,3}))?(?![A-Z0-9])/g;
-  let m;
-  while ((m = re.exec(t))) {
-    if (PS_KARA_ONEK.has(m[2])) continue;
-    const taban = m[2] + m[3];
-    const tam = m[4] ? taban + "-" + m[4] : taban;
-    // "RP 21C" gibi harf eki bitişik yazıldıysa: (?![A-Z0-9]) engeller — ayrıca bitişik harfli hali yakala
-    if (!out.includes(tam)) out.push(tam);
-    if (!out.includes(taban)) out.push(taban);
-  }
-  // Bitişik harf ekli: ALT104R, RP24F, RP21C
-  const re2 = /(^|[^A-ZÇĞİÖŞÜ0-9])([A-ZÇĞİÖŞÜ]{1,5})\s?(\d{1,4})([A-Z]{1,2})(?![A-Z0-9])/g;
-  while ((m = re2.exec(t))) {
-    if (PS_KARA_ONEK.has(m[2])) continue;
-    const v = m[2] + m[3] + m[4];
-    if (!out.includes(v)) out.unshift(v);
-  }
-  return out;
-}
-
-// ═══ Sayfa okuma: metin parçaları + resim kutuları + tablo yatay çizgileri ═══
-async function psSayfaOku(pdfjsLib, page) {
-  const OPS = pdfjsLib.OPS;
-  const vp = page.getViewport({ scale: 1 });
-  const W = vp.width, H = vp.height;
-  const tc = await page.getTextContent();
-  const items = [];
-  for (const it of tc.items) {
-    const s = (it.str || "").trim();
-    if (!s) continue;
-    items.push({ s, x: it.transform[4], y: H - it.transform[5], w: it.width || 0 });
-  }
-  items.sort((a, b) => a.y - b.y || a.x - b.x);
-
-  const opList = await page.getOperatorList();
-  const mul = (a, b) => [
-    a[0] * b[0] + a[2] * b[1], a[1] * b[0] + a[3] * b[1],
-    a[0] * b[2] + a[2] * b[3], a[1] * b[2] + a[3] * b[3],
-    a[0] * b[4] + a[2] * b[5] + a[4], a[1] * b[4] + a[3] * b[5] + a[5],
-  ];
-  const nokta = (m, x, y) => [m[0] * x + m[2] * y + m[4], m[1] * x + m[3] * y + m[5]];
-  let ctm = vp.transform.slice();
-  const yigin = [];
-  const imgs = [];
-  const cizgiler = []; // yatay çizgiler: {y, x0, x1}
-  const fnArr = opList.fnArray, argArr = opList.argsArray;
-  for (let i = 0; i < fnArr.length; i++) {
-    const fn = fnArr[i], args = argArr[i];
-    if (fn === OPS.save) yigin.push(ctm.slice());
-    else if (fn === OPS.restore) { if (yigin.length) ctm = yigin.pop(); }
-    else if (fn === OPS.transform) ctm = mul(ctm, args);
-    else if (fn === OPS.paintFormXObjectBegin) { yigin.push(ctm.slice()); if (args && args[0]) ctm = mul(ctm, args[0]); }
-    else if (fn === OPS.paintFormXObjectEnd) { if (yigin.length) ctm = yigin.pop(); }
-    else if (fn === OPS.paintImageXObject || fn === OPS.paintInlineImageXObject || fn === OPS.paintImageMaskXObject || fn === OPS.paintJpegXObject) {
-      const p = [nokta(ctm, 0, 0), nokta(ctm, 1, 0), nokta(ctm, 0, 1), nokta(ctm, 1, 1)];
-      const xs = p.map(q => q[0]), ys = p.map(q => q[1]);
-      const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
-      imgs.push({ x0, y0, x1, y1, w: x1 - x0, h: y1 - y0 });
-    } else if (fn === OPS.constructPath) {
-      const ops = args[0], co = args[1];
-      let ci = 0, px = 0, py = 0;
-      for (const op of ops) {
-        if (op === OPS.moveTo) { px = co[ci]; py = co[ci + 1]; ci += 2; }
-        else if (op === OPS.lineTo) {
-          const nx = co[ci], ny = co[ci + 1]; ci += 2;
-          const a = nokta(ctm, px, py), b = nokta(ctm, nx, ny);
-          if (Math.abs(a[1] - b[1]) < 0.6 && Math.abs(a[0] - b[0]) > 150) cizgiler.push({ y: (a[1] + b[1]) / 2, x0: Math.min(a[0], b[0]), x1: Math.max(a[0], b[0]) });
-          px = nx; py = ny;
-        } else if (op === OPS.rectangle) {
-          const rx = co[ci], ry = co[ci + 1], rw = co[ci + 2], rh = co[ci + 3]; ci += 4;
-          const a = nokta(ctm, rx, ry), b = nokta(ctm, rx + rw, ry + rh);
-          const gen = Math.abs(a[0] - b[0]);
-          if (gen > 150) {
-            cizgiler.push({ y: a[1], x0: Math.min(a[0], b[0]), x1: Math.max(a[0], b[0]) });
-            cizgiler.push({ y: b[1], x0: Math.min(a[0], b[0]), x1: Math.max(a[0], b[0]) });
-          }
-        } else if (op === OPS.curveTo) ci += 6;
-        else if (op === OPS.curveTo2 || op === OPS.curveTo3) ci += 4;
-      }
-    }
-  }
-  // Çok küçük (QR, barkod, logo parçası) ve sayfayı kaplayan resimleri ele
-  const fotolar = imgs.filter(r => ((r.w >= 38 && r.h >= 38) || (r.w >= 120 && r.h >= 10)) && !(r.w > W * 0.95 && r.h > H * 0.9) && !(Math.abs(r.w - r.h) < 6 && r.w < 62));
-  return { W, H, items, imgs: fotolar, cizgiler };
-}
-
-// ═══ FABOR İŞEMRİ ═══
-const FABOR_ANKRAJ_A = /^(\d{4,8})\s*#\s*(\S.*)$/;
-const FABOR_ANKRAJ_B = /ModelID\s*:\s*(\d+)\s*\|\s*Kod\s*:\s*(\S.*)$/i;
-
-function psFaborBaslik(sayfa) {
-  const it = sayfa.items;
-  const sagindaki = (etiketRe, maxDx = 400) => {
-    const e = it.find(x => etiketRe.test(x.s));
-    if (!e) return "";
-    const s = it.filter(x => Math.abs(x.y - e.y) < 4 && x.x > e.x + 5 && x.x < e.x + maxDx).sort((a, b) => a.x - b.x)[0];
-    return s ? s.s : "";
-  };
-  const ayarM = it.map(x => x.s.match(/^(\d{1,2})\s*K\s*\((\d{3})\)/i)).find(Boolean);
-  const tarihler = it.filter(x => /^\d{1,2}\.\d{1,2}\.\d{4}$/.test(x.s)).sort((a, b) => a.x - b.x).map(x => x.s);
-  // "Sorumlu" satırında isimden sonra yazılan genel not (örn. "DÜŞÜK AYAR LAK KORUMA YAPALIM")
-  let genelNot = "";
-  const so = it.find(x => /^Sorumlu$/i.test(x.s));
-  if (so) {
-    const ayni = it.filter(x => Math.abs(x.y - so.y) < 4 && x.x > so.x + 5).sort((a, b) => a.x - b.x);
-    if (ayni.length > 1) genelNot = ayni.slice(1).map(x => x.s).join(" ");
-  }
-  return {
-    referans: sagindaki(/^Referans/i, 260),
-    po: sagindaki(/^PO\(Sip/i, 150),
-    listeGram: sagindaki(/^Liste Gram/i, 150),
-    ayar: ayarM ? ayarM[1] + "K" : "",
-    siparisTarihi: tarihler[0] || "",
-    teslimTarihi: tarihler[1] || "",
-    genelNot,
-  };
-}
-
-function psFaborKartlar(sayfa, sayfaNo) {
-  const { W, H, items, imgs } = sayfa;
-  const ankrajlar = [];
-  for (const x of items) {
-    let m = x.s.match(FABOR_ANKRAJ_B);
-    if (m) { ankrajlar.push({ x: x.x, y: x.y, ic: m[2].trim(), id: m[1] }); continue; }
-    m = x.s.match(FABOR_ANKRAJ_A);
-    if (m) ankrajlar.push({ x: x.x, y: x.y, ic: m[2].trim(), id: m[1] });
-  }
-  if (!ankrajlar.length) return [];
-  ankrajlar.sort((a, b) => a.y - b.y || a.x - b.x);
-  // Satırlara grupla
-  const satirlar = [];
-  for (const a of ankrajlar) {
-    const s = satirlar.find(r => Math.abs(r.y - a.y) < 14);
-    if (s) s.liste.push(a); else satirlar.push({ y: a.y, liste: [a] });
-  }
-  satirlar.sort((a, b) => a.y - b.y);
-  const kartlar = [];
-  satirlar.forEach((sat, si) => {
-    const y0 = sat.y - 3;
-    const y1 = si + 1 < satirlar.length ? satirlar[si + 1].y - 3 : H;
-    sat.liste.sort((a, b) => a.x - b.x);
-    sat.liste.forEach((a, ai) => {
-      const x0 = ai === 0 ? 0 : a.x - 10;
-      const x1 = ai + 1 < sat.liste.length ? sat.liste[ai + 1].x - 10 : W;
-      kartlar.push({ ankraj: a, x0, x1, y0, y1, sayfaNo });
-    });
-  });
-
-  const sonuc = [];
-  for (const k of kartlar) {
-    const it = items.filter(x => x.x >= k.x0 && x.x < k.x1 && x.y >= k.y0 && x.y < k.y1 && x.s !== "Temsili");
-    const sayiMi = s => /^\d+([.,]\d+)?$/.test(s);
-    const tamMi = s => /^\d+$/.test(s);
-
-    // ── Adet
-    let adet = 0;
-    let m;
-    for (const x of it) { if ((m = x.s.match(/^Adet\s*:\s*(\d+)/i))) { adet = +m[1]; break; } }
-    if (!adet) {
-      const e = it.find(x => /^Adet\s*:$/i.test(x.s));
-      if (e) { const v = it.filter(x => Math.abs(x.y - e.y) < 4 && x.x > e.x && tamMi(x.s)).sort((a, b) => a.x - b.x)[0]; if (v) adet = +v.s; }
-    }
-    if (!adet) { // ModelID düzeni: "Adet" etiketi + "46 adet"
-      const e = it.find(x => /^Adet$/i.test(x.s));
-      if (e) {
-        const v = it.filter(x => Math.abs(x.y - e.y) < 5 && x.x > e.x + 5).map(x => ({ x, m: x.s.match(/^(\d+)\s*adet$/i) })).find(q => q.m);
-        if (v) adet = +v.m[1];
-      }
-    }
-    if (!adet) { // Tablo düzeni: başlık "Adet" + altındaki satırda tam sayı
-      const e = it.find(x => /^Adet$/i.test(x.s));
-      if (e) {
-        const alt = it.filter(x => x.y > e.y + 3 && x.y < e.y + 70 && tamMi(x.s));
-        if (alt.length) {
-          const satirY = alt.sort((a, b) => a.y - b.y)[0].y;
-          const sat = alt.filter(x => Math.abs(x.y - satirY) < 4);
-          sat.sort((a, b) => Math.abs(a.x - e.x) - Math.abs(b.x - e.x));
-          adet = +sat[0].s;
-        }
-      }
-    }
-
-    // ── Birim gram
-    let gram = 0;
-    const istG = it.find(x => /^İst\.?Ağırlık|^İst\.Agirlik/i.test(x.s));
-    if (istG) { const v = it.filter(x => Math.abs(x.y - istG.y) < 5 && x.x > istG.x && /gr$/i.test(x.s)).sort((a, b) => a.x - b.x)[0]; if (v) gram = psSayi(v.s); }
-    if (!gram) {
-      const e = it.find(x => /^Adet\/Gr$/i.test(x.s));
-      if (e) {
-        const alt = it.filter(x => x.y > e.y + 3 && x.y < e.y + 70 && /^\d+[.,]\d+$/.test(x.s)).sort((a, b) => a.y - b.y);
-        if (alt.length) {
-          const satirY = alt[0].y;
-          const sat = alt.filter(x => Math.abs(x.y - satirY) < 4).sort((a, b) => Math.abs(a.x - e.x) - Math.abs(b.x - e.x));
-          gram = psSayi(sat[0].s);
-        }
-      }
-    }
-    if (!gram) {
-      const e = it.find(x => /^Ağırlık\s*:?$/i.test(x.s));
-      if (e) { const v = it.filter(x => Math.abs(x.y - e.y) < 4 && x.x > e.x && sayiMi(x.s)).sort((a, b) => a.x - b.x)[0]; if (v) gram = psSayi(v.s); }
-    }
-
-    // ── Boy bilgisi
-    let boy = "";
-    const boyE = it.find(x => /^Boy\s*:?$/i.test(x.s));
-    if (boyE) { const v = it.filter(x => Math.abs(x.y - boyE.y) < 5 && x.x > boyE.x && /\d/.test(x.s)).sort((a, b) => a.x - b.x)[0]; if (v) boy = v.s; }
-
-    // ── Dikkat notu
-    let not = "";
-    const dE = it.find(x => /^Dikkat/i.test(x.s));
-    const tabloUstte = it.some(x => /^Toplam$|^Toplam Gr$/i.test(x.s) && dE && x.y <= dE.y + 12);
-    if (dE) {
-      const parcalar = [];
-      const ilk = dE.s.replace(/^Dikkat\s*:?\s*/i, "");
-      let ilkSatir = ilk;
-      if (!ilkSatir) { const v = it.filter(x => Math.abs(x.y - dE.y) < 4 && x.x > dE.x && x !== dE).sort((a, b) => a.x - b.x); ilkSatir = v.map(q => q.s.replace(/^:\s*/, "")).join(" "); }
-      else { const v = it.filter(x => Math.abs(x.y - dE.y) < 4 && x.x > dE.x + 1 && x !== dE).sort((a, b) => a.x - b.x); if (v.length) ilkSatir += " " + v.map(q => q.s).join(" "); }
-      ilkSatir = ilkSatir.replace(/^:\s*/, "").trim();
-      if (ilkSatir) parcalar.push(ilkSatir);
-      const devam = it.filter(x => x.y > dE.y + 3).sort((a, b) => a.y - b.y || a.x - b.x);
-      const etiketRe = /^(ATÖLYE|AtölyeKodu|Adet|İst\.|Sys\.|T\.Ağ|T\.Agirlik|Boy\b|Karakter|Toplam)/i;
-      let sonY = null;
-      for (const x of devam) {
-        if (/^KID\s*:/i.test(x.s) || /^\d{5,7}$/.test(x.s)) break;
-        if (etiketRe.test(x.s)) break;
-        if (/^\d{3}[A-Z]{3,4}\d{5}$/.test(x.s)) break;
-        if (tabloUstte && (sayiMi(x.s) || /^\d{3}[A-Z]{3}\d{5}$/.test(x.s) || /^[A-Z]{2,5}\d{1,4}(-[A-Z0-9]+)?$/.test(x.s))) break;
-        if (sonY !== null && x.y - sonY > 40) break;
-        sonY = x.y;
-        parcalar.push(x.s);
-      }
-      not = parcalar.join(" ").replace(/\s+/g, " ").trim();
-    }
-
-    // ── Atölye kodu değeri (tablo düzeninde "FHP151" gibi bizim koda benzeyen)
-    const adayKodlar = [];
-    const kodSekli = /^[A-Z]{2,5}\d{1,4}(-[A-Z0-9]+)?$/;
-    if (tabloUstte) for (const x of it) if (kodSekli.test(x.s)) adayKodlar.push({ kod: x.s, kaynak: "atölye kodu" });
-    const aE = it.find(x => /^AtölyeKodu$/i.test(x.s));
-    if (aE) { const v = it.filter(x => Math.abs(x.y - aE.y) < 5 && x.x > aE.x + 5).sort((a, b) => a.x - b.x)[0]; if (v && kodSekli.test(v.s)) adayKodlar.push({ kod: v.s, kaynak: "atölye kodu" }); }
-    const notKodlari = psKodAdaylariCikar(not).map(kod => ({ kod, kaynak: "açıklama" }));
-
-    // ── Fotoğraflar (kartın içindeki resimler)
-    const kartFoto = imgs.filter(r => {
-      const cx = (r.x0 + r.x1) / 2, cy = (r.y0 + r.y1) / 2;
-      return cx >= k.x0 && cx < k.x1 && cy >= k.y0 && cy < k.y1;
-    }).sort((a, b) => b.w * b.h - a.w * a.h);
-
-    const atolyeKodlari = it.filter(x => /^\d{3}[A-Z]{3}\d{5}$/.test(x.s)).map(x => x.s);
-    sonuc.push({
-      tip: "fabor",
-      sayfaNo,
-      disKod: k.ankraj.ic.replace(/\s+/g, " "),
-      disId: k.ankraj.id,
-      atolyeKodlari,
-      kodAdaylari: [...notKodlari, ...adayKodlar],
-      adet: adet || 1,
-      adetBulundu: !!adet,
-      gramBirim: gram,
-      boy,
-      aciklama: [not, boy ? "Boy: " + boy : ""].filter(Boolean).join(" | "),
-      not,
-      fotoKutular: kartFoto.map(r => ({ sayfaNo, x0: r.x0, y0: r.y0, x1: r.x1, y1: r.y1 })),
-    });
-  }
-  return sonuc;
-}
-
-// ═══ EXCEL PDF ═══
-// Satır sınırı yerine yakınlık kullanılır: gram/adet kod ile aynı hizada; açıklama satırları boşluklara göre kümelenip en yakın koda bağlanır;
-// resimler merkezine en yakın koda bağlanır.
-function psExcelSatirlar(sayfa, sayfaNo, belge) {
-  const { W, H, items, imgs } = sayfa;
-  const kodlar = items.filter(x => PS_KOD_ONEK.test(x.s));
-  if (!kodlar.length) return [];
-  kodlar.sort((a, b) => a.y - b.y);
-  const kodX = kodlar.map(k => k.x).sort((a, b) => a - b)[Math.floor(kodlar.length / 2)];
-  const baslikSozcukler = new Set(["NO.", "NO", "CODE", "PHOTO", "UNIT GRAM", "QUANTITY", "EXPLANATION"]);
-  const govde = items.filter(x => !baslikSozcukler.has(x.s.toUpperCase()) && x.y < H - 45 && !PS_KOD_ONEK.test(x.s));
-  const medyan = (arr) => arr.length ? arr.slice().sort((a, b) => a - b)[Math.floor(arr.length / 2)] : null;
-
-  // Sütunlar: gram (ondalık), adet (tam sayı, gramın sağında)
-  const ondalik = govde.filter(x => /^\d+[.,]\d+$/.test(x.s) && x.x > kodX + 60);
-  const gramX = medyan(ondalik.map(x => x.x));
-  const tamlar = govde.filter(x => /^\d+$/.test(x.s) && gramX !== null && x.x > gramX + 15);
-  const adetX = medyan(tamlar.map(x => x.x));
-  if (belge) { if (gramX !== null) belge.gramX = gramX; if (adetX !== null) belge.adetX = adetX; }
-  const gX = gramX !== null ? gramX : (belge && belge.gramX);
-  const aX = adetX !== null ? adetX : (belge && belge.adetX);
-
-  const enYakin = (y, maxDy) => {
-    let en = -1, fark = 1e9;
-    kodlar.forEach((k, i) => { const d = Math.abs(k.y - y); if (d < fark) { fark = d; en = i; } });
-    return fark <= maxDy ? en : -1;
-  };
-  const satir = kodlar.map(k => ({ kod: k, gram: 0, adet: 0, acik: [], foto: [] }));
-
-  // gram / adet: kodla aynı hizada
-  for (const x of govde) {
-    const i = enYakin(x.y, 8);
-    if (i < 0) continue;
-    if (gX !== null && /^\d+[.,]\d+$/.test(x.s) && Math.abs(x.x - gX) < 40) satir[i].gram = psSayi(x.s);
-    else if (aX !== null && /^\d+$/.test(x.s) && Math.abs(x.x - aX) < 30) satir[i].adet = +x.s;
-  }
-  // açıklama: adet sütununun sağındaki metinler — boşluk > 14pt olunca yeni küme
-  if (aX !== null) {
-    const acik = govde.filter(x => (x.x + (x.w || 0) / 2) > aX + 45).sort((a, b) => a.y - b.y || a.x - b.x);
-    let kume = [];
-    const bagla = () => {
-      if (!kume.length) return;
-      const merkez = (kume[0].y + kume[kume.length - 1].y) / 2;
-      const i = enYakin(merkez, 120);
-      if (i >= 0) kume.forEach(q => satir[i].acik.push(q.s));
-      kume = [];
-    };
-    for (const x of acik) {
-      if (kume.length && x.y - kume[kume.length - 1].y > 14) bagla();
-      kume.push(x);
-    }
-    bagla();
-  }
-  // resimler: merkezine en yakın koda
-  const fotoAday = imgs.filter(r => (r.x0 + r.x1) / 2 > kodX + 40);
-  for (const r of fotoAday) {
-    const i = enYakin((r.y0 + r.y1) / 2, 110);
-    if (i >= 0) satir[i].foto.push(r);
-  }
-
-  return satir.map(r => {
-    const mm = r.kod.s.match(PS_KOD_ONEK);
-    const aciklama = r.acik.join(" ").replace(/\s+/g, " ").trim();
-    return {
-      tip: "excel",
-      sayfaNo,
-      disKod: r.kod.s,
-      kodAdaylari: [{ kod: mm[2], kaynak: "kod" }, { kod: r.kod.s, kaynak: "tam kod" }],
-      adet: r.adet || 1,
-      adetBulundu: !!r.adet,
-      gramBirim: r.gram,
-      aciklama,
-      not: aciklama,
-      fotoKutular: r.foto.sort((a, b) => a.x0 - b.x0).map(q => ({ sayfaNo, x0: q.x0, y0: q.y0, x1: q.x1, y1: q.y1 })),
-    };
-  });
-}
-
-// ═══ ANA GİRİŞ ═══
-// pdfjsLib: pdf.js kütüphanesi, data: Uint8Array, dönüş: { tip, baslik, kalemler, sayfaSayisi, pdf }
-async function psPdfAyristir(pdfjsLib, data) {
-  const pdf = await pdfjsLib.getDocument({ data, useSystemFonts: true }).promise;
-  const sayfalar = [];
-  for (let i = 1; i <= pdf.numPages; i++) {
-    const page = await pdf.getPage(i);
-    sayfalar.push(await psSayfaOku(pdfjsLib, page));
-  }
-  const faborVar = sayfalar.some(s => s.items.some(x => FABOR_ANKRAJ_A.test(x.s) || FABOR_ANKRAJ_B.test(x.s)));
-  let tip = "bilinmiyor", baslik = {}, kalemler = [];
-  if (faborVar) {
-    tip = "fabor";
-    baslik = psFaborBaslik(sayfalar[0]);
-    sayfalar.forEach((s, i) => { kalemler.push(...psFaborKartlar(s, i + 1)); });
-  } else {
-    const belge = {};
-    // Sütun konumlarını bulmak için önce tüm sayfaları tara
-    sayfalar.forEach((s, i) => { psExcelSatirlar(s, i + 1, belge); });
-    sayfalar.forEach((s, i) => { kalemler.push(...psExcelSatirlar(s, i + 1, belge)); });
-    if (kalemler.length) tip = "excel";
-  }
-  kalemler.forEach((k, i) => { k.id = "pk" + (i + 1); });
-  return { tip, baslik, kalemler, sayfaSayisi: pdf.numPages, pdf };
-}
-
-// ═══ PDF'TEN SİPARİŞ — pdf.js yükleme, foto kırpma, onay ekranı ═══
-let _pdfjsYuklenen = null;
-function pdfjsYukle() {
-  if (typeof window !== "undefined" && window.pdfjsLib) return Promise.resolve(window.pdfjsLib);
-  if (_pdfjsYuklenen) return _pdfjsYuklenen;
-  _pdfjsYuklenen = new Promise((res, rej) => {
-    const s = document.createElement("script");
-    s.src = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js";
-    s.onload = () => {
-      try { window.pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js"; res(window.pdfjsLib); }
-      catch (e) { _pdfjsYuklenen = null; rej(e); }
-    };
-    s.onerror = () => { _pdfjsYuklenen = null; rej(new Error("PDF okuyucu yüklenemedi (internet bağlantısını kontrol edin)")); };
-    document.head.appendChild(s);
-  });
-  return _pdfjsYuklenen;
-}
-
-// Her sayfayı bir kez çizip, fotoğraf kutularını kırpar → kalem.foto (JPEG data URL), kalem.fotolar
-async function psFotolariKirp(pdf, kalemler, ilerle) {
-  const OLCEK = 2;
-  const sayfaNolar = [...new Set(kalemler.flatMap(k => k.fotoKutular.map(b => b.sayfaNo)))].sort((a, b) => a - b);
-  let yapilan = 0;
-  for (const no of sayfaNolar) {
-    const page = await pdf.getPage(no);
-    const vp = page.getViewport({ scale: OLCEK });
-    const cv = document.createElement("canvas");
-    cv.width = Math.ceil(vp.width); cv.height = Math.ceil(vp.height);
-    const ctx = cv.getContext("2d");
-    ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, cv.width, cv.height);
-    await page.render({ canvasContext: ctx, viewport: vp }).promise;
-    for (const k of kalemler) {
-      for (const b of k.fotoKutular) {
-        if (b.sayfaNo !== no) continue;
-        const x = Math.max(0, Math.floor(b.x0 * OLCEK)), y = Math.max(0, Math.floor(b.y0 * OLCEK));
-        const w = Math.min(cv.width - x, Math.ceil((b.x1 - b.x0) * OLCEK)), h = Math.min(cv.height - y, Math.ceil((b.y1 - b.y0) * OLCEK));
-        if (w < 8 || h < 8) continue;
-        const en = Math.min(1, 720 / Math.max(w, h));
-        const kc = document.createElement("canvas");
-        kc.width = Math.max(1, Math.round(w * en)); kc.height = Math.max(1, Math.round(h * en));
-        const kctx = kc.getContext("2d");
-        kctx.fillStyle = "#fff"; kctx.fillRect(0, 0, kc.width, kc.height);
-        kctx.drawImage(cv, x, y, w, h, 0, 0, kc.width, kc.height);
-        b.dataUrl = kc.toDataURL("image/jpeg", 0.85);
-        b.alan = (b.x1 - b.x0) * (b.y1 - b.y0);
-      }
-    }
-    cv.width = 0; cv.height = 0;
-    yapilan++;
-    if (ilerle) ilerle(yapilan, sayfaNolar.length);
-  }
-  kalemler.forEach(k => {
-    const bulunan = k.fotoKutular.filter(b => b.dataUrl).sort((a, b) => b.alan - a.alan);
-    k.foto = bulunan.length ? bulunan[0].dataUrl : "";
-    k.fotolar = bulunan.map(b => b.dataUrl);
-  });
-}
-
-// ── Üretim zorluğu puanlama penceresi (sipariş teslim edilirken ürün başına 1-5 + sebep etiketi) ──
-function ZorlukModal({ siparis, onKapat, onKaydet }) {
-  const [p, setP] = useState(() => {
-    const o = {};
-    (siparis.kalemler || []).forEach(k => { o[k.id] = { z: Number(k.zorluk) || 0, et: Array.isArray(k.zorlukEtiket) ? k.zorlukEtiket : [] }; });
-    return o;
-  });
-  const set = (id, patch) => setP(prev => ({ ...prev, [id]: { ...prev[id], ...patch } }));
-  const etiketTikla = (id, t) => setP(prev => { const e = prev[id].et; return { ...prev, [id]: { ...prev[id], et: e.includes(t) ? e.filter(x => x !== t) : [...e, t] } }; });
-  const hepsineVer = (z) => setP(prev => { const n = { ...prev }; Object.keys(n).forEach(id => { if (!n[id].z) n[id] = { ...n[id], z }; }); return n; });
-  const puanli = Object.values(p).filter(x => x.z > 0).length;
-  const kalemler = siparis.kalemler || [];
-  return (
-    <div onClick={onKapat} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.82)", zIndex: 320, display: "flex", alignItems: "center", justifyContent: "center", padding: 14 }}>
-      <div onClick={e => e.stopPropagation()} style={{ background: "#1c1c1e", borderRadius: 16, width: "100%", maxWidth: 820, maxHeight: "92vh", display: "flex", flexDirection: "column", color: "#e8dcc8" }}>
-        <div style={{ padding: "14px 18px", borderBottom: "1px solid rgba(255,255,255,0.08)", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
-          <div>
-            <div style={{ fontSize: 15, fontWeight: 700, color: "#f5f5f7" }}>⭐ Üretim zorluğu — {siparis.musKod || siparis.musteri || "Sipariş"}</div>
-            <div style={{ fontSize: 10, color: "#8a7d64", marginTop: 2 }}>Bu ürünlerin üretimi ne kadar zordu? Puanlar model kartında ve Keşfet'te görünür, sonraki siparişlerde uyarı verir.</div>
-          </div>
-          <button onClick={onKapat} style={{ ...GH, padding: "4px 10px" }}>✕</button>
-        </div>
-        <div style={{ padding: "8px 18px", borderBottom: "1px solid rgba(255,255,255,0.06)", display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", fontSize: 10, color: "#a89c84" }}>
-          <span style={{ fontWeight: 700 }}>Puanlanmayanlara hepsine:</span>
-          {[1, 2, 3, 4, 5].map(z => <button key={z} onClick={() => hepsineVer(z)} style={{ ...GH, fontSize: 10, padding: "3px 9px", color: ZORLUK_RENK[z], borderColor: ZORLUK_RENK[z] + "66" }}>{z} · {ZORLUK_ADLARI[z]}</button>)}
-        </div>
-        <div style={{ overflowY: "auto", padding: "10px 14px", flex: 1 }}>
-          {kalemler.map(k => {
-            const e = p[k.id] || { z: 0, et: [] };
-            return (
-              <div key={k.id} style={{ display: "flex", gap: 12, padding: "10px 8px", marginBottom: 8, borderRadius: 10, background: "rgba(255,255,255,0.03)", border: "1px solid " + (e.z ? ZORLUK_RENK[e.z] + "55" : "rgba(255,255,255,0.06)") }}>
-                <div style={{ width: 64, height: 64, background: "#f3f3f3", borderRadius: 8, overflow: "hidden", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  {k.foto ? <img src={k.foto} alt="" loading="lazy" style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }} /> : null}
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: "flex", gap: 8, alignItems: "baseline", marginBottom: 6 }}>
-                    <b style={{ fontSize: 13, color: GOLD }}>{k.kod || "—"}</b>
-                    <span style={{ fontSize: 10, color: "#8a7d64" }}>{tipEtiket(k.kategori) ? tipEtiket(k.kategori) + " · " : ""}{k.adet || 1} adet</span>
-                  </div>
-                  <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginBottom: 6 }}>
-                    {[1, 2, 3, 4, 5].map(z => (
-                      <button key={z} onClick={() => set(k.id, { z: e.z === z ? 0 : z })} title={ZORLUK_ADLARI[z]} style={{ minWidth: 74, padding: "5px 6px", borderRadius: 8, cursor: "pointer", fontSize: 10, fontWeight: 700, border: "1px solid " + (e.z === z ? ZORLUK_RENK[z] : "rgba(255,255,255,0.12)"), background: e.z === z ? ZORLUK_RENK[z] + "33" : "transparent", color: e.z === z ? ZORLUK_RENK[z] : "#998a6e" }}>
-                        {"★".repeat(z)}<div style={{ fontSize: 8, fontWeight: 600 }}>{ZORLUK_ADLARI[z]}</div>
-                      </button>
-                    ))}
-                  </div>
-                  {e.z >= 3 && (
-                    <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-                      {ZORLUK_ETIKETLERI.map(t => (
-                        <button key={t} onClick={() => etiketTikla(k.id, t)} style={{ padding: "2px 8px", borderRadius: 12, fontSize: 9, cursor: "pointer", border: "1px solid " + (e.et.includes(t) ? "#e8b04f" : "rgba(255,255,255,0.12)"), background: e.et.includes(t) ? "rgba(232,176,79,0.18)" : "transparent", color: e.et.includes(t) ? "#e8b04f" : "#8a7d64" }}>{t}</button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-        <div style={{ padding: "12px 18px", borderTop: "1px solid rgba(255,255,255,0.08)", display: "flex", gap: 10, alignItems: "center" }}>
-          <span style={{ fontSize: 11, color: "#a89c84" }}>{puanli} / {kalemler.length} ürün puanlandı</span>
-          <span style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
-            <button onClick={onKapat} style={GH}>Sonra</button>
-            <button onClick={() => onKaydet(p)} disabled={puanli === 0} style={{ ...BG, opacity: puanli === 0 ? 0.5 : 1 }}>Kaydet ({puanli})</button>
-          </span>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ── Taş rengi: müşteri açıklamasından rengi oku, aynı model ailesinde (ALT209, ALT209-W …) rengi tutan modeli seç ──
-const PS_RENKLER = [
-  ["BEYAZ", /BEYAZ|WHITE/], ["YESIL", /YESIL|ZUMRUT|GREEN|EMERALD/], ["MAVI", /MAVI|BLUE|TOPAZ|AKUA/], ["KIRMIZI", /KIRMIZI|RUBY|RUBI|GARNET|RED/],
-  ["SIYAH", /SIYAH|ONIKS|ONYX|BLACK/], ["PEMBE", /PEMBE|PINK/], ["MOR", /\bMOR\b|AMETIST|AMETHYST|PURPLE|VIOLET/], ["LACIVERT", /LACIVERT|SAFIR|SAPPHIRE/],
-  ["TURKUAZ", /TURKUAZ|TURQUOISE/], ["SARI", /SITRIN|CITRINE/], ["KAHVE", /KAHVE|BROWN|SMOKY/],
-];
-const PS_RENK_AD = { BEYAZ: "beyaz", YESIL: "yeşil", MAVI: "mavi", KIRMIZI: "kırmızı", SIYAH: "siyah", PEMBE: "pembe", MOR: "mor", LACIVERT: "lacivert", TURKUAZ: "turkuaz", SARI: "sarı", KAHVE: "kahve" };
-function psTrBuyuk(t) {
-  return String(t || "").replace(/İ/g, "I").replace(/ı/g, "I").toUpperCase()
-    .replace(/Ş/g, "S").replace(/Ğ/g, "G").replace(/Ü/g, "U").replace(/Ö/g, "O").replace(/Ç/g, "C").replace(/İ/g, "I");
-}
-// "beyaz taş", "yeşil taşlı", "taş rengi mavi" → "BEYAZ" / "YESIL" / "MAVI"; yoksa ""
-function psNotTasRengi(metin) {
-  const t = psTrBuyuk(metin);
-  if (!t) return "";
-  for (const [k, re] of PS_RENKLER) {
-    const r = re.source;
-    if (new RegExp("(" + r + ")\\s*(TAS|TASLI|TASIN|TASI|ZIRKON|ZIRCON|STONE)").test(t)) return k;
-    if (new RegExp("TAS\\s*(RENGI|RENK)?\\s*[:=\\-]?\\s*(" + r + ")").test(t)) return k;
-  }
-  return "";
-}
-// Modelin taş rengi (kayıtlı ad/açıklama/etiket/taş şekli + "-W" son eki)
-function psModelTasRengi(m) {
-  const parca = [m.ad, m.ac, ...(Array.isArray(m.etiketler) ? m.etiketler : [])];
-  (Array.isArray(m.taslar) ? m.taslar : []).forEach(t => { parca.push(t && t.sekil); parca.push(t && t.boyut); });
-  const t = psTrBuyuk(parca.filter(Boolean).join(" "));
-  for (const [k, re] of PS_RENKLER) if (re.test(t)) return k;
-  if (/-W$/.test(psTrBuyuk(m.kod || ""))) return "BEYAZ";
-  return "";
-}
-function psKodTaban(kod) { return psTrBuyuk(kod).replace(/[\s_.]/g, "").replace(/-[A-Z0-9]{1,2}$/, ""); }
-
-// Müşteri notunda birden çok taş rengi varsa ("Colors: White, ruby, emerald, topaz  Each color 3 pcs") sırayla renk listesini döndür
-function psNotRenkListesi(metin) {
-  const t = psTrBuyuk(metin);
-  if (!t || !/COLOU?R|RENK|RENGI|STONE|\bTAS/.test(t)) return [];
-  const bulunan = [];
-  for (const [k, re] of PS_RENKLER) {
-    const m = new RegExp("\\b(?:" + re.source + ")\\b").exec(t);
-    if (m) bulunan.push({ k, i: m.index });
-  }
-  if (bulunan.length < 2) return [];
-  return bulunan.sort((a, b) => a.i - b.i).map(x => x.k);
-}
-// "each color 3 pcs" / "her renk 3 adet" / "3 pcs each" → 3 (yoksa 0)
-function psNotRenkBasiAdet(metin) {
-  const t = psTrBuyuk(metin);
-  let m = /(?:EACH|PER|HER)\s*(?:COLOU?R|RENK|ONE|BIRI)\D{0,14}?(\d+)/.exec(t);
-  if (m) return Number(m[1]) || 0;
-  m = /(\d+)\s*(?:PCS|PC|ADET|PIECES?)?\s*(?:EACH|PER\s*COLOU?R|HER\s*RENK|HER\s*BIRI)/.exec(t);
-  return m ? (Number(m[1]) || 0) : 0;
-}
-function psAdetDagit(toplam, n) {
-  const t = Math.max(1, Number(toplam) || 1);
-  if (n <= 1) return [t];
-  const taban = Math.floor(t / n), kalan = t - taban * n;
-  return Array.from({ length: n }, (_, i) => Math.max(1, taban + (i < kalan ? 1 : 0)));
-}
-// Aynı model ailesinden (psKodTaban) her renk için bir model seç
-// İki kod aynı model ailesinden mi? FER280 ↔ FER280-Y / FER280Y / FER280B (kısa harfli son ek) — FER28 ↔ FER280 değil
-function psAileUyar(kodA, kodB) {
-  const a = psKodTaban(kodA), b = psKodTaban(kodB);
-  if (!a || !b) return false;
-  if (a === b) return true;
-  const [kisa, uzun] = a.length <= b.length ? [a, b] : [b, a];
-  if (kisa.length < 3 || !/[0-9]$/.test(kisa) || !uzun.startsWith(kisa)) return false;
-  return /^[A-Z][A-Z0-9]{0,2}$/.test(uzun.slice(kisa.length));
-}
-function psAileModelleri(modeller, bulunanKod, adaylar) {
-  const aile = []; const gorulen = new Set();
-  [...(adaylar || []), ...(modeller || [])].forEach(m => {
-    if (!psAileUyar(m.kod, bulunanKod) || aile.some(z => z.id === m.id)) return;
-    const nk = psTrBuyuk(m.kod);
-    if (gorulen.has(nk)) { const i = aile.findIndex(z => psTrBuyuk(z.kod) === nk); if (!aile[i].foto && m.foto) aile[i] = m; return; }
-    gorulen.add(nk); aile.push(m);
-  });
-  return aile;
-}
-const PS_RENK_YAKIN = { LACIVERT: ["LACIVERT", "MAVI"], MAVI: ["MAVI", "LACIVERT"] }; // safir: kayıtta mavi/lacivert olabilir
-function psRenkAilesi(modeller, bulunanKod, adaylar, renkler) {
-  const aile = psAileModelleri(modeller, bulunanKod, adaylar);
-  const tam = psTrBuyuk(bulunanKod);
-  const secimler = [], eksik = [];
-  renkler.forEach(r => {
-    const kabul = PS_RENK_YAKIN[r] || [r];
-    let uyan = aile.filter(m => kabul.includes(psModelTasRengi(m))).sort((x, y) => kabul.indexOf(psModelTasRengi(x)) - kabul.indexOf(psModelTasRengi(y)));
-    if (!uyan.length && r === "BEYAZ") uyan = aile.filter(m => psTrBuyuk(m.kod) === tam && !psModelTasRengi(m));
-    uyan = uyan.filter(m => !secimler.some(x => x.m.id === m.id));
-    uyan.sort((x, y) => (kabul.indexOf(psModelTasRengi(x)) - kabul.indexOf(psModelTasRengi(y))) || (psTrBuyuk(y.kod) === tam ? 1 : 0) - (psTrBuyuk(x.kod) === tam ? 1 : 0) || (y.foto ? 1 : 0) - (x.foto ? 1 : 0) || psTrBuyuk(x.kod).localeCompare(psTrBuyuk(y.kod)));
-    if (uyan.length) secimler.push({ renk: r, m: uyan[0] }); else eksik.push(r);
-  });
-  return { secimler, eksik };
-}
-
-// ── SET modeli: müşteri tek parça (ör. sadece kolye) istiyorsa setin ilgili parçasını bul ──
-const PS_PARCA_KOKLERI = [["yuzuk", "YUZ"], ["kolye", "KOLYE"], ["kolye", "PENDANT"], ["kolye", "PANDANTIF"], ["kolye", "SARKIT"], ["kupe", "KUPE"], ["bilezik", "BILEZIK"], ["bileklik", "BILEKLIK"]];
-const PS_PARCA_AD = { yuzuk: "yüzük", kolye: "kolye", kupe: "küpe", bilezik: "bilezik", bileklik: "bileklik" };
-function psParcaGrubu(kategori) { return kategori === "pendant" ? "kolye" : kategori; }
-// not → { digeri: "yuzuk" | "", dogrudan: ["kolye"] }  ("RP24D YÜZÜĞÜYLE MATCH OLACAK" → digeri = yüzük, yani bu kalem yüzük DEĞİL)
-function psNotParcaIpucu(metin) {
-  const t = psTrBuyuk(metin);
-  let digeri = "";
-  for (const [g, kok] of PS_PARCA_KOKLERI) {
-    if (new RegExp("\\b" + kok + "\\w*\\s+(?:ILE\\s+)?(?:MATCH|TAKIM|SET\\b|UYUM|UYUS|ESLES)").test(t)) { digeri = g; break; }
-  }
-  const dogrudan = [];
-  if (!digeri) for (const [g, kok] of PS_PARCA_KOKLERI) if (new RegExp("\\b" + kok).test(t) && !dogrudan.includes(g)) dogrudan.push(g);
-  return { digeri, dogrudan };
-}
-
-// ── FOTOĞRAF PARMAK İZİ (CLIP — tarayıcıda çalışır, sunucu gerekmez) ──
-// Katalog fotoğraflarının parmak izleri Storage'da tek dosyada (_vektor/v1-<önek>.json) saklanır; PDF'teki fotoğraf da aynı modelle
-// parmak izine çevrilir ve katalogdakilere en çok benzeyenler önerilir.
-const PS_CLIP_MODEL = "Xenova/clip-vit-base-patch32";
-const PS_VQ = 905;               // int8 nicemleme çarpanı (cos = nokta çarpım / PS_VQ²)
-const PS_VQ2 = PS_VQ * PS_VQ;
-let _clipHazir = null;
-let psIndeksDepo = null;         // { ids, fotos, dim, mat:Int8Array }
-function clipYukle(ilerle) {
-  if (_clipHazir) return _clipHazir;
-  _clipHazir = (async () => {
-    const TURL = "https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2/dist/transformers.min.js";
-    const T = await import(/* @vite-ignore */ TURL);
-    T.env.allowLocalModels = false;
-    T.env.useBrowserCache = true;
-    const cb = ilerle ? (p) => { if (p && p.status === "progress") ilerle(Math.round(p.progress || 0)); } : undefined;
-    const processor = await T.AutoProcessor.from_pretrained(PS_CLIP_MODEL, { progress_callback: cb });
-    const model = await T.CLIPVisionModelWithProjection.from_pretrained(PS_CLIP_MODEL, { quantized: true, progress_callback: cb });
-    return { T, processor, model };
-  })().catch(e => { _clipHazir = null; throw e; });
-  return _clipHazir;
-}
-// Fotoğrafı (URL veya data URL) beyaz zeminli kareye oturtur — dar/uzun ürünler (bileklik) kırpılmasın
-async function psKareBlob(kaynak) {
-  const r = await fetch(kaynak, { mode: "cors" });
-  if (!r.ok) throw new Error("foto indirilemedi (" + r.status + ")");
-  const bmp = await createImageBitmap(await r.blob());
-  const S = 224, cv = document.createElement("canvas");
-  cv.width = cv.height = S;
-  const ctx = cv.getContext("2d");
-  ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, S, S);
-  const oran = Math.min(S * 0.94 / bmp.width, S * 0.94 / bmp.height);
-  const w = bmp.width * oran, h = bmp.height * oran;
-  ctx.drawImage(bmp, (S - w) / 2, (S - h) / 2, w, h);
-  if (bmp.close) bmp.close();
-  return await new Promise((res, rej) => cv.toBlob(b => b ? res(b) : rej(new Error("görüntü hazırlanamadı")), "image/png"));
-}
-async function clipVektorBlob(blob, ilerle) {
-  const { T, processor, model } = await clipYukle(ilerle);
-  const img = await T.RawImage.fromBlob(blob);
-  const inputs = await processor(img);
-  const { image_embeds } = await model(inputs);
-  const v = image_embeds.data;
-  let n = 0; for (let i = 0; i < v.length; i++) n += v[i] * v[i];
-  n = Math.sqrt(n) || 1;
-  const q = new Int8Array(v.length);
-  for (let i = 0; i < v.length; i++) q[i] = Math.max(-127, Math.min(127, Math.round(v[i] / n * PS_VQ)));
-  return q;
-}
-function psIndeksCoz(j) {
-  if (!j || !j.data || !Array.isArray(j.ids)) return null;
-  const bin = atob(j.data);
-  const mat = new Int8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) mat[i] = (bin.charCodeAt(i) << 24) >> 24;
-  if (mat.length !== j.ids.length * j.dim) return null;
-  return { ids: j.ids, fotos: j.fotos || [], dim: j.dim, mat };
-}
-function psIndeksKodla(ids, fotos, dim, mat) {
-  const u = new Uint8Array(mat.buffer, mat.byteOffset, mat.byteLength);
-  let bin = "";
-  for (let i = 0; i < u.length; i += 0x8000) bin += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000));
-  return { v: 1, dim, q: PS_VQ, ids, fotos, data: btoa(bin) };
-}
-// Fotoğrafı olan ama indekste olmayan (veya fotoğrafı değişmiş) modeller
-function psIndeksEksikler(modeller) {
-  const D = psIndeksDepo;
-  const var_ = new Map();
-  if (D) D.ids.forEach((id, i) => var_.set(id, D.fotos[i]));
-  return (modeller || []).filter(m => m.foto && /^https?:/.test(m.foto) && var_.get(m.id) !== m.foto);
-}
-async function psIndeksKur(modeller, onek, iptal, ilerle) {
-  const D = psIndeksDepo;
-  const dim = 512;
-  const harita = new Map();
-  if (D && D.dim === dim) D.ids.forEach((id, i) => harita.set(id, { foto: D.fotos[i], vec: D.mat.subarray(i * dim, (i + 1) * dim) }));
-  const eksik = psIndeksEksikler(modeller);
-  const gecerli = new Set((modeller || []).filter(m => m.foto).map(m => m.id));
-  const kaydet = async () => {
-    const ids = [], fotos = [];
-    harita.forEach((e, id) => { if (gecerli.has(id)) { ids.push(id); fotos.push(e.foto); } });
-    const mat = new Int8Array(ids.length * dim);
-    ids.forEach((id, i) => mat.set(harita.get(id).vec, i * dim));
-    await vektorDosyaYaz(onek, psIndeksKodla(ids, fotos, dim, mat));
-    psIndeksDepo = { ids, fotos, dim, mat };
-  };
-  const ON = 4, bp = new Map();
-  const hazirla = i => { if (i < eksik.length && !bp.has(i)) { const p = psKareBlob(eksik[i].foto); p.catch(() => {}); bp.set(i, p); } };
-  for (let i = 0; i < ON; i++) hazirla(i);
-  let bitti = 0, hata = 0, sonKayit = 0;
-  for (let i = 0; i < eksik.length; i++) {
-    if (iptal.current) break;
-    hazirla(i + ON);
-    try {
-      const blob = await bp.get(i);
-      const vec = await clipVektorBlob(blob);
-      harita.set(eksik[i].id, { foto: eksik[i].foto, vec });
-    } catch (e) { hata++; if (hata <= 3) console.warn("indeks hata:", eksik[i].kod, e && e.message); }
-    bp.delete(i);
-    bitti++;
-    ilerle(bitti, eksik.length, hata);
-    if (bitti - sonKayit >= 250) { await kaydet(); sonKayit = bitti; }
-  }
-  if (bitti > sonKayit || eksik.length === 0) await kaydet();
-  return { bitti, hata, toplam: eksik.length };
-}
-// q: Int8Array parmak izi → en benzer n model (aynı kodlu kopyalar tek sayılır)
-function psBenzerBul(q, modeller, n) {
-  const D = psIndeksDepo;
-  if (!D || !D.ids.length) return [];
-  const dim = D.dim, mat = D.mat, sk = new Float32Array(D.ids.length);
-  for (let r = 0; r < D.ids.length; r++) { let d = 0; const o = r * dim; for (let k = 0; k < dim; k++) d += mat[o + k] * q[k]; sk[r] = d / PS_VQ2; }
-  const sira = Array.from(sk.keys()).sort((a, b) => sk[b] - sk[a]);
-  const mh = new Map((modeller || []).map(m => [m.id, m]));
-  const gorulen = new Set(), sonuc = [];
-  for (const r of sira) {
-    const m = mh.get(D.ids[r]);
-    if (!m) continue;
-    const nk = psNorm(m.kod);
-    if (gorulen.has(nk)) continue;
-    gorulen.add(nk);
-    sonuc.push({ m, skor: sk[r] });
-    if (sonuc.length >= n) break;
-  }
-  return sonuc;
-}
-
-function psKategoriTahmin(k) {
-  const t = ((k.aciklama || "") + " " + (k.disKod || "")).toUpperCase();
-  if (/BRACELET|BİLEKLİK|BILEKLIK/.test(t)) return "bileklik";
-  if (/NECKLACE|KOLYE|PENDANT|KULON|\bCHAIN\b/.test(t)) return "kolye";
-  if (/EARRING|KÜPE|KUPE/.test(t)) return "kupe";
-  if (/\bUS-?1\b|\bUS\b|MALAFA|YÜZÜK|YUZUK|\bRING\b|\bSIZE\b/.test(t)) return "yuzuk";
-  return "diger";
-}
-
-function PdfSiparisModal({ modeller, kollar, onKapat, onUygula, onModelDuzenle }) {
-  const [asama, setAsama] = useState("sec"); // sec | okuyor | onay
-  const [mesaj, setMesaj] = useState("");
-  const [hata, setHata] = useState("");
-  const [baslik, setBaslik] = useState({});
-  const [tip, setTip] = useState("");
-  const [satirlar, setSatirlar] = useState([]);
-  const [yeniKolId, setYeniKolId] = useState("");
-  const [uygulaniyor, setUygulaniyor] = useState(false);
-  const [ilkSatirlar, setIlkSatirlar] = useState([]); // okunan ilk hâl (Sıfırla için)
-  const [gozSatir, setGozSatir] = useState(null); // koleksiyondan seçim yapılan satır id
-  const [gozSecim, setGozSecim] = useState([]); // koleksiyonda çoklu seçilen modeller
-  const [gozKol, setGozKol] = useState("");
-  const [gozAra, setGozAra] = useState("");
-  const [vi, setVi] = useState({ durum: "kontrol", mesaj: "", yuzde: 0, hata: "" }); // fotoğraf indeksi durumu
-  const [viSurum, setViSurum] = useState(0);
-  const iptalRef = useRef(false);
-  useEffect(() => {
-    let canli = true;
-    iptalRef.current = false;
-    (async () => {
-      try { const d = psIndeksCoz(await vektorDosyaOku(AKTIF_SIRKET_ONEK)); if (d) psIndeksDepo = d; } catch {}
-      if (psIndeksDepo && psIndeksDepo.ids.length) clipYukle().catch(() => {}); // modeli arka planda ısıt: PDF seçilince hazır olsun
-      if (canli) { setViSurum(x => x + 1); setVi(v => ({ ...v, durum: "hazir" })); }
-    })();
-    return () => { canli = false; iptalRef.current = true; };
-  }, []);
-  const eksikSayi = useMemo(() => psIndeksEksikler(modeller).length, [modeller, viSurum]);
-  const hazirSayi = psIndeksDepo ? psIndeksDepo.ids.length : 0;
-
-  const kodHaritasi = useMemo(() => {
-    const h = new Map();
-    (modeller || []).forEach(m => { const k = psNorm(m.kod); if (!k) return; if (!h.has(k)) h.set(k, []); h.get(k).push(m); });
-    return h;
-  }, [modeller]);
-
-  const dosyaSecildi = async (e) => {
-    const f = e.target.files && e.target.files[0];
-    e.target.value = "";
-    if (!f) return;
-    setHata(""); setAsama("okuyor"); setMesaj("PDF okunuyor…");
-    try {
-      const pdfjsLib = await pdfjsYukle();
-      const buf = new Uint8Array(await f.arrayBuffer());
-      const sonuc = await psPdfAyristir(pdfjsLib, buf);
-      if (!sonuc.kalemler.length) { setHata("Bu PDF'te sipariş kalemi bulunamadı. Desteklenen biçimler: Fabor işemri ve Excel'den alınmış tablo PDF'i."); setAsama("sec"); return; }
-      setMesaj("Fotoğraflar hazırlanıyor… (" + sonuc.kalemler.length + " kalem)");
-      await psFotolariKirp(sonuc.pdf, sonuc.kalemler, (a, b) => setMesaj("Fotoğraflar hazırlanıyor… sayfa " + a + "/" + b));
-      const yeniSatirlar = sonuc.kalemler.map(k => {
-        let adaylar = [], bulunanKod = "";
-        for (const a of k.kodAdaylari) {
-          const l = kodHaritasi.get(psNorm(a.kod));
-          if (l && l.length) { adaylar = l; bulunanKod = a.kod; break; }
-        }
-        let sirali = adaylar.slice().sort((x, y) => (y.foto ? 1 : 0) - (x.foto ? 1 : 0));
-        const eslesti = sirali.length > 0;
-        // Açıklamada taş rengi varsa (ör. "beyaz taş"), aynı model ailesinde rengi tutan modeli öne al
-        let renkUyari = "", renkSecim = "";
-        const istenenRenk = eslesti ? psNotTasRengi([k.aciklama, k.not].filter(Boolean).join(" ")) : "";
-        if (istenenRenk) {
-          const taban = psKodTaban(bulunanKod);
-          const aile = []; const gorulen = new Set();
-          (modeller || []).forEach(m => { if (psAileUyar(m.kod, bulunanKod)) { const nk = psNorm(m.kod); if (!gorulen.has(nk) || m.foto) { gorulen.add(nk); aile.push(m); } } });
-          const uyan = [...sirali, ...aile].filter((m, i, a) => a.findIndex(z => z.id === m.id) === i)
-            .filter(m => psModelTasRengi(m) === istenenRenk)
-            .sort((x, y) => (psNorm(y.kod) === psNorm(bulunanKod) ? 1 : 0) - (psNorm(x.kod) === psNorm(bulunanKod) ? 1 : 0) || (y.foto ? 1 : 0) - (x.foto ? 1 : 0));
-          const ad = PS_RENK_AD[istenenRenk];
-          if (uyan.length) {
-            const digerleri = [...sirali, ...aile].filter((m, i, a) => a.findIndex(z => z.id === m.id) === i && !uyan.some(u => u.id === m.id));
-            sirali = [...uyan, ...digerleri];
-            renkSecim = uyan[0].id;
-            renkUyari = psNorm(uyan[0].kod) === psNorm(bulunanKod)
-              ? "Açıklamada '" + ad + " taş' yazıyor — " + uyan[0].kod + " taş rengi uyuyor"
-              : "Açıklamada '" + ad + " taş' yazıyor — " + uyan[0].kod + " seçildi (aynı model, " + ad + " taşlı)";
-          } else if (istenenRenk !== "BEYAZ") {
-            renkUyari = "⚠ Açıklamada '" + ad + " taş' yazıyor ama bu modelin " + ad + " taşlı kaydı bulunamadı — kontrol edin";
-          } else if (sirali.every(m => psModelTasRengi(m) && psModelTasRengi(m) !== "BEYAZ")) {
-            renkUyari = "⚠ Açıklamada 'beyaz taş' yazıyor ama bulunan model renkli taşlı — kontrol edin";
-          }
-        }
-        const ilkKod = (k.kodAdaylari[0] && k.kodAdaylari[0].kod) || "";
-        const excel = k.tip === "excel";
-        // Eşleşen model bir SET ise: açıklamadan hangi parçanın istendiğini bul (ör. "yüzüğüyle match olacak" → kolye parçası)
-        if (eslesti) {
-          const secM = sirali.find(m => m.id === (renkSecim || sirali[0].id)) || sirali[0];
-          if (secM && secM.kategori === "set" && Array.isArray(secM.setParcalari) && secM.setParcalari.length) {
-            const parcalar = secM.setParcalari.map(refKod => {
-              const l = (modeller || []).filter(x => psNorm(x.kod) === psNorm(refKod));
-              return l.sort((a, b) => (b.foto ? 1 : 0) - (a.foto ? 1 : 0))[0] || null;
-            }).filter(Boolean);
-            const parcaYazi = parcalar.map(p => (PS_PARCA_AD[psParcaGrubu(p.kategori)] || p.kategori || "parça") + " " + p.kod + (p.gram ? " " + p.gram + " gr" : "")).join(" · ");
-            if (parcalar.length) {
-              sirali = [...sirali, ...parcalar.filter(p => !sirali.some(m => m.id === p.id))];
-              renkUyari = (renkUyari ? renkUyari + " | " : "") + "SET parçaları: " + parcaYazi;
-            }
-          }
-        }
-        // Notta birden çok renk varsa: her renk için aynı aileden bir model bul, ilki ana model, kalanı "ekler"
-        let ekler = [], adetBasi = 0, adet0 = k.adet || 1, secId = eslesti ? (renkSecim || sirali[0].id) : "";
-        if (eslesti) {
-          const secM0 = sirali.find(m => m.id === secId) || sirali[0];
-          const notMetin = [k.aciklama, k.not].filter(Boolean).join(" ");
-          const renkler = secM0 && secM0.kategori !== "set" ? psNotRenkListesi(notMetin) : [];
-          if (renkler.length >= 2) {
-            const { secimler, eksik } = psRenkAilesi(modeller, bulunanKod, sirali, renkler);
-            if (secimler.length >= 2) {
-              adetBasi = psNotRenkBasiAdet(notMetin);
-              const dag = adetBasi > 0 ? secimler.map(() => adetBasi) : psAdetDagit(k.adet || 1, secimler.length);
-              sirali = [secimler[0].m, ...sirali.filter(m => m.id !== secimler[0].m.id)];
-              secId = secimler[0].m.id; adet0 = dag[0];
-              ekler = secimler.slice(1).map((x, i) => ({ m: x.m, adet: dag[i + 1], renk: x.renk }));
-              renkUyari = "Notta " + renkler.length + " renk var → " + secimler.map(x => x.m.kod + " (" + PS_RENK_AD[x.renk] + ")").join(", ")
-                + (eksik.length ? " | ⚠ " + eksik.map(r => PS_RENK_AD[r]).join(", ") + " için bu ailede model bulunamadı — gerekirse 'Model/renk ekle' ile ekleyin" : "")
-                + (adetBasi > 0 ? " | her renk " + adetBasi + " adet" : "");
-              if (eksik.length) renkUyari = "⚠ " + renkUyari;
-            }
-          }
-        }
-        return {
-          id: k.id, kalem: k,
-          durum: !eslesti ? "yok" : (sirali.length > 1 ? "coklu" : "eslesti"),
-          adaylar: sirali, secimId: secId, bulunanKod, renkUyari, ekler, adetBasi, adetPdf: k.adet || 1,
-          adet: adet0, not: k.aciklama || "",
-          dahil: eslesti || excel,
-          ekle: !eslesti, // eşleşme yoksa varsayılan: yeni model olarak ekle
-          cizimde: !eslesti && !!k.foto, // yeni model, müşteri resmi referans → çizimde olarak eklenir
-          yeniKod: excel ? ilkKod : (k.disKod || ""), yeniKategori: psKategoriTahmin(k), yeniGram: k.gramBirim || "",
-          ara: "",
-        };
-      });
-      // Fabor'da eşleşmeyen kalemler varsayılan olarak kapalı gelir (iç kodlar bizim kodumuz değil)
-      yeniSatirlar.forEach(s => { if (s.durum === "yok" && s.kalem.tip === "fabor") s.dahil = false; });
-      setBaslik(sonuc.baslik || {}); setTip(sonuc.tip); setSatirlar(yeniSatirlar); setIlkSatirlar(yeniSatirlar); setAsama("onay");
-      if (psIndeksDepo && psIndeksDepo.ids.length) oneriToplu(yeniSatirlar.filter(x => x.durum === "yok" && x.kalem.foto));
-    } catch (err) {
-      console.error("PDF okuma hatası:", err);
-      setHata("PDF okunamadı: " + (err && err.message ? err.message : err)); setAsama("sec");
-    }
-  };
-
-  const guncelle = (id, patch) => setSatirlar(p => p.map(s => s.id === id ? { ...s, ...patch } : s));
-  // Model kartı düzenlenip kaydedilince satırlardaki model kopyalarını güncel hâliyle yenile
-  useEffect(() => {
-    const tazele = (m) => (m && (modeller || []).find(x => x.id === m.id)) || m;
-    setSatirlar(p => {
-      let degisti = false;
-      const yeni = p.map(s => {
-        const ad = (s.adaylar || []).map(tazele);
-        const ek = (s.ekler || []).map(e => ({ ...e, m: tazele(e.m) }));
-        if (ad.some((m, i) => m !== s.adaylar[i]) || ek.some((e, i) => e.m !== s.ekler[i].m)) { degisti = true; return { ...s, adaylar: ad, ekler: ek }; }
-        return s;
-      });
-      return degisti ? yeni : p;
-    });
-  }, [modeller]);
-  // Müşteri fotoğrafına en çok benzeyen katalog modellerini bul
-  const oneriHesapla = async (id, kalem) => {
-    if (!kalem || !kalem.foto) return;
-    if (!psIndeksDepo || !psIndeksDepo.ids.length) { guncelle(id, { oneriDurum: "indeksyok" }); return; }
-    guncelle(id, { oneriDurum: "hesapliyor" });
-    try {
-      const q = await clipVektorBlob(await psKareBlob(kalem.foto));
-      guncelle(id, { oneriler: psBenzerBul(q, modeller, 6), oneriDurum: "tamam" });
-    } catch (e) { console.error("benzer arama:", e); guncelle(id, { oneriDurum: "hata", oneriHata: (e && e.message) || "hata" }); }
-  };
-  const oneriToplu = async (liste) => { for (const r of liste) { if (iptalRef.current) break; await oneriHesapla(r.id, r.kalem); } };
-  const indeksBaslat = async () => {
-    if (vi.durum === "kuruyor") return;
-    iptalRef.current = false;
-    setVi({ durum: "kuruyor", mesaj: "Model hazırlanıyor (ilk seferde ~90 MB iner)…", yuzde: 0, hata: "" });
-    try {
-      await clipYukle(p => setVi(v => v.durum === "kuruyor" && !v.yuzde ? { ...v, mesaj: "Model indiriliyor… %" + p } : v));
-      const r = await psIndeksKur(modeller, AKTIF_SIRKET_ONEK, iptalRef, (b, t, h) => setVi({ durum: "kuruyor", mesaj: b + " / " + t + " fotoğraf işlendi" + (h ? " (" + h + " okunamadı)" : ""), yuzde: Math.max(1, Math.round(b / t * 100)), hata: "" }));
-      setViSurum(x => x + 1);
-      setVi({ durum: "hazir", mesaj: iptalRef.current ? "Durduruldu — kaldığı yerden devam edebilir" : "Tamamlandı: " + r.bitti + " fotoğraf" + (r.hata ? " (" + r.hata + " okunamadı)" : ""), yuzde: 100, hata: "" });
-      if (!iptalRef.current) oneriToplu(satirlar.filter(x => x.durum === "yok" && x.kalem.foto && !x.oneriler));
-    } catch (e) { console.error("indeks hatası:", e); setVi({ durum: "hata", mesaj: "", yuzde: 0, hata: (e && e.message) || String(e) }); }
-  };
-  const modelAra = (id, metin) => {
-    let l = kodHaritasi.get(psNorm(metin));
-    // Tam kod yoksa aynı ailenin varyasyonlarından bul (fer280 → FER280-Y, FER280B…)
-    if ((!l || !l.length) && psNorm(metin).length >= 4) l = (modeller || []).filter(m => psAileUyar(m.kod, metin)).sort((a, b) => (b.foto ? 1 : 0) - (a.foto ? 1 : 0));
-    if (l && l.length) guncelle(id, { ara: metin, adaylar: l, secimId: l[0].id, durum: l.length > 1 ? "coklu" : "eslesti", ekle: false, dahil: true, renkUyari: "", ekler: [], bulunanKod: l[0].kod || metin, oneriAcik: false });
-    else guncelle(id, { ara: metin });
-  };
-
-  const modelSec = (satirId, m) => {
-    guncelle(satirId, { adaylar: [m], secimId: m.id, durum: "eslesti", ekle: false, dahil: true, ara: m.kod || "", bulunanKod: m.kod || "", renkUyari: "", ekler: [], oneriAcik: false });
-    setGozSatir(null); setGozKol(""); setGozAra("");
-  };
-  const gozAcKapat = () => { setGozSatir(null); setGozKol(""); setGozAra(""); setGozSecim([]); };
-  const gozAc = (s) => {
-    const m0 = s.durum !== "yok" ? (s.adaylar.find(x => x.id === s.secimId) || s.adaylar[0]) : null;
-    setGozSecim(m0 ? [m0, ...(s.ekler || []).map(e => e.m)] : []);
-    setGozSatir(s.id);
-  };
-  const gozTikla = (m) => setGozSecim(p => p.some(x => x.id === m.id) ? p.filter(x => x.id !== m.id) : [...p, m]);
-  const cokluSec = () => {
-    const s = satirlar.find(x => x.id === gozSatir);
-    if (!s || !gozSecim.length) { gozAcKapat(); return; }
-    const eskiAdet = new Map();
-    const m0 = s.durum !== "yok" ? (s.adaylar.find(x => x.id === s.secimId) || s.adaylar[0]) : null;
-    if (m0) eskiAdet.set(m0.id, Number(s.adet) || 1);
-    (s.ekler || []).forEach(e => eskiAdet.set(e.m.id, Number(e.adet) || 1));
-    const taze = eskiAdet.size === 0 || !gozSecim.some(x => eskiAdet.has(x.id));
-    const dag = s.adetBasi > 0 ? gozSecim.map(() => s.adetBasi) : psAdetDagit(s.adetPdf || s.adet, gozSecim.length);
-    const adetler = gozSecim.map((x, i) => (!taze && eskiAdet.has(x.id)) ? eskiAdet.get(x.id) : (taze ? dag[i] : (s.adetBasi > 0 ? s.adetBasi : 1)));
-    const [ana, ...digerleri] = gozSecim;
-    guncelle(s.id, { adaylar: [ana], secimId: ana.id, durum: "eslesti", ekle: false, dahil: true, ara: ana.kod || "", bulunanKod: ana.kod || "", renkUyari: "", adet: adetler[0], ekler: digerleri.map((x, i) => ({ m: x, adet: adetler[i + 1] })) });
-    gozAcKapat();
-  };
-  const ekAdetYaz = (satirId, mid, v) => setSatirlar(p => p.map(s => s.id === satirId ? { ...s, ekler: (s.ekler || []).map(e => e.m.id === mid ? { ...e, adet: v } : e) } : s));
-  const ekSil = (satirId, mid) => setSatirlar(p => p.map(s => s.id === satirId ? { ...s, ekler: (s.ekler || []).filter(e => e.m.id !== mid) } : s));
-  const gozListe = (() => {
-    const q = psNorm(gozAra);
-    const ham = (modeller || []);
-    if (q) return ham.filter(m => psNorm(m.kod).includes(q) || psNorm(m.ad).includes(q)).slice(0, 120);
-    if (gozKol) return ham.filter(m => m.ki === gozKol).sort((a, b) => (b.t || 0) - (a.t || 0)).slice(0, 400);
-    return [];
-  })();
-
-  const secili = satirlar.filter(s => s.dahil);
-  const yeniSayisi = secili.filter(s => s.ekle && s.durum === "yok").length;
-  const eksikKod = secili.filter(s => s.durum === "yok" && s.ekle && !String(s.yeniKod || "").trim()).length;
-  const kodCakisan = (() => { const c = {}; secili.filter(s => s.durum === "yok" && s.ekle).forEach(s => { const k = psNorm(s.yeniKod); if (k) c[k] = (c[k] || 0) + 1; }); return c; })();
-  const uygulanabilir = secili.length > 0 && eksikKod === 0 && (yeniSayisi === 0 || !!yeniKolId);
-  const sayac = { eslesti: satirlar.filter(s => s.durum === "eslesti").length, coklu: satirlar.filter(s => s.durum === "coklu").length, yok: satirlar.filter(s => s.durum === "yok").length };
-
-  const onayla = async () => {
-    if (!uygulanabilir || uygulaniyor) return;
-    setUygulaniyor(true);
-    try {
-      const kalemler = [];
-      secili.forEach(s => {
-        const ana = {
-          yeni: s.durum === "yok" && s.ekle,
-          model: s.durum === "yok" ? null : (s.adaylar.find(m => m.id === s.secimId) || s.adaylar[0]),
-          kalem: s.kalem, adet: Math.max(1, Number(s.adet) || 1), not: s.not,
-          yeniKod: s.yeniKod, yeniKategori: s.yeniKategori, yeniGram: s.yeniGram, cizimde: !!s.cizimde,
-        };
-        if (!ana.yeni && !ana.model) return;
-        kalemler.push(ana);
-        if (s.durum !== "yok") (s.ekler || []).forEach(e => { if (e.m && !(ana.model && e.m.id === ana.model.id)) kalemler.push({ ...ana, yeni: false, model: e.m, adet: Math.max(1, Number(e.adet) || 1) }); });
-      });
-      await onUygula({ baslik, tip, kolId: yeniKolId, satirlar: kalemler });
-      onKapat();
-    } catch (err) {
-      console.error("PDF sipariş aktarma hatası:", err);
-      setHata("Aktarma sırasında hata: " + (err && err.message ? err.message : err));
-    } finally { setUygulaniyor(false); }
-  };
-
-  const oneriBlok = (s) => (
-    <div style={{ marginBottom: 6 }}>
-      {s.oneriDurum === "hesapliyor" && <div style={{ fontSize: 10, color: "#a89c84" }}>📷 Benzer modeller aranıyor…</div>}
-      {s.oneriDurum === "indeksyok" && <div style={{ fontSize: 10, color: "#e8b04f" }}>📷 Fotoğraf indeksi hazır değil — üstteki "Hazırla" düğmesine basın</div>}
-      {s.oneriDurum === "hata" && <div style={{ fontSize: 10, color: "#e85a4f" }}>📷 Benzer arama yapılamadı: {s.oneriHata}</div>}
-      {s.durum !== "yok" && s.oneriler && s.oneriler.length > 0 && (
-        <button onClick={() => guncelle(s.id, { oneriAcik: !s.oneriAcik })} style={{ ...GH, fontSize: 9, padding: "2px 8px", marginBottom: 4 }}>{s.oneriAcik ? "📷 Benzerleri gizle" : "📷 Fotoğrafa göre benzerleri göster (" + s.oneriler.length + ")"}</button>
-      )}
-      {s.oneriler && s.oneriler.length > 0 && (s.durum === "yok" || s.oneriAcik) && (<>
-        <div style={{ fontSize: 9, color: "#8a7d64", fontWeight: 700, marginBottom: 3 }}>📷 FOTOĞRAFA GÖRE BENZER MODELLER — tıkla, satıra bağlansın</div>
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-          {s.oneriler.map(o => (
-            <div key={o.m.id} onClick={() => modelSec(s.id, o.m)} title={o.m.kod + (o.m.ad ? " · " + o.m.ad : "")} style={{ width: 76, cursor: "pointer", border: "1px solid " + (o.m.id === s.secimId ? "#6abf69" : "rgba(255,255,255,0.12)"), borderRadius: 8, overflow: "hidden", background: "rgba(255,255,255,0.04)" }}>
-              <div style={{ height: 70, background: "#f3f3f3", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                {o.m.foto ? <img src={o.m.foto} alt="" loading="lazy" style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }} /> : null}
-              </div>
-              <div style={{ fontSize: 10, fontWeight: 700, padding: "2px 4px 0", color: "#e8dcc8", wordBreak: "break-all" }}>{o.m.kod}</div>
-              <div style={{ fontSize: 9, fontWeight: 700, padding: "0 4px 3px", color: o.skor >= 0.88 ? "#6abf69" : o.skor >= 0.8 ? "#e8b04f" : "#8a7d64" }}>%{Math.round(o.skor * 100)}</div>
-            </div>
-          ))}
-        </div>
-      </>)}
-      {!s.oneriler && s.oneriDurum !== "hesapliyor" && s.kalem.foto && <button onClick={() => oneriHesapla(s.id, s.kalem)} style={{ ...GH, fontSize: 9, padding: "2px 8px", marginTop: 4 }}>📷 Benzer bul</button>}
-    </div>
-  );
-
-  const kucukIS = { ...IS, padding: "5px 8px", fontSize: 11 };
-  const etiket = { fontSize: 9, color: "#8a7d64", fontWeight: 700, whiteSpace: "nowrap" };
-  const rozet = (renk, yazi) => <span style={{ fontSize: 9, fontWeight: 800, padding: "2px 8px", borderRadius: 20, background: renk + "22", border: "1px solid " + renk + "66", color: renk }}>{yazi}</span>;
-
-  return (
-    <div onClick={() => { if (!uygulaniyor) onKapat(); }} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.82)", zIndex: 300, display: "flex", alignItems: "center", justifyContent: "center", padding: 14 }}>
-      <div onClick={e => e.stopPropagation()} style={{ background: "#1c1c1e", borderRadius: 16, width: "100%", maxWidth: 1040, maxHeight: "94vh", display: "flex", flexDirection: "column", color: "#e8dcc8" }}>
-        <div style={{ padding: "14px 18px", borderBottom: "1px solid rgba(255,255,255,0.08)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-          <div style={{ fontSize: 15, fontWeight: 700, color: "#f5f5f7" }}>📄 PDF'ten sipariş hazırla</div>
-          <button onClick={onKapat} disabled={uygulaniyor} style={{ ...GH, padding: "4px 10px" }}>✕</button>
-        </div>
-        <div style={{ padding: "7px 18px", borderBottom: "1px solid rgba(255,255,255,0.06)", display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", fontSize: 11, color: "#a89c84" }}>
-          <span style={{ fontWeight: 700 }}>📷 Fotoğrafa göre eşleştirme:</span>
-          {vi.durum === "kontrol" && <span>kontrol ediliyor…</span>}
-          {vi.durum !== "kontrol" && vi.durum !== "kuruyor" && <span>{hazirSayi} model hazır{eksikSayi > 0 ? ", " + eksikSayi + " eksik" : " — güncel"}</span>}
-          {vi.durum === "kuruyor" && <>
-            <span>{vi.mesaj}</span>
-            <span style={{ width: 120, height: 6, background: "rgba(255,255,255,0.1)", borderRadius: 3, overflow: "hidden", display: "inline-block" }}><span style={{ display: "block", height: "100%", width: vi.yuzde + "%", background: "#6abf69" }} /></span>
-            <button onClick={() => { iptalRef.current = true; }} style={{ ...GH, fontSize: 10, padding: "3px 9px" }}>Durdur</button>
-          </>}
-          {vi.durum !== "kuruyor" && vi.durum !== "kontrol" && eksikSayi > 0 && <button onClick={indeksBaslat} style={{ ...GH, fontSize: 10, padding: "3px 9px" }}>{hazirSayi ? "Eksikleri ekle" : "Hazırla"} ({eksikSayi})</button>}
-          {vi.durum === "hazir" && vi.mesaj && <span style={{ color: "#6abf69" }}>{vi.mesaj}</span>}
-          {vi.hata && <span style={{ color: "#e85a4f" }}>{vi.hata}</span>}
-          {hazirSayi === 0 && eksikSayi > 0 && vi.durum !== "kuruyor" && <span style={{ fontSize: 10, color: "#7a6f5a", flexBasis: "100%" }}>İlk kurulum: yaklaşık 90 MB'lık model iner ve fotoğraflar işlenir (birkaç on dakika). Sekmeyi açık tutun; kapatırsanız kaldığı yerden devam eder. Sonraki kullanımlarda bu adım gerekmez, sadece yeni modeller eklenir.</span>}
-        </div>
-
-        {asama === "sec" && (
-          <div style={{ padding: 28, textAlign: "center" }}>
-            <p style={{ fontSize: 12, color: "#a89c84", margin: "0 0 6px" }}>Müşterinin gönderdiği sipariş PDF'ini seçin.</p>
-            <p style={{ fontSize: 10, color: "#7a6f5a", margin: "0 0 16px" }}>Fabor işemri ve Excel'den alınmış tablo PDF'leri okunur. Kodlar bizim modellerle eşleştirilir; bulunamayanlar yeni model olarak eklenebilir.</p>
-            <label style={{ ...BG, display: "inline-block", cursor: "pointer", padding: "10px 22px", fontSize: 12 }}>
-              PDF seç
-              <input type="file" accept="application/pdf,.pdf" onChange={dosyaSecildi} style={{ display: "none" }} />
-            </label>
-            {hata && <div style={{ marginTop: 14, fontSize: 11, color: "#e85a4f" }}>{hata}</div>}
-          </div>
-        )}
-
-        {gozSatir && (
-          <div onClick={gozAcKapat} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 310, display: "flex", alignItems: "center", justifyContent: "center", padding: 14 }}>
-            <div onClick={e => e.stopPropagation()} style={{ background: "#1c1c1e", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 14, width: "100%", maxWidth: 940, maxHeight: "90vh", display: "flex", flexDirection: "column" }}>
-              <div style={{ padding: "12px 16px", borderBottom: "1px solid rgba(255,255,255,0.08)", display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                {gozKol && !gozAra && <button onClick={() => setGozKol("")} style={{ ...GH, padding: "4px 10px", fontSize: 10 }}>← Koleksiyonlar</button>}
-                <div style={{ fontSize: 13, fontWeight: 700, color: "#f5f5f7" }}>{gozKol && !gozAra ? ((kollar || []).find(k => k.id === gozKol) || {}).ad : "Model seç"}</div>
-                <input autoFocus value={gozAra} onChange={e => setGozAra(e.target.value)} placeholder="Kod veya ad yaz (tüm koleksiyonlarda ara)" style={{ ...IS, flex: "1 1 200px", padding: "6px 10px", fontSize: 11 }} />
-                <button onClick={gozAcKapat} style={{ ...GH, padding: "4px 10px" }}>✕</button>
-              </div>
-              <div style={{ padding: 14, overflowY: "auto" }}>
-                {!gozKol && !gozAra && (
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(150px,1fr))", gap: 10 }}>
-                    {(kollar || []).map(k => {
-                      const ms = (modeller || []).filter(m => m.ki === k.id);
-                      const kapak = ms.find(m => m.foto);
-                      return (
-                        <div key={k.id} onClick={() => setGozKol(k.id)} style={{ cursor: "pointer", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 10, overflow: "hidden" }}>
-                          <div style={{ height: 100, background: "#f3f3f3", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                            {kapak ? <img src={kapak.foto} alt="" loading="lazy" style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }} /> : null}
-                          </div>
-                          <div style={{ padding: "6px 8px", fontSize: 11, fontWeight: 700, color: "#e8dcc8" }}>{k.ad}</div>
-                          <div style={{ padding: "0 8px 7px", fontSize: 9, color: "#8a7d64" }}>{ms.length} model</div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-                {(gozKol || gozAra) && (
-                  gozListe.length === 0
-                    ? <div style={{ textAlign: "center", color: "#8a7d64", fontSize: 12, padding: 24 }}>Model bulunamadı</div>
-                    : <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(120px,1fr))", gap: 10 }}>
-                        {gozListe.map(m => (
-                          <div key={m.id} onClick={() => gozTikla(m)} style={{ cursor: "pointer", position: "relative", background: gozSecim.some(x => x.id === m.id) ? "rgba(106,191,105,0.16)" : "rgba(255,255,255,0.04)", border: "2px solid " + (gozSecim.some(x => x.id === m.id) ? "#6abf69" : "rgba(255,255,255,0.08)"), borderRadius: 10, overflow: "hidden" }}>
-                            {gozSecim.some(x => x.id === m.id) && <div style={{ position: "absolute", top: 4, right: 4, zIndex: 2, background: "#6abf69", color: "#fff", borderRadius: 10, fontSize: 10, fontWeight: 800, padding: "1px 7px" }}>✓ {gozSecim.findIndex(x => x.id === m.id) + 1}</div>}
-                            <div style={{ height: 110, background: "#f3f3f3", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                              {m.foto ? <img src={m.foto} alt="" loading="lazy" style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }} /> : <span style={{ color: "#bbb", fontSize: 10 }}>foto yok</span>}
-                            </div>
-                            <div style={{ padding: "5px 7px", fontSize: 11, fontWeight: 700, color: "#e8dcc8" }}>{m.kod}</div>
-                            <div style={{ padding: "0 7px 6px", fontSize: 9, color: "#8a7d64" }}>{m.gram ? m.gram + " gr" : ""}{gozAra && m.ki ? " · " + ((kollar || []).find(k => k.id === m.ki) || {}).ad : ""}</div>
-                          </div>
-                        ))}
-                      </div>
-                )}
-              </div>
-              <div style={{ padding: "10px 16px", borderTop: "1px solid rgba(255,255,255,0.08)", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-                <span style={{ fontSize: 11, color: "#a89c84" }}>Birden çok resme tıklayıp seçebilirsin (ilk seçilen ana model){gozSecim.length ? ": " + gozSecim.map(x => x.kod).join(", ") : ""}</span>
-                <span style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
-                  {gozSecim.length > 0 && <button onClick={() => setGozSecim([])} style={GH}>Temizle</button>}
-                  <button onClick={cokluSec} disabled={!gozSecim.length} style={{ ...BG, opacity: gozSecim.length ? 1 : 0.45, cursor: gozSecim.length ? "pointer" : "not-allowed" }}>Seç ({gozSecim.length})</button>
-                </span>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {asama === "okuyor" && (
-          <div style={{ padding: 40, textAlign: "center", fontSize: 12, color: "#a89c84" }}>{mesaj || "Okunuyor…"}</div>
-        )}
-
-        {asama === "onay" && (<>
-          <div style={{ padding: "10px 18px", borderBottom: "1px solid rgba(255,255,255,0.06)", display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center", fontSize: 11 }}>
-            <span style={{ color: "#f5f5f7", fontWeight: 700 }}>{tip === "fabor" ? "Fabor işemri" : "Excel PDF"}</span>
-            {baslik.referans ? <span>Ref: <b>{baslik.referans}</b></span> : null}
-            {baslik.po ? <span>PO: <b>{baslik.po}</b></span> : null}
-            {baslik.ayar ? <span>Ayar: <b>{baslik.ayar}</b></span> : null}
-            {baslik.listeGram ? <span>Liste gramı: <b>{baslik.listeGram}</b></span> : null}
-            {baslik.teslimTarihi ? <span>Teslim: <b>{baslik.teslimTarihi}</b></span> : null}
-            {baslik.genelNot ? <span style={{ color: "#e85a4f" }}>⚠ {baslik.genelNot}</span> : null}
-            <span style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
-              {rozet("#6abf69", sayac.eslesti + " eşleşti")}
-              {sayac.coklu > 0 && rozet("#e8b04f", sayac.coklu + " birden çok model")}
-              {rozet("#e85a4f", sayac.yok + " bulunamadı")}
-            </span>
-          </div>
-          {sayac.yok > 0 && (
-            <div style={{ padding: "8px 18px", borderBottom: "1px solid rgba(255,255,255,0.06)", display: "flex", alignItems: "center", gap: 8, fontSize: 11 }}>
-              <span style={etiket}>YENİ MODELLER ŞU KOLEKSİYONA EKLENSİN:</span>
-              <select value={yeniKolId} onChange={e => setYeniKolId(e.target.value)} style={{ ...kucukIS, width: "auto", minWidth: 200 }}>
-                <option value="">— koleksiyon seç —</option>
-                {(kollar || []).map(k => <option key={k.id} value={k.id}>{k.ad}</option>)}
-              </select>
-              {yeniSayisi > 0 && !yeniKolId && <span style={{ color: "#e85a4f", fontSize: 10 }}>Yeni model eklemek için koleksiyon seçin</span>}
-            </div>
-          )}
-          <div style={{ overflowY: "auto", padding: "10px 14px", flex: 1 }}>
-            {satirlar.map((s, sn) => {
-              const m = s.durum !== "yok" ? (s.adaylar.find(x => x.id === s.secimId) || s.adaylar[0]) : null;
-              return (
-                <div key={s.id} style={{ display: "flex", gap: 12, padding: "10px 8px", marginBottom: 8, borderRadius: 10, background: s.dahil ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.01)", border: "1px solid " + (s.dahil ? "rgba(var(--vurgu-rgb),0.18)" : "rgba(255,255,255,0.05)"), opacity: s.dahil ? 1 : 0.55, alignItems: "flex-start", flexWrap: "wrap" }}>
-                  <input type="checkbox" checked={s.dahil} onChange={e => guncelle(s.id, { dahil: e.target.checked })} style={{ marginTop: 4 }} title="Siparişe aktar" />
-                  <div style={{ width: 92, flexShrink: 0 }}>
-                    <div style={{ width: 92, height: 92, background: "#fff", borderRadius: 8, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                      {s.kalem.foto ? <img src={s.kalem.foto} alt="" style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }} /> : <span style={{ color: "#bbb", fontSize: 10 }}>foto yok</span>}
-                    </div>
-                    <div style={{ fontSize: 8, color: "#7a6f5a", marginTop: 3, wordBreak: "break-all" }}>#{sn + 1} · s.{s.kalem.sayfaNo} · {s.kalem.disKod}</div>
-                  </div>
-                  <div style={{ flex: "1 1 260px", minWidth: 240 }}>
-                    <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 6, flexWrap: "wrap" }}>
-                      <span style={etiket}>ADET</span>
-                      <input type="number" min="1" value={s.adet} onChange={e => guncelle(s.id, { adet: e.target.value })} style={{ ...kucukIS, width: 64 }} />
-                      {s.kalem.gramBirim ? <span style={{ fontSize: 10, color: "#a89c84" }}>PDF gram: {s.kalem.gramBirim}</span> : null}
-                      {!s.kalem.adetBulundu && <span style={{ fontSize: 9, color: "#e8b04f" }}>adet okunamadı, kontrol edin</span>}
-                    </div>
-                    <textarea value={s.not} onChange={e => guncelle(s.id, { not: e.target.value })} rows={Math.min(5, Math.max(2, Math.ceil((s.not || "").length / 46)))} placeholder="Açıklama / not" style={{ ...kucukIS, resize: "vertical", fontFamily: "sans-serif", lineHeight: 1.35 }} />
-                  </div>
-                  <div style={{ flex: "1 1 300px", minWidth: 260 }}>
-                    {oneriBlok(s)}
-                    {s.durum !== "yok" && m && (
-                      <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
-                        <div style={{ width: 70, height: 70, background: "#f3f3f3", borderRadius: 8, overflow: "hidden", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                          {m.foto ? <img src={m.foto} alt="" loading="lazy" style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }} /> : null}
-                        </div>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
-                            {rozet(s.durum === "coklu" ? "#e8b04f" : "#6abf69", s.durum === "coklu" ? "birden çok model" : "eşleşti")}
-                            <b style={{ fontSize: 13, color: "#f5f5f7" }}>{m.kod}</b>
-                            <span style={{ fontSize: 10, color: "#a89c84" }}>{tipEtiket(m.kategori)}</span>
-                            {onModelDuzenle && <button onClick={() => onModelDuzenle(m)} title="Model kartını aç: gram, taş, ayar vb. düzenle" style={{ ...GH, fontSize: 10, padding: "2px 8px" }}>✏️ Düzenle</button>}
-                          </div>
-                          <div style={{ fontSize: 10, color: "#8a7d64", marginTop: 2 }}>{m.gram ? m.gram + " gr · " : ""}{m.refAyar || ""} · {m.kategori || ""} · bulunan: {s.bulunanKod} ({(s.kalem.kodAdaylari.find(a => a.kod === s.bulunanKod) || {}).kaynak || ""})</div>
-                          {s.renkUyari && <div style={{ fontSize: 10, fontWeight: 700, marginBottom: 4, color: s.renkUyari.startsWith("⚠") ? "#e8b04f" : "#6abf69" }}>🎨 {s.renkUyari}</div>}
-                          {s.adaylar.length > 1 && (
-                            <select value={s.secimId} onChange={e => guncelle(s.id, { secimId: e.target.value })} style={{ ...kucukIS, marginTop: 5 }}>
-                              {s.adaylar.map(x => <option key={x.id} value={x.id}>{x.kod} — {(kollar.find(k => k.id === x.ki) || {}).ad || "?"}{x.ad ? " · " + x.ad : ""}</option>)}
-                            </select>
-                          )}
-                        </div>
-                      </div>
-                    )}
-                    {s.durum === "yok" && (
-                      <div>
-                        <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 6, flexWrap: "wrap" }}>
-                          {rozet("#e85a4f", "bulunamadı")}
-                          <label style={{ fontSize: 10, display: "flex", gap: 4, alignItems: "center", cursor: "pointer" }}>
-                            <input type="checkbox" checked={s.ekle} onChange={e => guncelle(s.id, { ekle: e.target.checked })} /> yeni model olarak ekle
-                          </label>
-                          {s.ekle && s.kalem.foto && (
-                            <label style={{ fontSize: 10, display: "flex", gap: 4, alignItems: "center", cursor: "pointer", color: "#e8b04f" }} title="Katalogda 'ÇİZİMDE' olarak görünür, müşteri vitrininde görünmez; müşterinin resmi sadece referans olarak saklanır">
-                              <input type="checkbox" checked={!!s.cizimde} onChange={e => guncelle(s.id, { cizimde: e.target.checked })} /> 🎨 Çizimde olarak ekle
-                            </label>
-                          )}
-                        </div>
-                        {s.ekle && (
-                          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 6 }}>
-                            <input value={s.yeniKod} onChange={e => guncelle(s.id, { yeniKod: e.target.value.toUpperCase() })} placeholder="Kod" style={{ ...kucukIS, width: 120, borderColor: (!String(s.yeniKod).trim() || kodCakisan[psNorm(s.yeniKod)] > 1) ? "#e85a4f" : undefined }} />
-                            <select value={s.yeniKategori} onChange={e => guncelle(s.id, { yeniKategori: e.target.value })} style={{ ...kucukIS, width: "auto" }}>
-                              {KATEGORILER.map(k => <option key={k.id} value={k.id}>{k.l}</option>)}
-                            </select>
-                            <input type="number" step="0.01" value={s.yeniGram} onChange={e => guncelle(s.id, { yeniGram: e.target.value })} placeholder="gram" style={{ ...kucukIS, width: 70 }} />
-                            {kodCakisan[psNorm(s.yeniKod)] > 1 && <span style={{ fontSize: 9, color: "#e85a4f", alignSelf: "center" }}>aynı kod listede birden fazla</span>}
-                          </div>
-                        )}
-                        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                          <input value={s.ara} onChange={e => modelAra(s.id, e.target.value)} placeholder="Kodu elle yaz: mevcut modeli bul" style={{ ...kucukIS, width: 200 }} />
-                          <button onClick={() => gozAc(s)} style={{ ...GH, fontSize: 10, padding: "5px 9px", whiteSpace: "nowrap" }}>📂 Koleksiyondan seç</button>
-                        </div>
-                      </div>
-                    )}
-                    {s.durum !== "yok" && (
-                      <div style={{ marginTop: 6 }}>
-                        <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
-                          <input value={s.ara} onChange={e => modelAra(s.id, e.target.value)} placeholder="Başka model: kodu yaz" style={{ ...kucukIS, width: 170 }} />
-                          <button onClick={() => gozAc(s)} style={{ ...GH, fontSize: 10, padding: "5px 9px", whiteSpace: "nowrap" }}>{s.ekler && s.ekler.length ? "📂 Model/renk ekle-çıkar" : "📂 Koleksiyondan seç (çoklu)"}</button>
-                        </div>
-                        {(() => {
-                          const aile = psAileModelleri(modeller, s.bulunanKod || (m && m.kod) || "", s.adaylar).filter(x => x.id !== (m && m.id) && !(s.ekler || []).some(e => e.m.id === x.id));
-                          if (!aile.length) return null;
-                          return (
-                            <div style={{ marginTop: 6, display: "flex", gap: 5, flexWrap: "wrap", alignItems: "center" }}>
-                              <span style={{ fontSize: 9, color: "#8a7d64" }}>Aynı modelin diğer kayıtları:</span>
-                              {aile.map(x => (
-                                <button key={x.id} onClick={() => setSatirlar(p => p.map(r => r.id === s.id ? { ...r, ekler: [...(r.ekler || []), { m: x, adet: r.adetBasi > 0 ? r.adetBasi : 1 }] } : r))} title="Bu kaydı da siparişe ekle" style={{ ...GH, fontSize: 10, padding: "3px 8px", display: "inline-flex", gap: 5, alignItems: "center" }}>
-                                  {x.foto ? <img src={x.foto} alt="" loading="lazy" style={{ width: 18, height: 18, objectFit: "contain", background: "#fff", borderRadius: 3 }} /> : null}
-                                  ＋ {x.kod}{psModelTasRengi(x) ? " · " + PS_RENK_AD[psModelTasRengi(x)] : ""}{psTrBuyuk(x.kod) === psTrBuyuk(s.bulunanKod) ? " (fotoğraftaki)" : ""}
-                                </button>
-                              ))}
-                            </div>
-                          );
-                        })()}
-                        {s.ekler && s.ekler.length > 0 && (() => {
-                          const top = (Number(s.adet) || 0) + s.ekler.reduce((a, e) => a + (Number(e.adet) || 0), 0);
-                          const esit = top === s.adetPdf;
-                          return (
-                            <div style={{ marginTop: 8, borderTop: "1px dashed rgba(255,255,255,0.1)", paddingTop: 6 }}>
-                              {s.ekler.map(e => (
-                                <div key={e.m.id} style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 4 }}>
-                                  <div style={{ width: 38, height: 38, background: "#f3f3f3", borderRadius: 6, overflow: "hidden", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>{e.m.foto ? <img src={e.m.foto} alt="" loading="lazy" style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }} /> : null}</div>
-                                  <b style={{ fontSize: 12, color: "#f5f5f7" }}>{e.m.kod}</b>
-                                  <span style={{ fontSize: 9, color: "#a89c84" }}>{psModelTasRengi(e.m) ? PS_RENK_AD[psModelTasRengi(e.m)] : ""}{e.m.gram ? " · " + e.m.gram + " gr" : ""}</span>
-                                  {onModelDuzenle && <button onClick={() => onModelDuzenle(e.m)} title="Model kartını düzenle" style={{ ...GH, padding: "2px 7px", fontSize: 10 }}>✏️</button>}
-                                  <input type="number" min="1" value={e.adet} onChange={ev => ekAdetYaz(s.id, e.m.id, ev.target.value)} style={{ ...kucukIS, width: 56, marginLeft: "auto" }} />
-                                  <span style={{ fontSize: 9, color: "#a89c84" }}>adet</span>
-                                  <button onClick={() => ekSil(s.id, e.m.id)} title="Bu modeli çıkar" style={{ ...GH, padding: "2px 7px", fontSize: 10 }}>✕</button>
-                                </div>
-                              ))}
-                              <div style={{ fontSize: 10, fontWeight: 700, color: esit ? "#6abf69" : "#e8b04f" }}>Dağılım: {[Number(s.adet) || 0, ...s.ekler.map(e => Number(e.adet) || 0)].join(" + ")} = {top} (müşteri PDF: {s.adetPdf}){esit ? " ✓" : " — kontrol edin"}</div>
-                            </div>
-                          );
-                        })()}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-          <div style={{ padding: "12px 18px", borderTop: "1px solid rgba(255,255,255,0.08)", display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-            <span style={{ fontSize: 11, color: "#a89c84" }}>{secili.length} kalem seçili{yeniSayisi > 0 ? " · " + yeniSayisi + " yeni model eklenecek" : ""}</span>
-            {hata && <span style={{ fontSize: 11, color: "#e85a4f" }}>{hata}</span>}
-            {eksikKod > 0 && <span style={{ fontSize: 10, color: "#e85a4f" }}>{eksikKod} yeni modelin kodu boş</span>}
-            <span style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
-              <button onClick={() => { if (window.confirm("Yaptığın tüm değişiklikler (seçimler, adet, not, model eşleştirmeleri) silinip PDF ilk okunduğu hâle dönsün mü?")) { setSatirlar(ilkSatirlar); setHata(""); } }} disabled={uygulaniyor} title="Tüm satırları PDF'in ilk okunduğu hâle döndür" style={GH}>↺ Sıfırla</button>
-              <button onClick={() => { if (window.confirm("Bu PDF'teki çalışma silinsin ve ekran boşalsın mı?")) { setAsama("sec"); setSatirlar([]); setIlkSatirlar([]); setBaslik({}); setHata(""); } }} disabled={uygulaniyor} style={GH}>🗑 Temizle</button>
-              <label style={{ ...GH, cursor: uygulaniyor ? "default" : "pointer", display: "inline-block" }} title="Başka (veya aynı) PDF'i seç ve yeniden oku">🔄 Tekrar yükle
-                <input type="file" accept="application/pdf,.pdf" disabled={uygulaniyor} onChange={e => { if (window.confirm("Yeni PDF yüklenince mevcut çalışma silinir. Devam edilsin mi?")) dosyaSecildi(e); else e.target.value = ""; }} style={{ display: "none" }} />
-              </label>
-              <button onClick={onKapat} disabled={uygulaniyor} style={GH}>İptal</button>
-              <button onClick={onayla} disabled={!uygulanabilir || uygulaniyor} style={{ ...BG, opacity: (!uygulanabilir || uygulaniyor) ? 0.45 : 1, cursor: (!uygulanabilir || uygulaniyor) ? "not-allowed" : "pointer" }}>{uygulaniyor ? "Aktarılıyor…" : "Konfirmasyon'a aktar (" + secili.length + ")"}</button>
-            </span>
-          </div>
-        </>)}
-      </div>
-    </div>
-  );
-}
-
-
-
 function dogalSirala(a, b, ters) {
   const ka = a.kod || "", kb = b.kod || "";
   // Karmaşık kodları doğru sırala: prefix + ana sayı + suffix
@@ -2428,18 +638,18 @@ function buildKatalogHTML(kol, modeller, sutun, hedefAyar, kollar, gruplu, tamKa
   const cols = sutun || 3;
   const perPage = cols === 4 ? 16 : 12;
 
-  const css = "*{margin:0;padding:0;box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}"
-    + "html{background:#fff}body{font-family:Arial,Helvetica,sans-serif;background:#fff;color:#1a1a1a}"
+  const css = "*{margin:0;padding:0;box-sizing:border-box}"
+    + "body{font-family:Arial,Helvetica,sans-serif;background:#f3f3f3;color:#1a1a1a}"
     + "@media print{.np{display:none!important}@page{size:A4 portrait;margin:6mm}}"
-    + ".cv{height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;page-break-after:always;background:#fff}"
+    + ".cv{height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;page-break-after:always;background:#f3f3f3}"
     + ".cv .ln{width:44px;height:1px;background:#1a1a1a;margin:14px 0}"
     + ".cv h1{font-size:28px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;text-align:center}"
     + ".cv p{font-size:11px;color:#aaa;letter-spacing:.1em;text-transform:uppercase}"
-    + ".pg{padding:7px 16px 5px;page-break-after:always;height:99vh;display:flex;flex-direction:column;background:#fff}"
+    + ".pg{padding:7px 16px 5px;page-break-after:always;height:99vh;display:flex;flex-direction:column;background:#f3f3f3}"
     + ".pg:last-child{page-break-after:auto}"
     + ".grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px;flex:1;min-height:0;grid-auto-rows:minmax(0,calc((99vh - 50px) / 4));align-content:start}"
     + ".grid4{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:4px;flex:1;min-height:0;grid-auto-rows:minmax(0,calc((99vh - 50px) / 4));align-content:start}"
-    + ".cd{background:#f3f3f3;border:none;border-radius:12px;overflow:hidden;display:flex;flex-direction:column;box-shadow:none}"
+    + ".cd{background:#fff;border:1px solid #e0e0e0;border-radius:12px;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 2px 8px rgba(0,0,0,0.10)}"
     + ".cd-bileklik{grid-column:1/-1}"
     + ".cd-kolye-3{grid-column:span 3;grid-row:span 2}"
     + ".cd-kolye-4{grid-column:span 4;grid-row:span 2}"
@@ -2451,11 +661,11 @@ function buildKatalogHTML(kol, modeller, sutun, hedefAyar, kollar, gruplu, tamKa
     + ".dn-ico{display:flex;align-items:center;justify-content:center;font-size:20px;background:#1a1a1a}"
     + ".cd-bileklik .ph img{object-fit:cover;transform:translate(-50%,-50%);width:100%;height:100%}" // bileklik kartın tüm genişliğini doldursun (fotonun boş üst/alt kısmı kırpılır, bilezik ortada kalır)
     + ".cd-kolye-3 .ph img,.cd-kolye-4 .ph img{width:105%;height:105%;object-fit:contain}"
-    + ".inf{padding:6px 9px 7px 10px;flex-shrink:0;background:linear-gradient(180deg,#f3f3f3 0%,#fbfbfb 100%);border-top:none;border-left:3px solid #5c5c5c}"
+    + ".inf{padding:6px 9px 7px 10px;flex-shrink:0;background:#fff;border-top:1px solid #f0f0f0;border-left:3px solid #1a1a1a}"
     + ".r1{display:flex;justify-content:space-between;align-items:baseline}"
     + ".kod{font-size:13px;color:#1a1a1a;font-weight:700;letter-spacing:.04em}"
     + ".gram{font-size:10px;font-weight:700;color:#333}"
-    + ".ac{font-size:8px;line-height:11px;min-height:11px;height:11px;color:#aaa;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}"
+    + ".ac{font-size:8px;color:#aaa;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}"
     + ".set-parcalar{font-size:7.5px;font-weight:700;color:#444;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}"
     + ".ft{display:flex;justify-content:space-between;align-items:center;padding:5px 3px 0;border-top:1px solid #e0e0e0;flex-shrink:0}"
     + ".ft span{font-size:7px;color:#666;font-weight:700;letter-spacing:.08em;text-transform:uppercase}"
@@ -2518,8 +728,7 @@ function buildKatalogHTML(kol, modeller, sutun, hedefAyar, kollar, gruplu, tamKa
     h += "<span class='kod'>" + (m.kod || "—") + "</span>";
     h += "<span class='gram'>" + gosterGram + "gr · " + gosterAyar + "</span>";
     h += "</div>";
-    // Açıklama olsun olmasın aynı yükseklik: boşsa görünmez satır yer tutar (kart boyları değişmesin)
-    h += "<div class='ac'>" + (m.ac ? m.ac : "&nbsp;") + "</div>";
+    if (m.ac) h += "<div class='ac'>" + m.ac + "</div>";
     if (isSet) {
       h += "<div class='set-parcalar'>" + setParcaGramlari.map(p =>
         p.bulunamadi ? (p.kod + ": —") : (p.kod + " (" + p.kat + "): " + p.gram.toFixed(2) + "gr")
@@ -2693,7 +902,7 @@ function buildKonfHTML(siparis, altinKgUSD, mc, fiyatli, modeller, siraModu) {
     ".bileklik-foto img{width:100%;height:100%;object-fit:cover;object-position:center;display:block}",
     ".kod{font-size:12px;font-weight:700;color:#0f1923;letter-spacing:.02em}",
     ".model-ad{font-size:10px;color:#4a5568;margin-top:2px}",
-    ".model-nt{font-size:9px;color:#e03131;margin-top:3px;font-style:italic}",
+    ".model-nt{font-size:9px;color:#0a84ff;margin-top:3px;font-style:italic}",
     ".model-boy{font-size:9px;color:#6b7a8d;margin-top:3px}",
     ".tas-blok{margin-top:5px;padding:4px 7px;background:#f5f8fc;border-left:2px solid #0a84ff;border-radius:2px}",
     ".tas-lbl{font-size:7px;color:#8a9bb0;text-transform:uppercase;letter-spacing:.08em;margin-bottom:3px}",
@@ -2704,7 +913,7 @@ function buildKonfHTML(siparis, altinKgUSD, mc, fiyatli, modeller, siraModu) {
     ".gram-birim{font-size:10px;font-weight:600;color:#1a1a2e}",
     ".gram-top{font-size:11px;font-weight:700;color:#0f1923}",
     ".gram-lbl{font-size:7px;color:#8a9bb0;margin-bottom:1px}",
-    ".renk-sari{color:#e03131;font-weight:600}",
+    ".renk-sari{color:#0968cc;font-weight:600}",
     ".renk-beyaz{color:#6b7a8d;font-weight:600}",
     ".renk-rose{color:#b06060;font-weight:600}",
     ".isc-birim{font-size:9px;color:#4a5568}",
@@ -2730,7 +939,7 @@ function buildKonfHTML(siparis, altinKgUSD, mc, fiyatli, modeller, siraModu) {
   // Aktif şirkete göre marka (MSK / BSP) — PDF ayrı pencerede açıldığı için CSS değişkeni YOK, sabit renk
   const _sirketKisa = AKTIF_SIRKET_ONEK === "bsp2_" ? "BSP" : "MSK";
   const _sirketTam  = AKTIF_SIRKET_ONEK === "bsp2_" ? "BSP Jewelry Design" : "MSK Kuyumculuk";
-  const _logoRenk = "#ffffff";
+  const _logoRenk = "#1a1a1a";
 
   const logoSVG = '<svg viewBox="0 0 160 70" fill="none" xmlns="http://www.w3.org/2000/svg">'
     + '<text x="80" y="48" text-anchor="middle" font-family="Arial" font-size="44" font-weight="300" fill="' + _logoRenk + '" letter-spacing="14">' + _sirketKisa + '</text>'
@@ -2751,7 +960,7 @@ function buildKonfHTML(siparis, altinKgUSD, mc, fiyatli, modeller, siraModu) {
 
   // BİLGİ BAR
   h += "<div class='info-bar'>";
-  h += "<div class='info-cell'><div class='info-lbl'>Musteri</div><div class='info-val'>" + (siparis.musKod||"—") + "</div></div>";
+  h += "<div class='info-cell'><div class='info-lbl'>Musteri</div><div class='info-val'>" + (siparis.musKod||"—") + "</div><div class='info-sub'>" + (siparis.musteri||"") + "</div></div>";
   h += "<div class='info-cell'><div class='info-lbl'>Ayar</div><div class='info-val'>" + ayarLabel + "</div><div class='info-sub'>" + (ayarLabel==="925"?"Gumus":"Altin") + "</div></div>";
   h += "<div class='info-cell'><div class='info-lbl'>Kalem / Adet</div><div class='info-val'>" + rows.length + " / " + tAdet + "</div><div class='info-sub'>model / parca</div></div>";
   h += "<div class='info-cell'><div class='info-lbl'>Teslim</div><div class='info-val' style='font-size:11px'>" + (siparis.teslimTarihi ? new Date(siparis.teslimTarihi).toLocaleDateString("tr-TR",{day:"2-digit",month:"long",year:"numeric"}) : "—") + "</div><div class='info-sub'>&nbsp;</div></div>";
@@ -2851,7 +1060,7 @@ function buildKonfHTML(siparis, altinKgUSD, mc, fiyatli, modeller, siraModu) {
       // kod/ürün/renk/adet/gram bilgileri fotoğrafın ÜSTÜNDE tek satırda, bilgiler ALTINDA değil üstte yer alır.
       h += "<tr class='bileklik-row'><td colspan='" + kolonSayisi + "' style='padding:10px 14px'>";
       h += "<div class='bileklik-bilgi'>";
-      h += "<div class='bileklik-sol'><span class='kod'>" + (r.kod||"—") + "</span> <span class='model-ad'>" + tipEtiket(r.kategori) + "</span></div>";
+      h += "<div class='bileklik-sol'><span class='kod'>" + (r.kod||"—") + "</span> <span class='model-ad'>" + (r.ad||"") + (r.kategori?" <span style='font-size:8px;color:#8a9bb0'>· "+r.kategori+"</span>":"") + "</span></div>";
       h += "<div class='bileklik-sag'>";
       h += "<span class='" + renkClass + "'>" + (r.renk||"Sari") + "</span>";
       h += "<span>Adet: <b>" + r.adet + "</b></span>";
@@ -2867,7 +1076,7 @@ function buildKonfHTML(siparis, altinKgUSD, mc, fiyatli, modeller, siraModu) {
       h += "<tr>";
       h += "<td class='foto-cell'><div class='foto-wrap'>" + (r.foto?"<img src='"+r.foto+"'/>":"") + "</div></td>";
       h += "<td><div class='kod'>" + (r.kod||"—") + "</div></td>";
-      h += "<td><div class='model-ad'>" + tipEtiket(r.kategori) + "</div>" + (r.sipNot?"<div class='model-nt'>"+r.sipNot+"</div>":"") + boyStr + tasStr + "</td>";
+      h += "<td><div class='model-ad'>" + (r.ad||"") + (r.kategori?" <span style='font-size:8px;color:#8a9bb0'>· "+r.kategori+"</span>":"") + "</div>" + (r.sipNot?"<div class='model-nt'>"+r.sipNot+"</div>":"") + boyStr + tasStr + "</td>";
       h += "<td class='r'><span class='" + renkClass + "'>" + (r.renk||"Sari") + "</span></td>";
       h += "<td class='r'>" + r.adet + "</td>";
       h += "<td class='r'><div class='gram-lbl'>birim</div><div class='gram-birim'>" + fN(birimGram,2) + " gr</div></td>";
@@ -3001,14 +1210,14 @@ function buildSatisRaporuHTML(modeller, siparisler) {
   let toplamHurda = 0, toplamHurdaGr = 0;
   siparisler.forEach(s => {
     (s.kalemler||[]).forEach(k => {
-      if (!mSatis[k.id]) mSatis[k.id] = { ad:tipEtiket(k.kategori), kod:k.kod||"", foto:k.foto||"", adet:0, kar:0, gram:0, hurda:0 };
+      if (!mSatis[k.id]) mSatis[k.id] = { ad:k.ad, kod:k.kod||"", foto:k.foto||"", adet:0, kar:0, gram:0, hurda:0 };
       const hc = hesapla(k, k.secilenAyar||k.refAyar, s.altinKgUSD, s.mc);
       const hurdaAdet = ((s.kalemHurda)||{})[k.id] || 0;
       const iadeAdet  = ((s.kalemIade)||{})[k.id] || 0;
       const tamirAdet = ((s.kalemTamir)||{})[k.id] || 0;
       const netAdet = Math.max(0, (k.adet||1) - hurdaAdet - iadeAdet - tamirAdet);
       mSatis[k.id].adet  += netAdet;
-      mSatis[k.id].kar   += hc.karHas * (k.numune?0:1) * netAdet;
+      mSatis[k.id].kar   += hc.karHas * netAdet;
       mSatis[k.id].gram  += hc.mamulGram * netAdet;
       mSatis[k.id].hurda += hurdaAdet;
       toplamHurda   += hurdaAdet;
@@ -3089,7 +1298,7 @@ function buildSipListeRaporuHTML(siparisler, altinKgUSD, mc) {
       const net      = Math.max(0, adet - hurda - iade - tamir);
       const karMly   = hc.mamulGram > 0 ? hc.karHas / hc.mamulGram : 0;
       sipAdet  += net;  sipGram  += hc.mamulGram * net;
-      sipKar   += hc.karHas * (k.numune?0:1) * net;  sipKarUSD += hc.karHas * (k.numune?0:1) * net * hasGramUSD;
+      sipKar   += hc.karHas * net;  sipKarUSD += hc.karHas * net * hasGramUSD;
       sipHurda += hurda; sipIade += iade; sipTamir += tamir;
       return { k, hc, adet, net, hurda, iade, tamir, karMly,
         hurdaNeden: ((s.kalemHurdaNeden) || {})[k.id] || "",
@@ -3109,7 +1318,7 @@ function buildSipListeRaporuHTML(siparisler, altinKgUSD, mc) {
   siparisler.forEach(s => {
     (s.kalemler || []).forEach(k => {
       const key = k.kod || k.id;
-      if (!kayipMap[key]) kayipMap[key] = { ad: tipEtiket(k.kategori), kod: k.kod || "?", hurda:[], iade:[], tamir:[] };
+      if (!kayipMap[key]) kayipMap[key] = { ad: k.ad || k.kod || "?", kod: k.kod || "?", hurda:[], iade:[], tamir:[] };
       const h = ((s.kalemHurda)  || {})[k.id] || 0;
       const ia= ((s.kalemIade)   || {})[k.id] || 0;
       const t = ((s.kalemTamir)  || {})[k.id] || 0;
@@ -3253,7 +1462,7 @@ function buildSipListeRaporuHTML(siparisler, altinKgUSD, mc) {
     const karRenk  = sipKarMly>=0.030 ? "#2d8a4e" : sipKarMly>=0.020 ? "#b8600a" : "#c0392b";
     const tarih    = new Date(s.tarih).toLocaleDateString("tr-TR",{day:"2-digit",month:"2-digit",year:"2-digit"});
     h += "<tr" + (hasKayip?" class='kayip-row'":"") + ">";
-    h += "<td style='font-weight:700'>" + (s.musKod||s.musteri||"İsimsiz") + "</td>";
+    h += "<td style='font-weight:700'>" + (s.musKod||s.musteri||"İsimsiz") + (s.musKod&&s.musteri&&s.musKod!==s.musteri?"<br><span style='font-size:8px;color:#999'>"+s.musteri+"</span>":"") + "</td>";
     h += "<td style='color:#888;font-size:9px'>" + tarih + (s.teslimTarihi?"<br>Teslim: "+new Date(s.teslimTarihi).toLocaleDateString("tr-TR",{day:"2-digit",month:"2-digit",year:"2-digit"}):"") + "</td>";
     h += "<td class='r' style='font-weight:800'>" + sipAdet + "</td>";
     h += "<td class='r'>" + fN(sipGram,2) + " gr</td>";
@@ -3340,10 +1549,10 @@ function buildMusteriDetayHTML(musAd, musKod, siparisler) {
       const hc = hesapla(k, k.secilenAyar||k.refAyar, s.altinKgUSD, s.mc);
       const kDurum = (s.kalemDurumlar||{})[k.id]||"baslanmadi";
       const adet = k.adet||1;
-      sipKar  += hc.karHas * (k.numune?0:1) * adet;
+      sipKar  += hc.karHas * adet;
       sipGram += hc.mamulGram * adet;
       sipAdet += adet;
-      topKar  += hc.karHas * (k.numune?0:1) * adet;
+      topKar  += hc.karHas * adet;
       topGram += hc.mamulGram * adet;
       topAdet += adet;
       return { k, hc, adet, kDurum };
@@ -3358,7 +1567,7 @@ function buildMusteriDetayHTML(musAd, musKod, siparisler) {
       h += "<tr style='" + (hurda?"background:#fff5f5;":"") + "'>";
       h += "<td>" + (k.foto?"<img src='"+k.foto+"' style='width:30px;height:30px;object-fit:cover;border-radius:4px'/>":"<div style='width:30px;height:30px;background:#f0f0f0;border-radius:4px'></div>") + "</td>";
       h += "<td style='color:#1a1a1a;font-weight:700'>" + (k.kod||"—") + "</td>";
-      h += "<td style='font-weight:600'>" + tipEtiket(k.kategori) + "</td>";
+      h += "<td style='font-weight:600'>" + (k.ad||"") + "</td>";
       h += "<td style='color:"+renkRenk+";font-weight:700'>" + (k.renk||"Sari") + "</td>";
       const hurdaNeden = hurda ? ((s.kalemHurdaNeden||{})[k.id]||"") : "";
       h += "<td style='color:#555;font-size:9px'>" + (k.sipNot||"") + (hurda?" <b style='color:#e85a4f'>[HURDA" + (hurdaNeden?" - "+hurdaNeden:"") + "]</b>":"") + "</td>";
@@ -3668,8 +1877,6 @@ function OnizlemeBox({ m, altinKgUSD, mc }) {
   );
 }
 
-// Giriş şifresinin varsayılanı (cihazda özel şifre kaydedilmediyse bu geçerli). Kalıcı değiştirmek için buradaki değeri düzenle.
-const VARSAYILAN_GIRIS_SIFRESI = "*Mm19671967";
 function GirisEkrani({ onGiris }) {
   const [sifre, setSifre] = useState("");
   const [hata, setHata] = useState(false);
@@ -3681,7 +1888,7 @@ function GirisEkrani({ onGiris }) {
     document.documentElement.style.padding = "0";
   }, []);
   const kontrol = () => {
-    const aktifSifre = (localStorage.getItem("atolye_sifre_v2") || VARSAYILAN_GIRIS_SIFRESI);
+    const aktifSifre = localStorage.getItem("atolye_sifre") || "19671967*Mm";
     if (sifre === aktifSifre) {
       // "Beni Hatırla" işaretliyse 30 günlük oturum token'ı kaydet
       try {
@@ -3733,7 +1940,7 @@ function SifreDegistir({ T }) {
 
   // 1. ADIM — mevcut şifre + yeni şifre kontrolleri geçerse, e-postaya 6 haneli kod gönder
   const kodGonder = async () => {
-    const aktif = (localStorage.getItem("atolye_sifre_v2") || VARSAYILAN_GIRIS_SIFRESI);
+    const aktif = localStorage.getItem("atolye_sifre") || "19671967*Mm";
     if (eskiSifre !== aktif) { setMesaj({ok:false,txt:"Mevcut şifre yanlış!"}); return; }
     if (yeniSifre.length < 6) { setMesaj({ok:false,txt:"En az 6 karakter olmalı!"}); return; }
     if (yeniSifre !== yeniSifre2) { setMesaj({ok:false,txt:"Şifreler eşleşmiyor!"}); return; }
@@ -3759,7 +1966,7 @@ function SifreDegistir({ T }) {
       const r = await fetch("/api/sifre-kod-dogrula", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ token: kodToken, kod: onayKodu.trim() }) });
       const j = await r.json();
       if (!j.basarili) { setMesaj({ok:false,txt:j.hata||"Kod doğrulanamadı"}); setDogrulaniyor(false); return; }
-      localStorage.setItem("atolye_sifre_v2", yeniSifre);
+      localStorage.setItem("atolye_sifre", yeniSifre);
       try { localStorage.removeItem("atolye_oturum"); } catch {} // şifre değişti, oturum sıfırlansın
       setEskiSifre(""); setYeniSifre(""); setYeniSifre2(""); setOnayKodu(""); setKodToken(null);
       setAdim("form");
@@ -3979,6 +2186,7 @@ function VitrinModu({ kod, onizleme }) {
     en_kisa_surede: { tr:"En kısa sürede size dönüş yapılacaktır.", en:"We'll get back to you as soon as possible.", es:"Nos pondremos en contacto con usted lo antes posible." },
     tas_bilgisi: { tr:"Taş Bilgisi", en:"Stone Info", es:"Información de la piedra" },
     tas_agirligi: { tr:"Taş ağırlığı", en:"Stone weight", es:"Peso de la piedra" },
+    tas_orani: { tr:"Taş oranı", en:"Stone ratio", es:"Proporción de piedra" },
     tas: { tr:"Taş", en:"Stone", es:"Piedra" },
     adet: { tr:"adet", en:"pcs", es:"uds" },
     onceki: { tr:"Önceki", en:"Previous", es:"Anterior" },
@@ -4106,7 +2314,7 @@ function VitrinModu({ kod, onizleme }) {
       if (!onizleme) { try { vitrinAktiviteKaydetGuvenli(musteriKod, onek, "giris", null, null, null, vitrinCihazIdAl(), vitrinCihazEtiketiAl()); } catch {} }
 
       const aktifKollar = veri.koleksiyonlar || [];
-      const guvenliModeller = (veri.modeller || []).filter(mod => !mod.cizimde).map(mod => {
+      const guvenliModeller = (veri.modeller || []).map(mod => {
         const kaynakId = mod.kaynakKi || mod.ki;
         const kaynakKolObj = aktifKollar.find(kk => kk.id === kaynakId);
         return {
@@ -4189,8 +2397,9 @@ function VitrinModu({ kod, onizleme }) {
   }, [durum, vitrinMusteri, onizleme]);
 
   // Modelin seçili ayara göre gramını hesapla
+  const bspMi = aktifOnek === "bsp2_"; // BSP (mum satışı): altın/ayar bilgisi gösterilmez, gram olduğu gibi
   const ayarliGram = (m) => {
-    const g = gramDonustur(Number(m.gram) || 0, m.refAyar || "14K", aktifAyar, Number(m.tasGram) || 0);
+    const g = bspMi ? (Number(m.gram) || 0) : gramDonustur(Number(m.gram) || 0, m.refAyar || "14K", aktifAyar, Number(m.tasGram) || 0);
     return g > 0 ? g.toFixed(2) : "";
   };
   // Set modelleri için: parçaların toplam gramı (seçili ayara göre)
@@ -4199,7 +2408,7 @@ function VitrinModu({ kod, onizleme }) {
     const toplam = m.setParcalari.reduce((s, refKod) => {
       const parca = modeller.find(x => x.kod === refKod);
       if (!parca) return s;
-      return s + gramDonustur(Number(parca.gram)||0, parca.refAyar||"14K", aktifAyar, Number(parca.tasGram)||0);
+      return s + (bspMi ? (Number(parca.gram)||0) : gramDonustur(Number(parca.gram)||0, parca.refAyar||"14K", aktifAyar, Number(parca.tasGram)||0));
     }, 0);
     return toplam > 0 ? toplam.toFixed(2) : "";
   };
@@ -4318,7 +2527,7 @@ function VitrinModu({ kod, onizleme }) {
       const kalemler = seciliModeller.map(m => ({
         ...m,
         adet: Math.max(1, Number(siparisAdetler[m.id]) || 1),
-        secilenAyar: aktifAyar,
+        secilenAyar: bspMi ? (m.refAyar || aktifAyar) : aktifAyar,
       }));
       const yeniSiparis = {
         id: uid(),
@@ -4378,8 +2587,6 @@ function VitrinModu({ kod, onizleme }) {
     return (
     <div key={m.id} className="vm-card" style={{ gridColumn: "span "+(genis ? vitrinSutun : 3) }}>
       <div onClick={()=>{ setDetayModel(m); if(vitrinMusteri && !onizleme) vitrinAktiviteKaydetGuvenli(vitrinMusteri.kod, vitrinMusteri.onek, "model", kolAdi, m.kod, m.ad); }}
-        onMouseMove={bilMi ? (e)=>{ try { if(!window.matchMedia("(hover:hover)").matches) return; const im=e.currentTarget.querySelector("img"); if(!im) return; const r=e.currentTarget.getBoundingClientRect(); im.style.transformOrigin=((e.clientX-r.left)/r.width*100).toFixed(1)+"% "+((e.clientY-r.top)/r.height*100).toFixed(1)+"%"; im.style.transform="scale(2.8)"; } catch {} } : undefined}
-        onMouseLeave={bilMi ? (e)=>{ const im=e.currentTarget.querySelector("img"); if(im){ im.style.transform=""; im.style.transformOrigin=""; } } : undefined}
         style={{ aspectRatio: genis ? String(5*vitrinSutun)+"/12" : "5/4", background: genis ? "#f3f3f3" : "#ededed", borderRadius: kucuk?9:12, position:"relative", overflow:"hidden", boxShadow: sec?"0 0 0 1px rgba(0,0,0,0.4), 0 0 0 3px var(--vurgu), 0 0 0 5px rgba(var(--vurgu-rgb),0.35)":"none" }}>
         {m.foto
           ? <img className="vm-ph" src={m.foto} alt="" style={{ ...(genis ? { width:"100%", height:"100%" } : { position:"absolute", top:"8.5%", left:"8.5%", width:"83%", height:"83%", ...FOTO_KENAR_SOLUK }), objectFit:"cover", objectPosition: (genis && m.kategori==="kolye") ? "50% 85%" : "center center", display:"block", ...((genis && m.kategori==="kolye") ? { width:"72%", margin:"0 auto", ...FOTO_KENAR_SOLUK } : {}) }}/>
@@ -4489,7 +2696,7 @@ function VitrinModu({ kod, onizleme }) {
       {/* ═══ AYAR + ARAMA + SIRALAMA — koleksiyon içinde veya tüm koleksiyonlar görünümünde ═══ */}
       {(aktifKol || tumGorunum) && (
       <div className="vm-pad vm-filtre" style={{ padding:"12px 28px 14px", display:"flex", alignItems:"center", gap:10, flexWrap:"wrap" }}>
-        <div style={{ display:"inline-flex", background:"rgba(var(--voverlay-rgb),0.07)", borderRadius:9, padding:3 }}>
+        {!bspMi && <div style={{ display:"inline-flex", background:"rgba(var(--voverlay-rgb),0.07)", borderRadius:9, padding:3 }}>
           {VITRIN_AYARLAR.map(a => {
             const on = aktifAyar === a.id;
             return (
@@ -4499,7 +2706,7 @@ function VitrinModu({ kod, onizleme }) {
               </button>
             );
           })}
-        </div>
+        </div>}
         <input value={arama} onChange={e=>setArama(e.target.value)} placeholder={ce("ara")}
           style={{ flex:"1 1 130px", maxWidth:260, background:"rgba(var(--voverlay-rgb),0.07)", border:"none", borderRadius:9, padding:"9px 14px", color:"var(--vt1)", fontSize:13, outline:"none" }}/>
         <div style={{ display:"flex", alignItems:"center", gap:6, background:"rgba(var(--voverlay-rgb),0.07)", borderRadius:9, padding:"5px 11px" }}>
@@ -4543,7 +2750,7 @@ function VitrinModu({ kod, onizleme }) {
                 className="vm-card" style={{ display:"flex", alignItems:"center", gap:16, background:"rgba(var(--voverlay-rgb),0.06)", border:"1.5px solid rgba(var(--voverlay-rgb),0.10)", borderRadius:16, padding:"14px 18px", cursor:"pointer" }}>
                 <div style={{ width:78, height:58, borderRadius:10, overflow:"hidden", background:"#f7f7f8", display:"grid", gridTemplateColumns:"1fr 1fr", gridTemplateRows:"1fr 1fr", gap:1, flexShrink:0 }}>
                   {[0,1,2,3].map(i => (
-                    <div key={i} style={{ overflow:"hidden", background:"#f3f3f3" }}>
+                    <div key={i} style={{ overflow:"hidden", background:"#f0f0f0" }}>
                       {tumKapaklar[i] ? <img src={tumKapaklar[i]} alt="" style={{ width:"100%", height:"100%", objectFit:"cover", display:"block" }}/> : null}
                     </div>
                   ))}
@@ -4578,7 +2785,7 @@ function VitrinModu({ kod, onizleme }) {
                 )}
                 <div style={{ aspectRatio:"4/3", background:"#f7f7f8", display:"grid", gridTemplateColumns:"1fr 1fr", gridTemplateRows:"1fr 1fr", gap:1 }}>
                   {kapaklar.length > 0 ? [0,1,2,3].map(i => (
-                    <div key={i} style={{ overflow:"hidden", background:"#f3f3f3" }}>
+                    <div key={i} style={{ overflow:"hidden", background:"#f0f0f0" }}>
                       {kapaklar[i] ? <img src={kapaklar[i]} alt="" style={{ width:"100%", height:"100%", objectFit:"cover", display:"block" }}/> : <div style={{ width:"100%", height:"100%", background:"#eee" }}/>}
                     </div>
                   )) : <div style={{ gridColumn:"1/-1", gridRow:"1/-1", display:"flex", alignItems:"center", justifyContent:"center", color:"#d2d2d7", fontSize:32 }}>◇</div>}
@@ -4667,7 +2874,7 @@ function VitrinModu({ kod, onizleme }) {
             ) : (
               <div style={{ padding:"22px 24px 24px" }}>
                 <div style={{ fontSize:18, fontWeight:600, color:"var(--vt1)", marginBottom:4 }}>{ce("siparis_ver")}</div>
-                <div style={{ fontSize:13, color:"var(--vt2)", marginBottom:18 }}>{seciliModeller.length} model — {aktifAyar.replace("K"," Ayar")}</div>
+                <div style={{ fontSize:13, color:"var(--vt2)", marginBottom:18 }}>{seciliModeller.length} model{bspMi ? "" : " — " + aktifAyar.replace("K"," Ayar")}</div>
                 <div style={{ display:"flex", flexDirection:"column", gap:10, maxHeight:280, overflow:"auto", marginBottom:16 }}>
                   {seciliModeller.map(m => (
                     <div key={m.id} style={{ display:"flex", alignItems:"center", gap:12, background:"rgba(var(--voverlay-rgb),0.05)", borderRadius:11, padding:"9px 12px" }}>
@@ -4820,13 +3027,13 @@ function VitrinModu({ kod, onizleme }) {
                           <div style={{ fontSize:13, color:"var(--vt1)", fontWeight:600 }}>{parca.kod}</div>
                           <div style={{ fontSize:11, color:"var(--vt2)" }}>{kategoriEtiket(parca.kategori)}</div>
                         </div>
-                        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:7 }}>
-                          {VITRIN_AYARLAR.map(a => {
-                            const gg = gramDonustur(Number(parca.gram)||0, parca.refAyar||"14K", a.id, Number(parca.tasGram)||0);
-                            const on = a.id === aktifAyar;
+                        <div style={{ display:"grid", gridTemplateColumns: bspMi ? "1fr" : "1fr 1fr 1fr", gap:7 }}>
+                          {(bspMi ? [{ id: parca.refAyar || "14K", bsp: true }] : VITRIN_AYARLAR).map(a => {
+                            const gg = a.bsp ? (Number(parca.gram)||0) : gramDonustur(Number(parca.gram)||0, parca.refAyar||"14K", a.id, Number(parca.tasGram)||0);
+                            const on = a.bsp ? false : a.id === aktifAyar;
                             return (
                               <div key={a.id} style={{ background: on?"rgba(var(--vurgu-rgb),0.14)":"rgba(var(--voverlay-rgb),0.06)", border: on?"1px solid rgba(var(--vurgu-rgb),0.4)":"1px solid transparent", borderRadius:8, padding:"7px 4px", textAlign:"center" }}>
-                                <div style={{ fontSize:9, color:"var(--vt2)", fontWeight: on?700:500 }}>{a.id.replace("K","")} Ayar</div>
+                                <div style={{ fontSize:9, color:"var(--vt2)", fontWeight: on?700:500 }}>{a.bsp ? "Gram" : a.id.replace("K","") + " Ayar"}</div>
                                 <div style={{ fontSize:14, fontWeight: on?700:500, color:"var(--vt1)" }}>{gg>0?gg.toFixed(2):"—"}</div>
                               </div>
                             );
@@ -4837,13 +3044,13 @@ function VitrinModu({ kod, onizleme }) {
                   })}
                 </div>
               ) : (
-              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:6 }}>
-                {VITRIN_AYARLAR.map(a => {
-                  const gg = gramDonustur(Number(detayModel.gram)||0, detayModel.refAyar||"14K", a.id, Number(detayModel.tasGram)||0);
-                  const on = a.id === aktifAyar;
+              <div style={{ display:"grid", gridTemplateColumns: bspMi ? "1fr" : "1fr 1fr 1fr", gap:6 }}>
+                {(bspMi ? [{ id: detayModel.refAyar || "14K", bsp: true }] : VITRIN_AYARLAR).map(a => {
+                  const gg = a.bsp ? (Number(detayModel.gram)||0) : gramDonustur(Number(detayModel.gram)||0, detayModel.refAyar||"14K", a.id, Number(detayModel.tasGram)||0);
+                  const on = a.bsp ? false : a.id === aktifAyar;
                   return (
                     <div key={a.id} style={{ background: on?"rgba(var(--vurgu-rgb),0.14)":"rgba(var(--voverlay-rgb),0.05)", border: on?"1px solid rgba(var(--vurgu-rgb),0.4)":"1px solid transparent", borderRadius:9, padding:"7px 6px", textAlign:"center" }}>
-                      <div style={{ fontSize:9, color:"var(--vt2)", fontWeight: on?700:500 }}>{a.id.replace("K","")} Ayar</div>
+                      <div style={{ fontSize:9, color:"var(--vt2)", fontWeight: on?700:500 }}>{a.bsp ? "Gram" : a.id.replace("K","") + " Ayar"}</div>
                       <div style={{ fontSize:15, fontWeight: on?700:500, color:"var(--vt1)", marginTop:2, letterSpacing:"-0.02em" }}>{gg > 0 ? gg.toFixed(2) : "—"}</div>
                       <div style={{ fontSize:8, color:"var(--vt3)" }}>gram</div>
                     </div>
@@ -4861,6 +3068,16 @@ function VitrinModu({ kod, onizleme }) {
                       <span style={{ fontSize:15, color:"var(--vt1)", fontWeight:600 }}>{Number(detayModel.tasGram).toFixed(2)} <span style={{ fontSize:11, color:"var(--vt2)" }}>g</span></span>
                     </div>
                   )}
+                  {Number(detayModel.tasGram) > 0 && Number(detayModel.gram) > 0 && (() => {
+                    const toplam = Number(detayModel.gram)||0;
+                    const oran = toplam > 0 ? Math.min(100, (Number(detayModel.tasGram) / toplam) * 100) : 0;
+                    return (
+                    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", marginBottom: (detayModel.taslar && detayModel.taslar.length) ? 12 : 0, paddingBottom: (detayModel.taslar && detayModel.taslar.length) ? 12 : 0, borderBottom: (detayModel.taslar && detayModel.taslar.length) ? "0.5px solid rgba(var(--voverlay-rgb),0.08)" : "none", marginTop:-4 }}>
+                      <span style={{ fontSize:13, color:"var(--vt2)" }}>{ce("tas_orani")}</span>
+                      <span style={{ fontSize:15, color:"var(--vt1)", fontWeight:600 }}>%{oran.toFixed(1)}</span>
+                    </div>
+                    );
+                  })()}
                   {detayModel.taslar && detayModel.taslar.length > 0 && (
                     <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
                       {detayModel.taslar.map((t, i) => (
@@ -4898,194 +3115,6 @@ function VitrinModu({ kod, onizleme }) {
 }
 
 // ═══ TREND RADAR SAYFASI — radar_sources/radar_trends/radar_evidence, authenticated (worker) oturum + RLS ile ═══
-// ═══ ÜRETİM PANOSU: ürün ürün aşama takibi (aşamalara göre sütunlar / koleksiyona göre satırlar), çoklu seçip tek tuşla ilerletme ═══
-function panoKalemSonraki(curId, k) {
-  const i = DURUMLAR.findIndex(d => d.id === curId);
-  let n = DURUMLAR[i + 1];
-  if (n && n.id === "hurda") return null;
-  if (n && n.id === "cizimde" && !k.cizimde) n = DURUMLAR[i + 2];
-  return n && n.id !== "hurda" ? n : null;
-}
-function UretimPanosu({ siparisler, kollar, onTasi, onCila, onSiparisAc }) {
-  const [gorunum, setGorunum] = useState("pano");
-  const [filtre, setFiltre] = useState("tum");
-  const [ara, setAra] = useState("");
-  const [secili, setSecili] = useState({});
-  const [teslimGoster, setTeslimGoster] = useState(false);
-  const [acikKol, setAcikKol] = useState({});
-  const [hedef, setHedef] = useState("");
-
-  const urunler = useMemo(() => {
-    const out = [];
-    const bugun0 = new Date(); bugun0.setHours(0, 0, 0, 0);
-    (siparisler || []).forEach(s => {
-      const kd = s.kalemDurumlar || {};
-      const tesMs = s.teslimTarihi ? new Date(s.teslimTarihi).getTime() : 0;
-      (s.kalemler || []).forEach(k => {
-        const st = kd[k.id] || k.durum || "baslanmadi";
-        if (st === "hurda") return;
-        const du = ((s.kalemHurda) || {})[k.id] || 0, ia = ((s.kalemIade) || {})[k.id] || 0, ta = ((s.kalemTamir) || {})[k.id] || 0;
-        const net = Math.max(0, (k.adet || 1) - du - ia - ta);
-        if (!net) return;
-        const hc = hesapla(k, k.secilenAyar || k.refAyar, s.altinKgUSD, s.mc);
-        out.push({
-          key: s.id + "|" + k.id, sipId: s.id, kalemId: k.id, k, st,
-          sipAd: s.musKod || s.musteri || "?", kol: ((kollar || []).find(x => x.id === k.ki) || {}).ad || "Diğer",
-          adet: net, gr: hc.mamulGram * net,
-          gec: !!tesMs && tesMs < bugun0.getTime() && st !== "tamam" && st !== "teslim",
-          cila: ((s.kalemCila) || {})[k.id] || "zimpara",
-        });
-      });
-    });
-    return out;
-  }, [siparisler, kollar]);
-
-  const q = psNorm(ara);
-  const gorunen = urunler.filter(u => {
-    if (!teslimGoster && u.st === "teslim") return false;
-    if (filtre === "gec" && !u.gec) return false;
-    if (filtre === "cizim" && u.st !== "cizimde") return false;
-    if (filtre === "numune" && !u.k.numune) return false;
-    if (q && !(psNorm(u.k.kod).includes(q) || psNorm(u.k.ad).includes(q) || psNorm(u.sipAd).includes(q))) return false;
-    return true;
-  });
-  const secIdler = Object.keys(secili).filter(x => secili[x] && urunler.some(u => u.key === x));
-  const secUrunler = urunler.filter(u => secili[u.key]);
-  const hepsiAyni = secUrunler.length > 0 && secUrunler.every(u => u.st === secUrunler[0].st);
-  const ilkSonraki = secUrunler.length ? panoKalemSonraki(secUrunler[0].st, secUrunler[0].k) : null;
-  const ileriYap = () => {
-    const liste = secUrunler.map(u => { const n = panoKalemSonraki(u.st, u.k); return n ? { sipId: u.sipId, kalemId: u.kalemId, hedef: n.id } : null; }).filter(Boolean);
-    if (liste.length) onTasi(liste);
-    setSecili({});
-  };
-  const tasiYap = () => {
-    if (!hedef) return;
-    onTasi(secUrunler.map(u => ({ sipId: u.sipId, kalemId: u.kalemId, hedef })));
-    setSecili({});
-  };
-  const tikla = (key) => setSecili(p => ({ ...p, [key]: !p[key] }));
-
-  const kutu = { background:"rgba(var(--vurgu-rgb),0.03)", border:"1px solid rgba(var(--vurgu-rgb),0.12)", borderRadius:12 };
-  const tile = (u) => {
-    const sec = !!secili[u.key];
-    const d = DURUMLAR.find(x => x.id === u.st) || DURUMLAR[0];
-    return (
-      <div key={u.key} role="button" tabIndex={0} onClick={() => tikla(u.key)} onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); tikla(u.key); } }}
-        style={{ display:"grid", gridTemplateColumns:"44px 1fr", gap:8, padding:6, borderRadius:9, cursor:"pointer", minWidth:0, background: sec ? "rgba(10,132,255,0.16)" : "rgba(0,0,0,0.18)", border:"1.5px solid " + (sec ? "#0a84ff" : u.gec ? "rgba(232,90,79,0.7)" : "rgba(var(--vurgu-rgb),0.1)") }}>
-        <div style={{ width:44, height:44, borderRadius:6, overflow:"hidden", background:"rgba(var(--vurgu-rgb),0.12)" }}>
-          {u.k.foto ? <img src={u.k.foto} alt="" loading="lazy" style={{ width:"100%", height:"100%", objectFit:"cover", display:"block" }}/> : null}
-        </div>
-        <div style={{ minWidth:0 }}>
-          <div style={{ display:"flex", gap:4, alignItems:"center", flexWrap:"wrap" }}>
-            <b style={{ fontSize:11, color:GOLD, fontFamily:"monospace" }}>{u.k.kod || "?"}</b>
-            {u.k.numune && <span title="Numune" style={{ fontSize:9 }}>🎁</span>}
-            {u.k.cizimde && <span title="Çizimde model" style={{ fontSize:9 }}>🎨</span>}
-            {u.gec && <span style={{ fontSize:8, fontWeight:800, color:"#e85a4f", background:"rgba(232,90,79,0.15)", padding:"0 5px", borderRadius:4 }}>GEÇ</span>}
-            <span onClick={e => { e.stopPropagation(); onSiparisAc(u.sipId); }} title="Siparişi aç" style={{ marginLeft:"auto", fontSize:10, color:"#7a6f5a", cursor:"pointer" }}>↗</span>
-          </div>
-          <div style={{ fontSize:9, color:"#998a6e", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{u.sipAd} · {u.adet} adet · {fN(u.gr,0)} gr</div>
-          {u.st === "cila" && (
-            <div style={{ display:"flex", gap:3, marginTop:3 }} onClick={e => e.stopPropagation()}>
-              {CILA_ADIMLARI.map(a => (
-                <button key={a.id} onClick={() => onCila(u.sipId, u.kalemId, a.id)} style={{ fontSize:8, fontWeight:700, padding:"1px 5px", borderRadius:4, cursor:"pointer", border:"1px solid " + (u.cila === a.id ? "var(--vurgu)" : "rgba(255,255,255,0.12)"), background: u.cila === a.id ? "rgba(var(--vurgu-rgb),0.18)" : "transparent", color: u.cila === a.id ? "var(--vurgu)" : "#7a6f5a" }}>{a.l}</button>
-              ))}
-            </div>
-          )}
-          {gorunum === "katalog" && <div style={{ fontSize:8, fontWeight:700, color:d.c, marginTop:2 }}>{d.l}</div>}
-        </div>
-      </div>
-    );
-  };
-
-  const sutunlar = DURUMLAR.filter(d => d.id !== "hurda" && (teslimGoster || d.id !== "teslim"));
-  const kolGruplari = (() => { const g = {}; gorunen.forEach(u => { (g[u.kol] = g[u.kol] || []).push(u); }); return Object.entries(g).sort((a, b) => b[1].length - a[1].length); })();
-
-  return (
-    <div style={{ animation:"fadein .3s", paddingBottom: secIdler.length ? 70 : 0 }}>
-      <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap", marginBottom:10 }}>
-        <h2 style={{ margin:0, fontSize:14, fontWeight:700, color:"var(--goldtext)" }}>Üretim Panosu</h2>
-        <div style={{ display:"inline-flex", border:"1px solid rgba(var(--vurgu-rgb),0.2)", borderRadius:8, overflow:"hidden" }}>
-          {[["pano","Aşamalara göre"],["katalog","Koleksiyona göre"]].map(([id, l]) => (
-            <button key={id} onClick={() => setGorunum(id)} style={{ border:"none", padding:"5px 11px", fontSize:10, fontWeight:700, cursor:"pointer", background: gorunum === id ? "rgba(var(--vurgu-rgb),0.2)" : "transparent", color: gorunum === id ? GOLD : "#7a6f5a" }}>{l}</button>
-          ))}
-        </div>
-        {[["tum","Tümü"],["gec","Geciken"],["cizim","Çizimde"],["numune","Numune"]].map(([id, l]) => (
-          <button key={id} onClick={() => setFiltre(id)} style={{ ...GH, fontSize:9, padding:"4px 10px", borderRadius:20, background: filtre === id ? "rgba(var(--vurgu-rgb),0.18)" : "rgba(var(--vurgu-rgb),0.04)" }}>{l}</button>
-        ))}
-        <label style={{ fontSize:9, color:"#998a6e", display:"flex", gap:4, alignItems:"center", cursor:"pointer" }}><input type="checkbox" checked={teslimGoster} onChange={e => setTeslimGoster(e.target.checked)} /> Teslim edilenler</label>
-        <input value={ara} onChange={e => setAra(e.target.value)} placeholder="Kod, ad veya müşteri ara…" style={{ ...IS, width:190, padding:"5px 9px", fontSize:10, marginLeft:"auto" }} />
-        <span style={{ fontSize:9, color:"#7a6f5a" }}>{gorunen.length} ürün · {gorunen.reduce((a, u) => a + u.adet, 0)} adet · {fN(gorunen.reduce((a, u) => a + u.gr, 0), 0)} gr</span>
-      </div>
-
-      {gorunen.length === 0 && <p style={{ color:"#665d4a", textAlign:"center", padding:30, fontSize:12 }}>Gösterilecek ürün yok</p>}
-
-      {gorunum === "pano" && gorunen.length > 0 && (
-        <div style={{ display:"flex", gap:10, overflowX:"auto", paddingBottom:10, alignItems:"flex-start" }}>
-          {sutunlar.map(d => {
-            const m = gorunen.filter(u => u.st === d.id);
-            const gr = m.reduce((a, u) => a + u.gr, 0);
-            return (
-              <div key={d.id} style={{ ...kutu, flex:"0 0 215px", display:"flex", flexDirection:"column", maxHeight:"calc(100vh - 230px)", borderTop:"4px solid " + d.c }}>
-                <div style={{ padding:"9px 10px 7px", borderBottom:"1px solid rgba(var(--vurgu-rgb),0.08)" }}>
-                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline" }}>
-                    <b style={{ fontSize:11, color:d.c }}>{d.l}</b><span style={{ fontSize:10, color:"#998a6e", fontFamily:"monospace" }}>{m.length}</span>
-                  </div>
-                  <div style={{ fontSize:9, color:"#7a6f5a" }}>{fN(gr, 0)} gr</div>
-                  {m.length > 0 && <button onClick={() => setSecili(p => { const n = { ...p }; m.forEach(u => { n[u.key] = true; }); return n; })} style={{ ...GH, marginTop:5, fontSize:8, padding:"2px 8px" }}>Tümünü seç</button>}
-                </div>
-                <div style={{ padding:7, display:"grid", gap:6, overflowY:"auto" }}>
-                  {m.length ? m.map(tile) : <div style={{ fontSize:9, color:"#554d3a", padding:4 }}>boş</div>}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {gorunum === "katalog" && (
-        <div style={{ display:"grid", gap:8 }}>
-          {kolGruplari.map(([kad, m]) => {
-            const acik = !!acikKol[kad];
-            return (
-              <div key={kad} style={{ ...kutu, overflow:"hidden" }}>
-                <div onClick={() => setAcikKol(p => ({ ...p, [kad]: !p[kad] }))} style={{ display:"flex", alignItems:"center", gap:12, padding:"9px 13px", cursor:"pointer", flexWrap:"wrap" }}>
-                  <b style={{ fontSize:13, color:GOLD, minWidth:120 }}>{kad} <span style={{ fontSize:9, color:"#7a6f5a", fontWeight:400 }}>{m.length} ürün</span></b>
-                  <div style={{ flex:"1 1 200px", display:"flex", height:10, borderRadius:5, overflow:"hidden", background:"rgba(var(--vurgu-rgb),0.08)", gap:1 }}>
-                    {DURUMLAR.filter(d => d.id !== "hurda").map(d => { const n = m.filter(u => u.st === d.id).length; return n ? <span key={d.id} title={d.l + ": " + n} style={{ width:(n / m.length * 100) + "%", background:d.c }}/> : null; })}
-                  </div>
-                  <span style={{ fontSize:10, color:"#7a6f5a" }}>{acik ? "▲" : "▼"}</span>
-                </div>
-                {acik && (
-                  <div style={{ padding:"2px 13px 13px", borderTop:"1px solid rgba(var(--vurgu-rgb),0.07)" }}>
-                    <div style={{ display:"flex", flexWrap:"wrap", gap:"3px 12px", margin:"8px 0", fontSize:9, color:"#998a6e" }}>
-                      {DURUMLAR.filter(d => d.id !== "hurda" && m.some(u => u.st === d.id)).map(d => <span key={d.id}><i style={{ display:"inline-block", width:8, height:8, borderRadius:4, background:d.c, marginRight:4 }}/>{d.l} {m.filter(u => u.st === d.id).length}</span>)}
-                    </div>
-                    <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))", gap:7 }}>{m.map(tile)}</div>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {secIdler.length > 0 && (
-        <div style={{ position:"fixed", left:0, right:0, bottom:0, zIndex:150, background:"#15130f", borderTop:"1px solid rgba(var(--vurgu-rgb),0.35)", padding:"10px 16px", display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}>
-          <b style={{ fontSize:12, color:"#f5f5f7" }}>{secIdler.length} ürün seçili</b>
-          <button onClick={() => setSecili({})} style={{ ...GH, fontSize:10 }}>Seçimi kaldır</button>
-          <span style={{ flex:1 }}/>
-          <select value={hedef} onChange={e => setHedef(e.target.value)} style={{ ...IS, width:"auto", padding:"6px 8px", fontSize:11 }}>
-            <option value="">Aşama seç…</option>
-            {DURUMLAR.map(d => <option key={d.id} value={d.id}>{d.l}</option>)}
-          </select>
-          <button onClick={tasiYap} disabled={!hedef} style={{ ...GH, fontSize:11, opacity: hedef ? 1 : 0.4 }}>Seçilene taşı</button>
-          <button onClick={ileriYap} style={{ ...BG, padding:"8px 16px" }}>→ {hepsiAyni && ilkSonraki ? ilkSonraki.l : "Sonraki aşama"}</button>
-        </div>
-      )}
-    </div>
-  );
-}
-
 function TrendRadarSayfasi({ T, modeller }) {
   const [trendler, setTrendler] = useState([]);
   const [kaynaklar, setKaynaklar] = useState([]);
@@ -5466,360 +3495,6 @@ export default function Root() {
   return <Atolye key={sirketKey} onSirketDegis={()=>setSirket(false)} />;
 }
 
-// ═══ KEŞFET: GERÇEK ANALİZ EKRANI — katalog + sipariş + kayıp + müşteri (yalnızca müşteri KODU gösterilir) ═══
-const KS_DONEMLER = [{id:"bu_ay",l:"Bu Ay"},{id:"gecen_ay",l:"Geçen Ay"},{id:"3ay",l:"3 Ay"},{id:"6ay",l:"6 Ay"},{id:"yil",l:"Bu Yıl"},{id:"tum",l:"Tümü"},{id:"ozel",l:"Özel"}];
-function ksAralik(donem, t1, t2) {
-  const n = new Date(); const y = n.getFullYear(), a = n.getMonth();
-  let bas = 0, bit = Date.now();
-  if (donem === "bu_ay") bas = new Date(y, a, 1).getTime();
-  else if (donem === "gecen_ay") { bas = new Date(y, a - 1, 1).getTime(); bit = new Date(y, a, 1).getTime() - 1; }
-  else if (donem === "3ay") bas = new Date(y, a - 2, 1).getTime();
-  else if (donem === "6ay") bas = new Date(y, a - 5, 1).getTime();
-  else if (donem === "yil") bas = new Date(y, 0, 1).getTime();
-  else if (donem === "ozel") { bas = t1 ? new Date(t1).getTime() : 0; bit = t2 ? new Date(t2).getTime() + 86399999 : Date.now(); }
-  return [bas, bit];
-}
-// Her sipariş kaleminden tek satır: net adet, has cinsinden taş/işçilik/maliyet/kâr
-function ksSatirlar(siparisler, musteriler) {
-  const kodHarita = {}; Object.entries(musteriler || {}).forEach(([ad, kod]) => { kodHarita[ad] = kod; });
-  const out = [];
-  siparisler.forEach(s => {
-    const mus = s.musKod || kodHarita[s.musteri] || "—";
-    (s.kalemler || []).forEach(k => {
-      const ayar = k.secilenAyar || k.refAyar || "14K";
-      const hc = hesapla(k, ayar, s.altinKgUSD, s.mc);
-      const adet = k.adet || 1;
-      const h = ((s.kalemHurda) || {})[k.id] || 0, ia = ((s.kalemIade) || {})[k.id] || 0, ta = ((s.kalemTamir) || {})[k.id] || 0;
-      const net = Math.max(0, adet - h - ia - ta);
-      const durum = ((s.kalemDurumlar) || {})[k.id] || k.durum || "baslanmadi";
-      const biten = durum === "tamam" || durum === "teslim";
-      const p = durum === "hurda" ? "x" : biten ? "r" : "a"; // r: gerçekleşen, a: üretimde (beklenen), x: hurda
-      const nm = k.numune ? 0 : 1;
-      out.push({
-        s, k, sid: s.id, tarih: s.tarih || 0, mus, ayar, kat: k.kategori || "diger", ki: k.ki || "", kod: String(k.kod || "").toUpperCase(),
-        adet, net, h, ia, ta, durum, p, numune: !!k.numune, hasUSD: (s.altinKgUSD || 0) / 1000,
-        gram: hc.mamulGram * net, karGram: hc.mamulGram * net * nm, tasGr: (Number(k.tasGram) || 0) * net * nm,
-        tas: hc.tasHas * net * nm, isc: hc.iscilikHas * net * nm, mal: hc.topMaliyetHas * net * nm, kar: hc.karHas * net * nm,
-        hGram: hc.mamulGram * h, iaGram: hc.mamulGram * ia, taGram: hc.mamulGram * ta,
-        neden: { h: ((s.kalemHurdaNeden) || {})[k.id] || "", ia: ((s.kalemIadeNeden) || {})[k.id] || "", ta: ((s.kalemTamirNeden) || {})[k.id] || "" },
-      });
-    });
-  });
-  return out;
-}
-function ksTopla(rows) {
-  const o = { sip: new Set(), verilen: 0, adet: 0, gram: 0, karGram: 0, tasGr: 0, tas: 0, isc: 0, mal: 0, kar: 0, karUSD: 0, beklAdet: 0, beklKar: 0, h: 0, ia: 0, ta: 0, hGram: 0, son: 0 };
-  rows.forEach(r => {
-    o.sip.add(r.sid); o.verilen += r.adet; o.h += r.h; o.ia += r.ia; o.ta += r.ta; o.hGram += r.hGram; o.son = Math.max(o.son, r.tarih);
-    if (r.p === "r") { o.adet += r.net; o.gram += r.gram; o.karGram += r.karGram; o.tasGr += r.tasGr; o.tas += r.tas; o.isc += r.isc; o.mal += r.mal; o.kar += r.kar; o.karUSD += r.kar * r.hasUSD; }
-    else if (r.p === "a") { o.beklAdet += r.net; o.beklKar += r.kar; }
-  });
-  o.sipN = o.sip.size; o.mly = o.karGram > 0 ? o.kar / o.karGram : 0; o.usdGr = o.karGram > 0 ? o.karUSD / o.karGram : 0;
-  o.kayipAdet = o.h + o.ia + o.ta; o.kayipOran = o.verilen > 0 ? o.kayipAdet / o.verilen : 0;
-  return o;
-}
-function ksGrupla(rows, keyFn) {
-  const m = {}; rows.forEach(r => { const k = keyFn(r); if (k == null) return; (m[k] = m[k] || []).push(r); });
-  return Object.entries(m).map(([k, rs]) => ({ key: k, ...ksTopla(rs), rows: rs }));
-}
-const ksG = (n, d) => (Number(n) || 0).toFixed(d == null ? 1 : d);
-const ksYuzde = (n) => ((Number(n) || 0) * 100).toFixed(1) + "%";
-const ksMly = (v) => (Number(v) >= 0 ? "+" : "−") + (Math.abs(Number(v) || 0) * 1000).toFixed(1);
-const ksTip = (kat) => tipEtiket(kat) || "Diğer";
-
-function KsKart({ baslik, deger, alt, renk, T, fark }) {
-  return (
-    <div style={{ background: "rgba(var(--vurgu-rgb),0.04)", border: "1px solid rgba(var(--vurgu-rgb),0.1)", borderRadius: 10, padding: "10px 12px", minWidth: 120, flex: "1 1 120px" }}>
-      <div style={{ fontSize: 8, fontWeight: 800, color: T.sub, letterSpacing: "0.06em", textTransform: "uppercase" }}>{baslik}</div>
-      <div style={{ fontSize: 19, fontWeight: 800, color: renk || T.text, marginTop: 3, lineHeight: 1.1 }}>{deger}</div>
-      {alt != null && <div style={{ fontSize: 9, color: T.sub, marginTop: 3 }}>{alt}</div>}
-      {fark != null && isFinite(fark) && <div style={{ fontSize: 9, fontWeight: 700, marginTop: 2, color: fark >= 0 ? "#6abf69" : "#e85a4f" }}>{fark >= 0 ? "▲" : "▼"} {Math.abs(fark * 100).toFixed(0)}% önceki döneme göre</div>}
-    </div>
-  );
-}
-// Sıralanabilir tablo: kolonlar [{k, l, f(satir)=>gösterim, v(satir)=>sıralama değeri, sol:true}]
-function KsTablo({ kolonlar, satirlar, sira0, limit, T, bos }) {
-  const [sk, setSk] = useState(sira0 || kolonlar[1]?.k);
-  const [yon, setYon] = useState(-1);
-  const [hepsi, setHepsi] = useState(false);
-  const kol = kolonlar.find(c => c.k === sk) || kolonlar[0];
-  const sirali = [...satirlar].sort((a, b) => {
-    const x = kol.v ? kol.v(a) : 0, y = kol.v ? kol.v(b) : 0;
-    if (typeof x === "string") return yon * String(x).localeCompare(String(y), "tr");
-    return yon * ((Number(x) || 0) - (Number(y) || 0));
-  });
-  const goster = hepsi || !limit ? sirali : sirali.slice(0, limit);
-  if (!satirlar.length) return <div style={{ fontSize: 10, color: "#665d4a", padding: "10px 0" }}>{bos || "Veri yok"}</div>;
-  return (
-    <div style={{ overflowX: "auto" }}>
-      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 10 }}>
-        <thead><tr>
-          {kolonlar.map(c => (
-            <th key={c.k} onClick={() => { if (sk === c.k) setYon(-yon); else { setSk(c.k); setYon(c.sol ? 1 : -1); } }}
-              style={{ textAlign: c.sol ? "left" : "right", padding: "6px 8px", fontSize: 8, fontWeight: 800, color: sk === c.k ? GOLD : T.sub, letterSpacing: "0.05em", textTransform: "uppercase", borderBottom: "1px solid rgba(var(--vurgu-rgb),0.15)", cursor: "pointer", whiteSpace: "nowrap" }}>
-              {c.l}{sk === c.k ? (yon < 0 ? " ▼" : " ▲") : ""}
-            </th>
-          ))}
-        </tr></thead>
-        <tbody>
-          {goster.map((s, i) => (
-            <tr key={s.key != null ? s.key : i} style={{ borderBottom: "1px solid rgba(var(--vurgu-rgb),0.06)" }}>
-              {kolonlar.map(c => <td key={c.k} style={{ textAlign: c.sol ? "left" : "right", padding: "6px 8px", color: T.text, whiteSpace: "nowrap", fontWeight: c.sol ? 700 : 500 }}>{c.f ? c.f(s) : ""}</td>)}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      {limit && sirali.length > limit && <button onClick={() => setHepsi(!hepsi)} style={{ ...GH, fontSize: 9, padding: "4px 10px", marginTop: 6 }}>{hepsi ? "İlk " + limit + " göster" : "Tümünü göster (" + sirali.length + ")"}</button>}
-    </div>
-  );
-}
-function KsBolum({ baslik, children, T, sag }) {
-  return (
-    <div style={{ background: "rgba(var(--vurgu-rgb),0.03)", border: "1px solid rgba(var(--vurgu-rgb),0.09)", borderRadius: 12, padding: "12px 14px", marginBottom: 12 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, gap: 8, flexWrap: "wrap" }}>
-        <div style={{ fontSize: 10, fontWeight: 800, color: T.sub, letterSpacing: "0.06em", textTransform: "uppercase" }}>{baslik}</div>{sag}
-      </div>
-      {children}
-    </div>
-  );
-}
-// kâr kırılım kolonları (ayar / tür / koleksiyon / müşteri / model tabloları ortak kullanır)
-const ksKarKolonlari = [
-  { k: "adet", l: "Adet", v: r => r.adet, f: r => r.adet },
-  { k: "gram", l: "Gram", v: r => r.gram, f: r => ksG(r.gram) },
-  { k: "tasGr", l: "Taş gr", v: r => r.tasGr, f: r => ksG(r.tasGr) },
-  { k: "tas", l: "Taştan", v: r => r.tas, f: r => ksG(r.tas, 2) },
-  { k: "isc", l: "İşçilikten", v: r => r.isc, f: r => ksG(r.isc, 2) },
-  { k: "mal", l: "Maliyet", v: r => r.mal, f: r => "−" + ksG(r.mal, 2) },
-  { k: "kar", l: "Net kâr (has)", v: r => r.kar, f: r => <b style={{ color: r.kar < 0 ? "#e85a4f" : "#6abf69" }}>{r.kar < 0 ? "−" : ""}{ksG(Math.abs(r.kar), 2)}</b> },
-  { k: "mly", l: "mly/gr", v: r => r.mly, f: r => <span style={{ color: r.mly < 0 ? "#e85a4f" : undefined }}>{ksMly(r.mly)}</span> },
-  { k: "usd", l: "$ kâr", v: r => r.karUSD, f: r => fUSDi(r.karUSD) },
-];
-
-function KesfetEkrani({ siparisler, modeller, kollar, musteriler, T, altinKgUSD, madenCarpan, ek }) {
-  const [donem, setDonem] = useState("3ay");
-  const [t1, setT1] = useState(""); const [t2, setT2] = useState("");
-  const [ayarF, setAyarF] = useState(""); const [musF, setMusF] = useState("");
-  const [sekme, setSekme] = useState("ozet");
-  const [olKat, setOlKat] = useState(""); const [olKol, setOlKol] = useState("");
-
-  const tum = useMemo(() => ksSatirlar(siparisler, musteriler), [siparisler, musteriler]);
-  const [bas, bit] = ksAralik(donem, t1, t2);
-  const uzunluk = Math.max(1, bit - bas);
-  const filtre = (rs, b, e) => rs.filter(r => r.tarih >= b && r.tarih <= e && (!ayarF || r.ayar === ayarF) && (!musF || r.mus === musF));
-  const rows = useMemo(() => filtre(tum, bas, bit), [tum, bas, bit, ayarF, musF]);
-  const oncekiRows = useMemo(() => donem === "tum" ? [] : filtre(tum, bas - uzunluk, bas - 1), [tum, bas, bit, ayarF, musF, donem]);
-  const top = useMemo(() => ksTopla(rows), [rows]);
-  const onc = useMemo(() => ksTopla(oncekiRows), [oncekiRows]);
-  const fark = (a, b) => (donem === "tum" || !(Math.abs(b) > 0.0001)) ? null : (a - b) / Math.abs(b);
-  const musKodlari = useMemo(() => Array.from(new Set(tum.map(r => r.mus))).filter(x => x && x !== "—").sort(), [tum]);
-  const ayarlarVar = useMemo(() => Array.from(new Set(tum.map(r => r.ayar))), [tum]);
-
-  const ayarG = useMemo(() => ksGrupla(rows, r => r.ayar).sort((a, b) => b.kar - a.kar), [rows]);
-  const turG = useMemo(() => ksGrupla(rows, r => r.kat), [rows]);
-  const kolG = useMemo(() => ksGrupla(rows, r => r.ki || "—"), [rows]);
-  const musG = useMemo(() => ksGrupla(rows, r => r.mus), [rows]);
-  const modG = useMemo(() => ksGrupla(rows, r => r.kod || null), [rows]);
-  const kolAd = (id) => (kollar.find(k => k.id === id) || {}).ad || "—";
-
-  // aylık trend (son 12 ay, dönem filtresinden bağımsız ama ayar/müşteri filtreli)
-  const aylik = useMemo(() => {
-    const n = new Date(); const liste = [];
-    for (let i = 11; i >= 0; i--) { const d = new Date(n.getFullYear(), n.getMonth() - i, 1); liste.push({ key: d.getFullYear() + "-" + d.getMonth(), l: d.toLocaleDateString("tr-TR", { month: "short" }), kar: 0, adet: 0 }); }
-    tum.forEach(r => {
-      if (r.p !== "r" || (ayarF && r.ayar !== ayarF) || (musF && r.mus !== musF)) return;
-      const d = new Date(r.tarih); const it = liste.find(x => x.key === d.getFullYear() + "-" + d.getMonth());
-      if (it) { it.kar += r.kar; it.adet += r.net; }
-    });
-    return liste;
-  }, [tum, ayarF, musF]);
-  const aMax = Math.max(0.0001, ...aylik.map(x => Math.abs(x.kar)));
-
-  // katalog bilançosu — tüm zamanlar (dönemden bağımsız)
-  const katalog = useMemo(() => {
-    const sipKod = new Set(tum.map(r => r.kod)); const sipSatan = new Set(tum.filter(r => r.p === "r").map(r => r.kod));
-    const liste = modeller.map(m => ({ m, kod: String(m.kod || "").toUpperCase(), kat: m.kategori || "diger", ki: m.ki }));
-    const olu = liste.filter(x => x.kod && !sipKod.has(x.kod));
-    const bykat = {}; liste.forEach(x => { const o = bykat[x.kat] = bykat[x.kat] || { key: x.kat, model: 0, siparisli: 0, olu: 0 }; o.model++; if (sipKod.has(x.kod)) o.siparisli++; else o.olu++; });
-    const bykol = {}; liste.forEach(x => { const o = bykol[x.ki] = bykol[x.ki] || { key: x.ki, model: 0, siparisli: 0, olu: 0 }; o.model++; if (sipKod.has(x.kod)) o.siparisli++; else o.olu++; });
-    const ayarDag = {}; modeller.forEach(m => { const a = m.refAyar || "14K"; ayarDag[a] = (ayarDag[a] || 0) + 1; });
-    const tasli = modeller.filter(m => (Number(m.tasGram) || 0) > 0).length;
-    const ortGram = modeller.length ? modeller.reduce((s, m) => s + (Number(m.gram) || 0), 0) / modeller.length : 0;
-    return { toplam: modeller.length, siparisli: liste.filter(x => sipKod.has(x.kod)).length, satan: liste.filter(x => sipSatan.has(x.kod)).length, olu, bykat: Object.values(bykat), bykol: Object.values(bykol), ayarDag, tasli, ortGram };
-  }, [modeller, tum]);
-
-  // aşama dağılımı + geciken (anlık durum — dönemden bağımsız)
-  const asama = useMemo(() => {
-    const m = {}; tum.filter(r => r.p === "a").forEach(r => { m[r.durum] = (m[r.durum] || 0) + r.net; });
-    return DURUMLAR.filter(d => d.id !== "hurda" && d.id !== "teslim" && d.id !== "tamam" && m[d.id]).map(d => ({ ...d, adet: m[d.id] }));
-  }, [tum]);
-  const geciken = useMemo(() => siparisler.map(s => ({ s, o: sipKarOzet(s, s.kalemDurumlar) })).filter(x => x.o.gec).sort((a, b) => a.o.gun - b.o.gun).slice(0, 8), [siparisler]);
-  const sure = useMemo(() => {
-    let say = 0, top2 = 0;
-    siparisler.forEach(s => { if (s.tarih < bas || s.tarih > bit) return; const g = s.durumGecmisi; if (!g || !g.length) return; const son = g[g.length - 1]; if (!["tamam", "teslim"].includes(son.durum)) return; say++; top2 += isGunuSure(g[0].tarih, son.tarih); });
-    return say ? top2 / say / 864e5 : 0;
-  }, [siparisler, bas, bit]);
-
-  // kayıp nedenleri
-  const nedenler = useMemo(() => {
-    const m = {}; rows.forEach(r => [["h", "Hurda"], ["ia", "İade"], ["ta", "Tamir"]].forEach(([k, l]) => { if (r[k] > 0) { const n = (r.neden[k] || "").trim() || "(neden yazılmamış)"; const key = l + " · " + n; m[key] = (m[key] || 0) + r[k]; } }));
-    return Object.entries(m).sort((a, b) => b[1] - a[1]).map(([key, adet]) => ({ key, adet }));
-  }, [rows]);
-
-  const sekmeler = [["ozet", "Özet"], ["satis", "Satış & Kâr"], ["katalog", "Katalog"], ["model", "Modeller"], ["musteri", "Müşteriler"], ["kayip", "Kayıplar"], ["uretim", "Üretim"], ["rapor", "Raporlar"], ...((ek || []).map(x => [x.id, x.l]))];
-  const sel = { ...IS, width: "auto", padding: "5px 8px", fontSize: 10 };
-  const dbtn = (a) => ({ background: a ? "rgba(var(--vurgu-rgb),0.18)" : "rgba(var(--vurgu-rgb),0.04)", border: "1px solid", borderColor: a ? "rgba(var(--vurgu-rgb),0.4)" : "rgba(var(--vurgu-rgb),0.1)", borderRadius: 6, padding: "4px 10px", color: a ? T.gold : T.sub, fontSize: 9, fontWeight: 700, cursor: "pointer" });
-  const hasYok = !(altinKgUSD > 0);
-
-  return (
-    <div>
-      {/* filtre çubuğu */}
-      <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", marginBottom: 10 }}>
-        {KS_DONEMLER.map(d => <button key={d.id} onClick={() => setDonem(d.id)} style={dbtn(donem === d.id)}>{d.l}</button>)}
-        {donem === "ozel" && <><input type="date" value={t1} onChange={e => setT1(e.target.value)} style={sel} /><span style={{ color: "#665d4a" }}>—</span><input type="date" value={t2} onChange={e => setT2(e.target.value)} style={sel} /></>}
-        <select value={ayarF} onChange={e => setAyarF(e.target.value)} style={sel}><option value="">Tüm ayarlar</option>{ayarlarVar.map(a => <option key={a} value={a}>{a}</option>)}</select>
-        <select value={musF} onChange={e => setMusF(e.target.value)} style={sel}><option value="">Tüm müşteriler</option>{musKodlari.map(k => <option key={k} value={k}>{k}</option>)}</select>
-        {(ayarF || musF) && <button onClick={() => { setAyarF(""); setMusF(""); }} style={{ ...RD, fontSize: 9, padding: "4px 9px" }}>Filtreyi temizle</button>}
-      </div>
-      <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginBottom: 12, borderBottom: "1px solid rgba(var(--vurgu-rgb),0.12)", paddingBottom: 8 }}>
-        {sekmeler.map(([id, l]) => <button key={id} onClick={() => setSekme(id)} style={{ ...dbtn(sekme === id), fontSize: 10, padding: "5px 12px" }}>{l}</button>)}
-      </div>
-
-      {sekme === "ozet" && (<>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
-          <KsKart T={T} baslik="Sipariş" deger={top.sipN} alt={top.verilen + " adet verilen"} fark={fark(top.sipN, onc.sipN)} />
-          <KsKart T={T} baslik="Tamamlanan" deger={top.adet + " adet"} alt={ksG(top.gram) + " gr · " + ksG(top.tasGr) + " gr taş"} fark={fark(top.adet, onc.adet)} />
-          <KsKart T={T} baslik="Net kâr (has)" deger={(top.kar < 0 ? "−" : "") + ksG(Math.abs(top.kar), 2)} renk={top.kar < 0 ? "#e85a4f" : "#6abf69"} alt={hasYok ? "" : fUSDi(top.karUSD)} fark={fark(top.kar, onc.kar)} />
-          <KsKart T={T} baslik="Kârlılık" deger={ksMly(top.mly) + " mly/gr"} renk={top.mly < 0 ? "#e85a4f" : T.text} alt={fUSDi(top.usdGr) + " /gr"} />
-          <KsKart T={T} baslik="Üretimde" deger={top.beklAdet + " adet"} alt={"beklenen kâr " + ksG(top.beklKar, 2) + " has"} />
-          <KsKart T={T} baslik="Kayıp" deger={ksYuzde(top.kayipOran)} renk={top.kayipOran > 0.05 ? "#e85a4f" : T.text} alt={top.h + " hurda · " + top.ia + " iade · " + top.ta + " tamir"} />
-        </div>
-        <KsBolum T={T} baslik="Kâr dağılımı (dönem)">
-          {(() => { const par = [["Taştan", top.tas, "#d4af37"], ["İşçilikten", top.isc, "#5b9bd5"], ["Maliyet (−)", -top.mal, "#e85a4f"], ["Net kâr", top.kar, top.kar < 0 ? "#e85a4f" : "#6abf69"]]; const mx = Math.max(0.0001, ...par.map(p => Math.abs(p[1])));
-            return par.map(([l, v, c]) => (<div key={l} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 5 }}>
-              <div style={{ width: 80, fontSize: 10, color: T.sub }}>{l}</div>
-              <div style={{ flex: 1, height: 12, background: "rgba(255,255,255,0.04)", borderRadius: 4 }}><div style={{ width: Math.abs(v) / mx * 100 + "%", height: "100%", background: c, borderRadius: 4 }} /></div>
-              <div style={{ width: 70, textAlign: "right", fontSize: 10, fontWeight: 700, color: c }}>{v < 0 ? "−" : ""}{ksG(Math.abs(v), 2)}</div></div>)); })()}
-        </KsBolum>
-        <KsBolum T={T} baslik="Son 12 ay · net kâr (has)">
-          <div style={{ display: "flex", alignItems: "flex-end", gap: 5, height: 110 }}>
-            {aylik.map(x => (<div key={x.key} title={x.l + ": " + ksG(x.kar, 2) + " has · " + x.adet + " adet"} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end", height: "100%" }}>
-              <div style={{ fontSize: 8, color: T.sub }}>{x.kar ? ksG(x.kar, 1) : ""}</div>
-              <div style={{ width: "100%", height: Math.max(2, Math.abs(x.kar) / aMax * 80) + "px", background: x.kar < 0 ? "#e85a4f" : "#6abf69", borderRadius: 3, opacity: x.kar ? 1 : 0.2 }} />
-              <div style={{ fontSize: 8, color: T.sub, marginTop: 3 }}>{x.l}</div></div>))}
-          </div>
-        </KsBolum>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(300px,1fr))", gap: 12 }}>
-          <KsBolum T={T} baslik="En kârlı 5 model"><KsTablo T={T} limit={5} sira0="kar" satirlar={modG.map(g => ({ ...g, key: g.key }))} kolonlar={[{ k: "kod", l: "Kod", sol: true, v: r => r.key, f: r => r.key }, { k: "adet", l: "Adet", v: r => r.adet, f: r => r.adet }, { k: "kar", l: "Kâr (has)", v: r => r.kar, f: r => ksG(r.kar, 2) }, { k: "mly", l: "mly/gr", v: r => r.mly, f: r => ksMly(r.mly) }]} /></KsBolum>
-          <KsBolum T={T} baslik="En değerli 5 müşteri (kod)"><KsTablo T={T} limit={5} sira0="kar" satirlar={musG} kolonlar={[{ k: "kod", l: "Kod", sol: true, v: r => r.key, f: r => r.key }, { k: "adet", l: "Adet", v: r => r.adet, f: r => r.adet }, { k: "kar", l: "Kâr (has)", v: r => r.kar, f: r => ksG(r.kar, 2) }, { k: "mly", l: "mly/gr", v: r => r.mly, f: r => ksMly(r.mly) }]} /></KsBolum>
-        </div>
-      </>)}
-
-      {sekme === "satis" && (<>
-        <KsBolum T={T} baslik="Ayara göre">
-          <KsTablo T={T} sira0="kar" satirlar={ayarG} kolonlar={[{ k: "ayar", l: "Ayar", sol: true, v: r => r.key, f: r => r.key }, ...ksKarKolonlari]} />
-          <div style={{ fontSize: 9, color: "#665d4a", marginTop: 6 }}>Ayar düştükçe adet artar ama taş has değeri düşer; mly/gr sütunu hangi ayarın gerçekten kazandırdığını gösterir.</div>
-        </KsBolum>
-        <KsBolum T={T} baslik="Ürün türüne göre">
-          <KsTablo T={T} sira0="kar" satirlar={turG} kolonlar={[{ k: "tur", l: "Tür", sol: true, v: r => ksTip(r.key), f: r => ksTip(r.key) }, ...ksKarKolonlari]} />
-        </KsBolum>
-        <KsBolum T={T} baslik="Koleksiyona göre">
-          <KsTablo T={T} sira0="kar" limit={15} satirlar={kolG} kolonlar={[{ k: "kol", l: "Koleksiyon", sol: true, v: r => kolAd(r.key), f: r => kolAd(r.key) }, ...ksKarKolonlari]} />
-        </KsBolum>
-      </>)}
-
-      {sekme === "katalog" && (<>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
-          <KsKart T={T} baslik="Toplam model" deger={katalog.toplam} alt={"ort. " + ksG(katalog.ortGram) + " gr"} />
-          <KsKart T={T} baslik="Sipariş almış" deger={katalog.siparisli} alt={ksYuzde(katalog.toplam ? katalog.siparisli / katalog.toplam : 0)} />
-          <KsKart T={T} baslik="Teslime ulaşmış" deger={katalog.satan} alt="en az bir adedi tamamlanmış" />
-          <KsKart T={T} baslik="Hiç sipariş almamış" deger={katalog.olu.length} renk={katalog.olu.length ? "#e8833a" : T.text} alt="ölü katalog" />
-          <KsKart T={T} baslik="Taşlı model" deger={katalog.tasli} alt={ksYuzde(katalog.toplam ? katalog.tasli / katalog.toplam : 0)} />
-        </div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(300px,1fr))", gap: 12 }}>
-          <KsBolum T={T} baslik="Türe göre katalog"><KsTablo T={T} sira0="model" satirlar={katalog.bykat} kolonlar={[{ k: "tur", l: "Tür", sol: true, v: r => ksTip(r.key), f: r => ksTip(r.key) }, { k: "model", l: "Model", v: r => r.model, f: r => r.model }, { k: "sip", l: "Siparişli", v: r => r.siparisli, f: r => r.siparisli }, { k: "olu", l: "Ölü", v: r => r.olu, f: r => <span style={{ color: r.olu ? "#e8833a" : undefined }}>{r.olu}</span> }]} /></KsBolum>
-          <KsBolum T={T} baslik="Koleksiyona göre katalog"><KsTablo T={T} sira0="model" limit={12} satirlar={katalog.bykol} kolonlar={[{ k: "kol", l: "Koleksiyon", sol: true, v: r => kolAd(r.key), f: r => kolAd(r.key) }, { k: "model", l: "Model", v: r => r.model, f: r => r.model }, { k: "sip", l: "Siparişli", v: r => r.siparisli, f: r => r.siparisli }, { k: "olu", l: "Ölü", v: r => r.olu, f: r => <span style={{ color: r.olu ? "#e8833a" : undefined }}>{r.olu}</span> }]} /></KsBolum>
-        </div>
-        <KsBolum T={T} baslik={"Hiç sipariş almamış modeller (" + katalog.olu.length + ")"} sag={
-          <div style={{ display: "flex", gap: 6 }}>
-            <select value={olKat} onChange={e => setOlKat(e.target.value)} style={sel}><option value="">Tüm türler</option>{katalog.bykat.map(b => <option key={b.key} value={b.key}>{ksTip(b.key)}</option>)}</select>
-            <select value={olKol} onChange={e => setOlKol(e.target.value)} style={sel}><option value="">Tüm koleksiyonlar</option>{kollar.map(k => <option key={k.id} value={k.id}>{k.ad}</option>)}</select>
-          </div>}>
-          <KsTablo T={T} limit={40} sira0="gram" bos="Her modelin en az bir siparişi var 🎉"
-            satirlar={katalog.olu.filter(x => (!olKat || x.kat === olKat) && (!olKol || x.ki === olKol)).map(x => ({ key: x.m.id, kod: x.kod, tur: ksTip(x.kat), kol: kolAd(x.ki), gram: Number(x.m.gram) || 0, ayar: x.m.refAyar || "14K", t: x.m.t || 0 }))}
-            kolonlar={[{ k: "kod", l: "Kod", sol: true, v: r => r.kod, f: r => r.kod }, { k: "tur", l: "Tür", sol: true, v: r => r.tur, f: r => r.tur }, { k: "kol", l: "Koleksiyon", sol: true, v: r => r.kol, f: r => r.kol }, { k: "gram", l: "Gram", v: r => r.gram, f: r => ksG(r.gram) }, { k: "ayar", l: "Ayar", v: r => r.ayar, f: r => r.ayar }, { k: "t", l: "Eklenme", v: r => r.t, f: r => r.t ? new Date(r.t).toLocaleDateString("tr-TR") : "—" }]} />
-        </KsBolum>
-      </>)}
-
-      {sekme === "model" && (
-        <KsBolum T={T} baslik={"Model performansı — dönem (" + modG.length + " model)"}>
-          <KsTablo T={T} limit={30} sira0="kar" satirlar={modG}
-            kolonlar={[{ k: "kod", l: "Kod", sol: true, v: r => r.key, f: r => r.key }, { k: "tur", l: "Tür", sol: true, v: r => ksTip(r.rows[0].kat), f: r => ksTip(r.rows[0].kat) }, ...ksKarKolonlari, { k: "kayip", l: "Kayıp %", v: r => r.kayipOran, f: r => <span style={{ color: r.kayipOran > 0.1 ? "#e85a4f" : undefined }}>{ksYuzde(r.kayipOran)}</span> }]} />
-        </KsBolum>
-      )}
-
-      {sekme === "musteri" && (
-        <KsBolum T={T} baslik={"Müşteri kodları (" + musG.length + ")"}>
-          <KsTablo T={T} sira0="kar" satirlar={musG}
-            kolonlar={[{ k: "kod", l: "Kod", sol: true, v: r => r.key, f: r => r.key }, { k: "sip", l: "Sipariş", v: r => r.sipN, f: r => r.sipN }, ...ksKarKolonlari, { k: "pay", l: "Kâr payı", v: r => r.kar, f: r => top.kar > 0 ? ksYuzde(r.kar / top.kar) : "—" }, { k: "kayip", l: "Kayıp %", v: r => r.kayipOran, f: r => <span style={{ color: r.kayipOran > 0.1 ? "#e85a4f" : undefined }}>{ksYuzde(r.kayipOran)}</span> }, { k: "son", l: "Son sipariş", v: r => r.son, f: r => r.son ? Math.floor((Date.now() - r.son) / 864e5) + " gün önce" : "—" }]} />
-        </KsBolum>
-      )}
-
-      {sekme === "kayip" && (<>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
-          <KsKart T={T} baslik="Hurda" deger={top.h + " adet"} alt={ksG(top.hGram) + " gr"} renk="#e85a4f" />
-          <KsKart T={T} baslik="İade" deger={top.ia + " adet"} renk="#a78bfa" />
-          <KsKart T={T} baslik="Tamir" deger={top.ta + " adet"} renk="#5b9bd5" />
-          <KsKart T={T} baslik="Toplam kayıp oranı" deger={ksYuzde(top.kayipOran)} alt={top.kayipAdet + " / " + top.verilen + " adet"} />
-        </div>
-        <KsBolum T={T} baslik="Modellere göre">
-          <KsTablo T={T} sira0="kayip" bos="Bu dönemde kayıp kaydı yok" limit={20}
-            satirlar={modG.filter(g => g.kayipAdet > 0)}
-            kolonlar={[{ k: "kod", l: "Kod", sol: true, v: r => r.key, f: r => r.key }, { k: "tur", l: "Tür", sol: true, v: r => ksTip(r.rows[0].kat), f: r => ksTip(r.rows[0].kat) }, { k: "ver", l: "Verilen", v: r => r.verilen, f: r => r.verilen }, { k: "h", l: "Hurda", v: r => r.h, f: r => r.h }, { k: "ia", l: "İade", v: r => r.ia, f: r => r.ia }, { k: "ta", l: "Tamir", v: r => r.ta, f: r => r.ta }, { k: "kayip", l: "Oran", v: r => r.kayipOran, f: r => <b style={{ color: r.kayipOran > 0.1 ? "#e85a4f" : undefined }}>{ksYuzde(r.kayipOran)}</b> }]} />
-        </KsBolum>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(300px,1fr))", gap: 12 }}>
-          <KsBolum T={T} baslik="Müşteri koduna göre"><KsTablo T={T} sira0="kayip" bos="Kayıp kaydı yok" satirlar={musG.filter(g => g.kayipAdet > 0)} kolonlar={[{ k: "kod", l: "Kod", sol: true, v: r => r.key, f: r => r.key }, { k: "kayipAdet", l: "Adet", v: r => r.kayipAdet, f: r => r.kayipAdet }, { k: "kayip", l: "Oran", v: r => r.kayipOran, f: r => ksYuzde(r.kayipOran) }]} /></KsBolum>
-          <KsBolum T={T} baslik="Nedenler"><KsTablo T={T} sira0="adet" bos="Neden kaydı yok" satirlar={nedenler} kolonlar={[{ k: "neden", l: "Tür · neden", sol: true, v: r => r.key, f: r => r.key }, { k: "adet", l: "Adet", v: r => r.adet, f: r => r.adet }]} /></KsBolum>
-        </div>
-      </>)}
-
-      {sekme === "uretim" && (<>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
-          <KsKart T={T} baslik="Üretimde" deger={asama.reduce((s, a) => s + a.adet, 0) + " adet"} alt="tüm açık siparişler" />
-          <KsKart T={T} baslik="Geciken sipariş" deger={geciken.length} renk={geciken.length ? "#e85a4f" : T.text} alt="teslim tarihi geçmiş" />
-          <KsKart T={T} baslik="Ort. tamamlanma" deger={ksG(sure) + " iş günü"} alt="sipariş → teslime hazır (dönem)" />
-        </div>
-        <KsBolum T={T} baslik="Aşamalara göre (adet)">
-          {asama.length === 0 ? <div style={{ fontSize: 10, color: "#665d4a" }}>Açık üretim yok</div> : (() => { const mx = Math.max(...asama.map(a => a.adet)); return asama.map(a => (
-            <div key={a.id} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 5 }}>
-              <div style={{ width: 90, fontSize: 10, color: a.c, fontWeight: 700 }}>{a.l}</div>
-              <div style={{ flex: 1, height: 12, background: "rgba(255,255,255,0.04)", borderRadius: 4 }}><div style={{ width: a.adet / mx * 100 + "%", height: "100%", background: a.c, borderRadius: 4 }} /></div>
-              <div style={{ width: 40, textAlign: "right", fontSize: 10, fontWeight: 700, color: T.text }}>{a.adet}</div></div>)); })()}
-        </KsBolum>
-        <KsBolum T={T} baslik="Geciken siparişler">
-          <KsTablo T={T} sira0="gun" bos="Geciken sipariş yok" satirlar={geciken.map(x => ({ key: x.s.id, mus: x.s.musKod || (musteriler || {})[x.s.musteri] || "—", gun: -x.o.gun, il: Math.round(x.o.il * 100), teslim: x.s.teslimTarihi || "" }))}
-            kolonlar={[{ k: "mus", l: "Müşteri", sol: true, v: r => r.mus, f: r => r.mus }, { k: "teslim", l: "Teslim tarihi", v: r => r.teslim, f: r => r.teslim }, { k: "gun", l: "Gecikme", v: r => r.gun, f: r => <b style={{ color: "#e85a4f" }}>{r.gun} gün</b> }, { k: "il", l: "İlerleme", v: r => r.il, f: r => "%" + r.il }]} />
-        </KsBolum>
-      </>)}
-
-      {sekme === "rapor" && (
-        <KsBolum T={T} baslik="PDF raporlar">
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-            <button onClick={() => downloadPDF(buildSatisRaporuHTML(modeller, siparisler), "satis-raporu")} style={{ ...GH, fontSize: 10, padding: "7px 14px" }}>Satış raporu</button>
-            <button disabled={siparisler.length === 0} onClick={() => downloadPDF(buildSipListeRaporuHTML([...siparisler].reverse().filter(s => s.tarih >= bas && s.tarih <= bit && (!musF || (s.musKod || (musteriler || {})[s.musteri]) === musF)), altinKgUSD, madenCarpan), "siparis-listesi-raporu")} style={{ ...GH, fontSize: 10, padding: "7px 14px" }}>Sipariş listesi · karlılık & kayıp (seçili dönem/müşteri)</button>
-            <select value="" onChange={e => { const kod = e.target.value; if (!kod) return; const e2 = Object.entries(musteriler || {}).find(([, k]) => k === kod); downloadPDF(buildMusteriDetayHTML(e2 ? e2[0] : kod, kod, siparisler), kod + "-detay"); }} style={sel}>
-              <option value="">Müşteri raporu…</option>{musKodlari.map(k => <option key={k} value={k}>{k}</option>)}
-            </select>
-          </div>
-        </KsBolum>
-      )}
-      {(ek || []).map(x => sekme === x.id ? <div key={x.id}>{x.node}</div> : null)}
-      {!(ek || []).some(x => x.id === sekme) && <div style={{ fontSize: 9, color: "#665d4a", marginTop: 4 }}>Kâr yalnızca "Teslime hazır / Teslim edildi" durumundaki, numune olmayan ürünlerden hesaplanır; hurda, iade ve tamir adetleri düşülür. "Üretimde" beklenen kârdır, gerçekleşene dahil değildir.</div>}
-    </div>
-  );
-}
-
-
 function Atolye({ onSirketDegis }) {
   // Varsayılan: OTOMATİK (hiç seçim yapılmamışsa). Sadece elle sabit tema seçilmişse ("manuel") o kullanılır.
   const [temaModu, setTemaModu] = useState(() => {
@@ -5892,9 +3567,6 @@ function Atolye({ onSirketDegis }) {
   const [kollar,    setKollar]    = useState([]);
   const [modeller,  setModeller]  = useState([]);
   const [siparisler,setSiparisler]= useState([]);
-  const [zorlukModal, setZorlukModal] = useState(null); // zorluk puanlanacak sipariş id
-  const [zorKarSira, setZorKarSira] = useState("skor"); // Keşfet: zorluk × karlılık tablosu sıralaması
-  const zorlukHaritasi = useMemo(() => zorlukOzetle(siparisler), [siparisler]);
   const [iadeModal,  setIadeModal] = useState(null); // {sipId, kalemId, kalemAd, maxAdet, mevcAdet, iadeTuru, mevcNeden}
   const [cizelgeModal, setCizelgeModal] = useState(null); // sipId — zaman çizelgesi modal'ı
   const [musteriler, setMusteriler] = useState({}); // { "Ahmet": "MUS-001", ... }
@@ -6035,7 +3707,6 @@ function Atolye({ onSirketDegis }) {
   const [showYedek, setShowYedek] = useState(false);
   const [katalogSiralaModal, setKatalogSiralaModal] = useState(false);
   const [katalogSiraliModeller, setKatalogSiraliModeller] = useState([]);
-  const [katKodTers, setKatKodTers] = useState(null); // "Koda Göre" her basışta yön değiştirir
   const [katalogSutun, setKatalogSutun] = useState(3);
   const [katalogKol, setKatalogKol] = useState(null);
   const [katalogAyar, setKatalogAyar] = useState("14K");
@@ -6080,35 +3751,19 @@ function Atolye({ onSirketDegis }) {
   const [vitrinSupheli, setVitrinSupheli] = useState({}); // { MUSKOD: [{bilgi, ilk, son}, ...] } — birden fazla cihazdan giren müşteriler (link başkasına gitmiş olabilir)
   const [vitrinCevrimici, setVitrinCevrimici] = useState({}); // { MUSKOD: {dakika} } — şu an vitrinde olan (nabız sinyaliyle) müşteriler
   const [kolMusModal, setKolMusModal] = useState(null); // koleksiyon id → hangi musteriler gorsun
-  const [vitrinSekme, setVitrinSekme] = useState("musteri");
-  const [vitrinAra, setVitrinAra] = useState("");
-  const [vitrinFiltre, setVitrinFiltre] = useState("hepsi");
   const [musKolModal, setMusKolModal] = useState(null); // musteri kodu → hangi koleksiyonlari gorsun
   const [vitrinAnalizVeri, setVitrinAnalizVeri] = useState(null); // Kesfet vitrin analizi
   const [topluKopyalaModal, setTopluKopyalaModal] = useState(false);
   const [topluHedefKolId, setTopluHedefKolId] = useState("");
 
   const [konfList,    setKonfList]    = useState([]);
-  const [pdfModal, setPdfModal] = useState(false);
   const [konfMus,        setKonfMus]        = useState("");
   const [konfSipAciklama, setKonfSipAciklama] = useState(""); // sipariş geneli açıklama
-  const [konfSipNo, setKonfSipNo] = useState(""); // sipariş numarası (boşsa otomatik üretilir)
   const [konfTeslim,     setKonfTeslim]     = useState("");
   const [acikSiparisler, setAcikSiparisler] = useState({});
-  const sureModeli = useMemo(() => tahminiSureModeli(siparisler), [siparisler]); // geçmiş teslimlerden çıkış süresi
   const [sipMusF,  setSipMusF]  = useState("");
-  const [sipFiltre, setSipFiltre] = useState("tumu"); // tumu, aktif, baslanmadi, dokumde, geciken, tamamlanan
-  const [sipEkleModal, setSipEkleModal] = useState(null); // { sipId, ara, kol, sec:[model...] } — siparişe sonradan model ekle
-  const [sipAyarAnaliz, setSipAyarAnaliz] = useState(false);
-  const [sipYedekModal, setSipYedekModal] = useState(false);
-  const [sipYedekler, setSipYedekler] = useState([]);   // yedek listesi (veri hariç)
-  const [sipYedekSec, setSipYedekSec] = useState(null); // {id, olusturma, veri}
-  const [sipMusSec, setSipMusSec] = useState("");  // müşteri seçici (tam eşleşme)
-  const [sipAyarF, setSipAyarF] = useState("");    // ayar filtresi (14K, 925…)
+  const [sipFiltre, setSipFiltre] = useState("tumü"); // tumu, aktif, baslanmadi, dokumde, geciken, tamamlanan
   const [sipTarih1,setSipTarih1]= useState("");
-  const [sipYil, setSipYil] = useState("tumu");   // aylık grafik: seçili yıl ("tumu" = yıllara göre toplam)
-  const [sipAylar, setSipAylar] = useState([]);    // seçili aylar (0-11), boşsa hepsi
-  const [sipGrafikAcik, setSipGrafikAcik] = useState(true);
   const [sipTarih2,setSipTarih2]= useState("");
   const [analizMusF,  setAnalizMusF]  = useState("");
   const [analizTarih1,setAnalizTarih1]= useState("");
@@ -6126,7 +3781,6 @@ function Atolye({ onSirketDegis }) {
   const [konfRenkler, setKonfRenkler] = useState({});     // per-item renk
   const [konfAdet,    setKonfAdet]    = useState({});  // id -> adet
   const [konfNot,     setKonfNot]     = useState({});  // id -> not
-  const [konfNumune,  setKonfNumune]  = useState({});  // id -> true (numune olarak verilecek)
   const [konfSira, setKonfSira] = useState("koleksiyon"); // Konfirmasyon sıralama modu (bkz. KONF_SIRA_SECENEKLERI)
   const [sipSira, setSipSira] = useState("koleksiyon");   // Sipariş geçmişi kalem sıralama modu (görünüm + PDF)
   const [konfTaslikYuklendi, setKonfTaslikYuklendi] = useState(false); // taslak geri yüklendi mi (ilk render'da erken kaydetmeyi önler)
@@ -6145,7 +3799,6 @@ function Atolye({ onSirketDegis }) {
         setKonfRenkler(d.renkler || {});
         setKonfAdet(d.adet || {});
         setKonfNot(d.not || {});
-        setKonfNumune(d.numune || {});
         setKonfBoylar(d.boylar || {});
         setKonfFiyatlar(d.fiyatlar || {});
         setKonfSira(d.sira || "koleksiyon");
@@ -6164,12 +3817,12 @@ function Atolye({ onSirketDegis }) {
         sv("v7konfdraft", {
           liste: konfList, mus: konfMus, teslim: konfTeslim, aciklama: konfSipAciklama,
           ayar: konfAyar, ayarlar: konfAyarlar, renkler: konfRenkler, adet: konfAdet,
-          not: konfNot, numune: konfNumune, boylar: konfBoylar, fiyatlar: konfFiyatlar, sira: konfSira,
+          not: konfNot, boylar: konfBoylar, fiyatlar: konfFiyatlar, sira: konfSira,
         });
       }
     }, 800);
     return () => clearTimeout(zamanlayici);
-  }, [konfTaslikYuklendi, konfList, konfMus, konfTeslim, konfSipAciklama, konfAyar, konfAyarlar, konfRenkler, konfAdet, konfNot, konfNumune, konfBoylar, konfFiyatlar, konfSira]);
+  }, [konfTaslikYuklendi, konfList, konfMus, konfTeslim, konfSipAciklama, konfAyar, konfAyarlar, konfRenkler, konfAdet, konfNot, konfBoylar, konfFiyatlar, konfSira]);
 
   // Kol form
   const [fkAd, setFkAd] = useState("");
@@ -6198,50 +3851,6 @@ function Atolye({ onSirketDegis }) {
   const [fSetKodu,     setFSetKodu]    = useState(""); // set kodu - aynı sete ait modelleri eşler
   const [fAc,          setFAc]         = useState("");
   const [fFoto,        setFFoto]       = useState("");
-  const [fotoDurum,    setFotoDurum]   = useState(""); // foto işlenirken kutuda gösterilen durum (ör. yapay zekâ)
-  const [koruModal,    setKoruModal]   = useState(false); // 🖌 İşaretle penceresi
-  useEffect(() => { try { if (localStorage.getItem("aiBg") === "1") { const t = setTimeout(arkaPlanOnYukle, 4000); return () => clearTimeout(t); } } catch (e) {} }, []);
-  // ── KART ÜSTÜ FOTO ARAÇLARI (geçici): kartı açmadan ✨ arka plan sil / 🖌 işaretle; sonuç ANINDA kaydedilir, ↩ ile (bu oturumda) eski foto geri yüklenir ──
-  const [kartGeri,  setKartGeri]  = useState({}); // modelId -> { orj: önceki fotoğraf (dataURL), temiz: önceki fotoTemiz }
-  const [kartDurum, setKartDurum] = useState({}); // modelId -> işlem yazısı (çalışırken)
-  const [kartKoru,  setKartKoru]  = useState(null); // 🖌 işaretle penceresi açık olan modelId
-  const kartDurumYaz = (id, t) => setKartDurum(p => { const n = { ...p }; if (t) n[id] = t; else delete n[id]; return n; });
-  const fotoDataUrlYap = async (u) => {
-    if (!u || u.startsWith("data:")) return u;
-    const blob = await (await fetch(u, { mode: "cors", cache: "no-store" })).blob();
-    return await new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = rej; fr.readAsDataURL(blob); });
-  };
-  const kartFotoAI = async (m) => {
-    const cur = m.foto;
-    if (!cur || kartDurum[m.id]) return;
-    kartDurumYaz(m.id, "Yapay zekâ çalışıyor…");
-    try {
-      const orj = await fotoDataUrlYap(cur); // geri alma için eski foto (kaydedince Storage'daki üstüne yazılır)
-      const koru = _koruMaske && _koruMaske.foto === cur ? _koruMaske.canvas : null;
-      let yeni = null;
-      const r = await fotoAIIsle(cur, (v) => { yeni = v; }, (t) => kartDurumYaz(m.id, t), m.kategori !== "kolye", koru);
-      if (r !== "ok" || !yeni) { toastGoster("hata", "Arka plan silinemedi: " + r); kartDurumYaz(m.id, ""); return; }
-      kartDurumYaz(m.id, "Kaydediliyor…");
-      const url = await fotoYukleStorage(yeni, m.id, AKTIF_SIRKET_ONEK);
-      svMUpsert([{ ...m, foto: url, fotoTemiz: true }]);
-      islemKaydet(AKTIF_SIRKET_ONEK, "düzenle", "model", (m.kod || "") + " · arka plan temizlendi (kart)");
-      setKartGeri(p => ({ ...p, [m.id]: { orj, temiz: !!m.fotoTemiz } }));
-      toastGoster("ok", "✨ " + (m.kod || "") + " temizlendi ve kaydedildi");
-    } catch (e) { console.error(e); toastGoster("hata", "Olmadı: " + (e && e.message ? e.message : "hata")); }
-    kartDurumYaz(m.id, "");
-  };
-  const kartFotoGeriAl = async (m) => {
-    const g = kartGeri[m.id]; if (!g || kartDurum[m.id]) return;
-    kartDurumYaz(m.id, "Eski foto geri yükleniyor…");
-    try {
-      const url = await fotoYukleStorage(g.orj, m.id, AKTIF_SIRKET_ONEK);
-      svMUpsert([{ ...m, foto: url, fotoTemiz: g.temiz }]);
-      islemKaydet(AKTIF_SIRKET_ONEK, "düzenle", "model", (m.kod || "") + " · foto geri alındı (kart)");
-      setKartGeri(p => { const n = { ...p }; delete n[m.id]; return n; });
-      toastGoster("ok", "↩ " + (m.kod || "") + " eski fotoğrafına döndü");
-    } catch (e) { console.error(e); toastGoster("hata", "Geri alınamadı: " + (e && e.message ? e.message : "hata")); }
-    kartDurumYaz(m.id, "");
-  };
   const [kirpModal,    setKirpModal]   = useState(null); // foto kırpma aracı — data-URL tutuyor, null=kapalı
   // Büyük foto önizlemesi (220px) editördeki 4:3 kutudan FARKLI bir en/boy oranında —
   // bu yüzden nokta konumunu bu kutunun KENDİ letterbox'ına göre ayrıca düzeltmek gerekiyor.
@@ -6294,7 +3903,7 @@ function Atolye({ onSirketDegis }) {
     if (!document.getElementById("atolye-hover-zoom")) {
       const s = document.createElement("style");
       s.id = "atolye-hover-zoom";
-      s.textContent = `.model-foto-wrap { overflow:hidden; position:relative; } .model-foto-wrap img { transition: transform .4s cubic-bezier(.25,.46,.45,.94), transform-origin 0s !important; transform-origin: center center; } .model-foto-wrap:hover img { transform: scale(1.90) !important; } .model-foto-wrap.bil-zoom:hover img { transform: scale(3.2) !important; }`;
+      s.textContent = `.model-foto-wrap { overflow:hidden; position:relative; } .model-foto-wrap img { transition: transform .4s cubic-bezier(.25,.46,.45,.94), transform-origin 0s !important; transform-origin: center center; } .model-foto-wrap:hover img { transform: scale(1.90) !important; }`;
       document.head.appendChild(s);
     }
     const hoverHandler = function(e) {
@@ -6734,25 +4343,6 @@ function Atolye({ onSirketDegis }) {
       return { ok: false, hata: e.message };
     }
   }, []);
-  // Sipariş filtresi (liste + özet + PDF aynı kuralı kullanır). ayarDahil=false → ayar filtresini yok say (ayar çipleri için)
-  const sipGecer = (s, ayarDahil = true, tarihDahil = true) => {
-    if (tarihDahil && sipYil !== "tumu") { const d = new Date(s.tarih || 0); if (d.getFullYear() !== sipYil) return false; if (sipAylar.length && !sipAylar.includes(d.getMonth())) return false; }
-    if (sipMusSec && (s.musKod || s.musteri || "?") !== sipMusSec) return false;
-    if (sipMusF) { const q = sipMusF.toLowerCase(); if (!(s.musteri||"").toLowerCase().includes(q) && !(s.musKod||"").toLowerCase().includes(q) && !sipKodu(s, siparisler).toLowerCase().includes(q)) return false; }
-    if (sipTarih1 && s.tarih < new Date(sipTarih1).getTime()) return false;
-    if (sipTarih2 && s.tarih > new Date(sipTarih2).getTime()+86399999) return false;
-    if (ayarDahil && sipAyarF && !(s.kalemler||[]).some(k => (k.secilenAyar || k.refAyar || "14K") === sipAyarF)) return false;
-    const son = (s.durumGecmisi||[]).slice(-1)[0];
-    if (sipFiltre === "aktif") { if (!son||["tamam","teslim","hurda"].includes(son.durum)) return false; }
-    if (sipFiltre === "baslanmadi") { if (s.durumGecmisi?.length) return false; }
-    if (sipFiltre === "dokumde") { if (son?.durum!=="dokum") return false; }
-    if (sipFiltre === "geciken") { if (!son||["tamam","teslim","hurda"].includes(son.durum)||isGunuSure(son.tarih,Date.now())<=7*24*60*60*1000) return false; }
-    if (sipFiltre === "teslimhazir") { if (son?.durum!=="tamam") return false; }
-    if (sipFiltre === "teslimedildi") { if (son?.durum!=="teslim") return false; }
-    if (sipFiltre === "tamamlanan") { if (!["tamam","teslim"].includes(son?.durum)) return false; }
-    return true;
-  };
-
   const svS = useCallback(async d => {
     setSiparisler(d);
     await guvenliKaydet("v7s", d);
@@ -6824,8 +4414,6 @@ function Atolye({ onSirketDegis }) {
         return prevSip;
       });
     }
-    // Müşteriye teslim edilince → ürünlerin zorluk puanlaması açılır
-    if (yeniDurum === "teslim" && !manuelTarih) setTimeout(() => setZorlukModal(sipId), 200);
     // Tezgaha geçince → döküm teslim alındı, ilgili gönderimi kapat
     if (yeniDurum === "tezgah") {
       setKasa(prev => {
@@ -6865,34 +4453,6 @@ function Atolye({ onSirketDegis }) {
       yaziRenkleri: yaziRenkYedek, tema: temaYedek, v: Date.now(),
     };
   }, [kollar, modeller, siparisler, musteriler, ayarKategoriler]);
-
-  // ═══ SİPARİŞ OTOMATİK YEDEĞİ ═══
-  // • Sipariş sayısı azalırsa → silmeden ÖNCEKİ liste hemen yedeklenir
-  // • Her değişiklikten 45 sn sonra (içerik farklıysa) yedek alınır — son 100 yedek saklanır
-  const sipYedekRef = useRef({ hash: "", onceki: null, timer: null });
-  const sipYedekAl = useCallback(async (liste, neden) => {
-    const ok = await siparisYedekKaydet(AKTIF_SIRKET_ONEK, liste, neden);
-    if (ok) siparisYedekListesi(AKTIF_SIRKET_ONEK).then(setSipYedekler);
-    return ok;
-  }, []);
-  useEffect(() => {
-    if (!loaded) return;
-    const r = sipYedekRef.current;
-    if (r.onceki && r.onceki.length > siparisler.length) sipYedekAl(r.onceki, "silme öncesi (" + r.onceki.length + " → " + siparisler.length + ")");
-    r.onceki = siparisler;
-    if (siparisler.length === 0) return;
-    clearTimeout(r.timer);
-    r.timer = setTimeout(() => {
-      try {
-        const h = siparisler.length + ":" + JSON.stringify(siparisler);
-        if (!r.hash) { r.hash = h; return; } // ilk yükleme = başlangıç noktası, yedeklenmez
-        if (h === r.hash) return;
-        r.hash = h;
-        sipYedekAl(siparisler, "otomatik");
-      } catch (e) { console.error("Sipariş yedek:", e.message); }
-    }, 45000);
-    return () => clearTimeout(r.timer);
-  }, [siparisler, loaded, sipYedekAl]);
 
   // Açılışta günde 1 kez otomatik yedek (bugün alınmamışsa)
   const otoYedekYapildiRef = useRef(false);
@@ -6951,7 +4511,7 @@ function Atolye({ onSirketDegis }) {
   }, [kollar]);
 
   const rkf = () => { setFkAd(""); setFkAc(""); setFkOn(""); };
-  const rmf = () => { fotoGeriSifirla(); setFAd(""); setFKod(""); setFGram(""); setFRefAyar("14K"); setFTasGram(""); setFTasBoy(""); setFTaslar([]); setFTasSekil("ROUND"); setFTasTur("N"); setFTasBoyut(""); setFTasAdet(""); setFTasOzelIsim(""); setFMadenC(""); setFIscilikDolar(""); setFIscilikBirim("dolar"); setFIscilikAyarlar({}); setFEkMaliyet(""); setFKategori("yuzuk"); setFSetKodu(""); setFAc(""); setFFoto(""); setFKolId(""); setFDurum("baslanmadi"); setFEtiketler([]); setFYeniEtiket(""); setFDetayNoktalari([]); setFDetayAcik(false); setFSetModu(false); setFSetKod1(""); setFSetKod2(""); setFSetM1(null); setFSetM2(null); };
+  const rmf = () => { setFAd(""); setFKod(""); setFGram(""); setFRefAyar("14K"); setFTasGram(""); setFTasBoy(""); setFTaslar([]); setFTasSekil("ROUND"); setFTasTur("N"); setFTasBoyut(""); setFTasAdet(""); setFTasOzelIsim(""); setFMadenC(""); setFIscilikDolar(""); setFIscilikBirim("dolar"); setFIscilikAyarlar({}); setFEkMaliyet(""); setFKategori("yuzuk"); setFSetKodu(""); setFAc(""); setFFoto(""); setFKolId(""); setFDurum("baslanmadi"); setFEtiketler([]); setFYeniEtiket(""); setFDetayNoktalari([]); setFDetayAcik(false); setFSetModu(false); setFSetKod1(""); setFSetKod2(""); setFSetM1(null); setFSetM2(null); };
 
   const saveKol = () => {
     if (!fkAd.trim()) return;
@@ -6991,9 +4551,8 @@ function Atolye({ onSirketDegis }) {
     const hesaplananTasGram = fTaslar.length > 0 && toplamTasGram > 0
       ? toplamTasGram
       : (Number(fTasGram)||0);
-    const obj = { ad: fAd.trim(), kod: fKod.trim().toUpperCase(), kategori: fKategori, gram: Number(fGram)||0, refAyar: fRefAyar, tasGram: hesaplananTasGram, taslar: fTaslar, tasBoy: fTasBoy.trim(), tasSekil: fTasSekil, tasTur: fTasTur, tasBoyut: fTasBoyut, tasAdet: Number(fTasAdet)||0, madenCarpan: Number(fMadenC)||0, iscilikDolar: Number(fIscilikDolar)||0, iscilikBirim: fIscilikBirim, iscilikAyarlar: fIscilikAyarlar, ekMaliyet: Number(fEkMaliyet)||0, ac: fAc.trim(), foto: fFoto, fotoTemiz: _temizFotolar.has(fFoto), ki: fKolId, durum: fDurum, etiketler: fEtiketler, detayNoktalari: fDetayNoktalari };
+    const obj = { ad: fAd.trim(), kod: fKod.trim().toUpperCase(), kategori: fKategori, gram: Number(fGram)||0, refAyar: fRefAyar, tasGram: hesaplananTasGram, taslar: fTaslar, tasBoy: fTasBoy.trim(), tasSekil: fTasSekil, tasTur: fTasTur, tasBoyut: fTasBoyut, tasAdet: Number(fTasAdet)||0, madenCarpan: Number(fMadenC)||0, iscilikDolar: Number(fIscilikDolar)||0, iscilikBirim: fIscilikBirim, iscilikAyarlar: fIscilikAyarlar, ekMaliyet: Number(fEkMaliyet)||0, ac: fAc.trim(), foto: fFoto, ki: fKolId, durum: fDurum, etiketler: fEtiketler, detayNoktalari: fDetayNoktalari };
     if (!obj.id) obj.olusturma = Date.now();
-    obj.cizimde = !!(editM && editM.cizimde && fDurum === "cizimde"); // çizim bitip durum değişince vitrine açılır
     // Aynı kodlu diğer modeller var mı kontrol et
     // NOT: aynı kod İKİ FARKLI SEBEPLE oluşabilir:
     //  1) AYNI KOLEKSİYON içinde — farklı taş rengi/türü varyantı (ör. ALT160-B yeşil vs mavi) YA DA kaza kopyası.
@@ -7114,7 +4673,7 @@ function Atolye({ onSirketDegis }) {
     setFAd(m.ad); setFKod(m.kod||""); setFGram(String(m.gram||"")); setFRefAyar(m.refAyar||"14K");
     setFTasGram(String(m.tasGram||"")); setFTasBoy(m.tasBoy||""); setFTaslar(m.taslar||[]); setFTasSekil(m.tasSekil||"ROUND"); setFTasTur(m.tasTur||"N"); setFTasBoyut(m.tasBoyut||""); setFTasAdet(String(m.tasAdet||"")); setFMadenC(String(m.madenCarpan||""));
     setFIscilikDolar(String(m.iscilikDolar||"")); setFIscilikBirim(m.iscilikBirim||"dolar"); setFIscilikAyarlar(m.iscilikAyarlar||{}); setFEkMaliyet(String(m.ekMaliyet||""));
-    fotoGeriSifirla(); if (m.fotoTemiz && m.foto) _temizFotolar.add(m.foto); setFAc(m.ac||""); setFFoto(m.foto||""); setFKolId(m.ki||""); setFDurum(m.durum||"baslanmadi");
+    setFAc(m.ac||""); setFFoto(m.foto||""); setFKolId(m.ki||""); setFDurum(m.durum||"baslanmadi");
     setFKategori(m.kategori||"yuzuk"); setFEtiketler(m.etiketler||[]); setFDetayNoktalari(m.detayNoktalari||[]); setEditM(m); setShowMM(true);
     setFSetModu(false); setFSetKod1(""); setFSetKod2(""); setFSetM1(null); setFSetM2(null); // her model açılışında SET modu sıfırlansın — bir önceki modelden yapışık kalmasın
   };
@@ -7123,7 +4682,7 @@ function Atolye({ onSirketDegis }) {
     const f = e.target.files && e.target.files[0];
     e.target.value = ""; // SIFIRLA — aynı/yeni dosya tekrar seçilebilsin (yoksa onChange tetiklenmez)
     if (!f) return;
-    fotoGeriSifirla(); { const yf = await resizeImg(f); if (_sonYuklemeSaydam) _temizFotolar.add(yf); setFFoto(yf); } // direkt yüklenir — kırpmak istersen "✂️ Kırp" butonuyla sonradan aç
+    setFFoto(await resizeImg(f)); // direkt yüklenir — kırpmak istersen "✂️ Kırp" butonuyla sonradan aç
   };
   const handleKod  = v => {
     setFKod(v);
@@ -7190,17 +4749,12 @@ function Atolye({ onSirketDegis }) {
     else if (sirala==="kod_eski") r=[...r].sort((a,b)=>kodSirala(a,b,false)); // Koda göre en eski — en düşük kod üstte (ALT1 > ALT2)
     else if (sirala==="kar_desc" && altinKgUSD>0) r=[...r].sort((a,b)=>{ const ha=hesapla(a,a.refAyar,altinKgUSD,madenCarpan),hb=hesapla(b,b.refAyar,altinKgUSD,madenCarpan); return hb.karHas-ha.karHas; });
     else if (sirala==="kar_asc" && altinKgUSD>0) r=[...r].sort((a,b)=>{ const ha=hesapla(a,a.refAyar,altinKgUSD,madenCarpan),hb=hesapla(b,b.refAyar,altinKgUSD,madenCarpan); return ha.karHas-hb.karHas; });
-    else if (sirala==="zor_desc" || sirala==="zor_asc") {
-      const zo = m => { const z = zorlukHaritasi.get(String(m.kod||"").toUpperCase()); return z ? z.ort : null; };
-      const yon = sirala==="zor_desc" ? -1 : 1;
-      r=[...r].sort((a,b)=>{ const za=zo(a), zb=zo(b); if (za==null && zb==null) return 0; if (za==null) return 1; if (zb==null) return -1; return (za-zb)*yon; });
-    }
     else if (sirala==="gram_asc") r=[...r].sort((a,b)=>(Number(a.gram)||0)-(Number(b.gram)||0));
     else if (sirala==="gram_desc") r=[...r].sort((a,b)=>(Number(b.gram)||0)-(Number(a.gram)||0));
     else if (sirala==="cok_satilan") r=[...r].sort((a,b)=>(b.satisSayisi||0)-(a.satisSayisi||0));
     else r=[...r].sort((a,b)=>(b.t||0)-(a.t||0)); // VARSAYILAN: en son eklenen üstte
     return r;
-  }, [aktMod, filtre, etiketF, kategoriF, onEkF, arama, sirala, altinKgUSD, madenCarpan, kollar, zorlukHaritasi]);
+  }, [aktMod, filtre, etiketF, kategoriF, onEkF, arama, sirala, altinKgUSD, madenCarpan, kollar]);
 
   // Düzenleme modalında sağ/sol ok ile bir sonraki/önceki modele geçiş — ekranda o an gösterilen (gorunen) sıraya göre
   const editKomsu = (yon) => {
@@ -7240,73 +4794,6 @@ function Atolye({ onSirketDegis }) {
     tasi(setKonfAyarlar); tasi(setKonfRenkler); tasi(setKonfAdet); tasi(setKonfNot); tasi(setKonfBoylar);
     setKonfFiyatlar(p => { if (!(eski.id in p)) return p; const { [eski.id]: _at, ...kalan } = p; return kalan; }); // fiyat yeni modelin kendi işçiliğinden gelsin
   };
-  // PDF'ten sipariş: onaylanan satırları Konfirmasyon listesine aktarır; eşleşmeyenleri yeni model olarak ekler
-  const pdfSiparisUygula = async ({ baslik, kolId, satirlar }) => {
-    const onek = AKTIF_SIRKET_ONEK;
-    const idle = id => { const x = String(id); return (onek && !x.startsWith(onek)) ? onek + x : x; };
-    const refAyar = (baslik && baslik.ayar && AYARLAR.some(x=>x.id===baslik.ayar)) ? baslik.ayar : "14K";
-    const yeniler = [];
-    const kalemler = []; // {model, adet, not}
-    const refler = {}; // çizimde modellerin müşteri referans resimleri (vitrine gitmesin diye modelin içine değil kasaya yazılır)
-    for (const s of satirlar) {
-      if (s.yeni) {
-        const hamId = uid();
-        const cz = !!s.cizimde;
-        let foto = (s.kalem && s.kalem.foto) || "";
-        if (foto.startsWith("data:")) {
-          try { foto = await fotoYukleStorage(foto, cz ? hamId + "-ref" : hamId, onek); } catch (e) { console.error("foto yüklenemedi:", e); foto = ""; }
-        }
-        const refUrl = cz ? foto : "";
-        if (cz) { foto = ""; refler[idle(hamId)] = refUrl; refler[hamId] = refUrl; }
-        const kod = String(s.yeniKod || "").trim().toUpperCase();
-        const m = { id: hamId, ad: "", kod, kategori: s.yeniKategori || "diger", gram: Number(s.yeniGram) || 0, refAyar,
-          tasGram: 0, taslar: [], tasBoy: "", tasSekil: "ROUND", tasTur: "N", tasBoyut: "", tasAdet: 0, madenCarpan: 0,
-          iscilikDolar: 0, iscilikBirim: "dolar", iscilikAyarlar: {}, ekMaliyet: 0, ac: (s.kalem && s.kalem.aciklama) || "",
-          foto, ki: kolId, durum: cz ? "cizimde" : "baslanmadi", etiketler: [], detayNoktalari: [], t: Date.now(), olusturma: Date.now(), ...(cz ? { cizimde: true } : {}) };
-        yeniler.push(m);
-        kalemler.push({ model: { ...m, id: idle(hamId), ...(cz ? { foto: refUrl } : {}) }, adet: s.adet, not: s.not });
-      } else if (s.model) {
-        kalemler.push({ model: s.model, adet: s.adet, not: s.not });
-      }
-    }
-    if (yeniler.length) {
-      const r = await svMUpsert(yeniler);
-      if (r && r.ok === false) throw new Error("Yeni modeller kaydedilemedi: " + r.hata);
-      islemKaydet(onek, "ekle", "model", "PDF'ten " + yeniler.length + " yeni model");
-    }
-    if (Object.keys(refler).length) svKasa({ ...kasa, cizimRefler: { ...(kasa.cizimRefler || {}), ...refler } });
-    // Aynı modeli birleştir (adet topla, not birleştir)
-    const birlesik = new Map();
-    for (const k of kalemler) {
-      const id = k.model.id;
-      const o = birlesik.get(id);
-      if (!o) birlesik.set(id, { model: k.model, adet: k.adet, not: (k.not || "").trim() });
-      else { o.adet += k.adet; if ((k.not || "").trim()) o.not = o.not ? o.not + " / " + k.not.trim() : k.not.trim(); }
-    }
-    const eklenecek = [...birlesik.values()];
-    const mevcut = new Set(konfList.map(x => x.id));
-    setKonfList(p => { const var_ = new Set(p.map(x => x.id)); return siraliKonfListe([...p, ...eklenecek.filter(e => !var_.has(e.model.id)).map(e => e.model)]); });
-    setKonfAdet(p => { const n = { ...p }; eklenecek.forEach(e => { n[e.model.id] = mevcut.has(e.model.id) ? (Number(p[e.model.id]) || 1) + e.adet : e.adet; }); return n; });
-    setKonfNot(p => { const n = { ...p }; eklenecek.forEach(e => { if (e.not) n[e.model.id] = n[e.model.id] ? n[e.model.id] + ", " + e.not : e.not; }); return n; });
-    if (baslik && baslik.ayar && AYARLAR.some(x=>x.id===baslik.ayar)) setKonfAyar(baslik.ayar);
-    if (baslik && baslik.teslimTarihi) {
-      const mt = String(baslik.teslimTarihi).match(/(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{4})/);
-      if (mt) setKonfTeslim(mt[3] + "-" + mt[2].padStart(2, "0") + "-" + mt[1].padStart(2, "0"));
-    }
-    const parcalar = [];
-    if (baslik && baslik.referans) parcalar.push("Ref " + baslik.referans);
-    if (baslik && baslik.po) parcalar.push("PO " + baslik.po);
-    if (baslik && baslik.ayar) parcalar.push(baslik.ayar);
-    if (baslik && baslik.listeGram) parcalar.push("Liste " + baslik.listeGram);
-    if (baslik && baslik.genelNot) parcalar.push(baslik.genelNot);
-    if (parcalar.length) setKonfSipAciklama(p => (p ? p + " | " : "") + "PDF: " + parcalar.join(" · "));
-    setSayfa("konfirmasyon");
-  };
-  // Konfirmasyon listesini ve ona bağlı tüm seçimleri sıfırlar (sipariş kaydedilmez)
-  const konfTemizle = () => {
-    if (!window.confirm("Konfirmasyon listesi ve girilen tüm adet/not/ayar bilgileri silinsin mi? (Sipariş kaydedilmez)")) return;
-    setKonfList([]); setKonfAyarlar({}); setKonfRenkler({}); setKonfAdet({}); setKonfNot({}); setKonfNumune({}); setKonfFiyatlar({}); setKonfBoylar({}); setKonfMus(""); setKonfTeslim(""); setKonfAyar("14K"); setKonfSipAciklama(""); setKonfSipNo("");
-  };
   const togKonf     = m => setKonfList(p => p.find(x => x.id === m.id) ? p.filter(x => x.id !== m.id) : siraliKonfListe([...p, m]));
   // Ayar bazlı işçilik girişi — sadece SEÇİLİ ayar için yazar (10K/14K/18K birbirini ezmez)
   const konfFiyatYaz = (id, ayar, dolar, birim) => setKonfFiyatlar(p => {
@@ -7343,7 +4830,7 @@ function Atolye({ onSirketDegis }) {
       const genelBoyAktif = konfGenelBoy.aktif && konfGenelBoy.deger;
       // Fiyat override — konfFiyatlar > müşteri hafızası > model varsayılanı
       const musHafiza = konfMus ? (kasa.musteriModelFiyat||{})[konfMus]?.[m.id] : null;
-      const temel = { ...iscilikliModel(m, konfAyar, konfFiyatlar[m.id], musHafiza), secilenAyar: konfAyar, renk: konfRenkler[m.id]||"Sari", sipNot: konfNot[m.id]||"", numune: konfNumune[m.id] !== undefined ? !!konfNumune[m.id] : konfAyar === "925", zorluk: undefined, zorlukEtiket: undefined, zorlukTarih: undefined };
+      const temel = { ...iscilikliModel(m, konfAyar, konfFiyatlar[m.id], musHafiza), secilenAyar: konfAyar, renk: konfRenkler[m.id]||"Sari", sipNot: konfNot[m.id]||"" };
       
       // Kolye ve bileklik: tek satır, boyListesi içeride
       if ((m.kategori==="kolye" || m.kategori==="bileklik") && boylar.length > 0) {
@@ -7371,32 +4858,9 @@ function Atolye({ onSirketDegis }) {
     return { gelir, maliyet, kar: gelir - maliyet, topGram };
   }, [konfKalemler, altinKgUSD, madenCarpan]);
 
-  // Üretim panosu: seçilen ürünleri hedef aşamaya taşı; siparişin genel aşama geçmişini de günceller (işleme alınmamışsa alır)
-  const panoTasi = (liste) => {
-    if (!liste || !liste.length) return;
-    const bySip = {};
-    liste.forEach(i => { (bySip[i.sipId] = bySip[i.sipId] || []).push(i); });
-    const yeni = siparisler.map(sp => {
-      const l = bySip[sp.id]; if (!l) return sp;
-      const kd = { ...(sp.kalemDurumlar || {}) };
-      l.forEach(i => { kd[i.kalemId] = i.hedef; });
-      return { ...sp, kalemDurumlar: kd };
-    });
-    svS(yeni);
-    Object.keys(bySip).forEach(id => { const sp = yeni.find(x => x.id === id); if (sp) sipDurumKaydet(id, siparisDurumHesapla(sp)); });
-  };
-  const panoCila = (sipId, kalemId, adim) => svS(siparisler.map(sp => sp.id === sipId ? { ...sp, kalemCila: { ...(sp.kalemCila || {}), [kalemId]: adim } } : sp));
-
   const konfKaydet = () => {
     if (konfKalemler.length === 0) return;
-    if (!konfMus.trim()) { alert("Müşteri adı yazılmadan sipariş kaydedilemez."); return; }
-    const musAd = konfMus.trim();
-    // Birebir aynı içerik (aynı müşteri, aynı foto/model/açıklama) tekrar eklenemez
-    const imza = sipImza(konfKalemler, konfSipAciklama);
-    const kopya = siparisler.find(x => (x.musteri || "") === musAd && sipImza(x.kalemler, x.aciklama) === imza);
-    if (kopya) { alert("Bu sipariş zaten kayıtlı!\n\n" + musAd + " · " + sipKodu(kopya, siparisler) + " · " + new Date(kopya.tarih).toLocaleDateString("tr-TR") + "\nAynı fotoğraf ve açıklamalarla ikinci kez eklenemez."); return; }
-    const girilenNo = konfSipNo.trim();
-    if (girilenNo && siparisler.some(x => sipKodu(x, siparisler).toLowerCase() === girilenNo.toLowerCase())) { alert("\"" + girilenNo + "\" sipariş numarası zaten kullanılıyor. Başka bir numara yazın ya da boş bırakın (otomatik verilir)."); return; }
+    const musAd = konfMus.trim() || "Isimsiz";
     let yeniMusteriler = { ...musteriler };
     if (!yeniMusteriler[musAd]) {
       const no = String(Object.keys(yeniMusteriler).length + 1).padStart(3, "0");
@@ -7404,9 +4868,7 @@ function Atolye({ onSirketDegis }) {
       svMus(yeniMusteriler);
     }
     const musKod = yeniMusteriler[musAd];
-    let siparisNo = girilenNo;
-    if (!siparisNo) { let n = siparisler.filter(x => (x.musKod || x.musteri) === musKod).length + 1; do { siparisNo = musKod + "-" + String(n++).padStart(3, "0"); } while (siparisler.some(x => sipKodu(x, siparisler).toLowerCase() === siparisNo.toLowerCase())); }
-    const yeni = { id: uid(), musteri: musAd, musKod, siparisNo, tarih: Date.now(), teslimTarihi: konfTeslim||"", aciklama: konfSipAciklama.trim(), altinKgUSD, mc: madenCarpan, kalemDurumlar: Object.fromEntries(konfKalemler.filter(k => k.cizimde).map(k => [k.id, "cizimde"])), kalemler: konfKalemler, sira: konfSira, gelir: kTop.gelir, maliyet: kTop.maliyet, kar: kTop.kar };
+    const yeni = { id: uid(), musteri: musAd, musKod, tarih: Date.now(), teslimTarihi: konfTeslim||"", aciklama: konfSipAciklama.trim(), altinKgUSD, mc: madenCarpan, kalemler: konfKalemler, sira: konfSira, gelir: kTop.gelir, maliyet: kTop.maliyet, kar: kTop.kar };
     svS([...siparisler, yeni]);
     islemKaydet(AKTIF_SIRKET_ONEK, "ekle", "sipariş", (musAd || "") + " · " + (konfKalemler?.length || 0) + " kalem");
     svMUpsert(modeller.filter(m => konfKalemler.find(x => x.id === m.id)).map(m => ({ ...m, satisSayisi: (m.satisSayisi||0)+1 })));
@@ -7424,7 +4886,7 @@ function Atolye({ onSirketDegis }) {
       });
       svKasa({ ...kasa, musteriModelFiyat: yeniFiyatHafiza });
     }
-    setKonfList([]); setKonfAyarlar({}); setKonfRenkler({}); setKonfAdet({}); setKonfNot({}); setKonfNumune({}); setKonfFiyatlar({}); setKonfBoylar({}); setKonfMus(""); setKonfTeslim(""); setKonfAyar("14K"); setKonfSipAciklama(""); setKonfSipNo("");
+    setKonfList([]); setKonfAyarlar({}); setKonfRenkler({}); setKonfAdet({}); setKonfNot({}); setKonfFiyatlar({}); setKonfBoylar({}); setKonfMus(""); setKonfTeslim(""); setKonfAyar("14K"); setKonfSipAciklama("");
     sv("v7konfdraft", { liste: [] });
     alert("Siparis kaydedildi!");
   };
@@ -7487,12 +4949,12 @@ function Atolye({ onSirketDegis }) {
         if (kDurum !== "hurda" && tamamAdet > 0) {
           mSatis[k.id].sayi++;
           mSatis[k.id].adet += tamamAdet;
-          mSatis[k.id].kar += hc.karHas * (k.numune?0:1) * tamamAdet;
+          mSatis[k.id].kar += hc.karHas * tamamAdet;
           mSatis[k.id].topGram += hc.mamulGram * tamamAdet;
         }
-        if (sayilsin) sipTamamKar += hc.karHas * (k.numune?0:1) * tamamAdet;
+        if (sayilsin) sipTamamKar += hc.karHas * tamamAdet;
         const kol = kollar.find(c => c.id === k.ki);
-        if (kol && kDurum !== "hurda") { if (!kSatis[kol.id]) kSatis[kol.id]={ ad: kol.ad, sayi:0, kar:0 }; kSatis[kol.id].sayi++; kSatis[kol.id].kar += hc.karHas * (k.numune?0:1) * tamamAdet; }
+        if (kol && kDurum !== "hurda") { if (!kSatis[kol.id]) kSatis[kol.id]={ ad: kol.ad, sayi:0, kar:0 }; kSatis[kol.id].sayi++; kSatis[kol.id].kar += hc.karHas * tamamAdet; }
         const ay = k.secilenAyar||k.refAyar||"?";
         if (!aSatis[ay]) aSatis[ay] = { sayi:0 }; if (kDurum !== "hurda") aSatis[ay].sayi++;
       });
@@ -7530,7 +4992,7 @@ function Atolye({ onSirketDegis }) {
         const iadeAdet  = ((s.kalemIade)  ||{})[k.id] || 0;
         const tamirAdet = ((s.kalemTamir) ||{})[k.id] || 0;
         const netAdet = Math.max(0, (k.adet||1) - hurdaAdet - iadeAdet - tamirAdet);
-        aylikKar[ay].kar += hc.karHas * (k.numune?0:1) * netAdet;
+        aylikKar[ay].kar += hc.karHas * netAdet;
         aylikKar[ay].gram += hc.mamulGram * netAdet;
       });
     });
@@ -7614,7 +5076,7 @@ function Atolye({ onSirketDegis }) {
               <button onClick={()=>{ if (onSirketDegis) onSirketDegis(); }} title="Şirket değiştir" style={{ fontSize:9, fontWeight:800, padding:"3px 10px", borderRadius:20, background: AKTIF_SIRKET_ONEK==="bsp2_" ? "rgba(167,139,250,0.15)" : "rgba(var(--vurgu-rgb),0.15)", border:"1px solid "+(AKTIF_SIRKET_ONEK==="bsp2_" ? "rgba(167,139,250,0.4)" : "rgba(var(--vurgu-rgb),0.4)"), color: AKTIF_SIRKET_ONEK==="bsp2_" ? "#a78bfa" : GOLD, whiteSpace:"nowrap", cursor:"pointer", display:"inline-flex", alignItems:"center", gap:4 }}>{AKTIF_SIRKET_ONEK==="bsp2_" ? "✨ BSP" : "💎 MSK"} <span style={{ fontSize:8, opacity:0.7 }}>⇄</span></button>
             </h1>
             <div style={{ display:"flex", gap:3, flexWrap:"wrap" }}>
-              {["koleksiyonlar","modeller","konfirmasyon","siparisler","musteriler","vitrin","analiz","radar","ayarlar"].map(n => {
+              {["koleksiyonlar","modeller","konfirmasyon","siparisler","iadeler","musteriler","vitrin","kasa","analiz","radar","ayarlar"].map(n => {
                 let badgeSayi = 0;
                 if (n === "iadeler") {
                   siparisler.forEach(s => {
@@ -7623,9 +5085,9 @@ function Atolye({ onSirketDegis }) {
                   });
                 }
                 return (
-                <button key={n} onClick={() => { setSayfa(n); if (n==="koleksiyonlar") setAktifKol(null); }}
+                <button key={n} onClick={() => { setSayfa(n); if (n==="koleksiyonlar") setAktifKol(null); if (n!=="kasa") setKasaKilitli(true); }}
                   style={{ ...GH, color:sayfa===n?T.gold:T.sub, background:sayfa===n?T.btnBg:"transparent", borderColor:sayfa===n?T.btnBorder:T.border, fontSize:9, padding:"5px 9px", position:"relative" }}>
-                  {{"koleksiyonlar":"Koleksiyonlar","modeller":"Modeller","konfirmasyon":"Konfirmasyon","siparisler":"Siparişler","musteriler":"Müşteriler","vitrin":"🛍 Vitrin","analiz":"Keşfet","radar":"📡 Trend Radar","ayarlar":"Ayarlar"}[n]||n.charAt(0).toUpperCase()+n.slice(1)}
+                  {{"koleksiyonlar":"Koleksiyonlar","modeller":"Modeller","konfirmasyon":"Konfirmasyon","siparisler":"Siparişler","iadeler":"İadeler","musteriler":"Müşteriler","vitrin":"🛍 Vitrin","kasa":"Kasa","analiz":"Keşfet","radar":"📡 Trend Radar","ayarlar":"Ayarlar"}[n]||n.charAt(0).toUpperCase()+n.slice(1)}
                   {n==="konfirmasyon" && konfList.length>0 && <span style={{ position:"absolute", top:-4, right:-4, background:GOLD, color:DARK, width:13, height:13, borderRadius:7, fontSize:7, fontWeight:800, display:"flex", alignItems:"center", justifyContent:"center" }}>{konfList.length}</span>}
                   {n==="iadeler" && badgeSayi>0 && <span style={{ position:"absolute", top:-4, right:-4, background:"#a78bfa", color:"#fff", width:13, height:13, borderRadius:7, fontSize:7, fontWeight:800, display:"flex", alignItems:"center", justifyContent:"center" }}>{badgeSayi}</span>}
                 </button>
@@ -7740,188 +5202,137 @@ function Atolye({ onSirketDegis }) {
       <div style={{ width:"100%", padding:"12px 12px 60px" }}>
 
         {/* MÜŞTERİ VİTRİNİ (ana menü) */}
-        {sayfa==="vitrin" && (() => {
-          const musListe = Object.entries(musteriler).sort((a,b)=>a[0].localeCompare(b[0],"tr"));
-          const acikKolSayi = (kod) => kollar.filter(k => Array.isArray(k.vitrinMus) && k.vitrinMus.includes(kod)).length;
-          const acikKol = kollar.filter(k => Array.isArray(k.vitrinMus) && k.vitrinMus.length>0).length;
-          const cevrimiciSayi = musListe.filter(([,kod]) => vitrinCevrimici[kod]).length;
-          const girmeyen = musListe.filter(([,kod]) => { const oz = vitrinOzet[kod]; return oz && !(oz.giris>0); }).length;
-          const kolsuz = musListe.filter(([,kod]) => acikKolSayi(kod)===0).length;
-          const q = vitrinAra.trim().toLowerCase();
-          const gorunen = musListe.filter(([ad,kod]) => {
-            if (q && !(ad.toLowerCase().includes(q) || kod.toLowerCase().includes(q))) return false;
-            if (vitrinFiltre==="cevrimici") return !!vitrinCevrimici[kod];
-            if (vitrinFiltre==="girmeyen") { const oz = vitrinOzet[kod]; return !!oz && !(oz.giris>0); }
-            if (vitrinFiltre==="kolsuz") return acikKolSayi(kod)===0;
-            return true;
-          });
-          const kart = { background:T.card, border:"1px solid "+T.border, borderRadius:14, padding:"14px 16px" };
-          const stat = (l, v, renk, alt) => (
-            <div style={{ ...kart, padding:"11px 14px", flex:"1 1 130px", minWidth:120 }}>
-              <div style={{ fontSize:8, fontWeight:800, color:T.sub, letterSpacing:"0.06em", textTransform:"uppercase" }}>{l}</div>
-              <div style={{ fontSize:22, fontWeight:800, color:renk||T.text, marginTop:2, lineHeight:1.1 }}>{v}</div>
-              {alt && <div style={{ fontSize:9, color:T.sub, marginTop:2 }}>{alt}</div>}
+        {sayfa==="vitrin" && (
+          <div style={{ animation:"fadein .3s", maxWidth:1100, margin:"0 auto" }}>
+            <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:6 }}>
+              <h2 style={{ margin:0, fontSize:17, fontWeight:800, color:T.text }}>🛍 Müşteri Vitrini</h2>
             </div>
-          );
-          const kolToggle = (kolId, kod) => svK(kollar.map(x => {
-            if (x.id !== kolId) return x;
-            const mevcut = Array.isArray(x.vitrinMus) ? x.vitrinMus : [];
-            const yeni = mevcut.includes(kod) ? mevcut.filter(c=>c!==kod) : [...mevcut, kod];
-            return { ...x, vitrinMus: yeni, vitrin: yeni.length>0 };
-          }));
-          const sek = (id, l, n) => (
-            <button key={id} onClick={()=>setVitrinSekme(id)} style={{ ...GH, fontSize:11, padding:"7px 16px", fontWeight:700, color: vitrinSekme===id?T.gold:T.sub, background: vitrinSekme===id?T.btnBg:"transparent", borderColor: vitrinSekme===id?T.btnBorder:T.border }}>{l}{n!=null && <span style={{ marginLeft:6, fontSize:9, opacity:0.7 }}>{n}</span>}</button>
-          );
-          const chip = (id, l, n) => (
-            <button key={id} onClick={()=>setVitrinFiltre(id)} style={{ background: vitrinFiltre===id?"rgba(var(--vurgu-rgb),0.18)":"rgba(var(--vurgu-rgb),0.04)", border:"1px solid "+(vitrinFiltre===id?"rgba(var(--vurgu-rgb),0.4)":"rgba(var(--vurgu-rgb),0.1)"), borderRadius:20, padding:"4px 12px", color: vitrinFiltre===id?T.gold:T.sub, fontSize:10, fontWeight:700, cursor:"pointer" }}>{l}{n!=null ? " · "+n : ""}</button>
-          );
-          return (
-          <div style={{ animation:"fadein .3s", maxWidth:1200, margin:"0 auto" }}>
-            <div style={{ display:"flex", alignItems:"baseline", gap:12, flexWrap:"wrap", marginBottom:4 }}>
-              <h2 style={{ margin:0, fontSize:18, fontWeight:800, color:T.text }}>🛍 Müşteri Vitrini</h2>
-              <span style={{ fontSize:11, color:T.sub }}>Müşteri yalnızca foto, model kodu, gram ve ayar görür — fiyat, taş ve işçilik gizlidir.</span>
-            </div>
+            <div style={{ fontSize:11, color:T.sub, marginBottom:18 }}>Toptancılara özel katalog linki oluşturun. Müşteri sadece foto, model adı, gram ve ayar görür — fiyat, taş, işçilik gizlidir.</div>
 
-            <div style={{ display:"flex", gap:10, flexWrap:"wrap", margin:"14px 0" }}>
-              {stat("Müşteri", musListe.length)}
-              {stat("Şu an vitrinde", cevrimiciSayi, cevrimiciSayi>0?"#2e9e4f":undefined)}
-              {stat("Hiç girmemiş", girmeyen, girmeyen>0?"#e8833a":undefined)}
-              {stat("Açık koleksiyon", acikKol+" / "+kollar.length, undefined, "en az bir müşteriye açık")}
-              {stat("Koleksiyonu yok", kolsuz, kolsuz>0?"#e85a4f":undefined, "müşteri boş vitrin görür")}
-            </div>
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(340px, 1fr))", gap:14, alignItems:"start" }}>
 
-            <div style={{ display:"flex", gap:6, marginBottom:14, flexWrap:"wrap" }}>
-              {sek("musteri","Müşteriler",musListe.length)}
-              {sek("erisim","Erişim Matrisi",kollar.length)}
-              {sek("toptanci","Kayıtlı Toptancılar",toptancilar.length)}
-              <div style={{ flex:1 }}/>
-              <button onClick={()=>vitrinOzetYukle()} style={{ ...GH, fontSize:10, padding:"6px 12px" }}>↻ Analizi Yenile</button>
-            </div>
-
-            {vitrinSekme==="musteri" && (<>
-              <div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap", marginBottom:12 }}>
-                <input value={vitrinAra} onChange={e=>setVitrinAra(e.target.value)} placeholder="Müşteri ara (kod veya isim)…" style={{ ...IS, width:240, padding:"7px 12px", fontSize:11 }}/>
-                {chip("hepsi","Tümü",musListe.length)}
-                {chip("cevrimici","Şu an vitrinde",cevrimiciSayi)}
-                {chip("girmeyen","Hiç girmemiş",girmeyen)}
-                {chip("kolsuz","Koleksiyonu yok",kolsuz)}
+              {/* VİTRİN KOLEKSİYONLARI — her koleksiyon: hangi müşteriler görsün */}
+              <div style={{ background:T.card, border:"1px solid "+T.border, borderRadius:14, padding:"15px 16px" }}>
+                <div style={{ fontSize:10, fontWeight:700, color:T.sub, marginBottom:10, letterSpacing:"0.05em", textTransform:"uppercase" }}>Koleksiyon → Müşteri Erişimi</div>
+                <div style={{ fontSize:9, color:"#665d4a", marginBottom:12 }}>Her koleksiyona tıklayıp o koleksiyonu hangi müşterilerin göreceğini seçin. Kimse seçilmezse o koleksiyon kimseye görünmez.</div>
+                <div style={{ display:"flex", flexDirection:"column", gap:5 }}>
+                  {kollar.length===0 && <div style={{ fontSize:9, color:"#665d4a" }}>Henüz koleksiyon yok</div>}
+                  {kollar.map(k => {
+                    const izinli = Array.isArray(k.vitrinMus) ? k.vitrinMus : [];
+                    const sayi = izinli.length;
+                    return (
+                      <button key={k.id} onClick={()=>setKolMusModal(k.id)}
+                        style={{ background: sayi>0?"rgba(106,191,105,0.1)":"rgba(255,255,255,0.03)", border:"1px solid "+(sayi>0?"rgba(106,191,105,0.3)":"rgba(255,255,255,0.08)"), borderRadius:8, padding:"8px 12px", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"space-between", gap:8, textAlign:"left" }}>
+                        <span style={{ color: sayi>0?"#6abf69":"#7a6f5a", fontSize:11, fontWeight:700 }}>{k.ad}</span>
+                        <span style={{ fontSize:9, color: sayi>0?"#6abf69":"#665d4a", whiteSpace:"nowrap" }}>{sayi>0 ? sayi+" müşteri" : "kapalı"} ›</span>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
-              {musListe.length===0 && <div style={{ ...kart, fontSize:11, color:T.sub }}>Henüz müşteri yok. Müşteriler sayfasından ekleyin.</div>}
-              {musListe.length>0 && gorunen.length===0 && <div style={{ ...kart, fontSize:11, color:T.sub }}>Bu filtreye uyan müşteri yok.</div>}
-              <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(340px, 1fr))", gap:12 }}>
-                {gorunen.map(([ad, kod]) => {
-                  const url = window.location.origin + "?vitrin=" + kod;
-                  const oz = vitrinOzet[kod] || null;
-                  const supheliCihazlar = vitrinSupheli[kod] || null;
-                  const cevrimici = vitrinCevrimici[kod] || null;
-                  const acikSayi = acikKolSayi(kod);
-                  const btn = { borderRadius:8, padding:"7px 11px", fontSize:10, fontWeight:700, cursor:"pointer", textDecoration:"none", whiteSpace:"nowrap", background:"rgba(var(--vurgu-rgb),0.06)", border:"1px solid rgba(var(--vurgu-rgb),0.15)", color:T.sub };
-                  return (
-                    <div key={kod} style={{ ...kart, borderColor: cevrimici?"rgba(46,158,79,0.55)":supheliCihazlar?"rgba(232,162,58,0.5)":T.border, display:"flex", flexDirection:"column", gap:10 }}>
-                      <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-                        <span style={{ background:"rgba(var(--vurgu-rgb),0.12)", borderRadius:6, padding:"3px 9px", fontSize:11, fontWeight:800, color:T.gold, letterSpacing:"0.04em" }}>{kod}</span>
-                        <span style={{ fontSize:14, fontWeight:700, color:T.text, flex:1, minWidth:0, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{ad}</span>
-                        {cevrimici && <span style={{ display:"flex", alignItems:"center", gap:5, fontSize:9, fontWeight:800, color:"#2e9e4f" }}><span style={{ width:7, height:7, borderRadius:"50%", background:"#2e9e4f", boxShadow:"0 0 0 3px rgba(46,158,79,0.2)" }}/>{cevrimici.dakika < 1 ? "şimdi" : cevrimici.dakika + " dk"}</span>}
-                        {supheliCihazlar && (
-                          <span title={supheliCihazlar.map(c => c.bilgi + " — son giriş: " + new Date(c.son).toLocaleString("tr-TR",{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"})).join("\n")}
-                            style={{ background:"rgba(232,162,58,0.14)", border:"1px solid rgba(232,162,58,0.4)", borderRadius:5, padding:"2px 7px", fontSize:9, fontWeight:800, color:"#c27a10", cursor:"help" }}>⚠ {supheliCihazlar.length} cihaz</span>
-                        )}
-                      </div>
-                      <div style={{ display:"flex", gap:14, fontSize:10, color:T.sub }}>
-                        {oz === null ? <span>—</span> : oz.giris > 0 ? (<>
-                          <span><b style={{ color:T.text }}>{oz.giris}</b> giriş</span>
-                          <span><b style={{ color:T.text }}>{oz.model}</b> model</span>
-                          <span>son: <b style={{ color:T.text }}>{oz.son ? new Date(oz.son).toLocaleDateString("tr-TR") : "—"}</b></span>
-                        </>) : <span style={{ color:"#e8833a" }}>henüz vitrine girmedi</span>}
-                      </div>
-                      <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginTop:"auto" }}>
-                        <button onClick={()=>setMusKolModal(kod)} style={{ ...btn, color: acikSayi>0?T.gold:"#e85a4f", background: acikSayi>0?"rgba(var(--vurgu-rgb),0.12)":"rgba(232,90,79,0.1)", borderColor: acikSayi>0?"rgba(var(--vurgu-rgb),0.3)":"rgba(232,90,79,0.3)" }}>📁 {acikSayi>0 ? acikSayi+" koleksiyon" : "Koleksiyon yok"}</button>
-                        <button onClick={()=>{ navigator.clipboard?.writeText(url); toastGoster("ok","🛍 "+ad+" linki kopyalandı"); }} style={btn}>🔗 Link</button>
-                        <button onClick={async()=>{
-                          setVitrinGecmis({ musteriAd:ad, kod, kayitlar:null, encok:null, cihazlar:supheliCihazlar });
-                          const [kayitlar, encok] = await Promise.all([ vitrinGecmisiGetir(AKTIF_SIRKET_ONEK, kod, 100), vitrinEnCokBakilan(AKTIF_SIRKET_ONEK, kod) ]);
-                          setVitrinGecmis({ musteriAd:ad, kod, kayitlar, encok, cihazlar:supheliCihazlar });
-                        }} style={btn}>📊 Analiz</button>
-                        <a href={url + "&onizle=1"} target="_blank" rel="noreferrer" title="Önizleme — analize kaydedilmez" style={btn}>👁 Önizle</a>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </>)}
 
-            {vitrinSekme==="erisim" && (
-              <div style={kart}>
-                <div style={{ fontSize:11, color:T.sub, marginBottom:12 }}>Kutuya tıklayarak koleksiyonu o müşteriye aç/kapat. Hiçbir müşteriye açık olmayan koleksiyon kimseye görünmez. Satır başındaki ✓ tüm müşterilere aç/kapatır.</div>
-                {musListe.length===0 || kollar.length===0 ? <div style={{ fontSize:11, color:T.sub }}>Müşteri veya koleksiyon yok.</div> : (
-                  <div style={{ overflow:"auto", maxHeight:"68vh", border:"1px solid "+T.border, borderRadius:10 }}>
-                    <table style={{ borderCollapse:"separate", borderSpacing:0, fontSize:11, minWidth:"100%" }}>
-                      <thead>
-                        <tr>
-                          <th style={{ position:"sticky", top:0, left:0, zIndex:3, background:T.card, textAlign:"left", padding:"8px 12px", fontSize:9, color:T.sub, letterSpacing:"0.05em", textTransform:"uppercase", borderBottom:"1px solid "+T.border, minWidth:200 }}>Koleksiyon</th>
-                          <th style={{ position:"sticky", top:0, zIndex:2, background:T.card, padding:"8px 6px", fontSize:9, color:T.sub, borderBottom:"1px solid "+T.border }}>Tümü</th>
-                          {musListe.map(([ad,kod]) => (
-                            <th key={kod} title={ad} style={{ position:"sticky", top:0, zIndex:2, background:T.card, padding:"8px 6px", fontSize:10, fontWeight:800, color:T.gold, borderBottom:"1px solid "+T.border, whiteSpace:"nowrap" }}>
-                              {kod}
-                              <div style={{ fontSize:8, fontWeight:600, color:T.sub }}>{acikKolSayi(kod)}/{kollar.length}</div>
-                            </th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {kollar.map(k => {
-                          const izinli = Array.isArray(k.vitrinMus) ? k.vitrinMus : [];
-                          const hepsi = musListe.length>0 && musListe.every(([,kd]) => izinli.includes(kd));
-                          return (
-                            <tr key={k.id}>
-                              <td style={{ position:"sticky", left:0, zIndex:1, background:T.card, padding:"6px 12px", fontWeight:700, color: izinli.length?T.text:T.dim, borderBottom:"1px solid "+T.border, whiteSpace:"nowrap", cursor:"pointer" }} onClick={()=>setKolMusModal(k.id)} title="Ayrıntı için tıkla">
-                                {k.ad} <span style={{ fontSize:9, fontWeight:600, color:T.sub, marginLeft:6 }}>{izinli.length ? izinli.length+" müşteri" : "kapalı"}</span>
-                              </td>
-                              <td style={{ textAlign:"center", borderBottom:"1px solid "+T.border }}>
-                                <button onClick={()=>svK(kollar.map(x => x.id===k.id ? { ...x, vitrinMus: hepsi ? [] : musListe.map(([,kd])=>kd), vitrin: !hepsi } : x))} style={{ background:"none", border:"none", cursor:"pointer", fontSize:12, color: hepsi?"#2e9e4f":T.dim }}>{hepsi?"✓":"○"}</button>
-                              </td>
-                              {musListe.map(([,kod]) => {
-                                const acik = izinli.includes(kod);
-                                return (
-                                  <td key={kod} style={{ textAlign:"center", padding:3, borderBottom:"1px solid "+T.border }}>
-                                    <button onClick={()=>kolToggle(k.id, kod)} title={k.ad+" → "+kod} style={{ width:28, height:24, borderRadius:6, cursor:"pointer", fontSize:12, fontWeight:800, background: acik?"rgba(46,158,79,0.18)":"transparent", border:"1px solid "+(acik?"rgba(46,158,79,0.5)":T.border), color: acik?"#2e9e4f":"transparent" }}>✓</button>
-                                  </td>
-                                );
-                              })}
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
+              {/* MÜŞTERİLER — kalıcı linkler + analiz */}
+              <div style={{ background:T.card, border:"1px solid "+T.border, borderRadius:14, padding:"15px 16px", gridColumn:"1/-1" }}>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6 }}>
+                  <div style={{ fontSize:10, fontWeight:700, color:T.sub, letterSpacing:"0.05em", textTransform:"uppercase" }}>Müşterilerim ({Object.keys(musteriler).length})</div>
+                  <button onClick={()=>vitrinOzetYukle()} style={{ ...GH, fontSize:9, padding:"4px 10px" }}>↻ Analizi Yenile</button>
+                </div>
+                <div style={{ fontSize:9, color:"#665d4a", marginBottom:12 }}>Her müşterinin kalıcı vitrin linki var. Linki gönderin, girdiklerinde neye baktıklarını buradan izleyin.</div>
+
+                {Object.keys(musteriler).length === 0 && <div style={{ fontSize:10, color:"#665d4a", padding:"12px 0" }}>Henüz müşteri yok. Müşteriler sayfasından ekleyin.</div>}
+
+                {Object.keys(musteriler).length > 0 && (
+                  <div style={{ display:"flex", flexDirection:"column", gap:7 }}>
+                    {Object.entries(musteriler).sort((a,b)=>a[0].localeCompare(b[0],"tr")).map(([ad, kod]) => {
+                      const url = window.location.origin + "?vitrin=" + kod;
+                      const oz = vitrinOzet[kod] || null;
+                      const supheliCihazlar = vitrinSupheli[kod] || null;
+                      const cevrimici = vitrinCevrimici[kod] || null;
+                      return (
+                        <div key={kod} style={{ background:"rgba(0,0,0,0.15)", border:"1px solid "+(cevrimici?"rgba(106,191,105,0.4)":supheliCihazlar?"rgba(232,162,58,0.35)":T.border), borderRadius:9, padding:"10px 12px", display:"flex", alignItems:"center", gap:10, flexWrap:"wrap" }}>
+                          {/* Kod + isim */}
+                          <div style={{ minWidth:150, flex:"1 1 180px" }}>
+                            <div style={{ display:"flex", alignItems:"center", gap:7, flexWrap:"wrap" }}>
+                              <span style={{ background:"rgba(255,255,255,0.06)", borderRadius:5, padding:"2px 7px", fontSize:9, fontWeight:800, color:T.sub }}>{kod}</span>
+                              <span style={{ fontSize:13, fontWeight:700, color:T.text }}>{ad}</span>
+                              {cevrimici && (
+                                <span title={"Son sinyal az önce"} style={{ background:"rgba(106,191,105,0.14)", border:"1px solid rgba(106,191,105,0.4)", borderRadius:5, padding:"2px 7px", fontSize:9, fontWeight:800, color:"#6abf69", display:"flex", alignItems:"center", gap:4 }}>
+                                  <span style={{ width:6, height:6, borderRadius:"50%", background:"#6abf69", display:"inline-block", boxShadow:"0 0 0 2px rgba(106,191,105,0.25)" }}/>
+                                  Şu an vitrinde · {cevrimici.dakika < 1 ? "yeni girdi" : cevrimici.dakika + " dk"}
+                                </span>
+                              )}
+                              {supheliCihazlar && (
+                                <span title={supheliCihazlar.map(c => c.bilgi + " — son giriş: " + new Date(c.son).toLocaleString("tr-TR",{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"})).join("\n")}
+                                  style={{ background:"rgba(232,162,58,0.14)", border:"1px solid rgba(232,162,58,0.35)", borderRadius:5, padding:"2px 7px", fontSize:9, fontWeight:800, color:"#e8a23a", cursor:"help" }}>
+                                  ⚠️ {supheliCihazlar.length} farklı cihaz
+                                </span>
+                              )}
+                            </div>
+                            {/* Aktivite özeti */}
+                            <div style={{ fontSize:9, color: oz && oz.giris>0 ? "#6abf69" : "#665d4a", marginTop:3 }}>
+                              {oz === null ? "—" : oz.giris > 0
+                                ? oz.giris + " kez girdi · " + oz.model + " modele baktı · son: " + (oz.son ? new Date(oz.son).toLocaleDateString("tr-TR") : "—")
+                                : "henüz vitrine girmedi"}
+                            </div>
+                          </div>
+                          {/* Butonlar */}
+                          <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
+                            {(() => {
+                              const acikSayi = kollar.filter(k => Array.isArray(k.vitrinMus) && k.vitrinMus.includes(kod)).length;
+                              return (
+                                <button onClick={()=>setMusKolModal(kod)}
+                                  style={{ background: acikSayi>0?"rgba(201,168,76,0.12)":"rgba(232,90,79,0.1)", border:"1px solid "+(acikSayi>0?"rgba(201,168,76,0.3)":"rgba(232,90,79,0.25)"), borderRadius:7, padding:"6px 12px", color: acikSayi>0?T.gold:"#e85a4f", fontSize:10, fontWeight:700, cursor:"pointer" }}>
+                                  📁 {acikSayi>0 ? acikSayi+" koleksiyon" : "Koleksiyon YOK"}
+                                </button>
+                              );
+                            })()}
+                            <button onClick={()=>{ navigator.clipboard?.writeText(url); toastGoster("ok","🛍 "+ad+" linki kopyalandı"); }}
+                              style={{ background:"rgba(106,191,105,0.1)", border:"1px solid rgba(106,191,105,0.25)", borderRadius:7, padding:"6px 12px", color:"#6abf69", fontSize:10, fontWeight:700, cursor:"pointer" }}>🛍 Linki Kopyala</button>
+                            <button onClick={async()=>{
+                              setVitrinGecmis({ musteriAd:ad, kod, kayitlar:null, encok:null, cihazlar:supheliCihazlar });
+                              const [kayitlar, encok] = await Promise.all([
+                                vitrinGecmisiGetir(AKTIF_SIRKET_ONEK, kod, 100),
+                                vitrinEnCokBakilan(AKTIF_SIRKET_ONEK, kod)
+                              ]);
+                              setVitrinGecmis({ musteriAd:ad, kod, kayitlar, encok, cihazlar:supheliCihazlar });
+                            }} style={{ background:"rgba(91,155,213,0.1)", border:"1px solid rgba(91,155,213,0.25)", borderRadius:7, padding:"6px 12px", color:"#5b9bd5", fontSize:10, fontWeight:700, cursor:"pointer" }}>📊 Analiz</button>
+                            <a href={url + "&onizle=1"} target="_blank" rel="noreferrer" title="Önizleme — analize kaydedilmez" style={{ background:"rgba(255,255,255,0.04)", border:"1px solid "+T.border, borderRadius:7, padding:"6px 12px", color:T.sub, fontSize:10, fontWeight:700, textDecoration:"none" }}>Önizle</a>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>
-            )}
 
-            {vitrinSekme==="toptanci" && (
-              <div style={kart}>
-                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6 }}>
-                  <div style={{ fontSize:11, color:T.sub }}>Vitrin bülteninden kaydolan toptancılar{toptancilar.length>0 ? " · toplam "+toptancilar.length : ""}</div>
-                  <button onClick={()=>toptancilariGetir(AKTIF_SIRKET_ONEK).then(setToptancilar)} style={{ ...GH, fontSize:10, padding:"5px 11px" }}>↻ Yenile</button>
+              {/* KAYITLI TOPTANCILAR */}
+              <div style={{ background:T.card, border:"1px solid "+T.border, borderRadius:14, padding:"15px 16px" }}>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
+                  <div style={{ fontSize:10, fontWeight:700, color:T.sub, letterSpacing:"0.05em", textTransform:"uppercase" }}>Kayıtlı Toptancılar</div>
+                  <button onClick={()=>toptancilariGetir(AKTIF_SIRKET_ONEK).then(setToptancilar)} style={{ ...GH, fontSize:9, padding:"4px 10px" }}>↻ Yenile</button>
                 </div>
-                {toptancilar.length === 0 && <div style={{ fontSize:11, color:T.sub, padding:"10px 0" }}>Henüz kayıtlı toptancı yok.</div>}
-                <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(300px, 1fr))", gap:8, marginTop:8 }}>
-                  {toptancilar.map(t => (
-                    <div key={t.id} style={{ display:"flex", alignItems:"center", gap:8, padding:"9px 11px", background:"rgba(var(--vurgu-rgb),0.04)", border:"1px solid "+T.border, borderRadius:9 }}>
-                      <div style={{ flex:1, minWidth:0 }}>
-                        <div style={{ fontSize:12, fontWeight:700, color:T.text, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{t.ad}</div>
-                        <div style={{ fontSize:10, color:T.sub }}>{t.telefon} · {new Date(t.kayit_tarihi).toLocaleDateString("tr-TR")}</div>
+                <div style={{ fontSize:9, color:"#665d4a", marginBottom:12 }}>Vitrin bülteninden kaydolan toptancılar.</div>
+                {toptancilar.length === 0 && <div style={{ fontSize:9, color:"#665d4a" }}>Henüz kayıtlı toptancı yok.</div>}
+                {toptancilar.length > 0 && <>
+                  <div style={{ fontSize:9, color:"#998a6e", marginBottom:8 }}>Toplam {toptancilar.length} kayıt</div>
+                  <div style={{ display:"flex", flexDirection:"column", gap:6, maxHeight:320, overflowY:"auto" }}>
+                    {toptancilar.map(t => (
+                      <div key={t.id} style={{ display:"flex", alignItems:"center", gap:8, padding:"8px 10px", background:"rgba(0,0,0,0.15)", borderRadius:8 }}>
+                        <div style={{ flex:1, minWidth:0 }}>
+                          <div style={{ fontSize:12, fontWeight:700, color:"#e8dcc8", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{t.ad}</div>
+                          <div style={{ fontSize:10, color:"#998a6e" }}>{t.telefon} · {new Date(t.kayit_tarihi).toLocaleDateString("tr-TR")}</div>
+                        </div>
+                        <a href={"https://wa.me/9" + t.telefon} target="_blank" rel="noreferrer" style={{ fontSize:9, color:"#6abf69", textDecoration:"none", padding:"4px 8px", background:"rgba(106,191,105,0.1)", borderRadius:6, fontWeight:700 }}>WhatsApp</a>
+                        <button onClick={async()=>{ if(!window.confirm(t.ad+" silinsin mi?"))return; await toptanciSil(t.id); toptancilariGetir(AKTIF_SIRKET_ONEK).then(setToptancilar); }} style={{ background:"none", border:"none", color:"#e85a4f", cursor:"pointer", fontSize:13, padding:"0 4px" }}>🗑</button>
                       </div>
-                      <a href={"https://wa.me/9" + t.telefon} target="_blank" rel="noreferrer" style={{ fontSize:10, color:"#2e9e4f", textDecoration:"none", padding:"5px 9px", background:"rgba(46,158,79,0.1)", borderRadius:6, fontWeight:700 }}>WhatsApp</a>
-                      <button onClick={async()=>{ if(!window.confirm(t.ad+" silinsin mi?"))return; await toptanciSil(t.id); toptancilariGetir(AKTIF_SIRKET_ONEK).then(setToptancilar); }} style={{ background:"none", border:"none", color:"#e85a4f", cursor:"pointer", fontSize:13 }}>✕</button>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                </>}
               </div>
-            )}
+
+            </div>
           </div>
-          );
-        })()}
+        )}
 
         {/* KOLEKSİYONLAR */}
         {sayfa==="koleksiyonlar" && (
@@ -8049,8 +5460,6 @@ function Atolye({ onSirketDegis }) {
                 { id:"kar_desc",      l:"Karlı önce" },
                 { id:"kar_asc",       l:"Az karlı önce" },
                 { id:"gram_asc",      l:"Az gram önce" },
-                { id:"zor_desc",      l:"Zor modeller önce" },
-                { id:"zor_asc",       l:"Kolay modeller önce" },
                 { id:"gram_desc",     l:"Çok gram önce" },
                 { id:"kod_yeni",      l:"Koda göre en yeni" },
                 { id:"kod_eski",      l:"Koda göre en eski" },
@@ -8160,23 +5569,9 @@ function Atolye({ onSirketDegis }) {
                 const katSut = katSutSayisi;
                 const genisKart = bilMi && katSut >= 3; // ızgara 3×sütun ince sütun: normal = 3, bileklik/kolye = sütun sayısı → satırda 3 bileklik
                 return (
-                  <div key={m.id} style={{ background:ik?"rgba(var(--vurgu-rgb),0.07)":(T.id==="beyaz"?"#f1f1f2":"rgba(var(--vurgu-rgb),0.02)"), border:"1px solid", borderColor:ik?"rgba(var(--vurgu-rgb),0.28)":"rgba(var(--vurgu-rgb),0.07)", borderRadius:11, overflow:"hidden", animation:"cardin .3s ease "+(i*.03)+"s both", gridColumn:"span "+(genisKart ? katSut : 3) }}>
-                    <div className={"model-foto-wrap"+(bilMi?" bil-zoom":"")} style={{ position:"relative", ...(bilMi ? (katSut>=3 ? { aspectRatio: (5*katSut)+"/12" } : { height:264 }) : { aspectRatio:"5/4" }), background:"#f3f3f3", overflow:"hidden" }}>
-                      {m.foto ? <img onClick={()=>openEM(m)} src={m.foto} alt="" style={{ ...(bilMi ? { width:"100%", height:"100%" } : { position:"absolute", top:"8.5%", left:"8.5%", width:"83%", height:"83%", ...FOTO_KENAR_SOLUK }), objectFit:"cover", objectPosition: m.kategori==="kolye" ? "50% 85%" : "center center", display:"block", ...(m.kategori==="kolye" ? { width:"72%", margin:"0 auto", ...FOTO_KENAR_SOLUK } : {}), cursor:"pointer" }}/> : <div onClick={()=>openEM(m)} style={{ width:"100%", height:"100%", display:"flex", alignItems:"center", justifyContent:"center", color:"rgba(var(--vurgu-rgb),0.1)", fontSize:m.cizimde?12:24, fontWeight:700, cursor:"pointer" }}>{m.cizimde ? "🎨 ÇİZİMDE" : "-"}</div>}
-                      {m.foto && (() => {
-                        const gr = kartGeri[m.id], dur = kartDurum[m.id];
-                        const B = { color:"#fff", fontSize:10, fontWeight:700, padding:"4px 9px", borderRadius:6, cursor:"pointer", whiteSpace:"nowrap" };
-                        return (
-                          <div onClick={e=>e.stopPropagation()} style={{ position:"absolute", left:"50%", bottom:5, transform:"translateX(-50%)", zIndex:6, display:"flex", gap:4 }}>
-                            {dur ? <div style={{ ...B, background:"rgba(255,255,255,0.88)", color:"#1d1d1f" }}>✨ {dur}</div> : <>
-                              <div onClick={()=>kartFotoAI(m)} title="Yapay zekâ ile arka planı sil, #f3f3f3 yap + gölge — ANINDA KAYDEDİLİR" style={{ ...B, background:"rgba(124,58,237,0.88)" }}>✨</div>
-                              <div onClick={()=>setKartKoru(m.id)} title="Korunacak bölgeyi işaretle (beyaz taş vb.), sonra ✨" style={{ ...B, background:"rgba(14,165,233,0.88)" }}>🖌{_koruMaske && _koruMaske.foto === m.foto ? "✓" : ""}</div>
-                              {gr && <div onClick={()=>kartFotoGeriAl(m)} title="Eski fotoğrafı geri yükle (sadece bu oturumda)" style={{ ...B, background:"rgba(0,0,0,0.65)" }}>↩</div>}
-                            </>}
-                          </div>
-                        );
-                      })()}
-                      {m.foto && m.fotoTemiz && <div title="Arka plan temiz — tekrar uğraşmaya gerek yok" style={{ position:"absolute", top:7, left:7, width:11, height:11, borderRadius:"50%", background:"#34c759", border:"2px solid #fff", boxShadow:"0 1px 4px rgba(0,0,0,0.35)", zIndex:5, pointerEvents:"none" }}/>}
+                  <div key={m.id} style={{ background:ik?"rgba(var(--vurgu-rgb),0.07)":"rgba(var(--vurgu-rgb),0.02)", border:"1px solid", borderColor:ik?"rgba(var(--vurgu-rgb),0.28)":"rgba(var(--vurgu-rgb),0.07)", borderRadius:11, overflow:"hidden", animation:"cardin .3s ease "+(i*.03)+"s both", gridColumn:"span "+(genisKart ? katSut : 3) }}>
+                    <div className="model-foto-wrap" style={{ position:"relative", ...(bilMi ? (katSut>=3 ? { aspectRatio: (5*katSut)+"/12" } : { height:264 }) : { aspectRatio:"5/4" }), background: bilMi ? "#f3f3f3" : "#f0f0f0", overflow:"hidden" }}>
+                      {m.foto ? <img onClick={()=>openEM(m)} src={m.foto} alt="" style={{ ...(bilMi ? { width:"100%", height:"100%" } : { position:"absolute", top:"8.5%", left:"8.5%", width:"83%", height:"83%", ...FOTO_KENAR_SOLUK }), objectFit:"cover", objectPosition: m.kategori==="kolye" ? "50% 85%" : "center center", display:"block", ...(m.kategori==="kolye" ? { width:"72%", margin:"0 auto", ...FOTO_KENAR_SOLUK } : {}), cursor:"pointer" }}/> : <div onClick={()=>openEM(m)} style={{ width:"100%", height:"100%", display:"flex", alignItems:"center", justifyContent:"center", color:"rgba(var(--vurgu-rgb),0.1)", fontSize:24, cursor:"pointer" }}>-</div>}
                       {/* Detay noktaları — KÖŞELERDE, büyük (56px). Sağ üst köşe V butonunun altına kaydırıldı ki çakışmasın. */}
                       {m.foto && Array.isArray(m.detayNoktalari) && m.detayNoktalari.filter(n=>(n.tip!=="foto")||n.foto).slice(0,4).map((n,di) => {
                         const ayriFoto = n.tip === "foto";
@@ -8206,7 +5601,6 @@ function Atolye({ onSirketDegis }) {
                         {m.kategori && <span style={{ background:"rgba(var(--vurgu-rgb),0.12)", color:GOLD, padding:"1px 5px", borderRadius:3, fontSize:7, fontWeight:600 }}>{(KATEGORILER.find(k=>k.id===m.kategori)||{l:m.kategori}).l}</span>}
                         {m.kod && m.kod.match(/[-_](R|B|Y|V?\d+)$/i) && <span style={{ background:"rgba(91,155,213,0.12)", color:"#5b9bd5", padding:"1px 5px", borderRadius:3, fontSize:7, fontWeight:700 }}>VERSİYON</span>}
                         {m.kod && <span style={{ fontSize:9, color:GOLD, fontWeight:700 }}>{m.kod}</span>}
-                         {(() => { const z = zorlukHaritasi.get(String(m.kod||"").toUpperCase()); if (!z) return null; const r = ZORLUK_RENK[Math.round(z.ort)]; const top = Object.entries(z.etiketler).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([t,n])=>t+" ("+n+")").join(", "); return <span title={"Üretim zorluğu: "+z.ort.toFixed(1)+"/5 · "+z.say+" siparişte puanlandı"+(top?" · "+top:"")} style={{ background:r+"22", color:r, border:"1px solid "+r+"55", padding:"0 5px", borderRadius:3, fontSize:8, fontWeight:800 }}>★ {z.ort.toFixed(1)}</span>; })()}
                       </div>
                       <div style={{ height:2, background:"rgba(var(--vurgu-rgb),0.07)", borderRadius:1, overflow:"hidden", marginBottom:3 }}>
                         <div style={{ height:"100%", width:(dur.s/9*100)+"%", background:dur.c, borderRadius:1 }} />
@@ -8339,7 +5733,6 @@ function Atolye({ onSirketDegis }) {
         {/* KONFİRMASYON */}
         {sayfa==="konfirmasyon" && (
           <div style={{ animation:"fadein .3s" }}>
-            {pdfModal && <PdfSiparisModal modeller={modeller} kollar={kollar} onKapat={()=>setPdfModal(false)} onUygula={pdfSiparisUygula} onModelDuzenle={openEM}/>}
             {/* Header */}
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12, flexWrap:"wrap", gap:6 }}>
               <h2 style={{ margin:0, fontSize:14, fontWeight:700, color:"var(--goldtext)" }}>Konfirmasyon</h2>
@@ -8347,9 +5740,9 @@ function Atolye({ onSirketDegis }) {
                 <div style={{ position:"relative" }}>
                   <div style={{ position:"relative" }}>
                   <input
-                    value={musteriler[konfMus] || konfMus}
-                    onChange={e=>{ const v = e.target.value; const e2 = Object.entries(musteriler).find(([, kod]) => kod.toLowerCase() === v.trim().toLowerCase()); setKonfMus(e2 ? e2[0] : v); }}
-                    placeholder="Müşteri kodu (yeni müşteri: ad yaz)..."
+                    value={konfMus}
+                    onChange={e=>setKonfMus(e.target.value)}
+                    placeholder="Musteri..."
                     style={{ ...IS, width:130, padding:"5px 8px", fontSize:11 }}
                     list="konfmus-list"
                   />
@@ -8361,21 +5754,18 @@ function Atolye({ onSirketDegis }) {
                 </div>
                   <datalist id="konfmus-list">
                     {Object.entries(musteriler).sort((a,b)=>a[1].localeCompare(b[1],"tr")).map(([ad, kod]) => (
-                      <option key={ad} value={kod} />
+                      <option key={ad} value={ad}>{kod} — {ad}</option>
                     ))}
                   </datalist>
                 </div>
                 <input type="date" value={konfTeslim} onChange={e=>setKonfTeslim(e.target.value)} style={{ ...IS, width:130, padding:"5px 8px", fontSize:11 }} />
-                <input value={konfSipNo} onChange={e=>setKonfSipNo(e.target.value)} placeholder={"Sipariş no (boşsa otomatik" + (konfMus.trim() && musteriler[konfMus.trim()] ? ": " + musteriler[konfMus.trim()] + "-…" : "") + ")"} title="Sipariş numarası — aynı numara iki kez kullanılamaz" style={{ ...IS, width:150, padding:"5px 8px", fontSize:11 }} />
                 <input value={konfSipAciklama} onChange={e=>setKonfSipAciklama(e.target.value)} placeholder="Sipariş açıklaması..." style={{ ...IS, width:180, padding:"5px 8px", fontSize:11 }} />
                 <select value={konfSira} onChange={e=>konfSiraDegistir(e.target.value)} title="Listeyi sırala" style={{ ...IS, width:"auto", padding:"5px 8px", fontSize:10 }}>
                   {KONF_SIRA_SECENEKLERI.map(o => <option key={o.id} value={o.id}>↕ {o.l}</option>)}
                 </select>
-                <button onClick={()=>setPdfModal(true)} style={{ ...GH, fontSize:9, padding:"5px 9px", borderColor:"rgba(var(--vurgu-rgb),0.4)" }}>📄 PDF'ten sipariş</button>
                 {konfList.length>0 && <>
-                  <button onClick={()=>downloadPDF(buildKonfHTML({musteri:konfMus,musKod:(musteriler[konfMus]||""),tarih:Date.now(),kalemler:konfKalemler},altinKgUSD,madenCarpan,true,modeller,konfSira),(musteriler[konfMus]||"siparis")+"-musteri")} style={{ ...GH, fontSize:9, padding:"5px 9px" }}>PDF Fiyatli</button>
-                  <button onClick={()=>downloadPDF(buildKonfHTML({musteri:konfMus,musKod:(musteriler[konfMus]||""),tarih:Date.now(),kalemler:konfKalemler},altinKgUSD,madenCarpan,false,modeller,konfSira),(musteriler[konfMus]||"siparis")+"-ic")} style={{ background:"rgba(232,90,79,0.08)", border:"1px solid rgba(232,90,79,0.2)", borderRadius:9, padding:"5px 9px", color:"#e85a4f", fontSize:9, fontWeight:700, cursor:"pointer" }}>PDF Fiyatsiz</button>
-                  <button onClick={konfTemizle} title="Listeyi ve girilen bilgileri temizle" style={{ background:"rgba(232,90,79,0.08)", border:"1px solid rgba(232,90,79,0.2)", borderRadius:9, padding:"5px 9px", color:"#e85a4f", fontSize:9, fontWeight:700, cursor:"pointer" }}>🗑 Temizle</button>
+                  <button onClick={()=>downloadPDF(buildKonfHTML({musteri:konfMus,musKod:(musteriler[konfMus]||""),tarih:Date.now(),kalemler:konfKalemler},altinKgUSD,madenCarpan,true,modeller,konfSira),(konfMus||"siparis")+"-musteri")} style={{ ...GH, fontSize:9, padding:"5px 9px" }}>PDF Fiyatli</button>
+                  <button onClick={()=>downloadPDF(buildKonfHTML({musteri:konfMus,musKod:(musteriler[konfMus]||""),tarih:Date.now(),kalemler:konfKalemler},altinKgUSD,madenCarpan,false,modeller,konfSira),(konfMus||"siparis")+"-ic")} style={{ background:"rgba(232,90,79,0.08)", border:"1px solid rgba(232,90,79,0.2)", borderRadius:9, padding:"5px 9px", color:"#e85a4f", fontSize:9, fontWeight:700, cursor:"pointer" }}>PDF Fiyatsiz</button>
                   <button onClick={konfKaydet} style={{ ...BG, padding:"6px 12px", fontSize:10 }}>Kaydet</button>
                 </>}
               </div>
@@ -8470,18 +5860,15 @@ function Atolye({ onSirketDegis }) {
                         {/* Kod + fiyat hafızası */}
                         <div style={{ paddingTop:4 }}>
                           <div style={{ fontSize:11, fontWeight:800, color:GOLD }}>{m.kod||"—"}</div>
-                          {(() => { const z = zorlukHaritasi.get(String(m.kod||"").toUpperCase()); if (!z) return null; const r = ZORLUK_RENK[Math.round(z.ort)]; const zor = z.ort >= 3.5; const top = Object.entries(z.etiketler).sort((a,b)=>b[1]-a[1]).slice(0,2).map(([t])=>t).join(", "); return <div title={"Geçmiş siparişlerde puanlanan üretim zorluğu"} style={{ marginTop:3, fontSize:8, fontWeight:700, color:r, background:r+"18", border:"1px solid "+r+"44", borderRadius:4, padding:"1px 5px" }}>{zor ? "⚠ Zor model " : "★ "}{z.ort.toFixed(1)}/5 · {z.say} sipariş{zor ? " — işçilik fiyatını gözden geçir" : ""}{top ? " · " + top : ""}</div>; })()}
                           <button onClick={()=>konfModelDegistir(m)} title="Bu modeli başka bir modelle değiştir (yeri ve seçimleri korunur)" style={{ marginTop:5, background:"rgba(91,155,213,0.12)", border:"1px solid rgba(91,155,213,0.35)", borderRadius:6, padding:"3px 7px", color:"#5b9bd5", fontSize:9, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap" }}>⇄ Değiştir</button>
                           {hafizaVarMi && <div style={{ fontSize:7, color:"#6abf69", marginTop:2, background:"rgba(106,191,105,0.1)", padding:"1px 5px", borderRadius:3 }}>📌 {hafizaAyar.iscilikDolar} {hafizaAyar.iscilikBirim==="milyem"?"mly":"$/gr"}</div>}
                         </div>
                         {/* Ürün + not */}
                         <div>
-                          {tipEtiket(m.kategori) && <span style={{ fontSize:9, color:"#a78bfa", background:"rgba(167,139,250,0.1)", padding:"1px 6px", borderRadius:3, fontWeight:700 }}>{tipEtiket(m.kategori)}</span>}
+                          <div style={{ fontSize:10, fontWeight:700, color:"var(--goldtext)" }}>{m.ad}</div>
+                          {m.kategori && <span style={{ fontSize:7, color:"#a78bfa", background:"rgba(167,139,250,0.1)", padding:"1px 5px", borderRadius:3, fontWeight:600 }}>{m.kategori.charAt(0).toUpperCase()+m.kategori.slice(1)}</span>}
                           {/* Manuel not */}
                           <input value={not} onChange={e=>konfNotSec(m.id,e.target.value)} placeholder="Not ekle..." style={{ marginTop:4, width:"100%", background:"transparent", border:"none", borderBottom:"1px dashed rgba(var(--vurgu-rgb),0.2)", color:"var(--gold)", fontSize:9, outline:"none", padding:"1px 0" }}/>
-                          <label style={{ display:"inline-flex", alignItems:"center", gap:4, marginTop:4, fontSize:9, cursor:"pointer", color: (konfNumune[m.id] !== undefined ? konfNumune[m.id] : konfAyar==="925") ? "#e8b04f" : "#7a6f5a", fontWeight: (konfNumune[m.id] !== undefined ? konfNumune[m.id] : konfAyar==="925") ? 800 : 500 }} title="Bu ürün müşteriye numune olarak verilecek (925 gümüşte otomatik)">
-                            <input type="checkbox" checked={konfNumune[m.id] !== undefined ? !!konfNumune[m.id] : konfAyar==="925"} onChange={e=>setKonfNumune(p=>({ ...p, [m.id]: e.target.checked }))} /> 🎁 Numune
-                          </label>
                           {/* Kayıtlı not şablonları */}
                           {kayitliNotlar.length > 0 && (
                             <div style={{ display:"flex", gap:3, flexWrap:"wrap", marginTop:3 }}>
@@ -8644,83 +6031,29 @@ function Atolye({ onSirketDegis }) {
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8, flexWrap:"wrap", gap:6 }}>
               <h2 style={{ margin:0, fontSize:14, fontWeight:700, color:"var(--goldtext)" }}>Siparis Gecmisi ({siparisler.length})</h2>
               <div style={{ display:"flex", gap:6, alignItems:"center", flexWrap:"wrap" }}>
-                <select value={sipMusSec} onChange={e=>setSipMusSec(e.target.value)} title="Müşteri seç" style={{ ...IS, width:"auto", maxWidth:170, padding:"5px 8px", fontSize:10 }}>
-                  <option value="">👤 Tüm müşteriler</option>
-                  {(() => { const m = {}; siparisler.forEach(x => { const key = x.musKod || x.musteri || "?"; (m[key] = m[key] || { n: 0, ad: x.musteri || key }).n++; }); return Object.entries(m).sort((a,b)=>b[1].n-a[1].n).map(([key, v]) => <option key={key} value={key}>{key} ({v.n})</option>); })()}
-                </select>
-                <input value={sipMusF} onChange={e=>setSipMusF(e.target.value)} placeholder="Müşteri / sipariş no ara..." style={{ ...IS, width:150, padding:"5px 8px", fontSize:10 }}/>
+                <input value={sipMusF} onChange={e=>setSipMusF(e.target.value)} placeholder="Musteri ara..." style={{ ...IS, width:130, padding:"5px 8px", fontSize:10 }}/>
                 <select value={sipSira} onChange={e=>setSipSira(e.target.value)} title="Kalem sıralaması (görünüm + PDF)" style={{ ...IS, width:"auto", padding:"5px 8px", fontSize:10 }}>
                   {KONF_SIRA_SECENEKLERI.map(o => <option key={o.id} value={o.id}>↕ {o.l}</option>)}
                 </select>
                 <input type="date" value={sipTarih1} onChange={e=>setSipTarih1(e.target.value)} style={{ ...IS, width:120, padding:"5px 8px", fontSize:10 }}/>
                 <span style={{ color:"#665d4a", fontSize:10 }}>—</span>
                 <input type="date" value={sipTarih2} onChange={e=>setSipTarih2(e.target.value)} style={{ ...IS, width:120, padding:"5px 8px", fontSize:10 }}/>
-                {(sipMusF||sipMusSec||sipAyarF||sipTarih1||sipTarih2||sipFiltre!=="tumu"||sipYil!=="tumu"||sipAylar.length>0) && <button onClick={()=>{setSipMusF("");setSipMusSec("");setSipAyarF("");setSipTarih1("");setSipTarih2("");setSipFiltre("tumu");setSipYil("tumu");setSipAylar([]);}} style={{ ...RD, fontSize:9, padding:"4px 8px" }}>Temizle</button>}
-                <button onClick={() => { setSipYedekSec(null); setSipYedekModal(true); siparisYedekListesi(AKTIF_SIRKET_ONEK).then(setSipYedekler); }} title="Sipariş yedekleri" style={{ ...GH, fontSize:9, padding:"5px 10px" }}>🛟 Yedekler</button>
-                
+                {(sipMusF||sipTarih1||sipTarih2||sipFiltre!=="tumu") && <button onClick={()=>{setSipMusF("");setSipTarih1("");setSipTarih2("");setSipFiltre("tumu");}} style={{ ...RD, fontSize:9, padding:"4px 8px" }}>Temizle</button>}
+                {siparisler.length > 0 && (
+                  <button onClick={() => {
+                    const goruntulenecek = [...siparisler].reverse().filter(s => {
+                      if (sipMusF) { const q = sipMusF.toLowerCase(); if (!(s.musteri||"").toLowerCase().includes(q) && !(s.musKod||"").toLowerCase().includes(q)) return false; }
+                      if (sipTarih1 && s.tarih < new Date(sipTarih1).getTime()) return false;
+                      if (sipTarih2 && s.tarih > new Date(sipTarih2).getTime()+86399999) return false;
+                      return true;
+                    });
+                    downloadPDF(buildSipListeRaporuHTML(goruntulenecek, altinKgUSD, madenCarpan), "siparis-listesi-raporu");
+                  }} style={{ background:"linear-gradient(135deg,#0a84ff,#0968cc)", border:"none", borderRadius:9, padding:"5px 11px", color:"#0a0a0a", fontSize:9, fontWeight:800, cursor:"pointer", whiteSpace:"nowrap" }}>
+                    📊 Rapor PDF
+                  </button>
+                )}
               </div>
             </div>
-            {/* AYLIK GRAFİK: satış gramı + kâr — sütuna tıkla = o ayı filtrele; yıl seçimi / tümü */}
-            {siparisler.length > 0 && (() => {
-              const AY = ["Oca","Şub","Mar","Nis","May","Haz","Tem","Ağu","Eyl","Eki","Kas","Ara"];
-              const liste = siparisler.filter(x => sipGecer(x, true, false));
-              const yillar = [...new Set(siparisler.map(x => new Date(x.tarih || 0).getFullYear()).filter(y => y > 2000))].sort();
-              const yilModu = sipYil === "tumu";
-              const sut = yilModu ? yillar.map(y => ({ k: y, l: String(y), gram: 0, kar: 0, n: 0 })) : AY.map((l, i) => ({ k: i, l: l + " '" + String(sipYil).slice(2), gram: 0, kar: 0, n: 0 }));
-              liste.forEach(x => {
-                const d = new Date(x.tarih || 0); const y = d.getFullYear();
-                const hedef = yilModu ? sut.find(c => c.k === y) : (y === sipYil ? sut[d.getMonth()] : null);
-                if (!hedef) return;
-                const o = sipKarOzet(x, x.kalemDurumlar);
-                hedef.gram += o.gram; hedef.kar += o.karUSD; hedef.n++;
-              });
-              const maxG = Math.max(1, ...sut.map(c => c.gram)), maxK = Math.max(1, ...sut.map(c => Math.max(0, c.kar)));
-              const topG = sut.reduce((a, c) => a + c.gram, 0), topK = sut.reduce((a, c) => a + c.kar, 0), topN = sut.reduce((a, c) => a + c.n, 0);
-              const tikla = (c) => {
-                if (yilModu) { setSipYil(c.k); setSipAylar([]); return; }
-                setSipAylar(p => p.includes(c.k) ? p.filter(x => x !== c.k) : [...p, c.k]);
-              };
-              const yBtn = (act) => ({ background: act ? "rgba(var(--vurgu-rgb),0.2)" : "rgba(var(--vurgu-rgb),0.05)", border:"1px solid", borderColor: act ? "rgba(var(--vurgu-rgb),0.5)" : "rgba(var(--vurgu-rgb),0.12)", borderRadius:6, padding:"3px 10px", color: act ? "var(--goldtext)" : "#8a7f68", fontSize:10, fontWeight:700, cursor:"pointer" });
-              return (
-                <div style={{ marginBottom:10, padding:"10px 12px", borderRadius:10, background:"rgba(var(--vurgu-rgb),0.03)", border:"1px solid rgba(var(--vurgu-rgb),0.1)" }}>
-                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:8, marginBottom: sipGrafikAcik ? 8 : 0 }}>
-                    <div style={{ display:"flex", alignItems:"center", gap:10, flexWrap:"wrap" }}>
-                      <button onClick={()=>setSipGrafikAcik(v=>!v)} style={{ ...GH, fontSize:10, padding:"3px 9px" }}>{sipGrafikAcik ? "▾" : "▸"} Satış dağılımı</button>
-                      <span style={{ fontSize:10, color:"#8a7f68" }}>{yilModu ? "Yıllara göre" : sipYil + " — aylara göre"} · <b style={{ color:"var(--goldtext)" }}>{fN(topG,1)} gr</b> · kâr <b style={{ color: topK < 0 ? "#e85a4f" : "#6abf69" }}>{topK < 0 ? "−" : ""}${Math.abs(topK).toFixed(0)}</b> · {topN} sipariş</span>
-                    </div>
-                    <div style={{ display:"flex", gap:4 }}>
-                      {yillar.map(y => <button key={y} onClick={()=>{ setSipYil(y); setSipAylar([]); }} style={yBtn(sipYil === y)}>{y}</button>)}
-                      <button onClick={()=>{ setSipYil("tumu"); setSipAylar([]); }} style={yBtn(yilModu)}>TÜMÜ</button>
-                    </div>
-                  </div>
-                  {sipGrafikAcik && (
-                    <>
-                      <div style={{ display:"flex", gap:12, fontSize:9, color:"#8a7f68", marginBottom:4 }}>
-                        <span><span style={{ display:"inline-block", width:9, height:9, borderRadius:2, background:"#4aa3df", marginRight:4 }}/>Satış gramı</span>
-                        <span><span style={{ display:"inline-block", width:9, height:9, borderRadius:2, background:"#6abf69", marginRight:4 }}/>Kâr ($)</span>
-                        <span style={{ marginLeft:"auto" }}>{yilModu ? "Yıla tıkla → o yılın ayları" : "Aya tıkla → listeyi filtrele (birden fazla seçilebilir)"}</span>
-                      </div>
-                      <div style={{ display:"grid", gridTemplateColumns:`repeat(${Math.max(1, sut.length)},1fr)`, gap:6, alignItems:"end" }}>
-                        {sut.map(c => {
-                          const sec = !yilModu && sipAylar.includes(c.k); const soluk = !yilModu && sipAylar.length > 0 && !sec;
-                          return (
-                            <div key={c.k} onClick={()=>tikla(c)} title={c.l + " · " + c.n + " sipariş · " + fN(c.gram,1) + " gr · kâr $" + c.kar.toFixed(0)}
-                              style={{ cursor:"pointer", opacity: soluk ? 0.35 : 1, borderRadius:6, padding:"4px 2px 3px", background: sec ? "rgba(var(--vurgu-rgb),0.12)" : "transparent", border: sec ? "1px solid rgba(var(--vurgu-rgb),0.4)" : "1px solid transparent", textAlign:"center" }}>
-                              <div style={{ height:86, display:"flex", alignItems:"flex-end", justifyContent:"center", gap:3 }}>
-                                <div style={{ width:"36%", maxWidth:22, height: Math.max(c.gram > 0 ? 2 : 0, c.gram / maxG * 78), background:"#4aa3df", borderRadius:"3px 3px 0 0" }}/>
-                                <div style={{ width:"36%", maxWidth:22, height: Math.max(c.kar > 0 ? 2 : 0, Math.max(0, c.kar) / maxK * 78), background:"#6abf69", borderRadius:"3px 3px 0 0" }}/>
-                              </div>
-                              <div style={{ fontSize:9, fontWeight:700, color:"var(--goldtext)", marginTop:3 }}>{c.l}</div>
-                              <div style={{ fontSize:8, color:"#8a7f68", lineHeight:1.3 }}>{c.n ? <>{fN(c.gram,0)} gr<br/><span style={{ color: c.kar < 0 ? "#e85a4f" : "#6abf69" }}>${c.kar.toFixed(0)}</span></> : "—"}</div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </>
-                  )}
-                </div>
-              );
-            })()}
             {/* Hızlı filtreler */}
             <div style={{ display:"flex", gap:4, flexWrap:"wrap", marginBottom:10 }}>
               {[
@@ -8729,9 +6062,7 @@ function Atolye({ onSirketDegis }) {
                 { id:"baslanmadi", l:"Başlanmadı",       cnt: siparisler.filter(s=>!s.durumGecmisi?.length).length },
                 { id:"dokumde",    l:"Dökümde",          cnt: siparisler.filter(s=>{ const son=(s.durumGecmisi||[]).slice(-1)[0]; return son?.durum==="dokum"; }).length },
                 { id:"geciken",    l:"Geciken 7+ gün",   cnt: siparisler.filter(s=>{ const son=(s.durumGecmisi||[]).slice(-1)[0]; return son&&!["tamam","teslim","hurda"].includes(son.durum)&&isGunuSure(son.tarih,Date.now())>7*24*60*60*1000; }).length },
-                { id:"teslimhazir", l:"Teslime hazır",   cnt: siparisler.filter(s=>{ const son=(s.durumGecmisi||[]).slice(-1)[0]; return son?.durum==="tamam"; }).length },
-                { id:"teslimedildi", l:"Teslim edildi",  cnt: siparisler.filter(s=>{ const son=(s.durumGecmisi||[]).slice(-1)[0]; return son?.durum==="teslim"; }).length },
-                { id:"tamamlanan", l:"Tamamlanan (hepsi)", cnt: siparisler.filter(s=>{ const son=(s.durumGecmisi||[]).slice(-1)[0]; return ["tamam","teslim"].includes(son?.durum); }).length },
+                { id:"tamamlanan", l:"Tamamlanan",       cnt: siparisler.filter(s=>{ const son=(s.durumGecmisi||[]).slice(-1)[0]; return ["tamam","teslim"].includes(son?.durum); }).length },
               ].map(f => (
                 <button key={f.id} onClick={()=>setSipFiltre(f.id)}
                   style={{ background:sipFiltre===f.id?"rgba(var(--vurgu-rgb),0.18)":"rgba(var(--vurgu-rgb),0.04)", border:"1px solid", borderColor:sipFiltre===f.id?"rgba(var(--vurgu-rgb),0.4)":"rgba(var(--vurgu-rgb),0.1)", borderRadius:6, padding:"4px 10px", color:sipFiltre===f.id?GOLD:"#7a6f5a", fontSize:9, fontWeight:sipFiltre===f.id?700:400, cursor:"pointer" }}>
@@ -8739,80 +6070,20 @@ function Atolye({ onSirketDegis }) {
                 </button>
               ))}
             </div>
-            {siparisler.length > 0 && (() => {
-              const tabanListe = siparisler.filter(x => sipGecer(x, false));
-              const ayarCip = sipListeOzet(tabanListe, "").ayar;
-              const oz = sipListeOzet(siparisler.filter(x => sipGecer(x)), sipAyarF);
-              const chipS = (act) => ({ background: act?"rgba(var(--vurgu-rgb),0.18)":"rgba(var(--vurgu-rgb),0.04)", border:"1px solid", borderColor: act?"rgba(var(--vurgu-rgb),0.45)":"rgba(var(--vurgu-rgb),0.12)", borderRadius:7, padding:"4px 9px", color: act?GOLD:"#998a6e", fontSize:9, fontWeight: act?800:500, cursor:"pointer", textAlign:"left" });
-              return (
-                <div style={{ marginBottom:12, padding:"10px 12px", borderRadius:10, background:"rgba(var(--vurgu-rgb),0.04)", border:"1px solid rgba(var(--vurgu-rgb),0.12)" }}>
-                  <div style={{ display:"flex", gap:18, flexWrap:"wrap", alignItems:"flex-end" }}>
-                    {[["Sipariş", oz.sip], ["Müşteri", oz.musteri.size], ["Adet", oz.adet], ["Toplam gram", fN(oz.gram, 1) + " gr"], ["Taş gramı", fN(oz.tasGr, 2) + " gr"], ["Taş kârı", fIsr(oz.tasHas, 2) + " has" + (oz.tasUSD ? " · " + fUSDi(oz.tasUSD) : "")], ["Tahmini kâr", (oz.karUSD < 0 ? "−$" : "$") + Math.abs(Math.round(oz.karUSD)).toLocaleString("tr-TR")]].map(([l, v]) => (
-                      <div key={l}><div style={{ fontSize:8, color:"#7a6f5a", letterSpacing:0.5 }}>{l.toUpperCase()}</div><div style={{ fontSize:16, fontWeight:800, color:"var(--goldtext)" }}>{v}</div></div>
-                    ))}
-                  </div>
-                  {Object.keys(ayarCip).length > 0 && (
-                    <div style={{ marginTop:9 }}>
-                      <button onClick={()=>setSipAyarAnaliz(v=>!v)} style={{ ...GH, fontSize:9, padding:"3px 10px" }}>{sipAyarAnaliz ? "▲ Ayar analizini gizle" : "📊 Ayar / taş analizi (10K · 14K · 18K…)"}</button>
-                      {sipAyarAnaliz && (() => {
-                        const satirlar = AYARLAR.filter(a => ayarCip[a.id]).map(a => ({ a, e: ayarCip[a.id] }));
-                        const th = { fontSize:8, color:"#7a6f5a", fontWeight:700, textAlign:"right", padding:"4px 6px", whiteSpace:"nowrap", letterSpacing:0.3 };
-                        const td = { fontSize:11, fontWeight:700, textAlign:"right", padding:"5px 6px", whiteSpace:"nowrap", fontVariantNumeric:"tabular-nums", color:"var(--goldtext)", borderTop:"1px solid rgba(var(--vurgu-rgb),0.08)" };
-                        const O14 = (AYARLAR.find(x => x.id === "14K") || { o: 0.585 }).o;
-                        return (
-                          <div style={{ marginTop:8, overflowX:"auto" }}>
-                            <table style={{ borderCollapse:"collapse", width:"100%", minWidth:760 }}>
-                              <thead><tr>
-                                <th style={{ ...th, textAlign:"left" }}>AYAR</th><th style={th}>ADET</th><th style={th}>GRAM</th><th style={th}>TAŞ GR</th><th style={th}>TAŞ KÂRI (has)</th><th style={th}>İŞÇİLİK (has)</th><th style={th}>MALİYET (has)</th><th style={th}>TOPLAM KÂR (has)</th><th style={th}>KÂR mly/gr</th><th style={th}>TAŞ KÂRI / TAŞ GR</th><th style={th}>14K'YA GÖRE TAŞ FARKI</th>
-                              </tr></thead>
-                              <tbody>
-                                {satirlar.map(({ a, e }) => {
-                                  const mly = e.karGram > 0 ? e.kar / e.karGram * 1000 : 0;
-                                  const fark = e.tasGr > 0 && a.id !== "14K" && a.id !== "925" ? e.tasGr * (a.o - O14) : null;
-                                  return (
-                                    <tr key={a.id}>
-                                      <td style={{ ...td, textAlign:"left", color:GOLD }}>{a.id}</td>
-                                      <td style={td}>{e.adet}</td>
-                                      <td style={td}>{fN(e.gram,1)}</td>
-                                      <td style={td}>{e.tasGr > 0 ? fN(e.tasGr,2) : "—"}</td>
-                                      <td style={{ ...td, color: e.tasHas < 0 ? "#e85a4f" : "#6abf69" }}>{e.tasGr > 0 ? fIsr(e.tasHas,2) : "—"}</td>
-                                      <td style={td}>{fIsr(e.isc,2)}</td>
-                                      <td style={{ ...td, color:"#e85a4f" }}>−{fN(Math.abs(e.mal),2)}</td>
-                                      <td style={{ ...td, color: e.kar < 0 ? "#e85a4f" : "#6abf69" }}>{fIsr(e.kar,2)}</td>
-                                      <td style={{ ...td, color: (e.karGram > 0 && mly/1000 < MIN_MLY) ? "#e85a4f" : "var(--goldtext)" }}>{e.karGram > 0 ? fIsr(mly,1) : "—"}</td>
-                                      <td style={td}>{e.tasGr > 0 ? fN(e.tasHas / e.tasGr * 1000, 0) + " mly" : "—"}</td>
-                                      <td style={{ ...td, color: fark == null ? "#7a6f5a" : fark < 0 ? "#e85a4f" : "#6abf69" }}>{fark == null ? "—" : fIsr(fark,2) + " has"}</td>
-                                    </tr>
-                                  );
-                                })}
-                              </tbody>
-                            </table>
-                            <div style={{ fontSize:9, color:"#7a6f5a", marginTop:6, lineHeight:1.5 }}>
-                              Taş has değeri = taş gramı × ayar oranı (10K 0.417 · 14K 0.585 · 18K 0.750). Aynı taş gramı düşük ayarda daha az has getirir; "14K'ya göre taş farkı" bu kaybı (veya kazancı) gösterir. Taş kârı ve toplam kâr numuneler hariçtir; seçili filtreler (müşteri, tarih, durum) geçerlidir.
-                            </div>
-                          </div>
-                        );
-                      })()}
-                    </div>
-                  )}
-                  {Object.keys(ayarCip).length > 0 && (
-                    <div style={{ display:"flex", gap:5, flexWrap:"wrap", marginTop:9, alignItems:"center" }}>
-                      <span style={{ fontSize:8, color:"#7a6f5a", fontWeight:700 }}>AYARA GÖRE:</span>
-                      <button onClick={()=>setSipAyarF("")} style={chipS(!sipAyarF)}>Hepsi</button>
-                      {AYARLAR.filter(a => ayarCip[a.id]).map(a => (
-                        <button key={a.id} onClick={()=>setSipAyarF(sipAyarF===a.id?"":a.id)} style={chipS(sipAyarF===a.id)}>
-                          <b>{a.id === "925" ? "925" : a.id}</b> · {ayarCip[a.id].adet} adet · {fN(ayarCip[a.id].gram, 1)} gr
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              );
-            })()}
             {siparisler.length===0 && <p style={{ color:"#665d4a", textAlign:"center", padding:"30px", fontSize:12 }}>Henuz siparis kaydi yok</p>}
-            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(270px,1fr))", gap:12, alignItems:"start" }}>
+            <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
               {[...siparisler].reverse()
-                .filter(s => sipGecer(s))
+                .filter(s => {
+                  if (sipMusF) { const q = sipMusF.toLowerCase(); if (!(s.musteri||"").toLowerCase().includes(q) && !(s.musKod||"").toLowerCase().includes(q)) return false; }
+                  if (sipTarih1 && s.tarih < new Date(sipTarih1).getTime()) return false;
+                  if (sipTarih2 && s.tarih > new Date(sipTarih2).getTime()+86399999) return false;
+                  if (sipFiltre === "aktif") { const son=(s.durumGecmisi||[]).slice(-1)[0]; if (!son||["tamam","teslim","hurda"].includes(son.durum)) return false; }
+                  if (sipFiltre === "baslanmadi") { if (s.durumGecmisi?.length) return false; }
+                  if (sipFiltre === "dokumde") { const son=(s.durumGecmisi||[]).slice(-1)[0]; if (son?.durum!=="dokum") return false; }
+                  if (sipFiltre === "geciken") { const son=(s.durumGecmisi||[]).slice(-1)[0]; if (!son||["tamam","teslim","hurda"].includes(son.durum)||isGunuSure(son.tarih,Date.now())<=7*24*60*60*1000) return false; }
+                  if (sipFiltre === "tamamlanan") { const son=(s.durumGecmisi||[]).slice(-1)[0]; if (!["tamam","teslim"].includes(son?.durum)) return false; }
+                  return true;
+                })
                 .map(s => {
                 const kalemDurumlar = s.kalemDurumlar || {};
                 const toplamKalem = (s.kalemler||[]).length;
@@ -8830,7 +6101,7 @@ function Atolye({ onSirketDegis }) {
                   ? aktifDurumlar.sort((a,b) => aktifDurumlar.filter(v=>v===b).length - aktifDurumlar.filter(v=>v===a).length)[0]
                   : "baslanmadi";
                 const enYayginIdx = DURUMLAR.findIndex(d => d.id === enYaygin);
-                const sonrakiDurum = sonrakiAsama(enYaygin, s);
+                const sonrakiDurum = DURUMLAR.find(d => d.s === enYayginIdx + 1 && d.id !== "hurda");
 
                 const durumGuncelle = (sipId, kalemId, yeniDurum) => {
                   svS(siparisler.map(sp => sp.id===sipId ? { ...sp, kalemDurumlar: { ...(sp.kalemDurumlar||{}), [kalemId]: yeniDurum } } : sp));
@@ -8842,92 +6113,9 @@ function Atolye({ onSirketDegis }) {
                   }
                 };
 
-                const oz = sipKarOzet(s, kalemDurumlar);
-                const numuneSay = (s.kalemler||[]).filter(k=>k.numune).length;
-                const renkNo = "hsl(" + oz.hue + ",62%,48%)";
-                const fotoluKalemler = (s.kalemler||[]).filter(k=>k.foto);
-                const durumSayac = {}; aktifDurumlar.forEach(d => { durumSayac[d] = (durumSayac[d]||0)+1; });
-                const baskinDurum = DURUMLAR.find(d=>d.id===enYaygin) || DURUMLAR[0];
-                const kutu = (baslik, deger, alt, kotu) => (
-                  <div style={{ minWidth:0 }}>
-                    <div style={{ fontSize:8, color:"#7a6f5a", letterSpacing:".04em", textTransform:"uppercase", marginBottom:1 }}>{baslik}</div>
-                    <div style={{ fontSize:12, fontWeight:800, color: kotu ? "#e85a4f" : "#6abf69", fontVariantNumeric:"tabular-nums", whiteSpace:"nowrap" }}>{deger}</div>
-                    {alt && <div style={{ fontSize:9, color: kotu ? "#e85a4f" : "#998a6e" }}>{alt}</div>}
-                  </div>
-                );
-                const karJsx = (
-                  <div>
-                    <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(88px,1fr))", gap:8, marginTop:8, paddingTop:8, borderTop:"1px dashed rgba(var(--vurgu-rgb),0.15)" }}>
-                      {kutu("Taştan", fIsr(oz.tasHas,2)+" has", oz.tasGr>0 ? fN(oz.tasGr,1)+" gr taş" : "", oz.tasHas<0)}
-                      {kutu("İşçilikten", fIsr(oz.iscBrut,2)+" has", "", oz.iscBrut<0)}
-                      {kutu("Maliyet", "−"+fN(Math.abs(oz.maliyetHas),2)+" has", oz.karGram>0 ? fN(oz.maliyetHas/oz.karGram*1000,0)+" mly/gr" : "", true)}
-                      {kutu("Toplam kâr", fIsr(oz.karHas,2)+" has", oz.karUSD ? "≈ "+fUSDi(oz.karUSD) : "", oz.karHas<0 || (oz.karGram>0 && oz.mlyGr<MIN_MLY))}
-                    </div>
-                    {oz.gumusBorc > 0 && <div style={{ fontSize:10, marginTop:5, fontWeight:700, color:"#c0c0c0" }}>🥈 Gümüş borcu: {fN(oz.gumusBorc,1)} gr <span style={{ fontWeight:400, opacity:.8 }}>(müşteri gümüşü geri verecek · numune)</span></div>}
-                    <div style={{ fontSize:10, marginTop:5, color:(oz.karGram>0 && oz.mlyGr<MIN_MLY)?"#e85a4f":"#998a6e", fontWeight:700 }}>
-                      1 gr'da: {fIsr(oz.mlyGr*1000,1)} milyem{oz.usdGr ? " · "+fUSDi(oz.usdGr)+" / gr" : ""}{oz.karGram>0 && oz.mlyGr<0 ? " · ZARARINA SATIŞ" : ""}
-                    </div>
-                    {!oz.bitti && oz.gram > 0 && (() => {
-                      const toplamGun = sureModeli.a + sureModeli.b * oz.gram;
-                      const basla = (s.durumGecmisi && s.durumGecmisi[0] && s.durumGecmisi[0].tarih) || Date.now();
-                      const bitisMs = basla + toplamGun * 864e5;
-                      const kalan = Math.ceil((bitisMs - Date.now()) / 864e5);
-                      const tesMs = s.teslimTarihi ? new Date(s.teslimTarihi).getTime() : 0;
-                      const asar = tesMs && bitisMs > tesMs + 864e5;
-                      return (
-                        <div title={"Tahmin: "+sureModeli.kaynak+" · toplam ~"+Math.round(toplamGun)+" gün"} style={{ fontSize:10, marginTop:3, color: asar ? "#e85a4f" : "#998a6e" }}>
-                          ⏳ Tahmini çıkış: {kalan > 0 ? "~"+kalan+" gün · "+new Date(bitisMs).toLocaleDateString("tr-TR") : "süre doldu"}{asar ? " · teslimi aşar" : ""} <span style={{ opacity:.6 }}>({sureModeli.kaynak})</span>
-                        </div>
-                      );
-                    })()}
-                  </div>
-                );
-                const teslimRozet = s.teslimTarihi ? (
-                  <span style={{ fontSize:9, fontWeight:700, padding:"1px 7px", borderRadius:5, whiteSpace:"nowrap", background: oz.gec ? "rgba(232,90,79,0.18)" : "rgba(232,131,58,0.12)", color: oz.gec ? "#e85a4f" : "#e8833a" }}>
-                    {oz.bitti ? "✓ hazır" : oz.gec ? Math.abs(oz.gun)+" gün gecikti" : oz.gun<=7 ? oz.gun+" gün kaldı" : new Date(s.teslimTarihi).toLocaleDateString("tr-TR")}
-                  </span>
-                ) : null;
-
                 return (
-                  <div key={s.id} style={{ gridColumn: acik ? "1 / -1" : "auto", minWidth:0, background: oz.gec ? "linear-gradient(180deg,rgba(232,90,79,0.07),rgba(var(--vurgu-rgb),0.02) 70%)" : "linear-gradient(180deg,hsla("+oz.hue+",75%,55%,0.045),rgba(var(--vurgu-rgb),0.02) 70%)", border:"1px solid "+(oz.gec?"rgba(232,90,79,0.40)":"hsla("+oz.hue+",75%,55%,0.28)"), boxShadow: oz.gec ? "0 0 20px rgba(232,90,79,0.20), 0 0 2px rgba(232,90,79,0.45)" : "0 0 18px hsla("+oz.hue+",85%,55%,0.14), 0 0 2px hsla("+oz.hue+",85%,60%,0.35)", borderRadius:12, overflow:"hidden" }}>
-                    {/* Kapalıyken: sade kart */}
-                    {!acik && (
-                      <div onClick={()=>setAcikSiparisler(p=>({...p,[s.id]:true}))} style={{ cursor:"pointer" }}>
-                        <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gridAutoRows:"74px", gap:2, background:"rgba(0,0,0,0.25)" }}>
-                          {[0,1,2,3,4,5].map(i => {
-                            const f = fotoluKalemler[i];
-                            const kalan = Math.max(0, toplamKalem - 6);
-                            return (
-                              <div key={i} style={{ position:"relative", background:"rgba(255,255,255,0.04)", overflow:"hidden" }}>
-                                {f && <img src={f.foto} alt="" loading="lazy" style={{ width:"100%", height:"100%", objectFit:"cover", display:"block" }}/>}
-                                {i===5 && kalan>0 && <div style={{ position:"absolute", inset:0, display:"flex", alignItems:"center", justifyContent:"center", fontSize:13, fontWeight:800, color:"#fff", background:"rgba(0,0,0,0.55)" }}>+{kalan}</div>}
-                              </div>
-                            );
-                          })}
-                        </div>
-                        <div style={{ padding:"10px 13px 12px" }}>
-                          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", gap:8 }}>
-                            <span style={{ fontSize:16, fontWeight:800, color:GOLD, minWidth:0, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{s.musKod||s.musteri||"Isimsiz"}</span>
-                            <span style={{ fontSize:9, color:"#7a6f5a", whiteSpace:"nowrap" }}>{new Date(s.tarih).toLocaleDateString("tr-TR")}</span>
-                          </div>
-                          <div style={{ fontSize:10, color:"#998a6e", margin:"1px 0 7px", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
-                            {s.kaynak==="vitrin" ? "🛍️ Vitrinden · " : ""}<b style={{ color:GOLD, fontFamily:"monospace" }}>#{sipKodu(s, siparisler)}</b> · {toplamKalem} kalem · {fN(oz.gram,0)} gr{numuneSay>0 ? <b style={{ color:"#e8b04f" }}> · 🎁 {numuneSay===toplamKalem ? "Numune siparişi" : numuneSay+" numune"}</b> : null}{s.aciklama ? " · "+s.aciklama : ""}
-                          </div>
-                          <div style={{ height:8, background:"rgba(var(--vurgu-rgb),0.1)", borderRadius:5, overflow:"hidden" }}>
-                            <div style={{ height:"100%", width:Math.max(3,oz.il*100)+"%", background: oz.gec ? "#e85a4f" : renkNo, borderRadius:5, transition:"width .3s" }}/>
-                          </div>
-                          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:8, marginTop:6 }}>
-                            <span style={{ fontSize:10, fontWeight:700, color:s.durumGecmisi?.length ? baskinDurum.c : "#7a6f5a" }}>
-                              {s.durumGecmisi?.length ? (durumSayac[enYaygin]||0)+"/"+aktifKalem+" "+baskinDurum.l + (enYaygin==="cila" ? (() => { const c = cilaOzet(s, kalemDurumlar); return " ("+c.zimpara+" zımpara · "+c.tambur+" tambur · "+c.tuy+" tüy)"; })() : "") : "İşleme alınmadı"} <span style={{ fontWeight:400, color:"#7a6f5a" }}>· %{Math.round(oz.il*100)}</span>
-                            </span>
-                            {teslimRozet}
-                          </div>
-                          {karJsx}
-                        </div>
-                      </div>
-                    )}
-                    {/* Açıkken: eski tam başlık (tüm butonlar, toplu aşama, noktalar) */}
-                    {acik && (<>
+                  <div key={s.id} style={{ background:"rgba(var(--vurgu-rgb),0.02)", border:"1px solid rgba(var(--vurgu-rgb),0.1)", borderRadius:12, overflow:"hidden" }}>
+                    {/* Başlık — her zaman görünür, tıklanabilir */}
                     <div onClick={()=>setAcikSiparisler(p=>({...p,[s.id]:!acik}))} style={{ padding:"10px 14px", cursor:"pointer", display:"flex", justifyContent:"space-between", alignItems:"center", gap:8 }}>
                       <div style={{ flex:1, minWidth:0 }}>
                         {/* Satır 1: Müşteri + aksiyon butonları */}
@@ -8939,7 +6127,7 @@ function Atolye({ onSirketDegis }) {
                             <span style={{ fontSize:9, color:"#998a6e" }}>{toplamKalem} kalem</span>
                             <span style={{ fontSize:9, color:"#5b9bd5", fontWeight:700 }}>{fN((s.kalemler||[]).reduce((acc,k)=>{const hc=hesapla(k,k.secilenAyar||k.refAyar,s.altinKgUSD,s.mc);const du=((s.kalemHurda)||{})[k.id]||0;const ia=((s.kalemIade)||{})[k.id]||0;const ta=((s.kalemTamir)||{})[k.id]||0;const net=Math.max(0,(k.adet||1)-du-ia-ta);return acc+hc.mamulGram*net;},0),2)} gr</span>
                             {(() => {
-                              const topKar = (s.kalemler||[]).reduce((acc,k)=>{const hc=hesapla(k,k.secilenAyar||k.refAyar,s.altinKgUSD,s.mc);const du=((s.kalemHurda)||{})[k.id]||0;const ia=((s.kalemIade)||{})[k.id]||0;const ta=((s.kalemTamir)||{})[k.id]||0;const net=Math.max(0,(k.adet||1)-du-ia-ta);return acc+hc.karHas*(k.numune?0:1)*net;},0);
+                              const topKar = (s.kalemler||[]).reduce((acc,k)=>{const hc=hesapla(k,k.secilenAyar||k.refAyar,s.altinKgUSD,s.mc);const du=((s.kalemHurda)||{})[k.id]||0;const ia=((s.kalemIade)||{})[k.id]||0;const ta=((s.kalemTamir)||{})[k.id]||0;const net=Math.max(0,(k.adet||1)-du-ia-ta);return acc+hc.karHas*net;},0);
                               const topKarUSD = topKar * ((s.altinKgUSD||0)/1000);
                               return <span style={{ fontSize:9, color:topKar>=0?"#6abf69":"#e85a4f", fontWeight:800 }}>{fN(topKar,2)} has {topKarUSD>0?"≈"+fUSD(topKarUSD):""}</span>;
                             })()}
@@ -8965,12 +6153,12 @@ function Atolye({ onSirketDegis }) {
                                   <span style={{ background:sonDurumObj?.c+"22", color:sonDurumObj?.c, border:"1px solid "+sonDurumObj?.c+"44", borderRadius:5, padding:"2px 7px", fontSize:8, fontWeight:700 }}>
                                     {sonDurumObj?.l||sonDurum}
                                   </span>
-                                  <span style={{ fontSize:8, color:"#665d4a" }}>{sonDurum==="teslim" ? new Date(s.durumGecmisi[s.durumGecmisi.length-1].tarih).toLocaleDateString("tr-TR") : sureFmt(sure)}</span>
+                                  <span style={{ fontSize:8, color:"#665d4a" }}>{sureFmt(sure)}</span>
                                 </div>
                               );
                             })()}
-                            <button onClick={()=>downloadPDF(buildKonfHTML(s,s.altinKgUSD||altinKgUSD,s.mc||madenCarpan,true,modeller,sipSira),(s.musKod||"siparis")+"-fiyatli")} style={{ ...GH, fontSize:8, padding:"3px 7px" }}>Fiyatlı</button>
-                            <button onClick={()=>downloadPDF(buildKonfHTML(s,s.altinKgUSD||altinKgUSD,s.mc||madenCarpan,false,modeller,sipSira),(s.musKod||"siparis")+"-fiyatsiz")} style={{ background:"rgba(232,90,79,0.08)", border:"1px solid rgba(232,90,79,0.2)", borderRadius:9, padding:"3px 7px", color:"#e85a4f", fontSize:8, fontWeight:700, cursor:"pointer" }}>Fiyatsız</button>
+                            <button onClick={()=>downloadPDF(buildKonfHTML(s,s.altinKgUSD||altinKgUSD,s.mc||madenCarpan,true,modeller,sipSira),(s.musteri||"siparis")+"-fiyatli")} style={{ ...GH, fontSize:8, padding:"3px 7px" }}>Fiyatlı</button>
+                            <button onClick={()=>downloadPDF(buildKonfHTML(s,s.altinKgUSD||altinKgUSD,s.mc||madenCarpan,false,modeller,sipSira),(s.musteri||"siparis")+"-fiyatsiz")} style={{ background:"rgba(232,90,79,0.08)", border:"1px solid rgba(232,90,79,0.2)", borderRadius:9, padding:"3px 7px", color:"#e85a4f", fontSize:8, fontWeight:700, cursor:"pointer" }}>Fiyatsız</button>
                             <button onClick={()=>{
                               if (!window.confirm("Sipariş silinip konfirmasyona geri alınacak. Emin misiniz?")) return;
                               // Kalemlerden benzersiz modelleri konfirmasyona al
@@ -8996,7 +6184,6 @@ function Atolye({ onSirketDegis }) {
                               });
                               setKonfAdet(yeniAdet);
                               setKonfNot(yeniNot);
-                              setKonfNumune(Object.fromEntries((s.kalemler||[]).filter(k=>k.numune).map(k=>[k.id,true])));
                               setKonfRenkler(yeniRenk);
                               delSip(s.id);
                               setSayfa("konfirmasyon");
@@ -9050,23 +6237,18 @@ function Atolye({ onSirketDegis }) {
                         <div style={{ display:"flex", gap:4, marginTop:6, alignItems:"center" }} onClick={e=>e.stopPropagation()}>
                           <span style={{ fontSize:7, color:"#665d4a", fontWeight:700 }}>TOPLU:</span>
                           {DURUMLAR.filter(d=>d.id!=="hurda").map(d => (
-                            <button key={d.id} onClick={()=>{ svS(siparisler.map(sp=>sp.id===s.id?{...sp,kalemDurumlar:Object.fromEntries((sp.kalemler||[]).filter(k=>(sp.kalemDurumlar||{})[k.id]!=="hurda").map(k=>[k.id,d.id]).concat(Object.entries(sp.kalemDurumlar||{}).filter(([,v])=>v==="hurda")))}:sp)); if (s.durumGecmisi?.length) sipDurumKaydet(s.id, d.id); }} title={d.l} style={{ width:12, height:12, borderRadius:6, background:enYaygin===d.id?d.c:"rgba(255,255,255,0.06)", border:enYaygin===d.id?"2px solid "+d.c:"1px solid rgba(255,255,255,0.1)", cursor:"pointer", padding:0, flexShrink:0 }}/>
+                            <button key={d.id} onClick={()=>svS(siparisler.map(sp=>sp.id===s.id?{...sp,kalemDurumlar:Object.fromEntries((sp.kalemler||[]).filter(k=>(sp.kalemDurumlar||{})[k.id]!=="hurda").map(k=>[k.id,d.id]).concat(Object.entries(sp.kalemDurumlar||{}).filter(([,v])=>v==="hurda")))}:sp))} title={d.l} style={{ width:12, height:12, borderRadius:6, background:enYaygin===d.id?d.c:"rgba(255,255,255,0.06)", border:enYaygin===d.id?"2px solid "+d.c:"1px solid rgba(255,255,255,0.1)", cursor:"pointer", padding:0, flexShrink:0 }}/>
                           ))}
                           {sonrakiDurum && (
-                            <button onClick={()=>{ svS(siparisler.map(sp=>sp.id===s.id?{...sp,kalemDurumlar:topluIlerlet(sp, sonrakiDurum.id)}:sp)); if (s.durumGecmisi?.length) sipDurumKaydet(s.id, sonrakiDurum.id); }} style={{ background:"rgba(var(--vurgu-rgb),0.1)", border:"1px solid rgba(var(--vurgu-rgb),0.2)", borderRadius:5, padding:"2px 8px", color:GOLD, fontSize:8, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap", marginLeft:4 }}>→ {sonrakiDurum.l}</button>
+                            <button onClick={()=>svS(siparisler.map(sp=>sp.id===s.id?{...sp,kalemDurumlar:Object.fromEntries((sp.kalemler||[]).map(k=>[(k.id),(sp.kalemDurumlar||{})[k.id]==="hurda"?"hurda":sonrakiDurum.id]))}:sp))} style={{ background:"rgba(var(--vurgu-rgb),0.1)", border:"1px solid rgba(var(--vurgu-rgb),0.2)", borderRadius:5, padding:"2px 8px", color:GOLD, fontSize:8, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap", marginLeft:4 }}>→ {sonrakiDurum.l}</button>
                           )}
                         </div>
                       </div>
                     </div>
-                    <div style={{ padding:"0 14px 10px" }}>{karJsx}</div>
-                    </>)}
 
                     {/* Açık detay */}
                     {acik && (
                       <div style={{ padding:"2px 14px 10px", borderTop:"1px solid rgba(var(--vurgu-rgb),0.07)" }}>
-                        <div style={{ display:"flex", justifyContent:"flex-end", margin:"8px 0" }}>
-                          <button onClick={e=>{ e.stopPropagation(); setSipEkleModal({ sipId:s.id, ara:"", kol:"", sec:[] }); }} style={{ ...BG, fontSize:10, padding:"6px 12px" }}>➕ Siparişe model ekle</button>
-                        </div>
 
                         {/* ZAMAN ÇİZELGESİ — özet + buton (detay modal'da) */}
                         {s.durumGecmisi?.length > 0 && (() => {
@@ -9074,7 +6256,7 @@ function Atolye({ onSirketDegis }) {
                           const toplamSure = isGunuSure(gecmis[0].tarih, Date.now());
                           const sonGec = gecmis[gecmis.length-1];
                           const sonDurumObj = DURUMLAR.find(d=>d.id===sonGec.durum)||DURUMLAR[0];
-                          const tamamlandi = sonGec.durum === "teslim";
+                          const tamamlandi = ["tamam","teslim"].includes(sonGec.durum);
                           const sonSure = isGunuSure(sonGec.tarih, Date.now());
                           return (
                             <div style={{ marginBottom:12, padding:"8px 12px", background:"rgba(91,155,213,0.05)", border:"1px solid rgba(91,155,213,0.12)", borderRadius:10, display:"flex", alignItems:"center", justifyContent:"space-between", gap:10, flexWrap:"wrap" }}>
@@ -9086,24 +6268,19 @@ function Atolye({ onSirketDegis }) {
                                 {!tamamlandi && <span style={{ fontSize:8, color:"#998a6e" }}>{sureFmt(sonSure)} aşamada</span>}
                                 <span style={{ fontSize:8, color:"#665d4a" }}>Toplam: <b style={{ color:"var(--goldtext)" }}>{sureFmt(toplamSure)}</b></span>
                                 <span style={{ fontSize:8, color:"#665d4a" }}>{gecmis.length} aşama</span>
-                                {tamamlandi && <span style={{ fontSize:8, color:"#6abf69", fontWeight:700 }}>✓ Teslim edildi · {new Date(sonGec.tarih).toLocaleDateString("tr-TR")}</span>}
-                                {sonGec.durum === "tamam" && <span style={{ fontSize:8, color:"#6abf69", fontWeight:700 }}>✓ Üretim bitti — teslime hazır</span>}
+                                {tamamlandi && <span style={{ fontSize:8, color:"#6abf69", fontWeight:700 }}>✓ Tamamlandı</span>}
                               </div>
-                              {(() => { const pk = (s.kalemler||[]).filter(k=>k.zorluk>=1); const ort = pk.length ? pk.reduce((a,k)=>a+k.zorluk,0)/pk.length : 0; return (
-                                <button onClick={e=>{ e.stopPropagation(); setZorlukModal(s.id); }} title="Ürünlerin üretim zorluğunu puanla" style={{ background:ort?ZORLUK_RENK[Math.round(ort)]+"22":"rgba(232,176,79,0.12)", border:"1px solid "+(ort?ZORLUK_RENK[Math.round(ort)]+"66":"rgba(232,176,79,0.35)"), borderRadius:6, padding:"4px 10px", color:ort?ZORLUK_RENK[Math.round(ort)]:"#e8b04f", fontSize:9, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap" }}>
-                                  ⭐ {ort ? "Zorluk "+ort.toFixed(1)+"/5 ("+pk.length+"/"+(s.kalemler||[]).length+")" : "Zorluk puanla"}
-                                </button>); })()}
                               <button onClick={e=>{ e.stopPropagation(); setCizelgeModal(s.id); }} style={{ background:"rgba(91,155,213,0.15)", border:"1px solid rgba(91,155,213,0.3)", borderRadius:6, padding:"4px 10px", color:"#5b9bd5", fontSize:9, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap" }}>
                                 📊 Çizelgeyi Aç
                               </button>
                               {/* Sonraki aşama butonu (hızlı erişim) */}
                               {!tamamlandi && (() => {
-                                const sonrakiDurum = sonrakiAsama(sonGec.durum, s);
+                                const sonrakiDurum = DURUMLAR[DURUMLAR.findIndex(d=>d.id===sonGec.durum)+1];
                                 if (!sonrakiDurum) return null;
                                 return (
                                   <button onClick={e=>{
                                     e.stopPropagation();
-                                    svS(siparisler.map(sp=>sp.id===s.id?{...sp,kalemDurumlar:topluIlerlet(sp, sonrakiDurum.id)}:sp));
+                                    svS(siparisler.map(sp=>sp.id===s.id?{...sp,kalemDurumlar:Object.fromEntries((sp.kalemler||[]).map(k=>[(k.id),(sp.kalemDurumlar||{})[k.id]==="hurda"?"hurda":sonrakiDurum.id]))}:sp));
                                     sipDurumKaydet(s.id, sonrakiDurum.id);
                                   }} style={{ background:sonrakiDurum.c+"22", border:"1px solid "+sonrakiDurum.c+"66", borderRadius:6, padding:"4px 10px", color:sonrakiDurum.c, fontSize:9, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap" }}>
                                     → {sonrakiDurum.l}
@@ -9140,72 +6317,20 @@ function Atolye({ onSirketDegis }) {
                               )}
                               <div style={{ flex:1, minWidth:0 }}>
                                 <div style={{ fontSize:10, fontWeight:700, color:"var(--goldtext)" }}>
-                                  <span style={{ color:GOLD, marginRight:4 }}>{k.kod||""}</span>{tipEtiket(k.kategori)}
-                                  <button onClick={e=>{ e.stopPropagation(); svS(siparisler.map(sp=>sp.id===s.id?{...sp,kalemler:(sp.kalemler||[]).map(x=>x.id===k.id?{...x,numune:!x.numune}:x)}:sp)); }} title="Numune işaretini aç/kapat" style={{ marginLeft:6, fontSize:8, fontWeight:700, padding:"1px 6px", borderRadius:5, cursor:"pointer", border:"1px solid "+(k.numune?"#e8b04f":"rgba(255,255,255,0.12)"), background:k.numune?"rgba(232,176,79,0.18)":"transparent", color:k.numune?"#e8b04f":"#7a6f5a" }}>🎁 {k.numune?"Numune":"numune?"}</button>
+                                  <span style={{ color:GOLD, marginRight:4 }}>{k.kod||""}</span>{k.ad}
                                   {k.renk && <span style={{ color:"var(--gold)", marginLeft:6, fontSize:9 }}>{k.renk}</span>}
                                 </div>
                                 <div style={{ fontSize:8, color:"#7a6f5a" }}>
-                                  {k.secilenAyar||k.refAyar}
-                                  {k.sipNot && <span style={{ color:"#5b9bd5", marginLeft:6 }}>{k.sipNot}</span>}
+                                  {k.secilenAyar||k.refAyar} · {fN(k.gram||0)} gr · {k.adet||1} adet
+                                  {k.sipNot && <span style={{ color:"#5b9bd5", marginLeft:4 }}>{k.sipNot}</span>}
                                 </div>
                               </div>
-                              <div style={{ flexShrink:0, width:92, textAlign:"center", padding:"8px 6px", borderRadius:10, background:"rgba(var(--vurgu-rgb),0.05)", border:"1px solid rgba(var(--vurgu-rgb),0.12)" }}>
-                                <div style={{ fontSize:8, color:"#7a6f5a", fontWeight:700, letterSpacing:0.5, marginBottom:3 }}>ADET</div>
-                                <div style={{ fontSize:15, fontWeight:800, color:"var(--goldtext)" }}>
-                                  {k.boyListesi && k.boyListesi.length ? <span title="Boy listesi olan kalem: adet boylardan hesaplanır">{k.adet||1}</span> : (
-                                    <input type="number" min="1" key={k.id+":"+(k.adet||1)} defaultValue={k.adet||1}
-                                      onClick={e=>e.stopPropagation()}
-                                      onKeyDown={e=>{ if (e.key==="Enter") e.currentTarget.blur(); }}
-                                      onBlur={e=>{
-                                        const yeniAdet = Math.floor(Number(e.target.value));
-                                        if (!yeniAdet || yeniAdet < 1 || yeniAdet === (k.adet||1)) { e.target.value = k.adet||1; return; }
-                                        const kayip = (((s.kalemHurda)||{})[k.id]||0) + (((s.kalemIade)||{})[k.id]||0) + (((s.kalemTamir)||{})[k.id]||0);
-                                        if (yeniAdet < kayip) { alert("Bu kalemde " + kayip + " adet hurda/iade/tamir kaydı var — adet bunun altına düşemez."); e.target.value = k.adet||1; return; }
-                                        setSiparisler(prev => {
-                                          const yeni = prev.map(x => {
-                                            if (x.id !== s.id) return x;
-                                            const kalemler = (x.kalemler||[]).map(z => z.id === k.id ? { ...z, adet: yeniAdet } : z);
-                                            let gelir = 0, maliyet = 0;
-                                            kalemler.forEach(z => { const h = hesapla(z, z.secilenAyar, x.altinKgUSD || altinKgUSD, x.mc || madenCarpan); gelir += h.gelirHas * (z.adet||1); maliyet += h.topMaliyetHas * (z.adet||1); });
-                                            return { ...x, kalemler, gelir, maliyet, kar: gelir - maliyet };
-                                          });
-                                          versiyonDamgala("v7s", yeni);
-                                          return yeni;
-                                        });
-                                        toastGoster("ok", (k.kod||k.ad||"Model") + ": adet " + (k.adet||1) + " → " + yeniAdet);
-                                      }}
-                                      title="Adedi düzelt (Enter ile kaydet)"
-                                      style={{ width:62, padding:"3px 4px", fontSize:15, fontWeight:800, textAlign:"center", background:"rgba(var(--vurgu-rgb),0.08)", border:"1px solid rgba(var(--vurgu-rgb),0.3)", borderRadius:5, color:"var(--goldtext)" }}/>
-                                  )}
-                                </div>
-                                {((((s.kalemHurda)||{})[k.id]||0)+(((s.kalemIade)||{})[k.id]||0)+(((s.kalemTamir)||{})[k.id]||0)) > 0 && <div style={{ fontSize:8, color:"#e85a4f", marginTop:2 }}>net {Math.max(0,(k.adet||1)-(((s.kalemHurda)||{})[k.id]||0)-(((s.kalemIade)||{})[k.id]||0)-(((s.kalemTamir)||{})[k.id]||0))}</div>}
-                              </div>
-                              {(() => { const hc0 = hesapla(k, k.secilenAyar||k.refAyar, s.altinKgUSD, s.mc); const net0 = Math.max(0,(k.adet||1)-(((s.kalemHurda)||{})[k.id]||0)-(((s.kalemIade)||{})[k.id]||0)-(((s.kalemTamir)||{})[k.id]||0)); return (
-                                <>
-                                  <div style={{ flexShrink:0, textAlign:"center", padding:"8px 6px", borderRadius:10, background:"rgba(var(--vurgu-rgb),0.05)", border:"1px solid rgba(var(--vurgu-rgb),0.12)", width:92 }}>
-                                    <div style={{ fontSize:8, color:"#7a6f5a", fontWeight:700, letterSpacing:0.5 }}>ÜRÜN GRAMI</div>
-                                    <div style={{ fontSize:15, fontWeight:800, color:"var(--goldtext)", lineHeight:1.4 }}>{fN(hc0.mamulGram, 2)}<span style={{ fontSize:9, fontWeight:600 }}> gr</span></div>
-                                    <div style={{ fontSize:8, color:"#998a6e" }}>adet başına</div>
-                                  </div>
-                                  <div style={{ flexShrink:0, textAlign:"center", padding:"8px 6px", borderRadius:10, background:"rgba(var(--vurgu-rgb),0.05)", border:"1px solid rgba(var(--vurgu-rgb),0.12)", width:100 }}>
-                                    <div style={{ fontSize:8, color:"#7a6f5a", fontWeight:700, letterSpacing:0.5 }}>TOPLAM GRAM</div>
-                                    <div style={{ fontSize:15, fontWeight:800, color:"var(--goldtext)", lineHeight:1.4 }}>{fN(hc0.mamulGram * net0, 1)}<span style={{ fontSize:9, fontWeight:600 }}> gr</span></div>
-                                    <div style={{ fontSize:8, color:"#998a6e" }}>{net0} adet × {fN(hc0.mamulGram, 2)}</div>
-                                  </div>
-                                </>); })()}
                               {/* Durum noktaları + hurda */}
                               <div style={{ display:"flex", gap:3, alignItems:"center", flexWrap:"wrap", justifyContent:"flex-end" }}>
                                 {DURUMLAR.filter(d=>d.id!=="hurda").map(d => (
                                   <button key={d.id} onClick={()=>durumGuncelle(s.id,k.id,d.id)} title={d.l} style={{ width:12, height:12, borderRadius:6, background:mevcDurum===d.id?d.c:"rgba(255,255,255,0.06)", border:mevcDurum===d.id?"2px solid "+d.c:"1px solid rgba(255,255,255,0.1)", cursor:"pointer", padding:0, flexShrink:0 }}/>
                                 ))}
                                 <span style={{ fontSize:8, color:dur.c, fontWeight:700, marginLeft:2, whiteSpace:"nowrap" }}>{dur.l}</span>
-                                {mevcDurum==="cila" && (
-                                  <span style={{ display:"inline-flex", gap:2, marginLeft:4 }}>
-                                    {CILA_ADIMLARI.map(a => { const secili = ((s.kalemCila||{})[k.id]||"zimpara")===a.id; return (
-                                      <button key={a.id} onClick={e=>{ e.stopPropagation(); svS(siparisler.map(sp=>sp.id===s.id?{...sp,kalemCila:{...(sp.kalemCila||{}),[k.id]:a.id}}:sp)); }} style={{ fontSize:8, fontWeight:700, padding:"1px 6px", borderRadius:5, cursor:"pointer", border:"1px solid "+(secili?"var(--vurgu)":"rgba(255,255,255,0.12)"), background:secili?"rgba(var(--vurgu-rgb),0.18)":"transparent", color:secili?"var(--vurgu)":"#7a6f5a" }}>{a.l}</button>
-                                    ); })}
-                                  </span>
-                                )}
                                 {/* Hurda butonu */}
                                 {(() => {
                                   const hurdaAdet = (s.kalemHurda||{})[k.id]||0;
@@ -9214,18 +6339,18 @@ function Atolye({ onSirketDegis }) {
                                   const tamirAdet = (s.kalemTamir||{})[k.id]||0;
                                   return (
                                     <>
-                                      <button onClick={e=>{e.stopPropagation(); setHurdaModal({sipId:s.id, kalemId:k.id, kalemKod:k.kod, kalemAd:tipEtiket(k.kategori), maxAdet:k.adet||1, mevcAdet:hurdaAdet, mevcNeden:hurdaNeden});}}
+                                      <button onClick={e=>{e.stopPropagation(); setHurdaModal({sipId:s.id, kalemId:k.id, kalemAd:k.ad, maxAdet:k.adet||1, mevcAdet:hurdaAdet, mevcNeden:hurdaNeden});}}
                                         style={{ display:"flex", alignItems:"center", gap:3, marginLeft:6, background:hurdaAdet>0?"rgba(232,90,79,0.15)":"rgba(232,90,79,0.06)", border:"1px solid rgba(232,90,79,0.25)", borderRadius:6, padding:"2px 7px", cursor:"pointer" }}>
                                         <span style={{ fontSize:7, color:"#e85a4f", fontWeight:700 }}>🗑 HURDA</span>
                                         {hurdaAdet>0 && <span style={{ fontSize:9, color:"#e85a4f", fontWeight:800 }}>{hurdaAdet}/{k.adet||1}</span>}
                                         {hurdaNeden && <span style={{ fontSize:7, color:"#e85a4f", opacity:0.7, maxWidth:60, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{hurdaNeden}</span>}
                                       </button>
-                                      <button onClick={e=>{e.stopPropagation(); setIadeModal({sipId:s.id, kalemId:k.id, kalemAd:tipEtiket(k.kategori), kalemKod:k.kod, maxAdet:k.adet||1, mevcAdet:iadeAdet, mevcNeden:(s.kalemIadeNeden||{})[k.id]||"", iadeTuru:(s.kalemIadeTuru||{})[k.id]||"para"});}}
+                                      <button onClick={e=>{e.stopPropagation(); setIadeModal({sipId:s.id, kalemId:k.id, kalemAd:k.ad, kalemKod:k.kod, maxAdet:k.adet||1, mevcAdet:iadeAdet, mevcNeden:(s.kalemIadeNeden||{})[k.id]||"", iadeTuru:(s.kalemIadeTuru||{})[k.id]||"para"});}}
                                         style={{ display:"flex", alignItems:"center", gap:3, marginLeft:6, background:iadeAdet>0?"rgba(167,139,250,0.15)":"rgba(167,139,250,0.06)", border:"1px solid rgba(167,139,250,0.25)", borderRadius:6, padding:"2px 7px", cursor:"pointer" }}>
                                         <span style={{ fontSize:7, color:"#a78bfa", fontWeight:700 }}>↩ İADE</span>
                                         {iadeAdet>0 && <span style={{ fontSize:9, color:"#a78bfa", fontWeight:800 }}>{iadeAdet}/{k.adet||1}</span>}
                                       </button>
-                                      <button onClick={e=>{e.stopPropagation(); setTamirModal({sipId:s.id, kalemId:k.id, kalemAd:tipEtiket(k.kategori), kalemKod:k.kod, maxAdet:k.adet||1, mevcAdet:tamirAdet, mevcNeden:(s.kalemTamirNeden||{})[k.id]||""});}}
+                                      <button onClick={e=>{e.stopPropagation(); setTamirModal({sipId:s.id, kalemId:k.id, kalemAd:k.ad, kalemKod:k.kod, maxAdet:k.adet||1, mevcAdet:tamirAdet, mevcNeden:(s.kalemTamirNeden||{})[k.id]||""});}}
                                         style={{ display:"flex", alignItems:"center", gap:3, marginLeft:6, background:tamirAdet>0?"rgba(91,155,213,0.15)":"rgba(91,155,213,0.06)", border:"1px solid rgba(91,155,213,0.25)", borderRadius:6, padding:"2px 7px", cursor:"pointer" }}>
                                         <span style={{ fontSize:7, color:"#5b9bd5", fontWeight:700 }}>🔧 TAMİR</span>
                                         {tamirAdet>0 && <span style={{ fontSize:9, color:"#5b9bd5", fontWeight:800 }}>{tamirAdet}/{k.adet||1}</span>}
@@ -9249,6 +6374,102 @@ function Atolye({ onSirketDegis }) {
 
         {/* MÜŞTERİLER */}
         {/* İADE & TAMİR */}
+        {sayfa==="iadeler" && (() => {
+          // Tüm siparişlerden iade ve tamir kaydı olan kalemleri çıkar
+          const iadeKayitlar = [];
+          const tamirKayitlar = [];
+          siparisler.forEach(s => {
+            const iade = s.kalemIade || {};
+            const iadeNeden = s.kalemIadeNeden || {};
+            const iadeTuru = s.kalemIadeTuru || {};
+            const tamir = s.kalemTamir || {};
+            const tamirNeden = s.kalemTamirNeden || {};
+            (s.kalemler||[]).forEach(k => {
+              if (iade[k.id] && iade[k.id] > 0) {
+                iadeKayitlar.push({
+                  sipId: s.id, musteri: s.musteri, kalem: k, adet: iade[k.id],
+                  neden: iadeNeden[k.id] || "", tur: iadeTuru[k.id] || "para",
+                  tarih: s.tarih || s.t
+                });
+              }
+              if (tamir[k.id] && tamir[k.id] > 0) {
+                tamirKayitlar.push({
+                  sipId: s.id, musteri: s.musteri, kalem: k, adet: tamir[k.id],
+                  neden: tamirNeden[k.id] || "", tarih: s.tarih || s.t
+                });
+              }
+            });
+          });
+          
+          return (
+            <div style={{ animation:"fadein .3s" }}>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
+                <h2 style={{ margin:0, fontSize:15, fontWeight:700, color:"var(--goldtext)" }}>İade & Tamir Kayıtları</h2>
+              </div>
+
+              {/* İade Bölümü */}
+              <div style={{ marginBottom:18 }}>
+                <h3 style={{ fontSize:12, color:"#a78bfa", marginBottom:8, fontWeight:700 }}>↩ İadeler ({iadeKayitlar.length})</h3>
+                {iadeKayitlar.length === 0 ? (
+                  <div style={{ background:"rgba(167,139,250,0.03)", border:"1px solid rgba(167,139,250,0.1)", borderRadius:10, padding:"24px", textAlign:"center", color:"#665d4a", fontSize:11 }}>
+                    İade kaydı yok
+                  </div>
+                ) : (
+                  <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+                    {iadeKayitlar.map((r, i) => (
+                      <div key={i} style={{ background:"rgba(167,139,250,0.04)", border:"1px solid rgba(167,139,250,0.15)", borderRadius:10, padding:"10px 12px", display:"flex", alignItems:"center", gap:10 }}>
+                        <div className="model-foto-wrap" style={{ width:80, height:80, borderRadius:8, overflow:"hidden", flexShrink:0, background:"rgba(0,0,0,0.2)" }}>{r.kalem.foto ? <img src={r.kalem.foto} style={{ width:"100%", height:"100%", objectFit:"cover", objectPosition:"center center", display:"block" }}/> : <div style={{ width:"100%", height:"100%", background:"rgba(var(--vurgu-rgb),0.06)" }}/>}</div>
+                        <div style={{ flex:1 }}>
+                          <div style={{ fontSize:11, fontWeight:700, color:"var(--goldtext)" }}>
+                            <span style={{ color:GOLD, marginRight:5 }}>{r.kalem.kod||""}</span>{r.kalem.ad}
+                          </div>
+                          <div style={{ fontSize:9, color:"#998a6e", marginTop:2 }}>
+                            Müşteri: <b style={{ color:"#c0b399" }}>{r.musteri}</b> · {new Date(r.tarih).toLocaleDateString("tr-TR")}
+                          </div>
+                          {r.neden && <div style={{ fontSize:9, color:"#a78bfa", marginTop:3, fontStyle:"italic" }}>"{r.neden}"</div>}
+                        </div>
+                        <div style={{ display:"flex", flexDirection:"column", gap:3, alignItems:"flex-end" }}>
+                          <span style={{ background:"rgba(167,139,250,0.15)", color:"#a78bfa", padding:"2px 8px", borderRadius:5, fontSize:9, fontWeight:700 }}>
+                            {r.tur === "degisim" ? "🔄 Değişim" : "💵 Para"}
+                          </span>
+                          <span style={{ fontSize:10, color:"#a78bfa", fontWeight:800 }}>{r.adet}/{r.kalem.adet||1} adet</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Tamir Bölümü */}
+              <div>
+                <h3 style={{ fontSize:12, color:"#5b9bd5", marginBottom:8, fontWeight:700 }}>🔧 Tamirler ({tamirKayitlar.length})</h3>
+                {tamirKayitlar.length === 0 ? (
+                  <div style={{ background:"rgba(91,155,213,0.03)", border:"1px solid rgba(91,155,213,0.1)", borderRadius:10, padding:"24px", textAlign:"center", color:"#665d4a", fontSize:11 }}>
+                    Tamir kaydı yok
+                  </div>
+                ) : (
+                  <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+                    {tamirKayitlar.map((r, i) => (
+                      <div key={i} style={{ background:"rgba(91,155,213,0.04)", border:"1px solid rgba(91,155,213,0.15)", borderRadius:10, padding:"10px 12px", display:"flex", alignItems:"center", gap:10 }}>
+                        <div className="model-foto-wrap" style={{ width:80, height:80, borderRadius:8, overflow:"hidden", flexShrink:0, background:"rgba(0,0,0,0.2)" }}>{r.kalem.foto ? <img src={r.kalem.foto} style={{ width:"100%", height:"100%", objectFit:"cover", objectPosition:"center center", display:"block" }}/> : <div style={{ width:"100%", height:"100%", background:"rgba(var(--vurgu-rgb),0.06)" }}/>}</div>
+                        <div style={{ flex:1 }}>
+                          <div style={{ fontSize:11, fontWeight:700, color:"var(--goldtext)" }}>
+                            <span style={{ color:GOLD, marginRight:5 }}>{r.kalem.kod||""}</span>{r.kalem.ad}
+                          </div>
+                          <div style={{ fontSize:9, color:"#998a6e", marginTop:2 }}>
+                            Müşteri: <b style={{ color:"#c0b399" }}>{r.musteri}</b> · {new Date(r.tarih).toLocaleDateString("tr-TR")}
+                          </div>
+                          {r.neden && <div style={{ fontSize:9, color:"#5b9bd5", marginTop:3, fontStyle:"italic" }}>"{r.neden}"</div>}
+                        </div>
+                        <span style={{ fontSize:10, color:"#5b9bd5", fontWeight:800 }}>{r.adet}/{r.kalem.adet||1} adet</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })()}
 
         {sayfa==="musteriler" && (
           <div style={{ animation:"fadein .3s" }}>
@@ -9400,16 +6621,864 @@ function Atolye({ onSirketDegis }) {
         )}
 
         {/* KASA */}
+        {sayfa==="kasa" && (() => {
+          // ── Şifre kontrolü ──
+          const kasaSifreKontrol = async () => {
+            const encoder = new TextEncoder();
+            const data = encoder.encode(kasaSifreGirdi);
+            const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+            const hashArray = Array.from(new Uint8Array(hashBuffer));
+            const hashHex = hashArray.map(b => b.toString(16).padStart(2,"0")).join("");
+            // 348834 hash
+            const dogruHash = "7c222fb2927d828af22f592134e8932480637c0d";
+            if (hashHex.startsWith(dogruHash.slice(0,10)) || kasaSifreGirdi === "348834") {
+              setKasaKilitli(false); setKasaSifreHata(false); setKasaSifreGirdi("");
+            } else {
+              setKasaSifreHata(true); setKasaSifreGirdi("");
+            }
+          };
+
+          if (kasaKilitli) return (
+            <div style={{ display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", minHeight:"60vh", gap:16 }}>
+              <div style={{ fontSize:32 }}>🔐</div>
+              <div style={{ fontSize:14, fontWeight:700, color:GOLD }}>Kasa & Bilanço</div>
+              <div style={{ fontSize:10, color:"#665d4a" }}>Bu bölüme erişmek için şifre gerekiyor</div>
+              <div style={{ display:"flex", flexDirection:"column", gap:8, alignItems:"center" }}>
+                <input
+                  type="password"
+                  placeholder="Şifre"
+                  value={kasaSifreGirdi}
+                  onChange={e=>{ setKasaSifreGirdi(e.target.value); setKasaSifreHata(false); }}
+                  onKeyDown={e=>e.key==="Enter"&&kasaSifreKontrol()}
+                  style={{ ...IS, width:200, padding:"10px 14px", fontSize:16, textAlign:"center", letterSpacing:"0.2em" }}
+                  autoFocus
+                />
+                {kasaSifreHata && <div style={{ fontSize:10, color:"#e85a4f", fontWeight:700 }}>Hatalı şifre</div>}
+                <button onClick={kasaSifreKontrol} style={{ ...BG, padding:"8px 28px", fontSize:11 }}>Giriş</button>
+              </div>
+            </div>
+          );
+
+          // ── Canlı hesaplamalar ──
+          const altinKgUSD = parseFloat(altinKg) || 0;
+          const hasGramUSD = altinKgUSD / 1000;
+
+          // Üretimdeki altın (aktif siparişler — tamam/teslim/hurda dışı)
+          let uretimAltin = 0, uretimTas = 0;
+          siparisler.forEach(s => {
+            (s.kalemler||[]).forEach(k => {
+              const dur = (s.kalemDurumlar||{})[k.id] || k.durum || "baslanmadi";
+              if (["tamam","teslim","hurda"].includes(dur)) return;
+              const hc = hesapla(k, k.secilenAyar||k.refAyar, s.altinKgUSD, s.mc);
+              const hurda = ((s.kalemHurda)||{})[k.id]||0;
+              const iade  = ((s.kalemIade) ||{})[k.id]||0;
+              const tamir = ((s.kalemTamir)||{})[k.id]||0;
+              const net   = Math.max(0,(k.adet||1)-hurda-iade-tamir);
+              uretimAltin += hc.mamulGram * net;
+              uretimTas   += (Number(k.tasGram)||0) * net;
+            });
+          });
+
+          // Satılmamış mamul (tamam ama teslim edilmedi) — altın + taş
+          let satilmamisAltin = 0, satilmamisTas = 0;
+          siparisler.forEach(s => {
+            (s.kalemler||[]).forEach(k => {
+              const dur = (s.kalemDurumlar||{})[k.id] || k.durum || "baslanmadi";
+              if (dur !== "tamam") return;
+              const hc = hesapla(k, k.secilenAyar||k.refAyar, s.altinKgUSD, s.mc);
+              const hurda = ((s.kalemHurda)||{})[k.id]||0;
+              const iade  = ((s.kalemIade) ||{})[k.id]||0;
+              const tamir = ((s.kalemTamir)||{})[k.id]||0;
+              const net   = Math.max(0,(k.adet||1)-hurda-iade-tamir);
+              satilmamisAltin += hc.mamulGram * net;
+              satilmamisTas   += (Number(k.tasGram)||0) * net;
+            });
+          });
+
+          // İade edilen malların taşları (kasada bekliyor)
+          let iadeTas = 0;
+          siparisler.forEach(s => {
+            (s.kalemler||[]).forEach(k => {
+              const iade = ((s.kalemIade)||{})[k.id]||0;
+              iadeTas += (Number(k.tasGram)||0) * iade;
+            });
+          });
+
+          // Hurda altın + hurda taş
+          let hurdaAltin = 0, hurdaTas = 0;
+          siparisler.forEach(s => {
+            (s.kalemler||[]).forEach(k => {
+              const hc = hesapla(k, k.secilenAyar||k.refAyar, s.altinKgUSD, s.mc);
+              const hurda = ((s.kalemHurda)||{})[k.id]||0;
+              hurdaAltin += hc.mamulGram * hurda;
+              hurdaTas   += (Number(k.tasGram)||0) * hurda;
+            });
+          });
+
+          // Ham altın stoku (manuel girişlerden)
+          const hamAltinGram = (kasa.hamAltin||[]).reduce((s,x) => x.tip==="giris" ? s+x.has : s-x.has, 0);
+
+          // Hazır ürün değeri
+          const hazirUrunGram = (kasa.hazirUrun||[]).reduce((s,x) => {
+            const m = modeller.find(mo=>mo.id===x.modelId);
+            if (!m) return s;
+            const hc = hesapla(m, m.secilenAyar||m.refAyar, altinKgUSD, parseFloat(mc)||0.030);
+            return s + hc.mamulGram * (x.adet||1);
+          }, 0);
+
+          // Serbest malzeme
+          const serbestGram = (kasa.serbest||[]).reduce((s,x) => s + ((x.gram||0)*(x.adet||1)), 0);
+
+          // Toplam öz sermaye
+          const toplamHas = hamAltinGram + uretimAltin + satilmamisAltin + hurdaAltin + hazirUrunGram + serbestGram;
+          const toplamUSD = toplamHas * hasGramUSD;
+
+          // Müşteri bakiyeleri
+          const musBakiye = {};
+          // Önce tüm müşteri kayıtlarını oluştur (siparişi olmayanlar da dahil — baslangic_bakiye için)
+          Object.keys(kasa.musteriOdemeler||{}).forEach(mus => {
+            if (!musBakiye[mus]) musBakiye[mus] = { borc:0, odenen:0, baslangicBorc:0, siparisler:[] };
+          });
+          siparisler.forEach(s => {
+            const mus = s.musteri || "İsimsiz";
+            if (!musBakiye[mus]) musBakiye[mus] = { borc:0, odenen:0, baslangicBorc:0, siparisler:[] };
+            let sipKar = 0;
+            (s.kalemler||[]).forEach(k => {
+              const hc = hesapla(k, k.secilenAyar||k.refAyar, s.altinKgUSD, s.mc);
+              const hurda = ((s.kalemHurda)||{})[k.id]||0;
+              const iade  = ((s.kalemIade) ||{})[k.id]||0;
+              const tamir = ((s.kalemTamir)||{})[k.id]||0;
+              const net   = Math.max(0,(k.adet||1)-hurda-iade-tamir);
+              sipKar += hc.karHas * net;
+            });
+            musBakiye[mus].borc += sipKar;
+            musBakiye[mus].siparisler.push({ id:s.id, tarih:s.tarih, kar:sipKar });
+          });
+          // Ödemeler + başlangıç borcu ayrı ayrı hesapla
+          Object.keys(musBakiye).forEach(mus => {
+            const odemeler = (kasa.musteriOdemeler||{})[mus] || [];
+            musBakiye[mus].baslangicBorc = odemeler.filter(x=>x.tip==="baslangic_bakiye").reduce((s,x)=>s+x.has,0);
+            musBakiye[mus].borc += musBakiye[mus].baslangicBorc;
+            musBakiye[mus].odenen = odemeler.filter(x=>x.tip!=="baslangic_bakiye").reduce((s,x)=>s+x.has,0);
+            musBakiye[mus].odemeler = odemeler;
+          });
+
+          // Dökümcü bakiyesi
+          const dokumGiden  = (kasa.dokumcuIslemler||[]).filter(x=>x.tip==="gonder"||x.tip==="baslangic_borc").reduce((s,x)=>s+x.has,0);
+          const dokumOdenen = (kasa.dokumcuIslemler||[]).filter(x=>x.tip==="ode").reduce((s,x)=>s+x.has,0);
+          const dokumBorc   = dokumGiden - dokumOdenen;
+
+          const KCARD = { background:"rgba(0,0,0,0.2)", border:"1px solid rgba(255,255,255,0.06)", borderRadius:12, padding:"12px 16px", marginBottom:12 };
+          const KSEC  = { fontSize:10, fontWeight:700, color:GOLD, marginBottom:10, letterSpacing:".04em" };
+          const KIN   = { ...IS, padding:"5px 8px", fontSize:10, marginBottom:6, width:"100%" };
+
+          return (
+            <div style={{ animation:"fadein .3s" }}>
+              {/* Başlık + alt sekmeler */}
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12, flexWrap:"wrap", gap:6 }}>
+                <h2 style={{ margin:0, fontSize:14, fontWeight:700, color:T.text }}>💰 Kasa & Stok</h2>
+              <button onClick={()=>setKasaKilitli(true)} style={{ ...RD, fontSize:9, padding:"4px 10px" }}>🔒 Kilitle</button>
+              </div>
+              <div style={{ display:"flex", gap:4, marginBottom:14, borderBottom:"1px solid rgba(var(--vurgu-rgb),0.12)", paddingBottom:8 }}>
+                {[{id:"ozet",l:"Özet"},{id:"musteri",l:"Müşteri Bakiyeleri"},{id:"dokumcu",l:"Dökümcü"},{id:"stok",l:"Stok"},{id:"muhasebe",l:"Muhasebe"},{id:"bilanco",l:"Bilanço"}].map(t => (
+                  <button key={t.id} onClick={()=>setKasaSayfa(t.id)} style={{ background:kasaSayfa===t.id?"rgba(var(--vurgu-rgb),0.15)":"transparent", border:"1px solid", borderColor:kasaSayfa===t.id?"rgba(var(--vurgu-rgb),0.4)":"transparent", borderRadius:7, padding:"5px 12px", color:kasaSayfa===t.id?GOLD:"#7a6f5a", fontSize:10, fontWeight:kasaSayfa===t.id?700:400, cursor:"pointer" }}>{t.l}</button>
+                ))}
+              </div>
+
+              {/* ══ ÖZET ══ */}
+              {kasaSayfa==="ozet" && (
+                <div>
+                  {/* Öz Sermaye */}
+                  <div style={KCARD}>
+                    <div style={KSEC}>🏦 ÖZ SERMAYE</div>
+                    <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:8, marginBottom:12 }}>
+                      {[
+                        { l:"Ham Altın", v:hamAltinGram, c:GOLD },
+                        { l:"Üretimdeki Altın", v:uretimAltin, c:"#5b9bd5" },
+                        { l:"Üretimdeki Taş", v:uretimTas, c:"#a78bfa" },
+                        { l:"Satılmamış Mamul (Altın)", v:satilmamisAltin, c:"#6abf69" },
+                        { l:"Satılmamış Mamul (Taş)", v:satilmamisTas, c:"#7c6abf" },
+                        { l:"İade Taşları", v:iadeTas, c:"#c27ba0" },
+                        { l:"Hurda Altın", v:hurdaAltin, c:"#e8833a" },
+                        { l:"Hurda Taş", v:hurdaTas, c:"#b86a3a" },
+                        { l:"Hazır Ürün + Serbest", v:hazirUrunGram+serbestGram, c:"#e8dcc8" },
+                      ].filter(x=>x.v>0).map((x,i) => (
+                        <div key={i} style={{ background:"rgba(0,0,0,0.15)", borderRadius:8, padding:"8px 10px" }}>
+                          <div style={{ fontSize:7, color:"#665d4a", textTransform:"uppercase", marginBottom:3 }}>{x.l}</div>
+                          <div style={{ fontSize:13, fontWeight:800, color:x.c }}>{fN(x.v,3)} <span style={{ fontSize:8 }}>has</span></div>
+                          {hasGramUSD>0 && <div style={{ fontSize:8, color:"#665d4a" }}>≈ {fUSD(x.v*hasGramUSD)}</div>}
+                        </div>
+                      ))}
+                    </div>
+                    <div style={{ background:"rgba(var(--vurgu-rgb),0.08)", border:"1px solid rgba(var(--vurgu-rgb),0.2)", borderRadius:8, padding:"10px 14px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                      <span style={{ fontSize:10, fontWeight:700, color:GOLD }}>TOPLAM ÖZ SERMAYE</span>
+                      <div style={{ textAlign:"right" }}>
+                        <div style={{ fontSize:16, fontWeight:800, color:GOLD }}>{fN(toplamHas,3)} has</div>
+                        {hasGramUSD>0 && <div style={{ fontSize:10, color:"#6abf69", fontWeight:700 }}>{fUSD(toplamUSD)}</div>}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Müşteri + Dökümcü özeti */}
+                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+                    <div style={KCARD}>
+                      <div style={KSEC}>👤 MÜŞTERİ ALACAKLAR</div>
+                      {Object.entries(musBakiye).filter(([,d])=>(d.borc-d.odenen)>0.001).sort((a,b)=>(b[1].borc-b[1].odenen)-(a[1].borc-a[1].odenen)).slice(0,5).map(([mus,d]) => {
+                        const bakiye = d.borc - d.odenen;
+                        return (
+                          <div key={mus} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"5px 0", borderBottom:"1px solid rgba(255,255,255,0.04)" }}>
+                            <span style={{ fontSize:9, color:"var(--goldtext)", fontWeight:600 }}>{mus}</span>
+                            <span style={{ fontSize:10, fontWeight:800, color:"#e85a4f" }}>{fN(bakiye,3)} has</span>
+                          </div>
+                        );
+                      })}
+                      {Object.values(musBakiye).every(d=>d.borc-d.odenen<=0.001) && <div style={{ fontSize:9, color:"#665d4a" }}>Açık bakiye yok</div>}
+                      <div style={{ marginTop:8, paddingTop:8, borderTop:"1px solid rgba(var(--vurgu-rgb),0.1)", display:"flex", justifyContent:"space-between" }}>
+                        <span style={{ fontSize:8, color:"#8a7d64" }}>TOPLAM ALACAK</span>
+                        <span style={{ fontSize:11, fontWeight:800, color:"#e85a4f" }}>{fN(Object.values(musBakiye).reduce((s,d)=>s+Math.max(0,d.borc-d.odenen),0),3)} has</span>
+                      </div>
+                    </div>
+                    <div style={KCARD}>
+                      <div style={KSEC}>🏭 DÖKÜMCÜ BORCU</div>
+                      <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+                        {[
+                          { l:"Toplam Gönderilen", v:dokumGiden, c:"#e8833a" },
+                          { l:"Toplam Ödenen",     v:dokumOdenen, c:"#6abf69" },
+                          { l:"Kalan Borç",        v:dokumBorc, c:dokumBorc>0?"#e85a4f":"#6abf69" },
+                        ].map((x,i) => (
+                          <div key={i} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"5px 0", borderBottom:i<2?"1px solid rgba(255,255,255,0.04)":"2px solid rgba(var(--vurgu-rgb),0.15)" }}>
+                            <span style={{ fontSize:9, color:"#998a6e" }}>{x.l}</span>
+                            <span style={{ fontSize:11, fontWeight:800, color:x.c }}>{fN(x.v,3)} has</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ══ MÜŞTERİ BAKİYELERİ ══ */}
+              {kasaSayfa==="musteri" && (
+                <div>
+                  <div style={{ display:"flex", justifyContent:"flex-end", gap:6, marginBottom:10 }}>
+                    <button onClick={()=>kasaModalAc({tip:"musBaklangic"})} style={{ ...GH, padding:"6px 14px", fontSize:10 }}>+ Başlangıç Bakiyesi</button>
+                    <button onClick={()=>kasaModalAc({tip:"musOde"})} style={{ ...BG, padding:"6px 14px", fontSize:10 }}>+ Ödeme Al</button>
+                  </div>
+                  {Object.entries(musBakiye).sort((a,b)=>(b[1].borc-b[1].odenen)-(a[1].borc-a[1].odenen)).map(([mus,d]) => {
+                    const bakiye = d.borc - d.odenen;
+                    const odemeler = (kasa.musteriOdemeler||{})[mus] || [];
+                    return (
+                      <div key={mus} style={{ ...KCARD }}>
+                        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
+                          <div>
+                            <div style={{ fontSize:12, fontWeight:800, color:"var(--goldtext)" }}>{mus}</div>
+                            <div style={{ fontSize:8, color:"#665d4a" }}>{d.siparisler.length} sipariş</div>
+                          </div>
+                          <div style={{ textAlign:"right" }}>
+                            <div style={{ fontSize:8, color:"#665d4a" }}>Toplam Borç</div>
+                            <div style={{ fontSize:13, fontWeight:800, color:GOLD }}>{fN(d.borc,3)} has</div>
+                          </div>
+                        </div>
+                        <div style={{ background:bakiye>0?"rgba(232,90,79,0.06)":"rgba(106,191,105,0.06)", border:"1px solid", borderColor:bakiye>0?"rgba(232,90,79,0.15)":"rgba(106,191,105,0.15)", borderRadius:9, padding:"10px 14px", marginBottom:8, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                          <div>
+                            <div style={{ fontSize:7, color:"#665d4a", textTransform:"uppercase", marginBottom:2 }}>NET BAKİYE</div>
+                            <div style={{ fontSize:16, fontWeight:800, color:bakiye>0?"#e85a4f":"#6abf69" }}>{fN(Math.abs(bakiye),3)} has</div>
+                            <div style={{ fontSize:8, color:"#665d4a" }}>{bakiye>0?"müşteri borçlu":"müşteri alacaklı"}</div>
+                          </div>
+                          <div style={{ textAlign:"right" }}>
+                            {d.baslangicBorc>0 && <div style={{ fontSize:8, color:"#a78bfa" }}>Başlangıç: {fN(d.baslangicBorc,3)} has</div>}
+                            {d.siparisler.length>0 && <div style={{ fontSize:8, color:"#665d4a" }}>Sipariş: {fN(d.borc-d.baslangicBorc,3)} has</div>}
+                            <div style={{ fontSize:8, color:"#6abf69" }}>Ödenen: {fN(d.odenen,3)} has</div>
+                          </div>
+                        </div>
+                        {(d.odemeler||[]).length>0 && (
+                          <div style={{ borderTop:"1px solid rgba(255,255,255,0.05)", paddingTop:8 }}>
+                            <div style={{ fontSize:7, color:"#665d4a", fontWeight:700, marginBottom:4 }}>HAREKET GEÇMİŞİ</div>
+                            {[...(d.odemeler||[])].sort((a,b)=>b.tarih-a.tarih).map(o => (
+                              <div key={o.id} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"3px 0", borderBottom:"1px solid rgba(255,255,255,0.03)" }}>
+                                <div>
+                                  <span style={{ fontSize:8, color:"#998a6e" }}>{new Date(o.tarih).toLocaleDateString("tr-TR")}</span>
+                                  {o.aciklama && <span style={{ fontSize:8, color:"#665d4a", marginLeft:6 }}>{o.aciklama}</span>}
+                                </div>
+                                <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                                  <span style={{ fontSize:8, color:"#998a6e", marginRight:2 }}>{o.tip==="baslangic_bakiye"?"Başlangıç":o.tip==="ode"?"Ödeme":"?"}</span>
+                                  <span style={{ fontSize:9, fontWeight:800, color:o.tip==="baslangic_bakiye"?"#a78bfa":"#6abf69" }}>{fN(o.has,3)} has</span>
+                                  <button onClick={()=>{
+                                    const yeni = { ...kasa };
+                                    yeni.musteriOdemeler = { ...yeni.musteriOdemeler };
+                                    yeni.musteriOdemeler[mus] = (yeni.musteriOdemeler[mus]||[]).filter(x=>x.id!==o.id);
+                                    svKasa(yeni);
+                                  }} style={{ ...RD, fontSize:8, padding:"2px 5px" }}>Sil</button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        <button onClick={()=>kasaModalAc({tip:"musOde",mus})} style={{ ...GH, fontSize:9, padding:"4px 10px", marginTop:8 }}>+ Ödeme Al</button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* ══ DÖKÜMCÜ ══ */}
+              {kasaSayfa==="dokumcu" && (() => {
+                // Dökümde olan siparişler (otomatik kayıtlardan)
+                const dokumdaOlanlar = (kasa.dokumcuIslemler||[]).filter(x=>x.tip==="gonder"&&!x.teslimTarih);
+                const teslimAlinanlar = (kasa.dokumcuIslemler||[]).filter(x=>x.tip==="gonder"&&x.teslimTarih);
+                return (
+                <div>
+                  {/* Özet */}
+                  <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:8, marginBottom:12 }}>
+                    {[
+                      { l:"Dökümde Bekleyen", v:dokumdaOlanlar.reduce((s,x)=>s+x.has,0), c:"#e8833a", sub:dokumdaOlanlar.length+" sipariş" },
+                      { l:"Toplam Gönderilen", v:dokumGiden, c:"#5b9bd5", sub:"tüm zamanlar" },
+                      { l:"Toplam Ödenen",     v:dokumOdenen, c:"#6abf69", sub:"yapılan ödemeler" },
+                      { l:"Kalan Borç",        v:dokumBorc, c:dokumBorc>0?"#e85a4f":"#6abf69", sub:dokumBorc>0?"ödenmeli":"borç yok" },
+                    ].map((x,i) => (
+                      <div key={i} style={{ background:"rgba(0,0,0,0.2)", borderRadius:10, padding:"10px 14px", textAlign:"center" }}>
+                        <div style={{ fontSize:7, color:"#665d4a", textTransform:"uppercase", marginBottom:4 }}>{x.l}</div>
+                        <div style={{ fontSize:13, fontWeight:800, color:x.c }}>{fN(x.v,3)} has</div>
+                        {hasGramUSD>0 && <div style={{ fontSize:8, color:"#665d4a" }}>≈ {fUSD(x.v*hasGramUSD)}</div>}
+                        <div style={{ fontSize:7, color:"#665d4a", marginTop:2 }}>{x.sub}</div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div style={{ display:"flex", gap:6, marginBottom:12 }}>
+                    <button onClick={()=>kasaModalAc({tip:"dokumOde"})} style={{ ...BG, padding:"6px 14px", fontSize:10 }}>+ Ödeme Yap</button>
+                    <button onClick={()=>kasaModalAc({tip:"dokumBorcGir"})} style={{ ...GH, padding:"6px 14px", fontSize:10 }}>+ Mevcut Borç Gir</button>
+                  </div>
+
+                  {/* Şu an dökümde bekleyen siparişler */}
+                  {dokumdaOlanlar.length > 0 && (
+                    <div style={KCARD}>
+                      <div style={KSEC}>🔄 DÖKÜMDE BEKLEYEN</div>
+                      {dokumdaOlanlar.sort((a,b)=>a.tarih-b.tarih).map(x => {
+                        const beklemeSure = Math.round((Date.now()-x.tarih)/86400000);
+                        return (
+                          <div key={x.id} style={{ display:"flex", alignItems:"center", gap:8, padding:"7px 0", borderBottom:"1px solid rgba(255,255,255,0.04)" }}>
+                            <div style={{ width:8, height:8, borderRadius:"50%", background:"#e8833a", flexShrink:0 }}/>
+                            <div style={{ flex:1 }}>
+                              <div style={{ fontSize:9, fontWeight:700, color:"var(--goldtext)" }}>{x.musteri||"?"}</div>
+                              <div style={{ fontSize:7, color:"#665d4a" }}>{new Date(x.tarih).toLocaleDateString("tr-TR")} · {beklemeSure} gün önce gönderildi</div>
+                              {x.aciklama && <div style={{ fontSize:7, color:"#665d4a" }}>{x.aciklama}</div>}
+                            </div>
+                            <div style={{ textAlign:"right" }}>
+                              <div style={{ fontSize:10, fontWeight:800, color:"#e8833a" }}>{fN(x.has,3)} has</div>
+                              <div style={{ fontSize:7, color:beklemeSure>3?"#e85a4f":"#665d4a", fontWeight:beklemeSure>3?700:400 }}>{beklemeSure>3?"⚠ Gecikiyor":""}</div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* İşlem geçmişi */}
+                  <div style={KCARD}>
+                    <div style={KSEC}>İŞLEM GEÇMİŞİ</div>
+                    {[...(kasa.dokumcuIslemler||[])].sort((a,b)=>b.tarih-a.tarih).map(x => {
+                      const etiket = x.tip==="gonder" ? (x.teslimTarih ? "✓ Döküm Teslim Alındı" : "→ Döküm Gönderildi") : x.tip==="baslangic_borc" ? "Başlangıç Borcu" : "✓ Ödeme Yapıldı";
+                      const renk   = x.tip==="ode" ? "#6abf69" : x.tip==="baslangic_borc" ? "#a78bfa" : "#e8833a";
+                      const isaretli = x.teslimTarih ? "rgba(106,191,105,0.04)" : undefined;
+                      return (
+                        <div key={x.id} style={{ display:"flex", alignItems:"center", gap:8, padding:"6px 0", borderBottom:"1px solid rgba(255,255,255,0.04)", background:isaretli }}>
+                          <div style={{ width:8, height:8, borderRadius:"50%", background:renk, flexShrink:0 }}/>
+                          <div style={{ flex:1 }}>
+                            <div style={{ fontSize:9, fontWeight:700, color:renk }}>{etiket}</div>
+                            {x.musteri && <div style={{ fontSize:8, color:"#998a6e" }}>{x.musteri}</div>}
+                            {x.aciklama && <div style={{ fontSize:7, color:"#665d4a" }}>{x.aciklama}</div>}
+                            <div style={{ fontSize:7, color:"#665d4a" }}>{new Date(x.tarih).toLocaleDateString("tr-TR")}</div>
+                          </div>
+                          <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                            <span style={{ fontSize:10, fontWeight:800, color:renk }}>{x.tip==="ode"?"+":"-"}{fN(x.has,3)} has</span>
+                            <button onClick={()=>{ const yeni={...kasa,dokumcuIslemler:(kasa.dokumcuIslemler||[]).filter(d=>d.id!==x.id)}; svKasa(yeni); }} style={{ ...RD, fontSize:8, padding:"2px 5px" }}>Sil</button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {!(kasa.dokumcuIslemler||[]).length && <div style={{ fontSize:9, color:"#665d4a", textAlign:"center", padding:"20px" }}>Henüz işlem yok — siparişler döküme geçince otomatik oluşur</div>}
+                  </div>
+                </div>
+                );
+              })()}
+
+              {/* ══ STOK ══ */}
+              {kasaSayfa==="stok" && (
+                <div>
+                  <div style={{ display:"flex", gap:6, marginBottom:12, flexWrap:"wrap" }}>
+                    <button onClick={()=>kasaModalAc({tip:"hamAltin"})} style={{ ...BG, padding:"6px 14px", fontSize:10 }}>+ Ham Altın Girişi</button>
+                    <button onClick={()=>kasaModalAc({tip:"hazirUrun"})} style={{ ...GH, padding:"6px 14px", fontSize:10 }}>+ Hazır Ürün</button>
+                    <button onClick={()=>kasaModalAc({tip:"serbest"})} style={{ background:"rgba(167,139,250,0.1)", border:"1px solid rgba(167,139,250,0.25)", borderRadius:9, padding:"6px 14px", color:"#a78bfa", fontSize:10, fontWeight:700, cursor:"pointer" }}>+ Serbest Malzeme</button>
+                  </div>
+
+                  {/* Ham Altın */}
+                  <div style={KCARD}>
+                    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
+                      <div style={KSEC}>🪙 HAM ALTIN STOĞU</div>
+                      <div style={{ fontSize:13, fontWeight:800, color:GOLD }}>{fN(hamAltinGram,3)} has</div>
+                    </div>
+                    {[...(kasa.hamAltin||[])].sort((a,b)=>b.tarih-a.tarih).slice(0,8).map(x => (
+                      <div key={x.id} style={{ display:"flex", alignItems:"center", gap:8, padding:"5px 0", borderBottom:"1px solid rgba(255,255,255,0.04)" }}>
+                        <div style={{ width:7, height:7, borderRadius:"50%", background:x.tip==="giris"?"#6abf69":"#e85a4f", flexShrink:0 }}/>
+                        <div style={{ flex:1 }}>
+                          <span style={{ fontSize:9, color:"var(--goldtext)" }}>{x.aciklama||"—"}</span>
+                          <div style={{ fontSize:7, color:"#665d4a" }}>{new Date(x.tarih).toLocaleDateString("tr-TR")}</div>
+                        </div>
+                        <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                          <span style={{ fontSize:9, fontWeight:800, color:x.tip==="giris"?"#6abf69":"#e85a4f" }}>{x.tip==="giris"?"+":"-"}{fN(x.has,3)} has</span>
+                          <button onClick={()=>{ const yeni={...kasa,hamAltin:(kasa.hamAltin||[]).filter(d=>d.id!==x.id)}; svKasa(yeni); }} style={{ ...RD, fontSize:8, padding:"2px 5px" }}>Sil</button>
+                        </div>
+                      </div>
+                    ))}
+                    {!(kasa.hamAltin||[]).length && <div style={{ fontSize:9, color:"#665d4a" }}>Henüz giriş yok</div>}
+                  </div>
+
+                  {/* Hazır Ürün */}
+                  {(kasa.hazirUrun||[]).length > 0 && (
+                    <div style={KCARD}>
+                      <div style={KSEC}>💍 HAZIR ÜRÜN STOĞU</div>
+                      {(kasa.hazirUrun||[]).map(x => {
+                        const m = modeller.find(mo=>mo.id===x.modelId);
+                        const hc = m ? hesapla(m, m.secilenAyar||m.refAyar, altinKgUSD, parseFloat(mc)||0.030) : null;
+                        return (
+                          <div key={x.id} style={{ display:"flex", alignItems:"center", gap:8, padding:"6px 0", borderBottom:"1px solid rgba(255,255,255,0.04)" }}>
+                            {m?.foto && <img src={m.foto} style={{ width:32, height:32, objectFit:"cover", borderRadius:5 }} alt=""/>}
+                            <div style={{ flex:1 }}>
+                              <div style={{ fontSize:9, fontWeight:700, color:"var(--goldtext)" }}>{x.ad}</div>
+                              {x.aciklama && <div style={{ fontSize:7, color:"#665d4a" }}>{x.aciklama}</div>}
+                            </div>
+                            <div style={{ textAlign:"right" }}>
+                              <div style={{ fontSize:10, fontWeight:800, color:GOLD }}>{x.adet} adet</div>
+                              {hc && <div style={{ fontSize:8, color:"#665d4a" }}>{fN(hc.mamulGram*x.adet,2)} has</div>}
+                            </div>
+                            <button onClick={()=>{ const yeni={...kasa,hazirUrun:(kasa.hazirUrun||[]).filter(d=>d.id!==x.id)}; svKasa(yeni); }} style={{ ...RD, fontSize:8, padding:"2px 5px" }}>Sil</button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* Serbest Malzeme */}
+                  {(kasa.serbest||[]).length > 0 && (
+                    <div style={KCARD}>
+                      <div style={KSEC}>📦 SERBEST MALZEME</div>
+                      {(kasa.serbest||[]).map(x => (
+                        <div key={x.id} style={{ display:"flex", alignItems:"center", gap:8, padding:"5px 0", borderBottom:"1px solid rgba(255,255,255,0.04)" }}>
+                          <div style={{ flex:1 }}>
+                            <div style={{ fontSize:9, fontWeight:700, color:"var(--goldtext)" }}>{x.ad}</div>
+                            {x.aciklama && <div style={{ fontSize:7, color:"#665d4a" }}>{x.aciklama}</div>}
+                          </div>
+                          <div style={{ textAlign:"right", marginRight:8 }}>
+                            <div style={{ fontSize:9, color:GOLD }}>{x.adet||1} adet · {fN((x.gram||0)*(x.adet||1),3)} gr</div>
+                          </div>
+                          <button onClick={()=>{ const yeni={...kasa,serbest:(kasa.serbest||[]).filter(d=>d.id!==x.id)}; svKasa(yeni); }} style={{ ...RD, fontSize:8, padding:"2px 5px" }}>Sil</button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* ══ MUHASEBE ══ */}
+              {kasaSayfa==="muhasebe" && (
+                <div>
+                  <div style={{ background:"rgba(91,155,213,0.03)", border:"1px solid rgba(91,155,213,0.1)", borderRadius:12, padding:"12px 16px", marginBottom:12 }}>
+                    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
+                      <div style={{ fontSize:10, fontWeight:700, color:"#5b9bd5" }}>📊 RHİNO ERP MİZAN</div>
+                      {rhinoMizan && <button onClick={()=>setRhinoMizan(null)} style={{ ...RD, fontSize:8, padding:"2px 8px" }}>Temizle</button>}
+                    </div>
+                    {!rhinoMizan ? (
+                      <div>
+                        <div style={{ fontSize:9, color:"#665d4a", marginBottom:8 }}>Excel mizan dosyasını yükleyin — müşteri bakiyeleri, dökümcü ve satıcı borçları otomatik okunur. Asistan sekmesinde ajan da bu veriyi kullanır.</div>
+                        <label style={{ display:"inline-block", background:"rgba(91,155,213,0.1)", border:"1px solid rgba(91,155,213,0.25)", borderRadius:8, padding:"6px 14px", color:"#5b9bd5", fontSize:10, fontWeight:700, cursor:"pointer" }}>
+                          📂 Mizan Yükle (.xlsx)
+                          <input type="file" accept=".xlsx,.xls" style={{ display:"none" }} onChange={async e => {
+                            const file = e.target.files[0];
+                            if (!file) return;
+                            try {
+                              const XLSX = await import("https://cdn.jsdelivr.net/npm/xlsx@0.18.5/+esm");
+                              const buf = await file.arrayBuffer();
+                              const wb = XLSX.read(buf, { type:"array" });
+                              const ws = wb.Sheets[wb.SheetNames[0]];
+                              const rows = XLSX.utils.sheet_to_json(ws, { header:1, defval:"" });
+                              const musteriHas=[], dokumcuHas=[], saticiUsd=[], saticiEur=[];
+                              rows.forEach(row => {
+                                const kod = String(row[0]||"").trim();
+                                const ad  = String(row[1]||"").trim().replace(/^'+/, "");
+                                const dvz = String(row[2]||"").trim();
+                                const bakBor = parseFloat(String(row[5]||"0").replace(",",".")) || 0;
+                                const bakAla = parseFloat(String(row[6]||"0").replace(",",".")) || 0;
+                                const bakiye = bakBor > 0 ? bakBor : -bakAla;
+                                const kodPrefix120 = "120 001 10" + String.fromCharCode(92);
+                                const kodPrefix32010 = "320 001 10" + String.fromCharCode(92);
+                                const kodPrefix32002 = "320 001 02" + String.fromCharCode(92);
+                                const kodPrefix32003 = "320 001 03" + String.fromCharCode(92);
+                                if (kod.startsWith(kodPrefix120) && dvz==="HAS" && ad) musteriHas.push({ ad, bakiye });
+                                if (kod.startsWith(kodPrefix32010) && dvz==="HAS" && ad) dokumcuHas.push({ ad, bakiye });
+                                if (kod.startsWith(kodPrefix32002) && dvz==="USD" && ad) saticiUsd.push({ ad, bakiye });
+                                if (kod.startsWith(kodPrefix32003) && dvz==="EUR" && ad) saticiEur.push({ ad, bakiye });
+                              });
+                              setRhinoMizan({ musteriHas, dokumcuHas, saticiUsd, saticiEur, tarih:new Date().toLocaleDateString("tr-TR"), dosyaAd:file.name });
+                            } catch(err) { alert("Dosya okunamadı: "+err.message); }
+                            e.target.value="";
+                          }}/>
+                        </label>
+                      </div>
+                    ) : (
+                      <div>
+                        <div style={{ fontSize:8, color:"#665d4a", marginBottom:12 }}>{rhinoMizan.dosyaAd} · {rhinoMizan.tarih} · Asistan sekmesinde ajan bu veriyi kullanıyor</div>
+                        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:10 }}>
+                          {/* Müşteri HAS */}
+                          <div style={KCARD}>
+                            <div style={{ fontSize:9, fontWeight:700, color:"#6abf69", marginBottom:8 }}>👤 MÜŞTERİ ALACAKLAR (HAS)</div>
+                            {rhinoMizan.musteriHas.filter(x=>Math.abs(x.bakiye)>0.001).sort((a,b)=>b.bakiye-a.bakiye).map((x,i)=>(
+                              <div key={i} style={{ display:"flex", justifyContent:"space-between", padding:"4px 0", borderBottom:"1px solid rgba(255,255,255,0.04)", fontSize:9 }}>
+                                <span style={{ color:"var(--goldtext)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", maxWidth:120 }}>{x.ad}</span>
+                                <span style={{ fontWeight:700, color:x.bakiye>0?"#6abf69":"#e85a4f", flexShrink:0, marginLeft:6 }}>{fN(x.bakiye,3)} has</span>
+                              </div>
+                            ))}
+                            {rhinoMizan.musteriHas.filter(x=>Math.abs(x.bakiye)>0.001).length===0 && <div style={{ fontSize:8, color:"#665d4a" }}>Açık bakiye yok</div>}
+                            <div style={{ borderTop:"1px solid rgba(var(--vurgu-rgb),0.1)", paddingTop:6, marginTop:6, display:"flex", justifyContent:"space-between" }}>
+                              <span style={{ fontSize:8, color:"#8a7d64" }}>TOPLAM</span>
+                              <span style={{ fontSize:10, fontWeight:800, color:"#6abf69" }}>{fN(rhinoMizan.musteriHas.reduce((s,x)=>s+x.bakiye,0),3)} has</span>
+                            </div>
+                          </div>
+                          {/* Müşteri Eşleştirme */}
+                          <div style={{ ...KCARD, gridColumn:"1 / -1" }}>
+                            <div style={{ fontSize:9, fontWeight:700, color:GOLD, marginBottom:10 }}>🔗 MÜŞTERİ EŞLEŞTİRME — Mizan ↔ Sistem</div>
+                            <div style={{ fontSize:8, color:"#665d4a", marginBottom:10 }}>Mizan'daki müşteri adlarını sisteminizdeki müşterilerle eşleştirin. Eşleştirme kaydedilir, bir dahaki yüklemede otomatik uygulanır.</div>
+                            <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+                              {rhinoMizan.musteriHas.filter(x=>Math.abs(x.bakiye)>0.001).map((x,i) => {
+                                // Otomatik eşleştirme — normalize karşılaştırma
+                                const norm = s => s.toLowerCase().replace(/[^a-z0-9ğüşıöçâîû]/gi,"").trim();
+                                const sistemAdlari = Object.keys(musteriler);
+                                const otomatik = sistemAdlari.find(s => norm(s) === norm(x.ad));
+                                const secili = mizanEslestirme[x.ad] || otomatik || "";
+                                const eslesti = !!secili;
+                                return (
+                                  <div key={i} style={{ display:"flex", alignItems:"center", gap:8, padding:"5px 8px", background:eslesti?"rgba(106,191,105,0.04)":"rgba(232,90,79,0.04)", border:"1px solid", borderColor:eslesti?"rgba(106,191,105,0.1)":"rgba(232,90,79,0.1)", borderRadius:7 }}>
+                                    <div style={{ flex:1, minWidth:0 }}>
+                                      <div style={{ fontSize:9, fontWeight:700, color:"var(--goldtext)" }}>{x.ad}</div>
+                                      <div style={{ fontSize:8, color:x.bakiye>0?"#6abf69":"#e85a4f" }}>{fN(x.bakiye,3)} has</div>
+                                    </div>
+                                    <div style={{ fontSize:12, color:eslesti?"#6abf69":"#e85a4f" }}>{eslesti?"↔":"?"}</div>
+                                    <select value={secili} onChange={e => {
+                                      const yeni = { ...mizanEslestirme, [x.ad]: e.target.value };
+                                      setMizanEslestirme(yeni);
+                                      try { localStorage.setItem("mizan_eslestirme", JSON.stringify(yeni)); } catch {}
+                                    }} style={{ ...IS, width:150, padding:"3px 6px", fontSize:9 }}>
+                                      <option value="">— Eşleştir —</option>
+                                      {Object.keys(musteriler).sort().map(m => <option key={m} value={m}>{m}</option>)}
+                                    </select>
+                                    {secili && secili !== otomatik && (
+                                      <button onClick={()=>{
+                                        const yeni = { ...mizanEslestirme };
+                                        delete yeni[x.ad];
+                                        setMizanEslestirme(yeni);
+                                        try { localStorage.setItem("mizan_eslestirme", JSON.stringify(yeni)); } catch {}
+                                      }} style={{ ...RD, fontSize:8, padding:"2px 6px" }}>↺</button>
+                                    )}
+                                    {otomatik && !mizanEslestirme[x.ad] && (
+                                      <span style={{ fontSize:7, color:"#6abf69", background:"rgba(106,191,105,0.1)", padding:"1px 5px", borderRadius:4 }}>otomatik</span>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                            <div style={{ marginTop:10, fontSize:8, color:"#665d4a" }}>
+                              {rhinoMizan.musteriHas.filter(x=>Math.abs(x.bakiye)>0.001).filter(x=>{
+                                const norm = s => s.toLowerCase().replace(/[^a-z0-9ğüşıöçâîû]/gi,"").trim();
+                                return !mizanEslestirme[x.ad] && !Object.keys(musteriler).find(s=>norm(s)===norm(x.ad));
+                              }).length} müşteri eşleştirilmedi
+                            </div>
+                          </div>
+                          {/* Satıcı/Dökümcü HAS */}
+                          <div style={KCARD}>
+                            <div style={{ fontSize:9, fontWeight:700, color:"#e8833a", marginBottom:8 }}>🏭 SATICI / DÖKÜMCÜ (HAS)</div>
+                            {rhinoMizan.dokumcuHas.filter(x=>Math.abs(x.bakiye)>0.001).sort((a,b)=>a.bakiye-b.bakiye).map((x,i)=>(
+                              <div key={i} style={{ display:"flex", justifyContent:"space-between", padding:"4px 0", borderBottom:"1px solid rgba(255,255,255,0.04)", fontSize:9 }}>
+                                <span style={{ color:"var(--goldtext)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", maxWidth:120 }}>{x.ad}</span>
+                                <span style={{ fontWeight:700, color:x.bakiye<0?"#e85a4f":x.bakiye>0?"#6abf69":"#665d4a", flexShrink:0, marginLeft:6 }}>{fN(x.bakiye,3)} has</span>
+                              </div>
+                            ))}
+                            {rhinoMizan.dokumcuHas.filter(x=>Math.abs(x.bakiye)>0.001).length===0 && <div style={{ fontSize:8, color:"#665d4a" }}>Açık bakiye yok</div>}
+                            <div style={{ borderTop:"1px solid rgba(var(--vurgu-rgb),0.1)", paddingTop:6, marginTop:6, display:"flex", justifyContent:"space-between" }}>
+                              <span style={{ fontSize:8, color:"#8a7d64" }}>TOPLAM BORÇ</span>
+                              <span style={{ fontSize:10, fontWeight:800, color:"#e85a4f" }}>{fN(Math.abs(rhinoMizan.dokumcuHas.filter(x=>x.bakiye<0).reduce((s,x)=>s+x.bakiye,0)),3)} has</span>
+                            </div>
+                          </div>
+                          {/* Satıcı USD */}
+                          <div style={KCARD}>
+                            <div style={{ fontSize:9, fontWeight:700, color:"#a78bfa", marginBottom:8 }}>💵 SATICI BORÇLAR (USD)</div>
+                            {rhinoMizan.saticiUsd.filter(x=>Math.abs(x.bakiye)>0.001).sort((a,b)=>a.bakiye-b.bakiye).map((x,i)=>(
+                              <div key={i} style={{ display:"flex", justifyContent:"space-between", padding:"4px 0", borderBottom:"1px solid rgba(255,255,255,0.04)", fontSize:9 }}>
+                                <span style={{ color:"var(--goldtext)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", maxWidth:120 }}>{x.ad}</span>
+                                <span style={{ fontWeight:700, color:x.bakiye<0?"#e85a4f":x.bakiye>0?"#6abf69":"#665d4a", flexShrink:0, marginLeft:6 }}>${fN(Math.abs(x.bakiye),2)}</span>
+                              </div>
+                            ))}
+                            {rhinoMizan.saticiUsd.filter(x=>Math.abs(x.bakiye)>0.001).length===0 && <div style={{ fontSize:8, color:"#665d4a" }}>Açık bakiye yok</div>}
+                            <div style={{ borderTop:"1px solid rgba(var(--vurgu-rgb),0.1)", paddingTop:6, marginTop:6, display:"flex", justifyContent:"space-between" }}>
+                              <span style={{ fontSize:8, color:"#8a7d64" }}>TOPLAM BORÇ</span>
+                              <span style={{ fontSize:10, fontWeight:800, color:"#e85a4f" }}>${fN(Math.abs(rhinoMizan.saticiUsd.filter(x=>x.bakiye<0).reduce((s,x)=>s+x.bakiye,0)),2)}</span>
+                            </div>
+                          </div>
+                          {/* Satıcı EUR */}
+                          {rhinoMizan.saticiEur.filter(x=>Math.abs(x.bakiye)>0.001).length>0 && (
+                            <div style={KCARD}>
+                              <div style={{ fontSize:9, fontWeight:700, color:"#5b9bd5", marginBottom:8 }}>💶 SATICI BORÇLAR (EUR)</div>
+                              {rhinoMizan.saticiEur.filter(x=>Math.abs(x.bakiye)>0.001).sort((a,b)=>a.bakiye-b.bakiye).map((x,i)=>(
+                                <div key={i} style={{ display:"flex", justifyContent:"space-between", padding:"4px 0", borderBottom:"1px solid rgba(255,255,255,0.04)", fontSize:9 }}>
+                                  <span style={{ color:"var(--goldtext)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", maxWidth:120 }}>{x.ad}</span>
+                                  <span style={{ fontWeight:700, color:x.bakiye<0?"#e85a4f":x.bakiye>0?"#6abf69":"#665d4a", flexShrink:0, marginLeft:6 }}>€{fN(Math.abs(x.bakiye),2)}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* ══ BİLANÇO ══ */}
+              {kasaSayfa==="bilanco" && (() => {
+                // AKTİF
+                const topAktif = hamAltinGram + uretimAltin + uretimTas + satilmamisAltin + satilmamisTas + iadeTas + hurdaAltin + hurdaTas + hazirUrunGram + serbestGram;
+                const topAlacak = Object.values(musBakiye).reduce((s,d)=>s+Math.max(0,d.borc-d.odenen),0);
+                const topAktifToplam = topAktif + topAlacak;
+                // PASİF
+                const topPasif = dokumBorc;
+                // ÖZ SERMAYE
+                const ozSermaye = topAktifToplam - topPasif;
+
+                const BLK = { background:"rgba(0,0,0,0.15)", borderRadius:7, padding:"5px 10px", display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:4 };
+                const BLV = (v, renk) => (
+                  <span style={{ fontSize:11, fontWeight:800, color:renk||GOLD }}>
+                    {fN(v,3)} <span style={{ fontSize:8, fontWeight:400 }}>has</span>
+                    {hasGramUSD>0 && <span style={{ fontSize:8, color:"#665d4a", marginLeft:4 }}>≈{fUSD(v*hasGramUSD)}</span>}
+                  </span>
+                );
+
+                return (
+                  <div>
+                    <div style={{ fontSize:9, color:"#665d4a", marginBottom:12 }}>
+                      {new Date().toLocaleDateString("tr-TR",{day:"2-digit",month:"long",year:"numeric"})} tarihi itibarıyla
+                    </div>
+
+                    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:14 }}>
+
+                      {/* AKTİF */}
+                      <div style={{ background:"rgba(var(--vurgu-rgb),0.02)", border:"1px solid rgba(var(--vurgu-rgb),0.1)", borderRadius:12, padding:"12px 14px" }}>
+                        <div style={{ fontSize:10, fontWeight:800, color:GOLD, marginBottom:10, letterSpacing:".04em" }}>AKTİF — Varlıklar</div>
+
+                        <div style={{ fontSize:8, color:"#8a7d64", fontWeight:700, marginBottom:6, textTransform:"uppercase" }}>Stok & Üretim</div>
+                        {[
+                          { l:"Ham Altın Stoğu",           v:hamAltinGram,      c:GOLD },
+                          { l:"Üretimdeki Altın",          v:uretimAltin,       c:"#5b9bd5" },
+                          { l:"Üretimdeki Taş",            v:uretimTas,         c:"#a78bfa" },
+                          { l:"Satılmamış Mamul — Altın",  v:satilmamisAltin,   c:"#6abf69" },
+                          { l:"Satılmamış Mamul — Taş",    v:satilmamisTas,     c:"#7c6abf" },
+                          { l:"İade Taşları",              v:iadeTas,           c:"#c27ba0" },
+                          { l:"Hurda Altın",               v:hurdaAltin,        c:"#e8833a" },
+                          { l:"Hurda Taş",                 v:hurdaTas,          c:"#b86a3a" },
+                          { l:"Hazır Ürün Stoğu",          v:hazirUrunGram,     c:GOLD },
+                          { l:"Serbest Malzeme",           v:serbestGram,       c:"#e8dcc8" },
+                        ].filter(x=>x.v>0).map((x,i) => (
+                          <div key={i} style={BLK}>
+                            <span style={{ fontSize:9, color:"#998a6e" }}>{x.l}</span>
+                            {BLV(x.v, x.c)}
+                          </div>
+                        ))}
+
+                        <div style={{ height:1, background:"rgba(var(--vurgu-rgb),0.1)", margin:"8px 0" }}/>
+                        <div style={{ fontSize:8, color:"#8a7d64", fontWeight:700, marginBottom:6, textTransform:"uppercase" }}>Alacaklar</div>
+                        {Object.entries(musBakiye).filter(([,d])=>d.borc-d.odenen>0).map(([mus,d]) => (
+                          <div key={mus} style={BLK}>
+                            <span style={{ fontSize:9, color:"#998a6e" }}>{mus}</span>
+                            {BLV(d.borc-d.odenen, "#5b9bd5")}
+                          </div>
+                        ))}
+                        {topAlacak===0 && <div style={{ fontSize:8, color:"#665d4a" }}>Açık alacak yok</div>}
+
+                        <div style={{ height:2, background:"rgba(var(--vurgu-rgb),0.2)", margin:"10px 0" }}/>
+                        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                          <span style={{ fontSize:10, fontWeight:800, color:GOLD }}>TOPLAM AKTİF</span>
+                          {BLV(topAktifToplam, GOLD)}
+                        </div>
+                      </div>
+
+                      {/* PASİF + ÖZ SERMAYE */}
+                      <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
+                        {/* Pasif */}
+                        <div style={{ background:"rgba(232,90,79,0.02)", border:"1px solid rgba(232,90,79,0.1)", borderRadius:12, padding:"12px 14px" }}>
+                          <div style={{ fontSize:10, fontWeight:800, color:"#e85a4f", marginBottom:10, letterSpacing:".04em" }}>PASİF — Borçlar</div>
+                          <div style={BLK}>
+                            <span style={{ fontSize:9, color:"#998a6e" }}>Dökümcü Borcu</span>
+                            {BLV(dokumBorc, "#e85a4f")}
+                          </div>
+                          <div style={{ height:2, background:"rgba(232,90,79,0.15)", margin:"10px 0" }}/>
+                          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                            <span style={{ fontSize:10, fontWeight:800, color:"#e85a4f" }}>TOPLAM PASİF</span>
+                            {BLV(topPasif, "#e85a4f")}
+                          </div>
+                        </div>
+
+                        {/* Öz Sermaye */}
+                        <div style={{ background:"rgba(106,191,105,0.03)", border:"2px solid rgba(106,191,105,0.2)", borderRadius:12, padding:"12px 14px", flex:1 }}>
+                          <div style={{ fontSize:10, fontWeight:800, color:"#6abf69", marginBottom:10, letterSpacing:".04em" }}>ÖZ SERMAYE</div>
+                          <div style={{ fontSize:8, color:"#665d4a", marginBottom:8 }}>Aktif − Pasif</div>
+                          <div style={{ fontSize:20, fontWeight:800, color:ozSermaye>=0?"#6abf69":"#e85a4f" }}>
+                            {fN(ozSermaye,3)} has
+                          </div>
+                          {hasGramUSD>0 && (
+                            <div style={{ fontSize:12, fontWeight:700, color:ozSermaye>=0?"#4a9a4a":"#c0392b", marginTop:4 }}>
+                              {fUSD(ozSermaye*hasGramUSD)}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Denklik kontrol */}
+                        <div style={{ background:"rgba(0,0,0,0.15)", borderRadius:8, padding:"8px 12px", textAlign:"center" }}>
+                          <div style={{ fontSize:7, color:"#665d4a", marginBottom:3 }}>AKTİF = PASİF + ÖZ SERMAYE</div>
+                          <div style={{ fontSize:9, fontWeight:700, color:Math.abs(topAktifToplam-(topPasif+ozSermaye))<0.001?"#6abf69":"#e85a4f" }}>
+                            {Math.abs(topAktifToplam-(topPasif+ozSermaye))<0.001 ? "✓ Bilanço dengeli" : "⚠ Fark var"}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Kilit butonu */}
+                    <div style={{ display:"flex", justifyContent:"flex-end", marginTop:8 }}>
+                      <button onClick={()=>setKasaKilitli(true)} style={{ ...RD, fontSize:9, padding:"5px 12px" }}>🔒 Kasayı Kilitle</button>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* ══ MODALLAR ══ */}
+              {kasaModal && (() => {
+                const kapat = () => setKasaModal(null);
+                const tip = kasaModal.tip;
+                let baslik = "";
+                if (tip==="musOde")       baslik = "Müşteri Ödemesi Al";
+                if (tip==="musBaklangic") baslik = "Başlangıç Bakiyesi Gir";
+                if (tip==="dokumOde")     baslik = "Dökümcüye Ödeme Yap";
+                if (tip==="dokumBorcGir") baslik = "Mevcut Borç Girişi";
+                if (tip==="hamAltin")     baslik = "Ham Altın Girişi";
+                if (tip==="hazirUrun")    baslik = "Hazır Ürün Ekle";
+                if (tip==="serbest")      baslik = "Serbest Malzeme Ekle";
+                const kaydet = () => {
+                  if (!kfHas && !["hazirUrun","serbest"].includes(tip)) return;
+                  const yeni = { ...kasa };
+                  if (tip==="musOde"||tip==="musBaklangic") {
+                    if (!kfMus) return;
+                    yeni.musteriOdemeler = { ...yeni.musteriOdemeler };
+                    if (!yeni.musteriOdemeler[kfMus]) yeni.musteriOdemeler[kfMus] = [];
+                    const kayitTip = tip==="musBaklangic" ? "baslangic_bakiye" : "ode";
+                    yeni.musteriOdemeler[kfMus] = [...yeni.musteriOdemeler[kfMus], { id:Date.now()+"", tarih:new Date(kfTarih).getTime(), has:parseFloat(kfHas)||0, aciklama:kfAc, tip:kayitTip }];
+                  } else if (tip==="dokumOde"||tip==="dokumBorcGir") {
+                    yeni.dokumcuIslemler = [...(yeni.dokumcuIslemler||[]), { id:Date.now()+"", tarih:new Date(kfTarih).getTime(), tip:tip==="dokumBorcGir"?"baslangic_borc":"ode", has:parseFloat(kfHas)||0, aciklama:kfAc }];
+                  } else if (tip==="hamAltin") {
+                    yeni.hamAltin = [...(yeni.hamAltin||[]), { id:Date.now()+"", tarih:new Date(kfTarih).getTime(), tip:kfTip, has:parseFloat(kfHas)||0, aciklama:kfAc }];
+                  } else if (tip==="hazirUrun") {
+                    if (!kfMod) return;
+                    const m = modeller.find(x=>x.id===kfMod);
+                    yeni.hazirUrun = [...(yeni.hazirUrun||[]), { id:Date.now()+"", modelId:kfMod, ad:m?.ad||"?", adet:parseInt(kfAdet)||1, aciklama:kfAc, tarih:Date.now() }];
+                  } else if (tip==="serbest") {
+                    if (!kfAd) return;
+                    yeni.serbest = [...(yeni.serbest||[]), { id:Date.now()+"", ad:kfAd, gram:parseFloat(kfGram)||0, adet:parseInt(kfAdet)||1, aciklama:kfAc, tarih:Date.now() }];
+                  }
+                  svKasa(yeni); kapat();
+                };
+
+                return (
+                  <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.7)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:9999 }} onClick={kapat}>
+                    <div style={{ background:"#1a1710", border:"1px solid rgba(var(--vurgu-rgb),0.2)", borderRadius:16, padding:"20px 24px", width:340, maxWidth:"95vw" }} onClick={e=>e.stopPropagation()}>
+                      <div style={{ fontSize:13, fontWeight:700, color:GOLD, marginBottom:14 }}>{baslik}</div>
+
+                      {/* Müşteri seç */}
+                      {tip==="musOde" && (
+                        <select value={kfMus} onChange={e=>setKfMus(e.target.value)} style={{ ...KIN, width:"100%" }}>
+                          <option value="">Müşteri seç...</option>
+                          {[...new Set([...Object.keys(musBakiye), ...Object.keys(musteriler)])].sort().map(m => <option key={m} value={m}>{m}</option>)}
+                        </select>
+                      )}
+
+                      {/* Tarih (hepsinde var) */}
+                      {!["hazirUrun","serbest"].includes(tip) && (
+                        <input type="date" value={kfTarih} onChange={e=>setKfTarih(e.target.value)} style={{ ...KIN, width:"100%" }}/>
+                      )}
+
+                      {/* Giriş/Çıkış seçimi (sadece ham altın) */}
+                      {tip==="hamAltin" && (
+                        <div style={{ display:"flex", gap:4, marginBottom:8 }}>
+                          {["giris","cikis"].map(t => (
+                            <button key={t} onClick={()=>setKfTip(t)} style={{ flex:1, padding:"5px", background:kfTip===t?"rgba(var(--vurgu-rgb),0.2)":"rgba(255,255,255,0.04)", border:"1px solid", borderColor:kfTip===t?GOLD:"rgba(255,255,255,0.08)", borderRadius:7, color:kfTip===t?GOLD:"#998a6e", fontSize:9, fontWeight:700, cursor:"pointer" }}>
+                              {t==="giris"?"Giriş":"Çıkış"}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Model seç (hazır ürün) */}
+                      {tip==="hazirUrun" && (
+                        <select value={kfMod} onChange={e=>setKfMod(e.target.value)} style={{ ...KIN, width:"100%" }}>
+                          <option value="">Model seç...</option>
+                          {modeller.map(m => <option key={m.id} value={m.id}>{m.kod||m.ad}</option>)}
+                        </select>
+                      )}
+
+                      {/* Malzeme adı (serbest) */}
+                      {tip==="serbest" && (
+                        <input placeholder="Malzeme adı (örn: Round 0.05ct taş)" value={kfAd} onChange={e=>setKfAd(e.target.value)} style={{ ...KIN, width:"100%" }}/>
+                      )}
+
+                      {/* Has gram (ödeme + döküm + ham altın) */}
+                      {!["hazirUrun","serbest"].includes(tip) && (
+                        <input type="number" placeholder="Has gram (örn: 2.500)" value={kfHas} onChange={e=>setKfHas(e.target.value)} style={{ ...KIN, width:"100%" }} step="0.001"/>
+                      )}
+
+                      {/* Gram (serbest malzeme) */}
+                      {tip==="serbest" && (
+                        <input type="number" placeholder="Birim gram (has)" value={kfGram} onChange={e=>setKfGram(e.target.value)} style={{ ...KIN, width:"100%" }} step="0.001"/>
+                      )}
+
+                      {/* Adet (hazır ürün + serbest) */}
+                      {["hazirUrun","serbest"].includes(tip) && (
+                        <input type="number" placeholder="Adet" value={kfAdet} onChange={e=>setKfAdet(e.target.value)} style={{ ...KIN, width:"100%" }} min="1"/>
+                      )}
+
+                      {/* Açıklama (hepsinde) */}
+                      <input placeholder="Açıklama (opsiyonel)" value={kfAc} onChange={e=>setKfAc(e.target.value)} style={{ ...KIN, width:"100%" }}/>
+
+                      <div style={{ display:"flex", gap:6, marginTop:8 }}>
+                        <button onClick={kaydet} style={{ ...BG, flex:1, padding:"7px" }}>Kaydet</button>
+                        <button onClick={kapat} style={{ ...RD, flex:1, padding:"7px" }}>İptal</button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+          );
+        })()}
 
 
         {/* ANALİZ */}
         {sayfa==="analiz" && (
           <div style={{ animation:"fadein .3s" }}>
-            <div style={{ marginBottom:12 }}><h2 style={{ margin:0, fontSize:14, fontWeight:700, color:T.text }}>Keşfet</h2></div>
-            <KesfetEkrani siparisler={siparisler} modeller={modeller} kollar={kollar} musteriler={musteriler} T={T} altinKgUSD={altinKgUSD} madenCarpan={madenCarpan}
-            ek={[
-              { id:"vitrin", l:"Vitrin", node:(
-<>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14, flexWrap:"wrap", gap:6 }}>
+              <h2 style={{ margin:0, fontSize:14, fontWeight:700, color:T.text }}>Kesfet</h2>
+              <div style={{ display:"flex", gap:6, alignItems:"center" }}>
+                {[{id:"bu_ay",l:"Bu Ay"},{id:"gecen_ay",l:"Geçen Ay"},{id:"3ay",l:"3 Ay"},{id:"yil",l:"Bu Yıl"}].map(d => (
+                  <button key={d.id} onClick={()=>setAnalizDonem(d.id)} style={{ background:analizDonem===d.id?"rgba(var(--vurgu-rgb),0.18)":"rgba(var(--vurgu-rgb),0.04)", border:"1px solid", borderColor:analizDonem===d.id?"rgba(var(--vurgu-rgb),0.4)":"rgba(var(--vurgu-rgb),0.1)", borderRadius:6, padding:"4px 10px", color:analizDonem===d.id?GOLD:"#7a6f5a", fontSize:9, fontWeight:analizDonem===d.id?700:400, cursor:"pointer" }}>{d.l}</button>
+                ))}
+                <button onClick={()=>downloadPDF(buildSatisRaporuHTML(modeller,siparisler),"satis-raporu")} style={{ ...GH, fontSize:9, padding:"5px 10px" }}>PDF Rapor</button>
+              </div>
+            </div>
+
             {/* ── VİTRİN ANALİZİ — müşteriler neye baktı ── */}
             {vitrinAnalizVeri && vitrinAnalizVeri.toplamModel > 0 && (
               <div style={{ background:T.card, border:"1px solid "+T.border, borderRadius:14, padding:"16px 18px", marginBottom:16 }}>
@@ -9487,10 +7556,265 @@ function Atolye({ onSirketDegis }) {
               </div>
             )}
 
-</>
-              ) },
-              { id:"kesif", l:"Model Keşfi", node:(
-<>
+            {/* ── 4 ANA METRİK ── */}
+            {(() => {
+              // Aktif siparişler (tamam/teslim/hurda dışı)
+              const aktifSip = siparisler.filter(s => {
+                const son = (s.durumGecmisi||[]).slice(-1)[0];
+                return son && !["tamam","teslim","hurda"].includes(son.durum);
+              });
+              // Başlamamış (durumGecmisi yok veya ilk durum)
+              const baslamamisSip = siparisler.filter(s => !s.durumGecmisi?.length);
+              // Aktif gram
+              let aktifGram = 0;
+              aktifSip.forEach(s => (s.kalemler||[]).forEach(k => {
+                const hc = hesapla(k, k.secilenAyar||k.refAyar, s.altinKgUSD||altinKgUSD, s.mc||madenCarpan);
+                aktifGram += hc.mamulGram * (k.adet||1);
+              }));
+              // Tamamlanan (dönem)
+              const tamGram = Object.values(analiz.aylikKar).reduce((s,d)=>s+d.gram,0);
+
+              return (
+                <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:8, marginBottom:14 }}>
+                  {[
+                    { lbl:"Aktif Üretim", val:aktifSip.length+" sipariş", sub:fN(aktifGram,1)+" gr üretimde", c:"#5b9bd5", bc:"rgba(91,155,213,0.3)", nav:"aktif" },
+                    { lbl:"Dönemde Tamamlanan", val:analiz.siparisSayisi+" sipariş", sub:fN(tamGram,1)+" gr · "+fN(analiz.tKar,2)+" has kâr", c:"#6abf69", bc:"rgba(106,191,105,0.3)" },
+                    { lbl:"Üretime Girmemiş", val:baslamamisSip.length+" sipariş", sub:"işleme alınmayı bekliyor", c:"#e8833a", bc:"rgba(232,131,58,0.3)", nav:"baslanmadi" },
+                    { lbl:"Toplam Aktif Gram", val:fN(aktifGram,1)+" gr", sub:altinKgUSD>0?"≈"+fUSD(aktifGram*(altinKgUSD/1000))+" altın değeri":"Fiyat girilmedi", c:GOLD, bc:"rgba(var(--vurgu-rgb),0.3)" },
+                  ].map((k,i) => (
+                    <div key={i} onClick={()=>{ if(k.nav){setSayfa("siparisler");setSipFiltre(k.nav);} }} style={{ background:"rgba(0,0,0,0.15)", border:"1px solid rgba(255,255,255,0.06)", borderLeft:"3px solid "+k.bc, borderRadius:10, padding:"12px 14px", cursor:k.nav?"pointer":"default" }}>
+                      <div style={{ fontSize:8, color:"#8a7d64", textTransform:"uppercase", letterSpacing:".06em", marginBottom:6 }}>{k.lbl}</div>
+                      <div style={{ fontSize:18, fontWeight:800, color:k.c, lineHeight:1, marginBottom:4 }}>{k.val}</div>
+                      <div style={{ fontSize:9, color:"#665d4a" }}>{k.sub}</div>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
+
+            {/* ── ORTA: AŞAMA DAĞILIMI + GECİKENLER ── */}
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:14 }}>
+              {/* Aşama dağılımı */}
+              {(() => {
+                const aktifSip = siparisler.filter(s => {
+                  const son = (s.durumGecmisi||[]).slice(-1)[0];
+                  return son && !["tamam","teslim","hurda"].includes(son.durum);
+                });
+                const durumSayilari = {};
+                aktifSip.forEach(s => {
+                  const son = (s.durumGecmisi||[]).slice(-1)[0];
+                  if (son) durumSayilari[son.durum] = (durumSayilari[son.durum]||0) + 1;
+                });
+                const maxSayi = Math.max(...Object.values(durumSayilari), 1);
+                return (
+                  <div style={{ background:"rgba(var(--vurgu-rgb),0.02)", border:"1px solid rgba(var(--vurgu-rgb),0.08)", borderRadius:12, padding:"12px 16px" }}>
+                    <div style={{ fontSize:10, fontWeight:700, color:GOLD, marginBottom:12 }}>Aktif Siparişler — Aşama Dağılımı</div>
+                    {DURUMLAR.filter(d=>d.id!=="hurda").map(d => {
+                      const sayi = durumSayilari[d.id] || 0;
+                      if (!sayi && !["baslanmadi","cizimde","dokum","tezgah","tamam"].includes(d.id)) return null;
+                      return (
+                        <div key={d.id} style={{ display:"flex", alignItems:"center", gap:8, marginBottom:6 }}>
+                          <div style={{ width:8, height:8, borderRadius:4, background:d.c, flexShrink:0 }}/>
+                          <span style={{ fontSize:10, color:"#998a6e", width:80, flexShrink:0 }}>{d.l}</span>
+                          <div style={{ flex:1, height:6, background:"rgba(255,255,255,0.05)", borderRadius:3, overflow:"hidden" }}>
+                            <div style={{ height:"100%", width:(sayi/maxSayi*100)+"%", background:d.c, borderRadius:3, opacity:.85 }}/>
+                          </div>
+                          <span style={{ fontSize:10, fontWeight:700, color:sayi>0?d.c:"#444", width:24, textAlign:"right" }}>{sayi}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+
+              {/* Geciken siparişler */}
+              <div style={{ background:"rgba(232,90,79,0.02)", border:"1px solid rgba(232,90,79,0.1)", borderRadius:12, padding:"12px 16px" }}>
+                <div style={{ fontSize:10, fontWeight:700, color:"#e85a4f", marginBottom:12 }}>Dikkat — Geciken / Bekleyen</div>
+                {analiz.takildi.length === 0 && (
+                  <div style={{ fontSize:11, color:"#6abf69", padding:"8px 0" }}>✓ Tüm siparişler zamanında ilerliyor</div>
+                )}
+                {analiz.takildi.map((x,i) => {
+                  const durObj = DURUMLAR.find(d=>d.id===x.durum)||DURUMLAR[0];
+                  const gun = Math.round(x.bekleme/86400000);
+                  return (
+                    <div key={i} onClick={()=>{ setSayfa("siparisler"); setSipFiltre("geciken"); setAcikSiparisler(p=>({...p,[x.id]:true})); }} style={{ display:"flex", alignItems:"center", gap:8, padding:"8px 10px", background:"rgba(232,90,79,0.04)", borderRadius:8, border:"1px solid rgba(232,90,79,0.1)", marginBottom:6, cursor:"pointer" }}
+                      onMouseOver={e=>e.currentTarget.style.background="rgba(232,90,79,0.1)"}
+                      onMouseOut={e=>e.currentTarget.style.background="rgba(232,90,79,0.04)"}>
+                      <div style={{ width:8, height:8, borderRadius:4, background:durObj.c, flexShrink:0 }}/>
+                      <div style={{ flex:1 }}>
+                        <div style={{ fontSize:11, fontWeight:700, color:"var(--goldtext)" }}>{x.musteri}</div>
+                        <div style={{ fontSize:9, color:durObj.c }}>{durObj.l}</div>
+                      </div>
+                      <div style={{ textAlign:"right" }}>
+                        <div style={{ fontSize:11, fontWeight:800, color:gun>7?"#e85a4f":"#e8833a" }}>{gun} gün</div>
+                        <div style={{ fontSize:8, color:"#5b9bd5" }}>→ Git</div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* ── ALT: DÖKÜMCÜ + MÜŞTERİ ALACAK + HURDA/İADE ── */}
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:10 }}>
+
+              {/* Dökümcü */}
+              {(() => {
+                const dokumGiden  = (kasa.dokumcuIslemler||[]).filter(x=>x.tip==="gonder"||x.tip==="baslangic_borc").reduce((s,x)=>s+x.has,0);
+                const dokumOdenen = (kasa.dokumcuIslemler||[]).filter(x=>x.tip==="ode").reduce((s,x)=>s+x.has,0);
+                const dokumBorc   = dokumGiden - dokumOdenen;
+                const dokumdaOlan = (kasa.dokumcuIslemler||[]).filter(x=>x.tip==="gonder"&&!x.teslimTarih);
+                const dokumdaGram = siparisler.filter(s=>{
+                  const son=(s.durumGecmisi||[]).slice(-1)[0];
+                  return son?.durum==="dokum";
+                }).reduce((acc,s)=>{
+                  (s.kalemler||[]).forEach(k=>{
+                    const hc=hesapla(k,k.secilenAyar||k.refAyar,s.altinKgUSD||altinKgUSD,s.mc||madenCarpan);
+                    acc+=hc.mamulGram*(k.adet||1);
+                  });
+                  return acc;
+                },0);
+                return (
+                  <div onClick={()=>{ setSayfa("kasa"); setKasaSayfa("dokumcu"); }} style={{ background:"rgba(232,131,58,0.02)", border:"1px solid rgba(232,131,58,0.1)", borderRadius:12, padding:"12px 16px", cursor:"pointer" }}>
+                    <div style={{ fontSize:10, fontWeight:700, color:"#e8833a", marginBottom:10 }}>Dökümcü <span style={{ fontSize:8, color:"#5b9bd5", marginLeft:4 }}>→ Git</span></div>
+                    <div style={{ fontSize:20, fontWeight:800, color:"#e8833a", marginBottom:2 }}>{fN(dokumBorc,3)} has</div>
+                    <div style={{ fontSize:9, color:"#665d4a", marginBottom:10 }}>{altinKgUSD>0?"≈"+fUSD(dokumBorc*(altinKgUSD/1000))+" bekleyen borç":""}</div>
+                    <div style={{ borderTop:"1px solid rgba(255,255,255,0.05)", paddingTop:8 }}>
+                      <div style={{ fontSize:9, color:"#998a6e" }}>Dökümde bekleyen: <span style={{ color:"var(--goldtext)", fontWeight:700 }}>{dokumdaOlan.length} sipariş · {fN(dokumdaGram,1)} gr</span></div>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Müşteri alacakları */}
+              {(() => {
+                const musBakiye = {};
+                siparisler.forEach(s => {
+                  const mus = s.musteri||"?";
+                  if (!musBakiye[mus]) musBakiye[mus] = { borc:0, odenen:0 };
+                  (s.kalemler||[]).forEach(k => {
+                    const hc = hesapla(k,k.secilenAyar||k.refAyar,s.altinKgUSD||altinKgUSD,s.mc||madenCarpan);
+                    const hurda=((s.kalemHurda)||{})[k.id]||0, iade=((s.kalemIade)||{})[k.id]||0, tamir=((s.kalemTamir)||{})[k.id]||0;
+                    musBakiye[mus].borc += hc.karHas * Math.max(0,(k.adet||1)-hurda-iade-tamir);
+                  });
+                  ((kasa.musteriOdemeler||{})[mus]||[]).forEach(o => { musBakiye[mus].odenen += o.has||0; });
+                });
+                const sirali = Object.entries(musBakiye).filter(([,d])=>(d.borc-d.odenen)>0.001).sort((a,b)=>(b[1].borc-b[1].odenen)-(a[1].borc-a[1].odenen)).slice(0,4);
+                const topBakiye = sirali.reduce((s,[,d])=>s+(d.borc-d.odenen),0);
+                const maxB = sirali[0] ? sirali[0][1].borc - sirali[0][1].odenen : 1;
+                return (
+                  <div style={{ background:"rgba(var(--vurgu-rgb),0.02)", border:"1px solid rgba(var(--vurgu-rgb),0.08)", borderRadius:12, padding:"12px 16px" }}>
+                    <div style={{ fontSize:10, fontWeight:700, color:GOLD, marginBottom:10 }}>Müşteri Alacakları</div>
+                    {sirali.map(([mus,d],i) => {
+                      const bakiye = d.borc-d.odenen;
+                      return (
+                        <div key={i} style={{ display:"flex", alignItems:"center", gap:6, marginBottom:6 }}>
+                          <span style={{ fontSize:10, color:"#998a6e", flex:1, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{mus}</span>
+                          <div style={{ width:60, height:4, background:"rgba(var(--vurgu-rgb),0.1)", borderRadius:2, overflow:"hidden" }}>
+                            <div style={{ height:"100%", width:(bakiye/maxB*100)+"%", background:GOLD, borderRadius:2 }}/>
+                          </div>
+                          <span style={{ fontSize:10, fontWeight:700, color:GOLD, width:52, textAlign:"right" }}>{fN(bakiye,2)} has</span>
+                        </div>
+                      );
+                    })}
+                    {sirali.length === 0 && <div style={{ fontSize:10, color:"#6abf69" }}>✓ Açık bakiye yok</div>}
+                    {sirali.length > 0 && <div style={{ borderTop:"1px solid rgba(var(--vurgu-rgb),0.1)", paddingTop:6, marginTop:4, fontSize:9, color:"#665d4a" }}>Toplam: <span style={{ color:GOLD, fontWeight:700 }}>{fN(topBakiye,2)} has</span></div>}
+                  </div>
+                );
+              })()}
+
+              {/* Hurda / İade */}
+              {(() => {
+                let hurdaAdet = 0, iadeAdet = 0;
+                const hurdaModeller = {}, iadeModeller = {};
+                siparisler.forEach(s => {
+                  (s.kalemler||[]).forEach(k => {
+                    const h = ((s.kalemHurda)||{})[k.id]||0;
+                    const ia = ((s.kalemIade)||{})[k.id]||0;
+                    hurdaAdet += h;
+                    iadeAdet += ia;
+                    if (h>0) { if (!hurdaModeller[k.kod||k.id]) hurdaModeller[k.kod||k.id]=0; hurdaModeller[k.kod||k.id]+=h; }
+                    if (ia>0) { if (!iadeModeller[k.kod||k.id]) iadeModeller[k.kod||k.id]=0; iadeModeller[k.kod||k.id]+=ia; }
+                  });
+                });
+                const enCokHurda = Object.entries(hurdaModeller).sort((a,b)=>b[1]-a[1]).slice(0,2);
+                const enCokIade  = Object.entries(iadeModeller).sort((a,b)=>b[1]-a[1]).slice(0,2);
+                return (
+                  <div onClick={()=>setSayfa("iadeler")} style={{ background:"rgba(232,90,79,0.02)", border:"1px solid rgba(232,90,79,0.08)", borderRadius:12, padding:"12px 16px", cursor:"pointer" }}>
+                    <div style={{ fontSize:10, fontWeight:700, color:"#e85a4f", marginBottom:10 }}>Hurda & İade <span style={{ fontSize:8, color:"#5b9bd5", marginLeft:4 }}>→ Git</span></div>
+                    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:10 }}>
+                      <div style={{ textAlign:"center", padding:"8px", background:"rgba(232,90,79,0.06)", borderRadius:8, border:"1px solid rgba(232,90,79,0.15)" }}>
+                        <div style={{ fontSize:22, fontWeight:800, color:"#e85a4f" }}>{hurdaAdet}</div>
+                        <div style={{ fontSize:9, color:"#998a6e" }}>hurda</div>
+                      </div>
+                      <div style={{ textAlign:"center", padding:"8px", background:"rgba(167,139,250,0.06)", borderRadius:8, border:"1px solid rgba(167,139,250,0.15)" }}>
+                        <div style={{ fontSize:22, fontWeight:800, color:"#a78bfa" }}>{iadeAdet}</div>
+                        <div style={{ fontSize:9, color:"#998a6e" }}>iade</div>
+                      </div>
+                    </div>
+                    {enCokHurda.length>0 && <div style={{ fontSize:9, color:"#998a6e", marginBottom:3 }}>En çok hurda: {enCokHurda.map(([k,v])=><span key={k} style={{ color:"#e85a4f", fontWeight:700 }}>{k} ×{v} </span>)}</div>}
+                    {enCokIade.length>0  && <div style={{ fontSize:9, color:"#998a6e" }}>En çok iade: {enCokIade.map(([k,v])=><span key={k} style={{ color:"#a78bfa", fontWeight:700 }}>{k} ×{v} </span>)}</div>}
+                    {hurdaAdet===0 && iadeAdet===0 && <div style={{ fontSize:10, color:"#6abf69" }}>✓ Bu dönemde kayıp yok</div>}
+                  </div>
+                );
+              })()}
+            </div>
+
+            {/* ── DASHBOARD — ÜRETİM & KARLILIK ÖZETİ ── */}
+            {(() => {
+              const hasGramUSD = altinKgUSD>0 ? altinKgUSD/1000 : 0;
+              // Tüm siparişlerden topla
+              let toplamGram=0, satilanGram=0, bitenGram=0;
+              let aktifAdet=0, dokumdeAdet=0, tamamAdet=0;
+              let satilanKarHas=0, bekleyenKarHas=0;
+              siparisler.forEach(s => {
+                (s.kalemler||[]).forEach(k => {
+                  const hc = hesapla(k, k.secilenAyar||k.refAyar, s.altinKgUSD||altinKgUSD, s.mc||madenCarpan);
+                  const dur = (s.kalemDurumlar||{})[k.id] || k.durum || "baslanmadi";
+                  const hurda=((s.kalemHurda)||{})[k.id]||0, iade=((s.kalemIade)||{})[k.id]||0, tamir=((s.kalemTamir)||{})[k.id]||0;
+                  const net = Math.max(0,(k.adet||1)-hurda-iade-tamir);
+                  const gram = hc.mamulGram*net;
+                  toplamGram += gram;
+                  if (["tamam","teslim"].includes(dur)) { bitenGram += gram; tamamAdet += net; }
+                  if (dur==="teslim") { satilanGram += gram; satilanKarHas += hc.karHas*net; }
+                  else { bekleyenKarHas += hc.karHas*net; }
+                  const son=(s.durumGecmisi||[]).slice(-1)[0];
+                  if (son && !["tamam","teslim","hurda"].includes(son.durum)) aktifAdet += net;
+                  if (son?.durum==="dokum") dokumdeAdet += net;
+                });
+              });
+              const toplamKarHas = satilanKarHas + bekleyenKarHas;
+              const kart = (lbl, ana, alt, renk) => (
+                <div style={{ background:"rgba(0,0,0,0.15)", border:"1px solid rgba(255,255,255,0.06)", borderLeft:"3px solid "+renk, borderRadius:10, padding:"10px 14px" }}>
+                  <div style={{ fontSize:7, color:"#8a7d64", textTransform:"uppercase", letterSpacing:".05em", marginBottom:5 }}>{lbl}</div>
+                  <div style={{ fontSize:16, fontWeight:800, color:renk, lineHeight:1 }}>{ana}</div>
+                  {alt && <div style={{ fontSize:8, color:"#665d4a", marginTop:3 }}>{alt}</div>}
+                </div>
+              );
+              return (
+                <div style={{ marginTop:14 }}>
+                  {/* KG / GRAM satırı */}
+                  <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:8, marginBottom:8 }}>
+                    {kart("Toplam Sipariş", fN(toplamGram/1000,3)+" kg", fN(toplamGram,1)+" gr", "#5b9bd5")}
+                    {kart("Üretimi Biten", fN(bitenGram/1000,3)+" kg", fN(bitenGram,1)+" gr · "+tamamAdet+" adet", "#6abf69")}
+                    {kart("Teslim Edilen", fN(satilanGram/1000,3)+" kg", fN(satilanGram,1)+" gr satıldı", GOLD)}
+                  </div>
+                  {/* ADET satırı */}
+                  <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:8, marginBottom:8 }}>
+                    {kart("Aktif Üretim", aktifAdet+" adet", "üretimde olan parça", "#e8833a")}
+                    {kart("Dökümde", dokumdeAdet+" adet", "dökümcüde bekleyen", "#e8a74f")}
+                    {kart("Tamamlanan", tamamAdet+" adet", "biten parça", "#6abf69")}
+                  </div>
+                  {/* KARLILIK satırı */}
+                  <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:8 }}>
+                    {kart("Satılan Karlılık", fN(satilanKarHas,2)+" has", hasGramUSD>0?"≈"+fUSD(satilanKarHas*hasGramUSD)+" (teslim edilen)":"teslim edilen kâr", "#6abf69")}
+                    {kart("Bekleyen Karlılık", fN(bekleyenKarHas,2)+" has", hasGramUSD>0?"≈"+fUSD(bekleyenKarHas*hasGramUSD)+" (üretimdeki)":"henüz teslim edilmeyen", "#e8833a")}
+                    {kart("Toplam Potansiyel", fN(toplamKarHas,2)+" has", hasGramUSD>0?"≈"+fUSD(toplamKarHas*hasGramUSD)+" (hepsi satılırsa)":"hepsi satılırsa", GOLD)}
+                  </div>
+                </div>
+              );
+            })()}
+
             {/* ── SEKMELİ MODEL PANELİ ── */}
             <div style={{ background:"rgba(255,255,255,0.02)", border:"1px solid rgba(255,255,255,0.06)", borderRadius:12, padding:"12px 16px", marginTop:14 }}>
               {/* Sekme butonları */}
@@ -9501,9 +7825,6 @@ function Atolye({ onSirketDegis }) {
                   { id:"arizali",  l:"⚠ Arıza Veren",  c:"#e85a4f" },
                   { id:"karli",    l:"💰 En Karlı",     c:GOLD },
                   { id:"kazandiran", l:"💵 Çok Kazandıran", c:"#6abf69" },
-                  { id:"zor",      l:"🧗 En Zor",       c:"#e85a4f" },
-                  { id:"kolay",    l:"🍃 En Kolay",     c:"#6abf69" },
-                  { id:"zorkar",   l:"⚖ Zorluk × Karlılık", c:GOLD },
                 ].map(t => (
                   <button key={t.id} onClick={()=>setKesfetSekme(t.id)} style={{ background:kesfetSekme===t.id?t.c+"22":"rgba(255,255,255,0.03)", border:"1px solid "+(kesfetSekme===t.id?t.c+"66":"rgba(255,255,255,0.08)"), borderRadius:7, padding:"5px 12px", color:kesfetSekme===t.id?t.c:"#7a6f5a", fontSize:10, fontWeight:kesfetSekme===t.id?700:400, cursor:"pointer" }}>{t.l}</button>
                 ))}
@@ -9541,10 +7862,6 @@ function Atolye({ onSirketDegis }) {
                     const mx = kl[0]?.karMly||1;
                     liste = kl.map(x=>({ m:x.m, sag:fN(x.karMly,3), sagAlt:"mly/gr", barW:(x.karMly/mx*100), barC:GOLD }));
                   }
-                } else if (kesfetSekme==="zor" || kesfetSekme==="kolay") {
-                  const zl = [...zorlukHaritasi.entries()].map(([kod, z]) => ({ m: modeller.find(x => String(x.kod||"").toUpperCase() === kod), z })).filter(x => x.m);
-                  zl.sort((a,b) => kesfetSekme==="zor" ? (b.z.ort - a.z.ort || b.z.say - a.z.say) : (a.z.ort - b.z.ort || b.z.say - a.z.say));
-                  liste = zl.slice(0,12).map(x => ({ m:x.m, sag:x.z.ort.toFixed(1)+"/5", sagAlt:x.z.say+" sipariş", barW:x.z.ort/5*100, barC:ZORLUK_RENK[Math.round(x.z.ort)] }));
                 } else if (kesfetSekme==="kazandiran") {
                   // Gerçekten teslim edilen ürünlerden toplam kazanç (kar has × teslim adedi)
                   const km={};
@@ -9556,72 +7873,18 @@ function Atolye({ onSirketDegis }) {
                     const net=Math.max(0,(k.adet||1)-hurda-iade-tamir);
                     if(net<=0) return;
                     if(!km[k.id]) km[k.id]={m:k, kazanc:0, adet:0};
-                    km[k.id].kazanc += hc.karHas*(k.numune?0:1)*net;
+                    km[k.id].kazanc += hc.karHas*net;
                     km[k.id].adet += net;
                   }));
                   const kz = Object.values(km).filter(x=>x.kazanc>0).sort((a,b)=>b.kazanc-a.kazanc).slice(0,10);
                   const mx = kz[0]?.kazanc||1;
                   liste = kz.map(x=>({ m:x.m, sag:fN(x.kazanc,2), sagAlt:x.adet+" adet satıldı", barW:(x.kazanc/mx*100), barC:"#6abf69", kazancHas:true }));
                 }
-                if (kesfetSekme==="zorkar") {
-                  const satirlar = [...zorlukHaritasi.entries()].map(([kod, z]) => {
-                    const m = modeller.find(x => String(x.kod||"").toUpperCase() === kod);
-                    if (!m) return null;
-                    const tasAdet = Array.isArray(m.taslar) && m.taslar.length ? m.taslar.reduce((a,t)=>a+(Number(t.adet)||0),0) : (Number(m.tasAdet)||0);
-                    const hc = altinKgUSD>0 ? hesapla(m, m.refAyar, altinKgUSD, madenCarpan) : null;
-                    const gram = hc ? hc.mamulGram : (Number(m.gram)||0);
-                    const mly = hc && hc.mamulGram>0 ? hc.karMly : null;
-                    const skor = mly!=null ? mly / z.ort : null; // zorluk başına kâr — yüksek = iyi
-                    return { m, z, tasAdet, gram, tasGr: gram>0 ? tasAdet/gram : 0, mly, skor };
-                  }).filter(Boolean);
-                  if (!satirlar.length) return <div style={{ fontSize:10, color:"#665d4a", padding:"10px 0" }}>Henüz zorluk puanı girilmedi — siparişte ⭐ Zorluk puanla ile ürünleri puanlayın</div>;
-                  const anahtar = { skor:r=>r.skor, zorluk:r=>r.z.ort, kar:r=>r.mly, tasgr:r=>r.tasGr }[zorKarSira] || (r=>r.skor);
-                  satirlar.sort((a,b)=>{ const x=anahtar(a), y=anahtar(b); if (x==null&&y==null) return 0; if (x==null) return 1; if (y==null) return -1; return zorKarSira==="zorluk"||zorKarSira==="tasgr" ? y-x : y-x; });
-                  const bas = (id,l) => <button onClick={()=>setZorKarSira(id)} style={{ background:zorKarSira===id?"rgba(var(--vurgu-rgb),0.2)":"transparent", border:"1px solid "+(zorKarSira===id?"rgba(var(--vurgu-rgb),0.5)":"rgba(255,255,255,0.1)"), borderRadius:5, padding:"2px 8px", color:zorKarSira===id?GOLD:"#998a6e", fontSize:9, fontWeight:700, cursor:"pointer" }}>{l}</button>;
-                  return (
-                    <div>
-                      {!(altinKgUSD>0) && <div style={{ fontSize:9, color:"#e8b04f", marginBottom:6 }}>Altın fiyatı girilince kâr (mly/gr) de hesaplanır.</div>}
-                      <div style={{ display:"flex", gap:5, alignItems:"center", marginBottom:8, flexWrap:"wrap" }}>
-                        <span style={{ fontSize:9, color:"#8a7d64" }}>Sırala:</span>
-                        {bas("skor","Kâr / zorluk (en verimli üstte)")}{bas("zorluk","En zor")}{bas("kar","En karlı")}{bas("tasgr","Taş/gr en çok")}
-                      </div>
-                      <div style={{ display:"grid", gridTemplateColumns:"minmax(150px,2fr) 1fr 0.8fr 0.8fr 0.8fr 1fr 1.6fr", gap:"2px 10px", fontSize:9, alignItems:"center" }}>
-                        {["Model","Zorluk","Taş adet","Taş/gr","Gram","Kâr mly/gr","Değerlendirme"].map(h => <div key={h} style={{ color:"#665d4a", fontWeight:700, padding:"4px 0", borderBottom:"1px solid rgba(255,255,255,0.08)" }}>{h}</div>)}
-                        {satirlar.slice(0,60).map((r,i) => {
-                          const m = r.m, zr = ZORLUK_RENK[Math.round(r.z.ort)];
-                          const zor = r.z.ort >= 3.5, dusuk = r.mly!=null && r.mly < MIN_MLY, iyi = r.mly!=null && r.mly >= 0.030;
-                          let deg = null;
-                          if (zor && dusuk) deg = { t:"⚠ Zor ve düşük kârlı — fiyatı artır / üretme", c:"#e85a4f" };
-                          else if (zor && !iyi && r.mly!=null) deg = { t:"Zor, kâr orta — işçiliği gözden geçir", c:"#e8b04f" };
-                          else if (zor) deg = { t:"Zor ama kârlı", c:"#e8b04f" };
-                          else if (r.z.ort <= 2.5 && iyi) deg = { t:"✓ Kolay ve kârlı — öne çıkar", c:"#6abf69" };
-                          else if (r.z.ort <= 2.5 && dusuk) deg = { t:"Kolay ama düşük kâr", c:"#998a6e" };
-                          const hucre = { padding:"5px 0", borderBottom:"1px solid rgba(255,255,255,0.04)" };
-                          const git = () => { const kol=kollar.find(k=>k.id===m.ki); if(kol){setAktifKol(kol);setSayfa("modeller");setArama(m.kod||m.ad);} };
-                          return (<Fragment key={m.id+"_"+i}>
-                            <div onClick={git} style={{ ...hucre, display:"flex", alignItems:"center", gap:8, cursor:"pointer" }}>
-                              {m.foto ? <img src={m.foto} alt="" loading="lazy" style={{ width:40, height:40, objectFit:"cover", borderRadius:6 }}/> : <div style={{ width:40, height:40 }}/>}
-                              <b style={{ fontSize:11, color:GOLD }}>{m.kod||m.ad}</b>
-                            </div>
-                            <div style={{ ...hucre, color:zr, fontWeight:800 }}>★ {r.z.ort.toFixed(1)} <span style={{ fontSize:8, color:"#665d4a", fontWeight:500 }}>({r.z.say})</span></div>
-                            <div style={{ ...hucre, color:"#c0b399" }}>{r.tasAdet||"—"}</div>
-                            <div style={{ ...hucre, color:"#c0b399" }}>{r.tasAdet&&r.gram ? fN(r.tasGr,1) : "—"}</div>
-                            <div style={{ ...hucre, color:"#c0b399" }}>{r.gram ? fN(r.gram,2) : "—"}</div>
-                            <div style={{ ...hucre, fontWeight:700, color:r.mly==null?"#665d4a":r.mly>=0.030?"#6abf69":r.mly>=0.020?"#e8a74f":"#e85a4f" }}>{r.mly!=null ? fN(r.mly,3) : "—"}</div>
-                            <div style={{ ...hucre, color:deg?deg.c:"#665d4a", fontWeight:700 }}>{deg ? deg.t : "—"}</div>
-                          </Fragment>);
-                        })}
-                      </div>
-                      {satirlar.length>60 && <div style={{ fontSize:8, color:"#665d4a", marginTop:6 }}>İlk 60 model gösteriliyor ({satirlar.length} puanlı model var).</div>}
-                      <div style={{ fontSize:8, color:"#665d4a", marginTop:8 }}>Kâr / zorluk = kâr (mly/gr) ÷ ortalama zorluk. Zor ≥ 3.5 · düşük kâr &lt; 0.020 · iyi kâr ≥ 0.030 mly/gr. Taş/gr = modeldeki toplam taş adedi ÷ gram.</div>
-                    </div>
-                  );
-                }
                 if (kesfetSekme==="karli" && !(altinKgUSD>0)) {
                   return <div style={{ fontSize:10, color:"#665d4a", padding:"10px 0" }}>Altın fiyatı girilince karlılık hesaplanır</div>;
                 }
                 if (liste.length===0) {
-                  return <div style={{ fontSize:10, color:"#665d4a", padding:"10px 0" }}>{kesfetSekme==="kazandiran"?"Henüz teslim edilen ürün yok":(kesfetSekme==="zor"||kesfetSekme==="kolay")?"Henüz zorluk puanı girilmedi — siparişte ⭐ Zorluk puanla ile ürünleri puanlayın":"Bu kategoride model bulunamadı"}</div>;
+                  return <div style={{ fontSize:10, color:"#665d4a", padding:"10px 0" }}>{kesfetSekme==="kazandiran"?"Henüz teslim edilen ürün yok":"Bu kategoride model bulunamadı"}</div>;
                 }
                 return (
                   <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr 1fr", gap:"4px 12px" }}>
@@ -9661,30 +7924,7 @@ function Atolye({ onSirketDegis }) {
                   </div>
                 );
               })()}
-              {(kesfetSekme==="zor" || kesfetSekme==="kolay") && (() => {
-                const say = {}; let toplam = 0;
-                zorlukHaritasi.forEach(z => Object.entries(z.etiketler).forEach(([t,n]) => { say[t] = (say[t]||0)+n; toplam += n; }));
-                const sirali = Object.entries(say).sort((a,b)=>b[1]-a[1]);
-                if (!sirali.length) return null;
-                const mx = sirali[0][1];
-                return (
-                  <div style={{ marginTop:14, borderTop:"1px solid rgba(255,255,255,0.06)", paddingTop:10 }}>
-                    <div style={{ fontSize:10, color:"#5b9bd5", fontWeight:700, marginBottom:6 }}>ZORLUK SEBEPLERİ (tüm puanlanan siparişler)</div>
-                    {sirali.map(([t,n]) => (
-                      <div key={t} style={{ display:"flex", alignItems:"center", gap:8, marginBottom:4 }}>
-                        <div style={{ width:140, fontSize:9, color:"#c0b399" }}>{t}</div>
-                        <div style={{ flex:1, height:7, background:"rgba(255,255,255,0.05)", borderRadius:4, overflow:"hidden" }}><div style={{ height:"100%", width:(n/mx*100)+"%", background:"#e8833a", opacity:.85 }}/></div>
-                        <div style={{ width:30, fontSize:9, color:"#998a6e", textAlign:"right" }}>{n}</div>
-                      </div>
-                    ))}
-                  </div>
-                );
-              })()}
             </div>
-</>
-              ) },
-            ]}
-            />
           </div>
         )}
 
@@ -10348,7 +8588,7 @@ function Atolye({ onSirketDegis }) {
         )}
 
         {/* TREND RADAR */}
-                {sayfa==="radar" && <TrendRadarSayfasi T={T} modeller={modeller} />}
+        {sayfa==="radar" && <TrendRadarSayfasi T={T} modeller={modeller} />}
       </div>
 
       {/* TOPLU KOPYALA MODAL */}
@@ -10801,7 +9041,7 @@ function Atolye({ onSirketDegis }) {
       {hurdaModal && (
         <Modal open={!!hurdaModal} onClose={()=>setHurdaModal(null)} title="Hurda Kaydı" T={T}>
           <div style={{ fontSize:11, fontWeight:700, color:"var(--goldtext)", marginBottom:12 }}>
-            {hurdaModal.kalemKod && <span style={{ color:GOLD, marginRight:6 }}>{hurdaModal.kalemKod}</span>}{hurdaModal.kalemAd}
+            {hurdaModal.kalemAd}
           </div>
           {/* Hurda adedi */}
           <Fl label={"Hurda Adedi (max "+hurdaModal.maxAdet+")"} T={T}>
@@ -10928,7 +9168,7 @@ function Atolye({ onSirketDegis }) {
         <div style={{ fontSize:9, color:T.sub, marginBottom:6, display:"flex", justifyContent:"space-between", alignItems:"center", gap:8, flexWrap:"wrap" }}>
           <span><b style={{ color:T.gold }}>{katalogSiraliModeller.length}</b> model seçili — PDF'e girecek</span>
           <div style={{ display:"flex", gap:5 }}>
-            <button onClick={() => { const yeniTers = katKodTers === null ? false : !katKodTers; setKatKodTers(yeniTers); setKatalogSiraliModeller([...katalogSiraliModeller].sort((a, b) => dogalSirala(a, b, yeniTers))); }} style={{ background:"rgba(91,155,213,0.1)", border:"1px solid rgba(91,155,213,0.2)", borderRadius:5, padding:"4px 10px", color:"#5b9bd5", fontSize:9, fontWeight:700, cursor:"pointer" }}>↕ Koda Göre {katKodTers === null ? "" : katKodTers ? "↓ büyük→küçük" : "↑ küçük→büyük"}</button>
+            <button onClick={() => setKatalogSiraliModeller([...katalogSiraliModeller].sort(dogalSirala))} style={{ background:"rgba(91,155,213,0.1)", border:"1px solid rgba(91,155,213,0.2)", borderRadius:5, padding:"4px 10px", color:"#5b9bd5", fontSize:9, fontWeight:700, cursor:"pointer" }}>↕ Koda Göre</button>
             <button onClick={() => {
               // Koleksiyona göre grupla — kaynakKi varsa o, yoksa ki
               const sortByKol = [...katalogSiraliModeller].sort((a, b) => {
@@ -11241,15 +9481,6 @@ function Atolye({ onSirketDegis }) {
       </Modal>
 
       {/* KOL MODAL */}
-      {zorlukModal && (() => {
-        const zs = siparisler.find(x => x.id === zorlukModal);
-        if (!zs) return null;
-        return <ZorlukModal siparis={zs} onKapat={()=>setZorlukModal(null)} onKaydet={(p)=>{
-          const simdi = Date.now();
-          svS(siparisler.map(sp => sp.id !== zs.id ? sp : { ...sp, kalemler: (sp.kalemler||[]).map(k => { const e = p[k.id]; if (!e || !e.z) return k; return { ...k, zorluk: e.z, zorlukEtiket: e.z >= 3 ? e.et : [], zorlukTarih: simdi }; }) }));
-          setZorlukModal(null);
-        }}/>;
-      })()}
       {/* ZAMAN ÇİZELGESİ MODAL */}
       {cizelgeModal && (() => {
         const s = siparisler.find(x => x.id === cizelgeModal);
@@ -11258,61 +9489,25 @@ function Atolye({ onSirketDegis }) {
         if (!gecmis.length) return null;
         const toplamSure = isGunuSure(gecmis[0].tarih, Date.now());
         const sonGec = gecmis[gecmis.length-1];
-        const tamamlandi = sonGec.durum === "teslim";
-        const sonrakiDurum = sonrakiAsama(sonGec.durum, s);
-        // Geçmişten bir aşama kaydını sil (varsayılan: son kayıt = geri al); ürün aşamaları da yeni son aşamaya çekilir
-        const gecmisSil = (gi) => {
-          if (gecmis.length < 2) return;
-          const durObj = DURUMLAR.find(d=>d.id===gecmis[gi].durum)||DURUMLAR[0];
-          if (!window.confirm(durObj.l + " aşaması (" + new Date(gecmis[gi].tarih).toLocaleString("tr-TR") + ") silinsin mi?")) return;
-          const yeniGecmis = gecmis.filter((_, i) => i !== gi);
-          const yeniSon = yeniGecmis[yeniGecmis.length - 1].durum;
-          const sonSilindi = gi === gecmis.length - 1;
-          setSiparisler(prev => {
-            const yeni = prev.map(sp => {
-              if (sp.id !== s.id) return sp;
-              const kd = { ...(sp.kalemDurumlar || {}) };
-              if (sonSilindi) (sp.kalemler || []).forEach(k => { if ((kd[k.id] || k.durum) !== "hurda") kd[k.id] = yeniSon; });
-              return { ...sp, durumGecmisi: (sp.durumGecmisi || []).filter((_, i) => i !== gi), kalemDurumlar: kd };
-            });
-            versiyonDamgala("v7s", yeni);
-            return yeni;
-          });
-        };
+        const tamamlandi = ["tamam","teslim"].includes(sonGec.durum);
+        const sonrakiDurum = DURUMLAR[DURUMLAR.findIndex(d=>d.id===sonGec.durum)+1];
         return (
-          <Modal open={!!cizelgeModal} onClose={()=>setCizelgeModal(null)} title={"⏱ Üretim Takibi — " + (s.musKod||s.musteri||"")} wide T={T}>
-            {(() => {
-              const liste = [...siparisler].reverse().filter(x => (x.durumGecmisi||[]).length);
-              const idx = liste.findIndex(x => x.id === s.id);
-              const git = (d) => { const n = liste[idx + d]; if (n) setCizelgeModal(n.id); };
-              return (
-                <div style={{ display:"flex", gap:6, alignItems:"center", marginBottom:10, flexWrap:"wrap" }}>
-                  <button onClick={()=>git(-1)} disabled={idx<=0} style={{ ...GH, padding:"5px 10px", opacity: idx<=0?0.35:1 }}>◀</button>
-                  <select value={s.id} onChange={e=>setCizelgeModal(e.target.value)} style={{ ...IS, width:"auto", flex:"1 1 220px", padding:"6px 9px", fontSize:11 }}>
-                    {liste.map(x => <option key={x.id} value={x.id}>{(x.musKod||x.musteri||"?")} · {new Date(x.tarih).toLocaleDateString("tr-TR")} · {(x.kalemler||[]).length} kalem · {((DURUMLAR.find(d=>d.id===x.durumGecmisi[x.durumGecmisi.length-1].durum)||{}).l)||""}</option>)}
-                  </select>
-                  <button onClick={()=>git(1)} disabled={idx>=liste.length-1} style={{ ...GH, padding:"5px 10px", opacity: idx>=liste.length-1?0.35:1 }}>▶</button>
-                  <span style={{ fontSize:9, color:"#7a6f5a" }}>{idx+1}/{liste.length} sipariş</span>
-                </div>
-              );
-            })()}
+          <Modal open={!!cizelgeModal} onClose={()=>setCizelgeModal(null)} title={"⏱ Üretim Takibi — " + (s.musteri||"")} wide T={T}>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14, padding:"8px 12px", background:"rgba(91,155,213,0.08)", borderRadius:8 }}>
               <div>
-                <div style={{ fontSize:11, color:"#5b9bd5", fontWeight:700 }}>Sipariş: {s.musKod||s.musteri}</div>
+                <div style={{ fontSize:11, color:"#5b9bd5", fontWeight:700 }}>Sipariş: {s.musteri}</div>
                 <div style={{ fontSize:9, color:"#998a6e", marginTop:2 }}>{(s.kalemler||[]).length} kalem · {gecmis.length} aşama</div>
               </div>
               <div style={{ textAlign:"right" }}>
                 <div style={{ fontSize:9, color:"#665d4a" }}>Toplam İş Günü Süresi</div>
                 <div style={{ fontSize:14, color:"var(--goldtext)", fontWeight:800 }}>{sureFmt(toplamSure)}</div>
-                {tamamlandi && <div style={{ fontSize:9, color:"#6abf69", fontWeight:700, marginTop:2 }}>✓ Teslim edildi</div>}
-                {gecmis.length > 1 && <button onClick={()=>gecmisSil(gecmis.length-1)} style={{ marginTop:6, fontSize:10, fontWeight:700, padding:"4px 10px", borderRadius:7, cursor:"pointer", border:"1px solid rgba(232,90,79,0.4)", background:"rgba(232,90,79,0.1)", color:"#e85a4f" }}>↶ Son aşamayı geri al</button>}
-                {sonGec.durum === "tamam" && <div style={{ fontSize:9, color:"#6abf69", fontWeight:700, marginTop:2 }}>✓ Üretim bitti — teslime hazır</div>}
+                {tamamlandi && <div style={{ fontSize:9, color:"#6abf69", fontWeight:700, marginTop:2 }}>✓ Tamamlandı</div>}
               </div>
             </div>
 
             {/* Aşamalar yatay */}
-            <div style={{ paddingBottom:8, marginBottom:14 }}>
-              <div style={{ display:"flex", flexWrap:"wrap", alignItems:"flex-start", gap:"14px 2px", padding:"4px 0" }}>
+            <div style={{ overflowX:"auto", paddingBottom:8, marginBottom:14 }}>
+              <div style={{ display:"flex", alignItems:"flex-start", gap:0, minWidth:"max-content", padding:"4px 0" }}>
                 {gecmis.map((gec, gi) => {
                   const durObj = DURUMLAR.find(d=>d.id===gec.durum)||DURUMLAR[0];
                   const sonrakiGec = gecmis[gi+1];
@@ -11322,8 +9517,23 @@ function Atolye({ onSirketDegis }) {
                     <div key={gi} style={{ display:"flex", alignItems:"center", flexShrink:0 }}>
                       <div style={{ textAlign:"center", width:110 }}>
                         <div
+                          onClick={()=>{
+                            // Son aşamaya tıklanınca geri al
+                            if (aktif && gecmis.length > 1) {
+                              if (!window.confirm(durObj.l + " aşaması geri alınsın mı?")) return;
+                              setSiparisler(prev => {
+                                const yeni = prev.map(sp => {
+                                  if (sp.id !== s.id) return sp;
+                                  const yeniGecmis = sp.durumGecmisi.slice(0, -1);
+                                  return { ...sp, durumGecmisi: yeniGecmis };
+                                });
+                                versiyonDamgala("v7s", yeni);
+                                return yeni;
+                              });
+                            }
+                          }}
                           style={{ width:42, height:42, borderRadius:21, background:durObj.c+"33", border:"2px solid "+durObj.c+(aktif&&!tamamlandi?"":"99"), margin:"0 auto 5px", display:"flex", alignItems:"center", justifyContent:"center", boxShadow:aktif&&!tamamlandi?"0 0 14px "+durObj.c+"88":"none", cursor: aktif && gecmis.length > 1 ? "pointer" : "default" }}
-                          >
+                          title={aktif && gecmis.length > 1 ? "Tıkla: bu aşamayı geri al" : ""}>
                           <div style={{ width:16, height:16, borderRadius:8, background:durObj.c }}/>
                         </div>
                         <div style={{ fontSize:10, fontWeight:700, color:durObj.c, whiteSpace:"nowrap" }}>{durObj.l}</div>
@@ -11338,19 +9548,18 @@ function Atolye({ onSirketDegis }) {
                             ~{Math.ceil(s.tasDizimSuresiMs/3600000)}sa · {s.tasDizimTasAdet} taş
                           </div>
                         )}
-                        <div style={{ fontSize:10, color:"#c0b399", cursor:"pointer", display:"inline-flex", flexDirection:"column", alignItems:"center", gap:1, marginTop:4, padding:"3px 8px", borderRadius:7, border:"1px solid rgba(var(--vurgu-rgb),0.2)", background:"rgba(var(--vurgu-rgb),0.05)" }}
+                        <div style={{ fontSize:8, color:"#7a6f5a", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:3, marginTop:2 }}
                           onClick={()=>{
-                            const tarihStr = yerelDT(gec.tarih);
+                            const tarihStr = new Date(gec.tarih).toISOString().slice(0,16);
                             setManuelTarihModal({ sipId: s.id, gecmisIdx: gi, durum: gec.durum, durumL: durObj.l, tarih: tarihStr });
                           }}
                           title="Tarihi düzenle">
-                          <span style={{ fontWeight:700 }}>{new Date(gec.tarih).toLocaleDateString("tr-TR", { weekday:"short", day:"2-digit", month:"2-digit", year:"2-digit" })}</span>
-                          <span style={{ fontFamily:"monospace", color:GOLD }}>{new Date(gec.tarih).toLocaleTimeString("tr-TR", { hour:"2-digit", minute:"2-digit" })} ✏</span>
+                          <span>{new Date(gec.tarih).toLocaleDateString("tr-TR")}</span>
+                          <span style={{ color:"#998a6e", fontSize:10 }}>✏</span>
                         </div>
-                        {gecmis.length > 1 && <div><button onClick={()=>gecmisSil(gi)} title={aktif ? "Bu aşamayı geri al" : "Bu kaydı sil"} style={{ marginTop:4, fontSize:9, padding:"2px 8px", borderRadius:6, cursor:"pointer", border:"1px solid rgba(232,90,79,0.35)", background:"rgba(232,90,79,0.08)", color:"#e85a4f", fontWeight:700 }}>{aktif ? "↶ geri al" : "✕ sil"}</button></div>}
                       </div>
                       {gi < gecmis.length - 1 && (
-                        <div style={{ color:"#665d4a", fontSize:18, flexShrink:0, marginBottom:44, width:14, textAlign:"center" }}>›</div>
+                        <div style={{ width:30, height:2, background:"rgba(var(--vurgu-rgb),0.3)", flexShrink:0, marginBottom:36 }}/>
                       )}
                     </div>
                   );
@@ -11358,14 +9567,10 @@ function Atolye({ onSirketDegis }) {
                 {/* Sonraki aşama butonu */}
                 {sonrakiDurum && !tamamlandi && (
                   <div style={{ display:"flex", alignItems:"center", flexShrink:0 }}>
-                    <div style={{ color:"#4a4334", fontSize:18, flexShrink:0, marginBottom:44, width:14, textAlign:"center" }}>›</div>
+                    <div style={{ width:30, height:2, background:"rgba(var(--vurgu-rgb),0.12)", flexShrink:0, marginBottom:36 }}/>
                     <button onClick={()=>{
+                      svS(siparisler.map(sp=>sp.id===s.id?{...sp,kalemDurumlar:Object.fromEntries((sp.kalemler||[]).map(k=>[(k.id),(sp.kalemDurumlar||{})[k.id]==="hurda"?"hurda":sonrakiDurum.id]))}:sp));
                       sipDurumKaydet(s.id, sonrakiDurum.id);
-                      setSiparisler(prev => {
-                        const yeni = prev.map(sp=>sp.id===s.id?{...sp,kalemDurumlar:topluIlerlet(sp, sonrakiDurum.id)}:sp);
-                        versiyonDamgala("v7s", yeni);
-                        return yeni;
-                      });
                     }} style={{ background:sonrakiDurum.c+"22", border:"2px dashed "+sonrakiDurum.c+"66", borderRadius:10, padding:"8px 14px", color:sonrakiDurum.c, fontSize:10, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap", marginBottom:36, textAlign:"center", width:110 }}>
                       → {sonrakiDurum.l}
                     </button>
@@ -11378,23 +9583,21 @@ function Atolye({ onSirketDegis }) {
             <div style={{ borderTop:"1px solid rgba(91,155,213,0.15)", paddingTop:12 }}>
               <div style={{ fontSize:10, color:"#5b9bd5", marginBottom:8, fontWeight:700 }}>AŞAMA SÜRELERİ DAĞILIMI</div>
               <div style={{ display:"flex", flexDirection:"column", gap:5 }}>
-                {(() => {
-                  const topl = durumSureHesapla(gecmis);
-                  return DURUMLAR.filter(d => topl[d.id] !== undefined).map(durObj => {
-                    const buSure = topl[durObj.id] || 0;
-                    const pct = toplamSure > 0 ? Math.round(buSure/toplamSure*100) : 0;
-                    const kez = gecmis.filter(g => g.durum === durObj.id).length;
-                    return (
-                      <div key={durObj.id} style={{ display:"flex", alignItems:"center", gap:8 }}>
-                        <div style={{ width:90, fontSize:9, color:durObj.c, fontWeight:700, flexShrink:0 }}>{durObj.l}{kez>1 ? " ×"+kez : ""}</div>
-                        <div style={{ flex:1, height:8, background:"rgba(255,255,255,0.05)", borderRadius:4, overflow:"hidden" }}>
-                          <div style={{ height:"100%", width:pct+"%", background:durObj.c, borderRadius:4, opacity:0.8, transition:"width 0.3s" }}/>
-                        </div>
-                        <div style={{ width:120, fontSize:9, color:"#c0b399", textAlign:"right", flexShrink:0, fontWeight:600 }}>{sureFmt(buSure)} <span style={{ color:"#665d4a" }}>({pct}%)</span></div>
+                {gecmis.map((gec, gi) => {
+                  const durObj = DURUMLAR.find(d=>d.id===gec.durum)||DURUMLAR[0];
+                  const sonrakiGec = gecmis[gi+1];
+                  const buSure = isGunuSure(gec.tarih, sonrakiGec ? sonrakiGec.tarih : Date.now());
+                  const pct = toplamSure > 0 ? Math.round(buSure/toplamSure*100) : 0;
+                  return (
+                    <div key={gi} style={{ display:"flex", alignItems:"center", gap:8 }}>
+                      <div style={{ width:80, fontSize:9, color:durObj.c, fontWeight:700, flexShrink:0 }}>{durObj.l}</div>
+                      <div style={{ flex:1, height:8, background:"rgba(255,255,255,0.05)", borderRadius:4, overflow:"hidden" }}>
+                        <div style={{ height:"100%", width:pct+"%", background:durObj.c, borderRadius:4, opacity:0.8, transition:"width 0.3s" }}/>
                       </div>
-                    );
-                  });
-                })()}
+                      <div style={{ width:120, fontSize:9, color:"#c0b399", textAlign:"right", flexShrink:0, fontWeight:600 }}>{sureFmt(buSure)} <span style={{ color:"#665d4a" }}>({pct}%)</span></div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           </Modal>
@@ -11513,131 +9716,6 @@ function Atolye({ onSirketDegis }) {
         </Modal>
       )}
 
-      {/* SİPARİŞE MODEL EKLE MODAL */}
-      {sipEkleModal && (() => {
-        const sp = siparisler.find(x => x.id === sipEkleModal.sipId);
-        if (!sp) return null;
-        const ayar = (sp.kalemler || [])[0] ? ((sp.kalemler[0].secilenAyar) || "14K") : "14K";
-        const q = psNorm(sipEkleModal.ara);
-        const mevcutIdler = new Set((sp.kalemler || []).map(k => k.id));
-        let liste = modeller.filter(m => (!sipEkleModal.kol || m.ki === sipEkleModal.kol) && (!q || psNorm(m.kod).includes(q) || psNorm(m.ad).includes(q)));
-        const toplamBulunan = liste.length;
-        liste = liste.slice(0, 48);
-        const secili = (m) => sipEkleModal.sec.some(x => x.id === m.id);
-        const tikla = (m) => setSipEkleModal(p => ({ ...p, sec: p.sec.some(x => x.id === m.id) ? p.sec.filter(x => x.id !== m.id) : [...p.sec, m] }));
-        const ekle = () => {
-          if (!sipEkleModal.sec.length) return;
-          const musHafizaTum = (kasa.musteriModelFiyat || {})[sp.musteri] || {};
-          const yeniKalemler = []; const artanlar = {};
-          sipEkleModal.sec.forEach(m => {
-            if (mevcutIdler.has(m.id)) { artanlar[m.id] = (artanlar[m.id] || 0) + 1; return; }
-            yeniKalemler.push({ ...iscilikliModel(m, ayar, null, musHafizaTum[m.id]), secilenAyar: ayar, renk: "Sari", sipNot: "", numune: ayar === "925", adet: 1, boy: null, zorluk: undefined, zorlukEtiket: undefined, zorlukTarih: undefined });
-          });
-          setSiparisler(prev => {
-            const yeni = prev.map(x => {
-              if (x.id !== sp.id) return x;
-              const kalemler = [...(x.kalemler || []).map(k => artanlar[k.id] ? { ...k, adet: (k.adet || 1) + artanlar[k.id] } : k), ...yeniKalemler];
-              let gelir = 0, maliyet = 0;
-              kalemler.forEach(k => { const h = hesapla(k, k.secilenAyar, x.altinKgUSD || altinKgUSD, x.mc || madenCarpan); gelir += h.gelirHas * (k.adet || 1); maliyet += h.topMaliyetHas * (k.adet || 1); });
-              return { ...x, kalemler, gelir, maliyet, kar: gelir - maliyet };
-            });
-            versiyonDamgala("v7s", yeni);
-            return yeni;
-          });
-          svMUpsert(sipEkleModal.sec.map(m => ({ ...m, satisSayisi: (m.satisSayisi || 0) + 1 })));
-          islemKaydet(AKTIF_SIRKET_ONEK, "güncelle", "sipariş", (sp.musKod || sp.musteri || "") + " · +" + sipEkleModal.sec.length + " model eklendi");
-          toastGoster("ok", sipEkleModal.sec.length + " model siparişe eklendi" + (Object.keys(artanlar).length ? " (zaten olanların adedi +1)" : ""));
-          setSipEkleModal(null);
-        };
-        return (
-          <Modal open onClose={()=>setSipEkleModal(null)} title={"➕ Siparişe model ekle — " + (sp.musKod || sp.musteri || "")} wide T={T}>
-            <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:8 }}>
-              <input autoFocus value={sipEkleModal.ara} onChange={e=>setSipEkleModal(p=>({ ...p, ara:e.target.value }))} placeholder="Model kodu veya adı ara…" style={{ ...IS, flex:"1 1 180px", padding:"6px 9px", fontSize:12 }}/>
-              <select value={sipEkleModal.kol} onChange={e=>setSipEkleModal(p=>({ ...p, kol:e.target.value }))} style={{ ...IS, width:"auto", padding:"6px 9px", fontSize:11 }}>
-                <option value="">Tüm koleksiyonlar</option>
-                {kollar.map(k => <option key={k.id} value={k.id}>{k.ad}</option>)}
-              </select>
-            </div>
-            <div style={{ fontSize:9, color:"#998a6e", marginBottom:6 }}>
-              {toplamBulunan} model{toplamBulunan > 48 ? " (ilk 48 gösteriliyor — aramayı daraltın)" : ""} · eklenecek ayar: <b>{ayar}</b> · her biri 1 adet eklenir (sonra adedi/notu değiştirebilirsiniz)
-            </div>
-            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(92px,1fr))", gap:6, maxHeight:"46vh", overflowY:"auto", marginBottom:10 }}>
-              {liste.map(m => (
-                <div key={m.id} onClick={()=>tikla(m)} title={m.ad || m.kod} style={{ cursor:"pointer", borderRadius:8, overflow:"hidden", background:"rgba(255,255,255,0.04)", border:"2px solid " + (secili(m) ? "#6abf69" : mevcutIdler.has(m.id) ? "rgba(232,176,79,0.5)" : "rgba(255,255,255,0.08)"), position:"relative" }}>
-                  <div style={{ height:80, background:"#f3f3f3", display:"flex", alignItems:"center", justifyContent:"center" }}>
-                    {m.foto ? <img src={m.foto} alt="" loading="lazy" style={{ maxWidth:"100%", maxHeight:"100%", objectFit:"contain" }}/> : null}
-                  </div>
-                  <div style={{ fontSize:10, fontWeight:700, padding:"2px 4px", color:"#e8dcc8", wordBreak:"break-all" }}>{m.kod}</div>
-                  {mevcutIdler.has(m.id) && <div style={{ fontSize:8, color:"#e8b04f", padding:"0 4px 2px" }}>zaten siparişte</div>}
-                  {secili(m) && <div style={{ position:"absolute", top:3, right:3, background:"#6abf69", color:"#0a0a0a", borderRadius:10, fontSize:10, fontWeight:800, padding:"0 6px" }}>✓</div>}
-                </div>
-              ))}
-            </div>
-            <div style={{ display:"flex", gap:8 }}>
-              <button onClick={()=>setSipEkleModal(null)} style={{ ...GH, flex:1, padding:"9px" }}>İptal</button>
-              <button onClick={ekle} disabled={!sipEkleModal.sec.length} style={{ ...BG, flex:2, padding:"9px", opacity: sipEkleModal.sec.length ? 1 : 0.4 }}>➕ {sipEkleModal.sec.length || ""} modeli siparişe ekle</button>
-            </div>
-          </Modal>
-        );
-      })()}
-
-      {/* SİPARİŞ YEDEKLERİ MODAL */}
-      <Modal open={sipYedekModal} onClose={()=>setSipYedekModal(false)} title="🛟 Sipariş Yedekleri" wide T={T}>
-        <div style={{ fontSize:10, color:"#998a6e", marginBottom:10 }}>
-          Siparişler her değişiklikten ~45 sn sonra, silme öncesinde ise anında otomatik yedeklenir (son 100 yedek saklanır). Bir yedeğin içinden tek tek sipariş geri getirebilirsiniz.
-        </div>
-        <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:10 }}>
-          <button onClick={async()=>{ const ok = await sipYedekAl(siparisler, "elle"); toastGoster(ok?"ok":"hata", ok?"Sipariş yedeği alındı":"Yedek alınamadı"); }} style={{ ...BG, fontSize:10, padding:"6px 12px" }}>💾 Şimdi yedek al ({siparisler.length} sipariş)</button>
-          <button onClick={()=>{ const blob = new Blob([JSON.stringify({ siparisler, v: Date.now() })], { type:"application/json" }); const u = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = u; a.download = "siparisler-" + new Date().toISOString().slice(0,10) + "-" + siparisler.length + ".json"; a.click(); setTimeout(()=>URL.revokeObjectURL(u), 2000); }} style={{ ...GH, fontSize:10, padding:"6px 12px" }}>⬇ Siparişleri PC'ye indir</button>
-        </div>
-        {!sipYedekSec && (
-          <div style={{ display:"flex", flexDirection:"column", gap:5, maxHeight:"50vh", overflowY:"auto" }}>
-            {sipYedekler.length === 0 && <div style={{ fontSize:10, color:"#665d4a" }}>Henüz yedek yok. Bir siparişi değiştirince ~45 sn içinde ilk yedek oluşur.</div>}
-            {sipYedekler.map(y => (
-              <button key={y.id} onClick={async()=>{ const v = await siparisYedekGetir(y.id); if (!v) { toastGoster("hata","Yedek okunamadı"); return; } setSipYedekSec({ id:y.id, olusturma:y.olusturma, veri:v }); }}
-                style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:8, padding:"7px 10px", borderRadius:8, cursor:"pointer", background:"rgba(var(--vurgu-rgb),0.04)", border:"1px solid rgba(var(--vurgu-rgb),0.12)", color:"var(--gold)", fontSize:11, textAlign:"left" }}>
-                <span>{new Date(y.olusturma).toLocaleString("tr-TR", { day:"2-digit", month:"2-digit", hour:"2-digit", minute:"2-digit" })}</span>
-                <span style={{ fontWeight:700 }}>{y.siparis_sayisi} sipariş</span>
-              </button>
-            ))}
-          </div>
-        )}
-        {sipYedekSec && (() => {
-          const liste = (sipYedekSec.veri.siparisler || []);
-          const durum = (ys) => { const m = siparisler.find(x => x.id === ys.id); if (!m) return "silinmis"; return JSON.stringify(m) === JSON.stringify(ys) ? "ayni" : "degismis"; };
-          const geriGetir = (ys) => {
-            if (!window.confirm((durum(ys) === "silinmis" ? "Silinmiş siparişi geri getir" : "Bu siparişi yedekteki haline döndür (şimdiki hali üzerine yazılır)") + ":\n" + (ys.musKod || ys.musteri || "") + " · " + sipKodu(ys, liste) + "?")) return;
-            const var_ = siparisler.some(x => x.id === ys.id);
-            svS(var_ ? siparisler.map(x => x.id === ys.id ? ys : x) : [...siparisler, ys].sort((a, b) => (a.tarih || 0) - (b.tarih || 0)));
-            toastGoster("ok", "Sipariş geri getirildi");
-          };
-          const eksikler = liste.filter(ys => durum(ys) === "silinmis");
-          return (
-            <div>
-              <div style={{ display:"flex", gap:6, alignItems:"center", marginBottom:8, flexWrap:"wrap" }}>
-                <button onClick={()=>setSipYedekSec(null)} style={{ ...GH, fontSize:10, padding:"4px 10px" }}>← Listeye dön</button>
-                <span style={{ fontSize:10, color:"#998a6e" }}>{new Date(sipYedekSec.olusturma).toLocaleString("tr-TR")} · {liste.length} sipariş · {sipYedekSec.veri.neden}</span>
-                {eksikler.length > 0 && <button onClick={()=>{ if (!window.confirm(eksikler.length + " silinmiş sipariş geri getirilsin mi? (mevcutlara dokunulmaz)")) return; svS([...siparisler, ...eksikler].sort((a, b) => (a.tarih || 0) - (b.tarih || 0))); toastGoster("ok", eksikler.length + " sipariş geri getirildi"); }} style={{ ...BG, fontSize:10, padding:"4px 10px" }}>↩ Tüm silinenleri geri getir ({eksikler.length})</button>}
-              </div>
-              <div style={{ display:"flex", flexDirection:"column", gap:5, maxHeight:"46vh", overflowY:"auto" }}>
-                {liste.map(ys => { const d = durum(ys); return (
-                  <div key={ys.id} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:8, padding:"6px 10px", borderRadius:8, background:"rgba(var(--vurgu-rgb),0.04)", border:"1px solid rgba(var(--vurgu-rgb),0.1)", fontSize:11 }}>
-                    <div style={{ minWidth:0 }}>
-                      <b style={{ color:"var(--gold)" }}>{ys.musKod || ys.musteri}</b> <span style={{ fontFamily:"monospace", color:"#998a6e", fontSize:10 }}>#{sipKodu(ys, liste)}</span>
-                      <div style={{ fontSize:9, color:"#7a6f5a" }}>{new Date(ys.tarih).toLocaleDateString("tr-TR")} · {(ys.kalemler||[]).length} kalem</div>
-                    </div>
-                    <div style={{ display:"flex", alignItems:"center", gap:6, flexShrink:0 }}>
-                      <span style={{ fontSize:9, fontWeight:700, color: d==="ayni"?"#6abf69": d==="silinmis"?"#e85a4f":"#e8b04f" }}>{d==="ayni"?"✓ aynı": d==="silinmis"?"silinmiş":"değişmiş"}</span>
-                      {d !== "ayni" && <button onClick={()=>geriGetir(ys)} style={{ ...GH, fontSize:9, padding:"3px 8px" }}>↩ Geri getir</button>}
-                    </div>
-                  </div>
-                ); })}
-              </div>
-            </div>
-          );
-        })()}
-      </Modal>
-
       {/* MANUEL TARİH DÜZENLEME MODAL */}
       <Modal open={!!manuelTarihModal} onClose={()=>setManuelTarihModal(null)} title="Aşama Tarihini Düzenle" T={T}>
         {manuelTarihModal && (
@@ -11655,14 +9733,14 @@ function Atolye({ onSirketDegis }) {
               <button onClick={()=>{
                 const yeniTarih = new Date(manuelTarihModal.tarih).getTime();
                 if (isNaN(yeniTarih)) { alert("Geçersiz tarih!"); return; }
-                { const sp0 = siparisler.find(x => x.id === manuelTarihModal.sipId); const g0 = (sp0 && sp0.durumGecmisi) || []; const i0 = manuelTarihModal.gecmisIdx;
-                  if ((g0[i0-1] && yeniTarih < g0[i0-1].tarih) || (g0[i0+1] && yeniTarih > g0[i0+1].tarih)) { alert("Tarih, önceki/sonraki aşamanın tarihleri arasında olmalı (sıra bozulmasın)."); return; } }
                 setSiparisler(prev => {
                   const yeni = prev.map(sp => {
                     if (sp.id !== manuelTarihModal.sipId) return sp;
                     const gecmis = [...(sp.durumGecmisi||[])];
                     if (gecmis[manuelTarihModal.gecmisIdx]) {
                       gecmis[manuelTarihModal.gecmisIdx] = { ...gecmis[manuelTarihModal.gecmisIdx], tarih: yeniTarih, manuel: true };
+                      // Tarihe göre yeniden sırala
+                      gecmis.sort((a,b) => a.tarih - b.tarih);
                     }
                     return { ...sp, durumGecmisi: gecmis };
                   });
@@ -11811,22 +9889,10 @@ function Atolye({ onSirketDegis }) {
       </Modal>
 
       {/* FOTO KIRPMA ARACI */}
-      {koruModal && fFoto && (
-        <FotoKoruModal src={fFoto} baslangic={_koruMaske && _koruMaske.foto === fFoto ? _koruMaske.canvas : null}
-          onIptal={()=>setKoruModal(false)}
-          onTamam={(cv)=>{ _koruMaske = cv ? { foto: fFoto, canvas: cv } : null; setKoruModal(false); toastGoster("ok", cv ? "🖌 İşaretlenen bölge korunacak — şimdi ✨ Arka planı sil'e bas" : "İşaret yok"); }}/>
-      )}
-      {kartKoru && (() => {
-        const km = modeller.find(x => x.id === kartKoru); const cur = km && km.foto;
-        if (!cur) return null;
-        return <FotoKoruModal src={cur} baslangic={_koruMaske && _koruMaske.foto === cur ? _koruMaske.canvas : null}
-          onIptal={()=>setKartKoru(null)}
-          onTamam={(cv)=>{ _koruMaske = cv ? { foto: cur, canvas: cv } : null; setKartKoru(null); toastGoster("ok", cv ? "🖌 İşaretlenen bölge korunacak — şimdi kartta ✨ 'e bas" : "İşaret yok"); }}/>;
-      })()}
       {kirpModal && (
         <FotoKirpModal src={kirpModal}
           onCancel={()=>setKirpModal(null)}
-          onConfirm={(sonuc)=>{ fotoGeriKaydet(fFoto, null); fotoTemizTasi(fFoto, sonuc); setFFoto(sonuc); setKirpModal(null); }}/>
+          onConfirm={(sonuc)=>{ setFFoto(sonuc); setKirpModal(null); }}/>
       )}
 
       {/* MODEL MODAL — SOL/SAĞ GEZİNME OKLARI (sadece düzenlerken, ekrandaki sıraya göre) */}
@@ -11863,14 +9929,7 @@ function Atolye({ onSirketDegis }) {
                   </div>
                 );
               })}
-              {fotoDurum && <div style={{ position:"absolute", inset:0, background:"rgba(255,255,255,0.78)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:6, fontSize:12, fontWeight:700, color:"#1d1d1f", textAlign:"center", padding:20 }}>✨ {fotoDurum}</div>}
               <div style={{ position:"absolute", bottom:8, right:8, display:"flex", gap:6 }}>
-                {fFoto && _fotoUndo.length>0 && <div onClick={e=>{ e.stopPropagation(); fotoGeriAl(setFFoto, setFDetayNoktalari); }} title="Son foto işlemini geri al" style={{ background:"rgba(0,0,0,0.6)", color:"#fff", fontSize:10, fontWeight:600, padding:"5px 11px", borderRadius:7, display:"flex", alignItems:"center", gap:5, cursor:"pointer" }}>↩ Geri al</div>}
-                {fFoto && <div onClick={async e=>{ e.stopPropagation(); if (fotoDurum) return; setFotoDurum("Yapay zekâ çalışıyor… (ilk seferde model iner)"); const r = await fotoAIIsle(fFoto, setFFoto, setFotoDurum, fKategori !== "kolye", _koruMaske && _koruMaske.foto === fFoto ? _koruMaske.canvas : null); setFotoDurum(""); toastGoster(r==="ok"?"ok":"hata", r==="ok" ? "✨ Arka plan silindi, #f3f3f3 yapıldı — beğenmezsen ↩ Geri al" : "Arka plan silinemedi: "+r); }} title="Yapay zekâ ile arka planı sil, #f3f3f3 yap" style={{ background:"rgba(124,58,237,0.85)", color:"#fff", fontSize:10, fontWeight:700, padding:"5px 11px", borderRadius:7, display:"flex", alignItems:"center", gap:5, cursor:"pointer" }}>✨ Arka planı sil</div>}
-                {fFoto && <div onClick={e=>{ e.stopPropagation(); setKoruModal(true); }} title="Arka plan silinirken dokunulmayacak bölgeleri fırçayla işaretle (beyaz taş vb.)" style={{ background:"rgba(14,165,233,0.85)", color:"#fff", fontSize:10, fontWeight:700, padding:"5px 11px", borderRadius:7, display:"flex", alignItems:"center", gap:5, cursor:"pointer" }}>🖌 İşaretle{_koruMaske && _koruMaske.foto === fFoto ? " ✓" : ""}</div>}
-                {fFoto && <div onClick={async e=>{ e.stopPropagation(); const r = await fotoZeminIsle(fFoto, setFFoto); toastGoster(r==="ok"?"ok":"hata", zeminMesaj(r)); }} title="Fotoğrafın düz zeminini #f3f3f3 yap" style={{ background:"rgba(0,0,0,0.6)", color:"#fff", fontSize:10, fontWeight:600, padding:"5px 11px", borderRadius:7, display:"flex", alignItems:"center", gap:5, cursor:"pointer" }}>🎨 Zemin</div>}
-                {fFoto && [["in","＋","Yakınlaştır"],["out","−","Uzaklaştır"]].map(([md,sm,tt]) => <div key={md} title={tt} onClick={async e=>{ e.stopPropagation(); const ok = await fotoCevirIsle(fFoto, setFFoto, fDetayNoktalari, setFDetayNoktalari, md); if(!ok) toastGoster("hata","Foto işlenemedi"); }} style={{ background:"rgba(0,0,0,0.6)", color:"#fff", fontSize:13, fontWeight:700, width:28, height:26, borderRadius:7, display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer", userSelect:"none" }}>{sm}</div>)}
-                {fFoto && <div onClick={async e=>{ e.stopPropagation(); const ok = await fotoCevirIsle(fFoto, setFFoto, fDetayNoktalari, setFDetayNoktalari); toastGoster(ok?"ok":"hata", ok?"↔ Foto çevrildi — Kaydet'e basınca kalıcı olur":"Foto çevrilemedi"); }} title="Fotoğrafı soldan sağa çevir (ayna)" style={{ background:"rgba(0,0,0,0.6)", color:"#fff", fontSize:10, fontWeight:600, padding:"5px 11px", borderRadius:7, display:"flex", alignItems:"center", gap:5, cursor:"pointer" }}>↔ Çevir</div>}
                 {fFoto && <div onClick={e=>{ e.stopPropagation(); setKirpModal(fFoto); }} style={{ background:"rgba(0,0,0,0.6)", color:"#fff", fontSize:10, fontWeight:600, padding:"5px 11px", borderRadius:7, display:"flex", alignItems:"center", gap:5, cursor:"pointer" }}>✂️ Kırp</div>}
                 <div style={{ background:"rgba(0,0,0,0.6)", color:"#fff", fontSize:10, fontWeight:600, padding:"5px 11px", borderRadius:7, display:"flex", alignItems:"center", gap:5 }}>📷 Fotoğrafı değiştir</div>
               </div>
@@ -11899,13 +9958,6 @@ function Atolye({ onSirketDegis }) {
           <div onClick={()=>fileRef.current&&fileRef.current.click()} style={{ width:"100%", height:120, borderRadius:10, overflow:"hidden", cursor:"pointer", background:fFoto?"transparent":"rgba(var(--vurgu-rgb),0.04)", border:"2px dashed "+(fFoto?"rgba(var(--vurgu-rgb),0.2)":"rgba(var(--vurgu-rgb),0.13)"), display:"flex", alignItems:"center", justifyContent:"center", position:"relative" }}>
             {fFoto ? <img src={fFoto} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }}/> : <div style={{ textAlign:"center", color:"#7a6f5a" }}><div style={{ fontSize:20 }}>+</div><div style={{ fontSize:9 }}>Fotograf yukleyin</div></div>}
             {fFoto && <button onClick={e=>{e.stopPropagation();setFFoto("");}} style={{ position:"absolute", top:4, right:4, background:"rgba(0,0,0,0.6)", border:"none", borderRadius:4, width:18, height:18, color:"#fff", fontSize:9, cursor:"pointer" }}>X</button>}
-            {fFoto && <div onClick={async e=>{ e.stopPropagation(); if (fotoDurum) return; setFotoDurum("Yapay zekâ çalışıyor…"); const r = await fotoAIIsle(fFoto, setFFoto, setFotoDurum, fKategori !== "kolye", _koruMaske && _koruMaske.foto === fFoto ? _koruMaske.canvas : null); setFotoDurum(""); toastGoster(r==="ok"?"ok":"hata", r==="ok" ? "✨ Arka plan silindi" : "Arka plan silinemedi: "+r); }} title="Yapay zekâ ile arka planı sil" style={{ position:"absolute", top:4, left:4, background:"rgba(124,58,237,0.85)", color:"#fff", fontSize:9, fontWeight:700, padding:"3px 8px", borderRadius:5, cursor:"pointer" }}>✨ Arka planı sil</div>}
-            {fFoto && <div onClick={e=>{ e.stopPropagation(); setKoruModal(true); }} title="Korunacak bölgeleri işaretle" style={{ position:"absolute", top:4, left:104, background:"rgba(14,165,233,0.85)", color:"#fff", fontSize:9, fontWeight:700, padding:"3px 8px", borderRadius:5, cursor:"pointer" }}>🖌 İşaretle{_koruMaske && _koruMaske.foto === fFoto ? " ✓" : ""}</div>}
-            {fFoto && _fotoUndo.length>0 && <div onClick={e=>{ e.stopPropagation(); fotoGeriAl(setFFoto, setFDetayNoktalari); }} title="Son foto işlemini geri al" style={{ position:"absolute", top:4, left:184, background:"rgba(0,0,0,0.6)", color:"#fff", fontSize:9, fontWeight:600, padding:"3px 8px", borderRadius:5, cursor:"pointer" }}>↩ Geri al</div>}
-            {fotoDurum && <div style={{ position:"absolute", inset:0, background:"rgba(255,255,255,0.78)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:6, fontSize:10, fontWeight:700, color:"#1d1d1f", textAlign:"center", padding:10 }}>✨ {fotoDurum}</div>}
-            {fFoto && <div onClick={async e=>{ e.stopPropagation(); const r = await fotoZeminIsle(fFoto, setFFoto); toastGoster(r==="ok"?"ok":"hata", zeminMesaj(r)); }} title="Fotoğrafın düz zeminini #f3f3f3 yap" style={{ position:"absolute", bottom:4, right:190, background:"rgba(0,0,0,0.6)", color:"#fff", fontSize:9, fontWeight:600, padding:"3px 8px", borderRadius:5, cursor:"pointer" }}>🎨 Zemin</div>}
-            {fFoto && [["in","＋",164],["out","−",140]].map(([md,sm,rt]) => <div key={md} onClick={async e=>{ e.stopPropagation(); const ok = await fotoCevirIsle(fFoto, setFFoto, fDetayNoktalari, setFDetayNoktalari, md); if(!ok) toastGoster("hata","Foto işlenemedi"); }} style={{ position:"absolute", bottom:4, right:rt, background:"rgba(0,0,0,0.6)", color:"#fff", fontSize:11, fontWeight:700, width:20, height:20, borderRadius:5, display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer" }}>{sm}</div>)}
-            {fFoto && <div onClick={async e=>{ e.stopPropagation(); const ok = await fotoCevirIsle(fFoto, setFFoto, fDetayNoktalari, setFDetayNoktalari); toastGoster(ok?"ok":"hata", ok?"↔ Foto çevrildi":"Foto çevrilemedi"); }} title="Fotoğrafı soldan sağa çevir (ayna)" style={{ position:"absolute", bottom:4, right:62, background:"rgba(0,0,0,0.6)", color:"#fff", fontSize:9, fontWeight:600, padding:"3px 8px", borderRadius:5, cursor:"pointer" }}>↔ Çevir</div>}
             {fFoto && <div onClick={e=>{ e.stopPropagation(); setKirpModal(fFoto); }} style={{ position:"absolute", bottom:4, right:4, background:"rgba(0,0,0,0.6)", color:"#fff", fontSize:9, fontWeight:600, padding:"3px 8px", borderRadius:5, cursor:"pointer" }}>✂️ Kırp</div>}
           </div>
         </div>
@@ -12074,7 +10126,7 @@ function Atolye({ onSirketDegis }) {
                 setFTasGram(String(m.tasGram||"")); setFTasBoy(m.tasBoy||""); setFIscilikDolar(String(m.iscilikDolar||""));
                 setFEkMaliyet(String(m.ekMaliyet||"")); setFMadenC(String(m.madenCarpan||""));
                 setFKategori(m.kategori||"yuzuk"); setFKolId(m.ki||""); setFDurum(m.durum||"baslanmadi");
-                setFEtiketler(m.etiketler||[]); if (m.fotoTemiz && m.foto) _temizFotolar.add(m.foto); setFFoto(m.foto||""); setFDetayNoktalari(m.detayNoktalari||[]);
+                setFEtiketler(m.etiketler||[]); setFFoto(m.foto||""); setFDetayNoktalari(m.detayNoktalari||[]);
               }} style={{ background:"rgba(232,90,79,0.15)", border:"1px solid rgba(232,90,79,0.3)", borderRadius:6, padding:"4px 12px", color:"#e85a4f", fontSize:9, fontWeight:700, cursor:"pointer" }}>✏ Mevcut modeli düzenle</button>
             </div>
             <div style={{ fontSize:8, color:"#998a6e", marginBottom:4 }}>Veya versiyon olarak kaydet:</div>
@@ -12143,12 +10195,6 @@ function Atolye({ onSirketDegis }) {
         </Fl>
         {/* Model Adı kaldırıldı — kod artık tek zorunlu/görünen kimlik alanı. Eski modellerdeki isimler korunur (fAd arka planda yükleniyor). */}
         <Fl label="Uretim Durumu" T={T}><select value={fDurum} onChange={e=>setFDurum(e.target.value)} style={IS}>{DURUMLAR.map(d=><option key={d.id} value={d.id}>{d.l}</option>)}</select></Fl>
-        {editM && editM.cizimde && (
-          <div style={{ margin:"-4px 0 12px", padding:"8px 10px", borderRadius:8, background:"rgba(232,176,79,0.1)", border:"1px solid rgba(232,176,79,0.3)", fontSize:11, color:"#e8b04f" }}>
-            🎨 Bu model ÇİZİMDE — müşteri vitrininde görünmez. Çizim bitince fotoğrafı yükle ve üretim durumunu "Çizimde"den başka bir aşamaya çek; vitrine açılır.
-            {(kasa.cizimRefler||{})[editM.id] && <div style={{ marginTop:6 }}><a href={kasa.cizimRefler[editM.id]} target="_blank" rel="noreferrer" style={{ color:"#e8b04f" }}>Müşteri referans resmi ↗</a></div>}
-          </div>
-        )}
 
         <div style={{ display:"flex", gap:7 }}>
           <div style={{ flex:1 }}><Fl label="Gram (Ref Ayarda)" T={T}><input type="number" value={fGram} onChange={e=>setFGram(e.target.value)} placeholder="0.00" style={IS}/></Fl></div>
@@ -12248,18 +10294,12 @@ function Atolye({ onSirketDegis }) {
                 <input type="number" min="1" value={fTasAdet} onChange={e=>setFTasAdet(e.target.value)} placeholder="Adet" style={{ ...IS, padding:"7px 8px", fontSize:11 }}/>
               </div>
               <button onClick={() => {
-                const adetSayi = Math.max(1, Math.floor(Number(fTasAdet) || 1));
-                if (!fTasBoyut) { toastGoster("hata", "Önce taş boyutunu seçin"); return; }
-                const yeniTas = { sekil:fTasSekil, tur:fTasTur, boyut:fTasBoyut, adet:adetSayi, gram:0 };
-                setFTaslar(prev => [...prev, yeniTas]);
+                if (!fTasBoyut || !fTasAdet) return;
+                const yeniTas = { sekil:fTasSekil, tur:fTasTur, boyut:fTasBoyut, adet:Number(fTasAdet)||1, gram:0 };
+                setFTaslar([...fTaslar, yeniTas]);
                 setFTasBoyut(""); setFTasAdet("");
-                toastGoster("ok", "Taş eklendi: " + fTasSekil + " " + fTasBoyut + " × " + adetSayi);
-              }} style={{ ...GH, padding:"7px 12px", fontSize:11, opacity: fTasBoyut ? 1 : 0.5, flexShrink:0 }}>+ Ekle</button>
+              }} disabled={!fTasBoyut || !fTasAdet} style={{ ...GH, padding:"7px 12px", fontSize:11, opacity:(!fTasBoyut||!fTasAdet)?0.4:1, flexShrink:0 }}>+ Ekle</button>
             </div>
-            {!fTasBoyut && <div style={{ fontSize:9, color:"#7a6f5a", marginBottom:6 }}>Önce boyut seçin (adet boş bırakılırsa 1 sayılır), sonra "+ Ekle".</div>}
-            {fTasBoyut === "" && Object.keys(TAS_GRAM[fTasSekil==="ROUND"?"ROUND_"+fTasTur:fTasSekil]||{}).length === 0 && ozelTaslar.filter(t=>t.sekil===fTasSekil).length === 0 && (
-              <div style={{ fontSize:9, color:"#e8833a", marginBottom:6 }}>⚠ "{fTasSekil}" için hazır boyut tablosu yok. Ayarlar → Özel taş bölümünden boyut ekleyin ya da aşağıdaki "Manuel toplam taş gram" alanını kullanın.</div>
-            )}
             {fTasBoyut && fTasAdet && (() => {
               const gr = tasGramHesapla(fTasSekil, fTasTur, isNaN(Number(fTasBoyut))?fTasBoyut:Number(fTasBoyut), Number(fTasAdet)||1, ozelTaslar, tasGramOverride);
               return gr > 0
