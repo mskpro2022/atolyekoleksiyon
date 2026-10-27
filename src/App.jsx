@@ -2196,6 +2196,7 @@ function VitrinModu({ kod, onizleme }) {
     boy_gerekli: { tr:"Lütfen yüzük/bilezik/bileklik için boy seçin ya da \"Boyu sonra bildireceğim\" seçeneğini işaretleyin.", en:"Please choose a size, or tick \"I will confirm the size later\".", es:"Elija una talla o marque \"Confirmaré la talla más tarde\"." },
     uzunluk: { tr:"Uzunluk", en:"Length", es:"Longitud" },
     urun_notu: { tr:"Bu ürün için not (opsiyonel)", en:"Note for this item (optional)", es:"Nota para este artículo (opcional)" },
+    liste_gram: { tr:"Toplam gram", en:"Total weight", es:"Peso total" },
     tas_orani: { tr:"Taş oranı", en:"Stone ratio", es:"Proporción de piedra" },
     tas: { tr:"Taş", en:"Stone", es:"Piedra" },
     adet: { tr:"adet", en:"pcs", es:"uds" },
@@ -2407,7 +2408,7 @@ function VitrinModu({ kod, onizleme }) {
   }, [durum, vitrinMusteri, onizleme]);
 
   // Modelin seçili ayara göre gramını hesapla
-  const bspMi = aktifOnek === "bsp2_"; // BSP (mum satışı): altın/ayar bilgisi gösterilmez, gram olduğu gibi
+  const bspMi = false; // BSP vitrininde de müşteri ayar seçer, gramlar ayara göre (eski "ayarsız BSP" modu kapalı)
   const ayarliGram = (m) => {
     const g = bspMi ? (Number(m.gram) || 0) : gramDonustur(Number(m.gram) || 0, m.refAyar || "14K", aktifAyar, Number(m.tasGram) || 0);
     return g > 0 ? g.toFixed(2) : "";
@@ -2538,6 +2539,12 @@ function VitrinModu({ kod, onizleme }) {
   const boyEkle = (m) => setSiparisBoylar(p => ({ ...p, [m.id]: [...(p[m.id]||[]), boyVarsayilan(m)] }));
   const boySil = (id, i) => setSiparisBoylar(p => ({ ...p, [id]: (p[id]||[]).filter((_,k)=>k!==i) }));
   const boyGuncelle = (id, i, alan, v) => setSiparisBoylar(p => ({ ...p, [id]: (p[id]||[]).map((b,k)=>k===i?{...b,[alan]:v}:b) }));
+  const satirAdet = (m) => {
+    if (boyGerekli(m) && !siparisBoySonra[m.id]) { const b = siparisBoylar[m.id] || []; if (b.length) return b.reduce((t,x)=>t+(Number(x.adet)||1),0); }
+    return Math.max(1, Number(siparisAdetler[m.id]) || 1);
+  };
+  const satirGram = (m) => (Number(ayarliGram(m)) || 0) * satirAdet(m);
+  const listeGram = () => seciliModeller.reduce((t,m)=>t+satirGram(m),0);
   const siparisAc = () => {
     setSiparisHata("");
     setSiparisBoylar(p => { const y = { ...p }; seciliModeller.forEach(m => { if (boyGerekli(m) && !(y[m.id]||[]).length) y[m.id] = [boyVarsayilan(m)]; }); return y; });
@@ -2900,7 +2907,7 @@ function VitrinModu({ kod, onizleme }) {
       {/* ═══ SİPARİŞ MODALI — müşteri kendi siparişini oluşturur (BSP) ═══ */}
       {siparisModal && (
         <div onClick={()=>{ if(!siparisGonderiliyor){ setSiparisModal(false); setSiparisBasarili(false); } }} style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.75)", zIndex:110, display:"flex", alignItems:"center", justifyContent:"center", padding:20, backdropFilter:"blur(20px)" }}>
-          <div onClick={e=>e.stopPropagation()} style={{ background:"var(--vcard)", borderRadius:18, maxWidth:520, width:"100%", maxHeight:"88vh", overflow:"auto" }}>
+          <div onClick={e=>e.stopPropagation()} style={{ background:"var(--vcard)", borderRadius:18, maxWidth:780, width:"100%", maxHeight:"94vh", overflow:"auto" }}>
             {siparisBasarili ? (
               <div style={{ padding:"40px 28px", textAlign:"center" }}>
                 <div style={{ fontSize:44, marginBottom:14 }}>✓</div>
@@ -2912,7 +2919,7 @@ function VitrinModu({ kod, onizleme }) {
               <div style={{ padding:"22px 24px 24px" }}>
                 <div style={{ fontSize:18, fontWeight:600, color:"var(--vt1)", marginBottom:4 }}>{ce("siparis_ver")}</div>
                 <div style={{ fontSize:13, color:"var(--vt2)", marginBottom:18 }}>{seciliModeller.length} model{bspMi ? "" : " — " + aktifAyar.replace("K"," Ayar")}</div>
-                <div style={{ display:"flex", flexDirection:"column", gap:10, maxHeight:"46vh", overflow:"auto", marginBottom:16 }}>
+                <div style={{ display:"flex", flexDirection:"column", gap:10, maxHeight:"64vh", overflow:"auto", marginBottom:16 }}>
                   {seciliModeller.map(m => {
                     const boyli = boyGerekli(m);
                     const sonra = !!siparisBoySonra[m.id];
@@ -2923,12 +2930,12 @@ function VitrinModu({ kod, onizleme }) {
                     return (
                     <div key={m.id} style={{ background:"rgba(var(--voverlay-rgb),0.05)", border: eksik ? "1px solid #e85a4f" : "1px solid transparent", borderRadius:11, padding:"9px 12px" }}>
                       <div style={{ display:"flex", alignItems:"center", gap:12 }}>
-                        <div style={{ width:44, height:44, borderRadius:8, overflow:"hidden", background:"#f7f7f8", flexShrink:0 }}>
+                        <div style={{ width:104, height:104, borderRadius:10, overflow:"hidden", background:"#f7f7f8", flexShrink:0 }}>
                           {m.foto ? <img src={m.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"contain" }}/> : null}
                         </div>
                         <div style={{ flex:1, minWidth:0 }}>
-                          <div style={{ fontSize:13, color:"var(--vt1)", fontWeight:500, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{m.kod}</div>
-                          <div style={{ fontSize:11, color:"var(--vt2)" }}>{ayarliGram(m)} g</div>
+                          <div style={{ fontSize:16, color:"var(--vt1)", fontWeight:600, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{m.kod}</div>
+                          <div style={{ fontSize:13, color:"var(--vt2)" }}>{ayarliGram(m)} g{satirAdet(m) > 1 ? " × " + satirAdet(m) + " = " : ""}{satirAdet(m) > 1 && <b style={{ color:"var(--vt1)" }}>{satirGram(m).toFixed(2)} g</b>}</div>
                         </div>
                         {(!boyli || sonra) && (
                           <div style={{ display:"flex", alignItems:"center", gap:6, flexShrink:0 }}>
@@ -2984,6 +2991,10 @@ function VitrinModu({ kod, onizleme }) {
                 </div>
                 <textarea value={siparisNot} onChange={e=>setSiparisNot(e.target.value)} placeholder="Not eklemek isterseniz (opsiyonel)..."
                   style={{ width:"100%", minHeight:64, background:"rgba(var(--voverlay-rgb),0.07)", border:"none", borderRadius:11, padding:"11px 13px", color:"var(--vt1)", fontSize:13, outline:"none", resize:"vertical", fontFamily:"inherit", marginBottom:16 }}/>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", margin:"0 2px 12px", fontSize:14, color:"var(--vt2)" }}>
+                  <span>{ce("liste_gram")} · {aktifAyar.replace("K"," Ayar")}</span>
+                  <span style={{ fontSize:18, fontWeight:700, color:"var(--vt1)" }}>{listeGram().toFixed(2)} g</span>
+                </div>
                 {siparisHata && <div style={{ fontSize:12, color:"#e85a4f", marginBottom:10 }}>{siparisHata}</div>}
                 <button disabled={siparisGonderiliyor} onClick={siparisGonder}
                   style={{ width:"100%", background: siparisGonderiliyor?"rgba(var(--voverlay-rgb),0.15)":"var(--vurgu)", border:"none", borderRadius:11, padding:"14px", color:"#1d1d1f", fontSize:15, fontWeight:600, cursor: siparisGonderiliyor?"default":"pointer" }}>
