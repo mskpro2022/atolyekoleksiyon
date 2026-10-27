@@ -10316,6 +10316,7 @@ function Atolye({ onSirketDegis }) {
           </div>
         </div>
 
+        {AKTIF_SIRKET_ONEK !== "bsp2_" && (<>
         <div style={{ background:"rgba(232,90,79,0.04)", border:"1px solid rgba(232,90,79,0.1)", borderRadius:10, padding:"10px 12px", marginBottom:10 }}>
           <div style={{ fontSize:9, fontWeight:700, color:"#e85a4f", marginBottom:8 }}>MALIYET</div>
           <div style={{ display:"flex", gap:7 }}>
@@ -10418,6 +10419,7 @@ function Atolye({ onSirketDegis }) {
             })()}
           </Fl>
         </div>
+        </>)}
 
         {/* AYAR KARŞILAŞTIRMA — ANA HESAP: aynı ürün 10K / 14K / 18K'da gram, taş, işçilik, maliyet, kâr ve 1 kg'daki adet */}
         {Number(fGram)>0 && fRefAyar!=="925" && (() => {
