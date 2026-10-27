@@ -346,7 +346,7 @@ function setSirketOnek(onek) {
 }
 // ═══ BSP (mum satışı) — sadeleştirilmiş sipariş durumları (mevcut durum kimlikleriyle eşleşir) ═══
 const BSP_DURUM_IDS = ["baslanmadi","dokum","teslim"];
-const BSP_DURUM_AD  = { baslanmadi:"Onaylandı", cizimde:"Çiziliyor", dokum:"Makineye atıldı", teslim:"Müşteriye teslim edildi" };
+const BSP_DURUM_AD  = { baslanmadi:"İşleme alındı", cizimde:"Çiziliyor", dokum:"Makineye atıldı", teslim:"Müşteriye teslim edildi" };
 function durumEtiket(d) { return (AKTIF_SIRKET_ONEK === "bsp2_" && BSP_DURUM_AD[d.id]) ? BSP_DURUM_AD[d.id] : d.l; }
 function durumSecenekleri() { const l = DURUMLAR.filter(d => d.id !== "hurda"); return AKTIF_SIRKET_ONEK === "bsp2_" ? l.filter(d => BSP_DURUM_IDS.includes(d.id)) : l; }
 // Bu anahtarlar şirketten bağımsız (önek ALMAZ) — her iki şirkette ortak kalır
@@ -3144,7 +3144,7 @@ function VitrinModu({ kod, onizleme }) {
       {/* ═══ SİPARİŞLERİM — müşteri kendi siparişlerinin durumunu görür ═══ */}
       {sipListeAcik && (() => {
         const t3 = (tr, en, es) => vitrinDil==="en" ? en : vitrinDil==="es" ? es : tr;
-        const ADIMLAR = [t3("Onaylandı","Approved","Aprobado"), t3("Makineye atıldı","Sent to machine","En máquina"), t3("Müşteriye teslim edildi","Delivered","Entregado")];
+        const ADIMLAR = [t3("İşleme alındı","In process","En proceso"), t3("Makineye atıldı","Sent to machine","En máquina"), t3("Müşteriye teslim edildi","Delivered","Entregado")];
         const adimNo = (d) => { if (d==="baslanmadi"||d==="cizimde") return 0; if (d==="tamam"||d==="teslim") return 2; if (d==="hurda") return -1; return 1; };
         const tarihYaz = (t) => { const n = Number(t); if (!n) return ""; try { return new Date(n).toLocaleDateString(vitrinDil==="en"?"en-GB":vitrinDil==="es"?"es-ES":"tr-TR"); } catch { return ""; } };
         const liste = Array.isArray(sipListe) ? sipListe : [];
@@ -3182,7 +3182,7 @@ function VitrinModu({ kod, onizleme }) {
                   <div style={{ fontSize:15, fontWeight:700 }}>{tarihYaz(sp.tarih)}</div>
                   {genel}
                   <div style={{ fontSize:12, color:"var(--vt2)" }}>{kalemler.length} {t3("model","models","modelos")} · {toplamAdet} {ce("adet")}</div>
-                  {sp.teslimTarihi && <div style={{ fontSize:12, color:"var(--vt2)" }}>{t3("İstenen teslim","Requested delivery","Entrega deseada")}: {tarihYaz(new Date(sp.teslimTarihi).getTime())}</div>}
+                  {sp.teslimTarihi && <div style={{ fontSize:13, color: (bekliyor||red||iptal) ? "var(--vt2)" : "#2e9e4f", fontWeight: (bekliyor||red||iptal) ? 400 : 700 }}>{(bekliyor||red||iptal) ? t3("İstenen teslim","Requested delivery","Entrega deseada") : t3("Teslim tarihi","Delivery date","Fecha de entrega")}: {tarihYaz(new Date(sp.teslimTarihi).getTime())}</div>}
                   <div style={{ flex:1 }}/>
                   {(iptal || red) && <button onClick={()=>sipListedenKaldir(sp.id)} style={{ background:"rgba(232,90,79,0.08)", border:"1px solid rgba(232,90,79,0.3)", borderRadius:9, padding:"6px 14px", color:"#e85a4f", fontSize:12, fontWeight:600, cursor:"pointer" }}>🗑 {t3("Listeden kaldır","Remove from list","Quitar de la lista")}</button>}
                   {bekliyor && <button onClick={()=>sipIptalEt(sp.id)} style={{ background:"rgba(232,90,79,0.08)", border:"1px solid rgba(232,90,79,0.3)", borderRadius:9, padding:"6px 14px", color:"#e85a4f", fontSize:12, fontWeight:600, cursor:"pointer" }}>{t3("Siparişi iptal et","Cancel order","Cancelar pedido")}</button>}
@@ -4672,6 +4672,24 @@ function Atolye({ onSirketDegis }) {
   }, [guvenliKaydet]);
 
 
+  // ── BSP: "İşleme Al" → önce teslim tarihi sorulur, müşteri vitrinde "İşleme alındı" + teslim tarihini görür ──
+  const [islemAlModal, setIslemAlModal] = useState(null); // { id, tarih, istenen }
+  const islemeAlBaslat = (s) => {
+    if (AKTIF_SIRKET_ONEK === "bsp2_") setIslemAlModal({ id: s.id, tarih: s.teslimTarihi || "", istenen: s.istenenTeslim ?? s.teslimTarihi ?? "" });
+    else sipDurumKaydet(s.id, siparisDurumHesapla(s));
+  };
+  const islemeAlOnayla = () => {
+    const m = islemAlModal; if (!m || !m.tarih) return;
+    const s = siparisler.find(x => x.id === m.id); if (!s) { setIslemAlModal(null); return; }
+    const baslangic = siparisDurumHesapla(s);
+    svS(siparisler.map(sp => sp.id !== m.id ? sp : {
+      ...sp, teslimTarihi: m.tarih, istenenTeslim: sp.istenenTeslim ?? sp.teslimTarihi ?? "",
+      onayDurum: sp.onayDurum === "red" || sp.onayDurum === "iptal" ? sp.onayDurum : "islemde", islemTarih: Date.now(),
+      durumGecmisi: [...(sp.durumGecmisi||[]), { durum: baslangic, tarih: Date.now(), manuel: false }],
+    }));
+    setIslemAlModal(null);
+    toastGoster("ok", "İşleme alındı — teslim " + new Date(m.tarih).toLocaleDateString("tr-TR"));
+  };
   // Sipariş durum geçmişini güncelle (opsiyonel manuel tarih)
   const sipDurumKaydet = useCallback((sipId, yeniDurum, manuelTarih, dokumBilgi) => {
     setSiparisler(prev => {
@@ -6454,7 +6472,9 @@ function Atolye({ onSirketDegis }) {
                   ? aktifDurumlar.sort((a,b) => aktifDurumlar.filter(v=>v===b).length - aktifDurumlar.filter(v=>v===a).length)[0]
                   : "baslanmadi";
                 const enYayginIdx = DURUMLAR.findIndex(d => d.id === enYaygin);
-                const sonrakiDurum = DURUMLAR.find(d => d.s === enYayginIdx + 1 && d.id !== "hurda");
+                const sonrakiDurum = AKTIF_SIRKET_ONEK === "bsp2_"
+                  ? (() => { const l = durumSecenekleri(); const i = l.findIndex(d => d.id === enYaygin); return i >= 0 ? l[i+1] : (enYaygin === "cizimde" ? l[1] : undefined); })()
+                  : DURUMLAR.find(d => d.s === enYayginIdx + 1 && d.id !== "hurda");
 
                 const durumGuncelle = (sipId, kalemId, yeniDurum) => {
                   svS(siparisler.map(sp => sp.id===sipId ? { ...sp, kalemDurumlar: { ...(sp.kalemDurumlar||{}), [kalemId]: yeniDurum } } : sp));
@@ -6478,10 +6498,9 @@ function Atolye({ onSirketDegis }) {
                             {s.kaynak === "vitrin" && <span style={{ fontSize:9, fontWeight:800, color:"#fff", background:"linear-gradient(135deg,#a78bfa,#8b6fe8)", padding:"2px 8px", borderRadius:980 }}>🛍️ Vitrinden</span>}
                             {s.onayDurum === "bekliyor" && (<>
                               <span style={{ fontSize:9, fontWeight:800, color:"#1d1d1f", background:"#f5b942", padding:"2px 8px", borderRadius:980 }}>⏳ Onay bekliyor</span>
-                              <button onClick={e=>{ e.stopPropagation(); svS(siparisler.map(sp=>sp.id===s.id?{...sp,onayDurum:"onaylandi",onayTarih:Date.now()}:sp)); toastGoster("ok","Sipariş onaylandı"); }} style={{ background:"rgba(106,191,105,0.18)", border:"1px solid rgba(106,191,105,0.45)", borderRadius:6, padding:"2px 9px", color:"#6abf69", fontSize:9, fontWeight:800, cursor:"pointer" }}>✓ Onayla</button>
                               <button onClick={e=>{ e.stopPropagation(); const n = window.prompt("Red sebebi (müşteri görecek, boş bırakabilirsin):", ""); if (n === null) return; svS(siparisler.map(sp=>sp.id===s.id?{...sp,onayDurum:"red",redNot:n.trim(),onayTarih:Date.now()}:sp)); toastGoster("ok","Sipariş reddedildi"); }} style={{ background:"rgba(232,90,79,0.12)", border:"1px solid rgba(232,90,79,0.35)", borderRadius:6, padding:"2px 9px", color:"#e85a4f", fontSize:9, fontWeight:800, cursor:"pointer" }}>✕ Reddet</button>
                             </>)}
-                            {s.onayDurum === "onaylandi" && <span style={{ fontSize:9, fontWeight:800, color:"#6abf69" }}>✓ Onaylandı</span>}
+                            {(s.onayDurum === "onaylandi" || s.onayDurum === "islemde") && <span style={{ fontSize:9, fontWeight:800, color:"#6abf69" }}>✓ İşleme alındı{s.teslimTarihi ? " · teslim " + new Date(s.teslimTarihi).toLocaleDateString("tr-TR") : ""}</span>}
                             {s.onayDurum === "red" && <span style={{ fontSize:9, fontWeight:800, color:"#e85a4f" }}>✕ Reddedildi{s.redNot ? " · "+s.redNot : ""}</span>}
                             {s.onayDurum === "iptal" && <span style={{ fontSize:9, fontWeight:800, color:"#e85a4f" }}>✕ Müşteri iptal etti</span>}
                             {(s.onayDurum === "iptal" || s.onayDurum === "red") && <button onClick={e=>{ e.stopPropagation(); setDelOnay({ type:"siparis", id:s.id }); }} style={{ ...RD, fontSize:9, padding:"2px 9px" }}>🗑 Sil</button>}
@@ -6499,10 +6518,7 @@ function Atolye({ onSirketDegis }) {
                           <div style={{ display:"flex", gap:4, alignItems:"center" }} onClick={e=>e.stopPropagation()}>
                             {/* İşleme Al / Durum butonları */}
                             {!s.durumGecmisi?.length && (
-                              <button onClick={() => {
-                                const baslangicDurum = siparisDurumHesapla(s);
-                                sipDurumKaydet(s.id, baslangicDurum);
-                              }} style={{ background:"rgba(106,191,105,0.15)", border:"1px solid rgba(106,191,105,0.3)", borderRadius:7, padding:"3px 10px", color:"#6abf69", fontSize:9, fontWeight:800, cursor:"pointer", whiteSpace:"nowrap" }}>
+                              <button onClick={() => islemeAlBaslat(s)} style={{ background:"rgba(106,191,105,0.15)", border:"1px solid rgba(106,191,105,0.3)", borderRadius:7, padding:"3px 10px", color:"#6abf69", fontSize:9, fontWeight:800, cursor:"pointer", whiteSpace:"nowrap" }}>
                                 ▶ İşleme Al
                               </button>
                             )}
@@ -6598,11 +6614,11 @@ function Atolye({ onSirketDegis }) {
                         {/* Toplu ilerleme butonları */}
                         <div style={{ display:"flex", gap:4, marginTop:6, alignItems:"center" }} onClick={e=>e.stopPropagation()}>
                           <span style={{ fontSize:7, color:"#665d4a", fontWeight:700 }}>TOPLU:</span>
-                          {DURUMLAR.filter(d=>d.id!=="hurda").map(d => (
+                          {durumSecenekleri().map(d => (
                             <button key={d.id} onClick={()=>svS(siparisler.map(sp=>sp.id===s.id?{...sp,kalemDurumlar:Object.fromEntries((sp.kalemler||[]).filter(k=>(sp.kalemDurumlar||{})[k.id]!=="hurda").map(k=>[k.id,d.id]).concat(Object.entries(sp.kalemDurumlar||{}).filter(([,v])=>v==="hurda")))}:sp))} title={d.l} style={{ width:12, height:12, borderRadius:6, background:enYaygin===d.id?d.c:"rgba(255,255,255,0.06)", border:enYaygin===d.id?"2px solid "+d.c:"1px solid rgba(255,255,255,0.1)", cursor:"pointer", padding:0, flexShrink:0 }}/>
                           ))}
                           {sonrakiDurum && (
-                            <button onClick={()=>svS(siparisler.map(sp=>sp.id===s.id?{...sp,kalemDurumlar:Object.fromEntries((sp.kalemler||[]).map(k=>[(k.id),(sp.kalemDurumlar||{})[k.id]==="hurda"?"hurda":sonrakiDurum.id]))}:sp))} style={{ background:"rgba(var(--vurgu-rgb),0.1)", border:"1px solid rgba(var(--vurgu-rgb),0.2)", borderRadius:5, padding:"2px 8px", color:GOLD, fontSize:8, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap", marginLeft:4 }}>→ {sonrakiDurum.l}</button>
+                            <button onClick={()=>svS(siparisler.map(sp=>sp.id===s.id?{...sp,kalemDurumlar:Object.fromEntries((sp.kalemler||[]).map(k=>[(k.id),(sp.kalemDurumlar||{})[k.id]==="hurda"?"hurda":sonrakiDurum.id]))}:sp))} style={{ background:"rgba(var(--vurgu-rgb),0.1)", border:"1px solid rgba(var(--vurgu-rgb),0.2)", borderRadius:5, padding:"2px 8px", color:GOLD, fontSize:8, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap", marginLeft:4 }}>→ {durumEtiket(sonrakiDurum)}</button>
                           )}
                         </div>
                       </div>
@@ -6656,7 +6672,7 @@ function Atolye({ onSirketDegis }) {
                         {!s.durumGecmisi?.length && (
                           <div style={{ marginBottom:10, padding:"8px 12px", background:"rgba(106,191,105,0.05)", border:"1px dashed rgba(106,191,105,0.2)", borderRadius:8, display:"flex", alignItems:"center", gap:10 }}>
                             <span style={{ fontSize:9, color:"#665d4a" }}>Bu sipariş henüz işleme alınmadı.</span>
-                            <button onClick={e=>{ e.stopPropagation(); sipDurumKaydet(s.id, siparisDurumHesapla(s)); }} style={{ background:"rgba(106,191,105,0.15)", border:"1px solid rgba(106,191,105,0.3)", borderRadius:6, padding:"3px 10px", color:"#6abf69", fontSize:9, fontWeight:800, cursor:"pointer" }}>
+                            <button onClick={e=>{ e.stopPropagation(); islemeAlBaslat(s); }} style={{ background:"rgba(106,191,105,0.15)", border:"1px solid rgba(106,191,105,0.3)", borderRadius:6, padding:"3px 10px", color:"#6abf69", fontSize:9, fontWeight:800, cursor:"pointer" }}>
                               ▶ İşleme Al
                             </button>
                           </div>
@@ -10858,6 +10874,17 @@ function Atolye({ onSirketDegis }) {
         )}
 
         <button onClick={saveModel} disabled={!fKod.trim() || modelKaydediliyor} style={{ ...BG, width:"100%", marginTop:4, opacity:(fKod.trim() && !modelKaydediliyor)?1:0.4, cursor: modelKaydediliyor?"wait":"pointer" }}>{modelKaydediliyor ? "Kaydediliyor..." : (editM?"Kaydet":"Ekle")}</button>
+        </div>
+      </Modal>
+
+      {/* BSP — İŞLEME AL: TESLİM TARİHİ */}
+      <Modal open={!!islemAlModal} onClose={()=>setIslemAlModal(null)} title="İşleme Al — Teslim Tarihi" T={T}>
+        <p style={{ color:"#998a6e", fontSize:12, marginBottom:10 }}>Müşteri bu tarihi vitrinde "Siparişlerim" sayfasında görecek.</p>
+        {islemAlModal?.istenen && <p style={{ color:"#5b9bd5", fontSize:11, marginBottom:10 }}>Müşterinin istediği tarih: {new Date(islemAlModal.istenen).toLocaleDateString("tr-TR")}</p>}
+        <input type="date" value={islemAlModal?.tarih||""} onChange={e=>setIslemAlModal(p=>({...p,tarih:e.target.value}))} style={{ ...IS, width:"100%", marginBottom:16 }}/>
+        <div style={{ display:"flex", gap:10 }}>
+          <button onClick={()=>setIslemAlModal(null)} style={{ ...GH, flex:1 }}>Vazgeç</button>
+          <button disabled={!islemAlModal?.tarih} onClick={islemeAlOnayla} style={{ flex:1, padding:"10px", background:"rgba(106,191,105,0.2)", border:"1px solid rgba(106,191,105,0.5)", borderRadius:9, color:"#6abf69", fontWeight:800, cursor:"pointer", opacity: islemAlModal?.tarih?1:0.4 }}>▶ İşleme Al</button>
         </div>
       </Modal>
 
