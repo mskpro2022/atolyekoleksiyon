@@ -345,7 +345,7 @@ function setSirketOnek(onek) {
   try { localStorage.setItem("atolye_sirket_onek", AKTIF_SIRKET_ONEK); } catch {}
 }
 // ═══ BSP (mum satışı) — sadeleştirilmiş sipariş durumları (mevcut durum kimlikleriyle eşleşir) ═══
-const BSP_DURUM_IDS = ["baslanmadi","cizimde","dokum","teslim"];
+const BSP_DURUM_IDS = ["baslanmadi","dokum","teslim"];
 const BSP_DURUM_AD  = { baslanmadi:"Onaylandı", cizimde:"Çiziliyor", dokum:"Makineye atıldı", teslim:"Müşteriye teslim edildi" };
 function durumEtiket(d) { return (AKTIF_SIRKET_ONEK === "bsp2_" && BSP_DURUM_AD[d.id]) ? BSP_DURUM_AD[d.id] : d.l; }
 function durumSecenekleri() { const l = DURUMLAR.filter(d => d.id !== "hurda"); return AKTIF_SIRKET_ONEK === "bsp2_" ? l.filter(d => BSP_DURUM_IDS.includes(d.id)) : l; }
@@ -3144,8 +3144,8 @@ function VitrinModu({ kod, onizleme }) {
       {/* ═══ SİPARİŞLERİM — müşteri kendi siparişlerinin durumunu görür ═══ */}
       {sipListeAcik && (() => {
         const t3 = (tr, en, es) => vitrinDil==="en" ? en : vitrinDil==="es" ? es : tr;
-        const ADIMLAR = [t3("Onaylandı","Approved","Aprobado"), t3("Çiziliyor","Being drawn","En diseño"), t3("Makineye atıldı","Sent to machine","En máquina"), t3("Müşteriye teslim edildi","Delivered","Entregado")];
-        const adimNo = (d) => { if (d==="baslanmadi") return 0; if (d==="cizimde") return 1; if (d==="tamam"||d==="teslim") return 3; if (d==="hurda") return -1; return 2; };
+        const ADIMLAR = [t3("Onaylandı","Approved","Aprobado"), t3("Makineye atıldı","Sent to machine","En máquina"), t3("Müşteriye teslim edildi","Delivered","Entregado")];
+        const adimNo = (d) => { if (d==="baslanmadi"||d==="cizimde") return 0; if (d==="tamam"||d==="teslim") return 2; if (d==="hurda") return -1; return 1; };
         const tarihYaz = (t) => { const n = Number(t); if (!n) return ""; try { return new Date(n).toLocaleDateString(vitrinDil==="en"?"en-GB":vitrinDil==="es"?"es-ES":"tr-TR"); } catch { return ""; } };
         const liste = Array.isArray(sipListe) ? sipListe : [];
         const rozet = (renk, yazi) => <span style={{ fontSize:11, fontWeight:700, color:renk, background:"rgba(var(--voverlay-rgb),0.07)", border:"1px solid "+renk, borderRadius:980, padding:"3px 11px", whiteSpace:"nowrap" }}>{yazi}</span>;
@@ -3169,12 +3169,12 @@ function VitrinModu({ kod, onizleme }) {
               const toplamAdet = kalemler.reduce((t,k)=>t+(Number(k.adet)||1),0);
               const bekliyor = sp.onayDurum === "bekliyor", red = sp.onayDurum === "red", iptal = sp.onayDurum === "iptal";
               const adimlar = kalemler.map(k => adimNo(k.durum));
-              const hepsiTeslim = kalemler.length > 0 && adimlar.every(a => a === 3);
+              const hepsiTeslim = kalemler.length > 0 && adimlar.every(a => a === 2);
               let genel;
               if (iptal) genel = rozet("#e85a4f", t3("İptal edildi","Cancelled","Cancelado"));
               else if (red) genel = rozet("#e85a4f", t3("Reddedildi","Declined","Rechazado"));
               else if (bekliyor) genel = rozet("#d99a1d", "⏳ " + t3("Onay bekleniyor","Awaiting approval","Pendiente de aprobación"));
-              else if (hepsiTeslim) genel = rozet("#2e9e4f", "✓ " + ADIMLAR[3]);
+              else if (hepsiTeslim) genel = rozet("#2e9e4f", "✓ " + ADIMLAR[2]);
               else genel = rozet("#2e9e4f", "✓ " + ADIMLAR[0]);
               return (
               <div key={sp.id} style={{ background:"var(--vcard)", border:"1px solid rgba(var(--voverlay-rgb),0.08)", borderRadius:14, padding:"16px 18px", marginTop:16, opacity: (iptal||red) ? 0.8 : 1 }}>
