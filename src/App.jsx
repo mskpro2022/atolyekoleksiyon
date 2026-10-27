@@ -2137,6 +2137,13 @@ function VitrinModu({ kod, onizleme }) {
   const [siparisBoySonra, setSiparisBoySonra] = useState({}); // { modelId: true } — boyu sonra bildirecek
   const [siparisUrunNot, setSiparisUrunNot] = useState({});   // { modelId: "not" }
   const [siparisHata, setSiparisHata] = useState("");
+  // Ekran ölçüsü — koleksiyon kartları ekranı dolduracak şekilde boyutlanır (koleksiyon çoğaldıkça küçülür)
+  const [ekranBoyut, setEkranBoyut] = useState(() => ({ w: typeof window !== "undefined" ? window.innerWidth : 1200, h: typeof window !== "undefined" ? window.innerHeight : 800 }));
+  useEffect(() => {
+    const f = () => setEkranBoyut({ w: window.innerWidth, h: window.innerHeight });
+    window.addEventListener("resize", f);
+    return () => window.removeEventListener("resize", f);
+  }, []);
   const [sipListeAcik, setSipListeAcik] = useState(false);   // "Siparişlerim" sayfası
   const [sipListe, setSipListe] = useState(null);              // null = yüklenmedi | dizi | "hata"
   const [sipListeYukleniyor, setSipListeYukleniyor] = useState(false);
@@ -2815,6 +2822,19 @@ function VitrinModu({ kod, onizleme }) {
         const toplamModel = modeller.length;
         const kapakAl = (kid) => [...modeller.filter(m => m.ki === kid && m.foto)].sort((a,b)=>(b.t||0)-(a.t||0)).slice(0,4).map(m => m.foto);
         const tumKapaklar = kollarSirali.reduce((acc, k) => acc.concat(kapakAl(k.id).slice(0,1)), []).slice(0,4);
+        // Kart sütun sayısı: kartlar ekrana sığacak en büyük boyutta (az koleksiyon → büyük kart, çok → küçük kart)
+        let kolSayi = null;
+        if (ekranBoyut.w > 640 && kollarSirali.length > 0) {
+          const N = kollarSirali.length, bosluk = 14, yan = 56;
+          const alanH = Math.max(320, ekranBoyut.h - (toplamModel > 0 ? 330 : 240));
+          const minC = Math.max(1, Math.ceil((ekranBoyut.w - yan) / 640));
+          for (let c = minC; c <= N; c++) {
+            const w = (ekranBoyut.w - yan - (c - 1) * bosluk) / c;
+            const kartH = w * 0.75 + 62;
+            if (Math.ceil(N / c) * (kartH + bosluk) <= alanH) { kolSayi = c; break; }
+          }
+          if (kolSayi === null) kolSayi = Math.max(minC, Math.floor((ekranBoyut.w - yan + bosluk) / (230 + bosluk)));
+        }
         return (
         <div>
           {/* Katalog seçim çubuğu — koleksiyon seçilince */}
@@ -2850,7 +2870,7 @@ function VitrinModu({ kod, onizleme }) {
           )}
 
           {/* KOLEKSİYON KARTLARI */}
-          <div className="vm-kart-grid vm-pad" style={{ padding:"14px 28px 8px" }}>
+          <div className="vm-kart-grid vm-pad" style={{ padding:"14px 28px 8px", ...(kolSayi ? { gridTemplateColumns:"repeat("+kolSayi+", minmax(0,1fr))" } : {}) }}>
             {kollarSirali.map(k => {
               const kolModelleri = modeller.filter(m => m.ki === k.id);
               const kapaklar = kapakAl(k.id);
