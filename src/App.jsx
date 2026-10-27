@@ -2132,6 +2132,7 @@ function VitrinModu({ kod, onizleme }) {
   const [siparisBoySonra, setSiparisBoySonra] = useState({}); // { modelId: true } — boyu sonra bildirecek
   const [siparisUrunNot, setSiparisUrunNot] = useState({});   // { modelId: "not" }
   const [siparisHata, setSiparisHata] = useState("");
+  const [siparisTeslim, setSiparisTeslim] = useState(""); // istenen teslim tarihi (yyyy-mm-dd)
   const [siparisGonderiliyor, setSiparisGonderiliyor] = useState(false);
   const [siparisBasarili, setSiparisBasarili] = useState(false);
   const [arama, setArama] = useState("");
@@ -2196,6 +2197,7 @@ function VitrinModu({ kod, onizleme }) {
     boy_gerekli: { tr:"Lütfen yüzük/bilezik/bileklik için boy seçin ya da \"Boyu sonra bildireceğim\" seçeneğini işaretleyin.", en:"Please choose a size, or tick \"I will confirm the size later\".", es:"Elija una talla o marque \"Confirmaré la talla más tarde\"." },
     uzunluk: { tr:"Uzunluk", en:"Length", es:"Longitud" },
     urun_notu: { tr:"Bu ürün için not (opsiyonel)", en:"Note for this item (optional)", es:"Nota para este artículo (opcional)" },
+    teslim_tarihi: { tr:"İstenen teslim tarihi (opsiyonel)", en:"Requested delivery date (optional)", es:"Fecha de entrega deseada (opcional)" },
     liste_gram: { tr:"Toplam gram", en:"Total weight", es:"Peso total" },
     tas_orani: { tr:"Taş oranı", en:"Stone ratio", es:"Proporción de piedra" },
     tas: { tr:"Taş", en:"Stone", es:"Piedra" },
@@ -2577,7 +2579,7 @@ function VitrinModu({ kod, onizleme }) {
         musteri: vitrinMusteri.ad || vitrinMusteri.kod,
         musKod: vitrinMusteri.kod,
         tarih: Date.now(),
-        teslimTarihi: "",
+        teslimTarihi: siparisTeslim || "",
         aciklama: siparisNot.trim(),
         kaynak: "vitrin", // ana sistemde "🛍️ Vitrinden" rozetiyle ayırt edilir
         kalemler,
@@ -2589,7 +2591,7 @@ function VitrinModu({ kod, onizleme }) {
       setSecili(new Set());
       setSiparisAdetler({});
       setSiparisBoylar({}); setSiparisBoySonra({}); setSiparisUrunNot({});
-      setSiparisNot("");
+      setSiparisNot(""); setSiparisTeslim("");
     } catch (e) {
       alert("Sipariş gönderilemedi: " + e.message + "\nLütfen tekrar deneyin.");
     } finally {
@@ -2907,7 +2909,7 @@ function VitrinModu({ kod, onizleme }) {
       {/* ═══ SİPARİŞ MODALI — müşteri kendi siparişini oluşturur (BSP) ═══ */}
       {siparisModal && (
         <div onClick={()=>{ if(!siparisGonderiliyor){ setSiparisModal(false); setSiparisBasarili(false); } }} style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.75)", zIndex:110, display:"flex", alignItems:"center", justifyContent:"center", padding:20, backdropFilter:"blur(20px)" }}>
-          <div onClick={e=>e.stopPropagation()} style={{ background:"var(--vcard)", borderRadius:18, maxWidth:780, width:"100%", maxHeight:"94vh", overflow:"auto" }}>
+          <div onClick={e=>e.stopPropagation()} style={{ background:"var(--vcard)", borderRadius:18, maxWidth:1180, width:"100%", maxHeight:"95vh", overflow:"auto" }}>
             {siparisBasarili ? (
               <div style={{ padding:"40px 28px", textAlign:"center" }}>
                 <div style={{ fontSize:44, marginBottom:14 }}>✓</div>
@@ -2916,10 +2918,11 @@ function VitrinModu({ kod, onizleme }) {
                 <button onClick={()=>{ setSiparisModal(false); setSiparisBasarili(false); }} style={{ background:"var(--vcard)", border:"none", borderRadius:11, padding:"12px 28px", color:"var(--vt1)", fontSize:14, fontWeight:600, cursor:"pointer" }}>Tamam</button>
               </div>
             ) : (
-              <div style={{ padding:"22px 24px 24px" }}>
+              <div style={{ padding:"22px 24px 24px", display:"flex", flexWrap:"wrap", gap:24, alignItems:"flex-start" }}>
+               <div style={{ flex:"1 1 520px", minWidth:0 }}>
                 <div style={{ fontSize:18, fontWeight:600, color:"var(--vt1)", marginBottom:4 }}>{ce("siparis_ver")}</div>
                 <div style={{ fontSize:13, color:"var(--vt2)", marginBottom:18 }}>{seciliModeller.length} model{bspMi ? "" : " — " + aktifAyar.replace("K"," Ayar")}</div>
-                <div style={{ display:"flex", flexDirection:"column", gap:10, maxHeight:"64vh", overflow:"auto", marginBottom:16 }}>
+                <div style={{ display:"flex", flexDirection:"column", gap:10, marginBottom:4 }}>
                   {seciliModeller.map(m => {
                     const boyli = boyGerekli(m);
                     const uzunUrun = m.kategori === "bileklik" || m.kategori === "kolye"; // yatay/uzun ürünler tam genişlikte görünsün
@@ -2990,10 +2993,15 @@ function VitrinModu({ kod, onizleme }) {
                     );
                   })}
                 </div>
+               </div>
+               <div style={{ flex:"0 1 340px", minWidth:260, position:"sticky", top:0, alignSelf:"flex-start", width:"100%" }}>
+                <div style={{ fontSize:12, color:"var(--vt2)", fontWeight:600, marginBottom:6 }}>{ce("teslim_tarihi")}</div>
+                <input type="date" value={siparisTeslim} min={new Date().toISOString().slice(0,10)} onChange={e=>setSiparisTeslim(e.target.value)}
+                  style={{ width:"100%", background:"rgba(var(--voverlay-rgb),0.07)", border:"none", borderRadius:11, padding:"11px 13px", color:"var(--vt1)", fontSize:14, outline:"none", fontFamily:"inherit", marginBottom:14, colorScheme:"light dark" }}/>
                 <textarea value={siparisNot} onChange={e=>setSiparisNot(e.target.value)} placeholder="Not eklemek isterseniz (opsiyonel)..."
-                  style={{ width:"100%", minHeight:64, background:"rgba(var(--voverlay-rgb),0.07)", border:"none", borderRadius:11, padding:"11px 13px", color:"var(--vt1)", fontSize:13, outline:"none", resize:"vertical", fontFamily:"inherit", marginBottom:16 }}/>
+                  style={{ width:"100%", minHeight:110, background:"rgba(var(--voverlay-rgb),0.07)", border:"none", borderRadius:11, padding:"11px 13px", color:"var(--vt1)", fontSize:13, outline:"none", resize:"vertical", fontFamily:"inherit", marginBottom:16 }}/>
                 <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", margin:"0 2px 12px", fontSize:14, color:"var(--vt2)" }}>
-                  <span>{ce("liste_gram")} · {aktifAyar.replace("K"," Ayar")}</span>
+                  <span>{seciliModeller.reduce((t,m)=>t+satirAdet(m),0)} {ce("adet")} · {ce("liste_gram")} · {aktifAyar.replace("K"," Ayar")}</span>
                   <span style={{ fontSize:18, fontWeight:700, color:"var(--vt1)" }}>{listeGram().toFixed(2)} g</span>
                 </div>
                 {siparisHata && <div style={{ fontSize:12, color:"#e85a4f", marginBottom:10 }}>{siparisHata}</div>}
@@ -3001,6 +3009,7 @@ function VitrinModu({ kod, onizleme }) {
                   style={{ width:"100%", background: siparisGonderiliyor?"rgba(var(--voverlay-rgb),0.15)":"var(--vurgu)", border:"none", borderRadius:11, padding:"14px", color:"#1d1d1f", fontSize:15, fontWeight:600, cursor: siparisGonderiliyor?"default":"pointer" }}>
                   {siparisGonderiliyor ? ce("gonderiliyor") : ce("siparisi_gonder")}
                 </button>
+               </div>
               </div>
             )}
           </div>
