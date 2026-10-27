@@ -1,4 +1,4 @@
-import { supabase, dbLoad, dbSave, fotoYukleStorage, yedekKaydet, yedekListesi, yedekGetir, bugunYedekVarMi, tabloModelleriSenkron, tabloModelleriToplu, tabloModelSil, tabloSiparisleriSenkron, tabloSiparisleriToplu, tabloMusterileriYaz, akilliModelOku, akilliSiparisOku, akilliMusteriOku, islemKaydet, islemGecmisiGetir, realtimeBaslat, tabloKoleksiyonlariYaz, tabloKasaYaz, akilliKoleksiyonOku, akilliKasaOku, tabloKoleksiyonlariOku, tabloKasaOku, saglikDenetimi, ekranSunucuFarki, toptanciKaydet, toptancilariGetir, toptanciSil, vitrinGecmisiGetir, vitrinEnCokBakilan, vitrinOzetGetir, vitrinAnaliz, vitrinGetirGuvenli, siparisOlusturGuvenli, vitrinAktiviteKaydetGuvenli, vitrinSupheliCihazlar, vitrinCevrimiciMusteriler, radarTrendleriOku, radarKaynaklariOku, radarKanitlariOku, radarTumKanitlariOku, radarTrendGuncelle, radarTrendSil, radarManuelKanitEkle } from "./supabase.js";
+import { supabase, dbLoad, dbSave, fotoYukleStorage, yedekKaydet, yedekListesi, yedekGetir, bugunYedekVarMi, tabloModelleriSenkron, tabloModelleriToplu, tabloModelSil, tabloSiparisleriSenkron, tabloSiparisleriToplu, tabloMusterileriYaz, akilliModelOku, akilliSiparisOku, akilliMusteriOku, islemKaydet, islemGecmisiGetir, realtimeBaslat, tabloKoleksiyonlariYaz, tabloKasaYaz, akilliKoleksiyonOku, akilliKasaOku, tabloKoleksiyonlariOku, tabloKasaOku, saglikDenetimi, ekranSunucuFarki, toptanciKaydet, toptancilariGetir, toptanciSil, vitrinGecmisiGetir, vitrinEnCokBakilan, vitrinOzetGetir, vitrinAnaliz, vitrinGetirGuvenli, siparisOlusturGuvenli, siparislerimGetirGuvenli, siparisIptalGuvenli, vitrinAktiviteKaydetGuvenli, vitrinSupheliCihazlar, vitrinCevrimiciMusteriler, radarTrendleriOku, radarKaynaklariOku, radarKanitlariOku, radarTumKanitlariOku, radarTrendGuncelle, radarTrendSil, radarManuelKanitEkle } from "./supabase.js";
 import { useState, useEffect, useCallback, useMemo, useRef, Fragment } from "react";
 
 const uid = () => "x" + Date.now() + Math.random().toString(36).substr(2, 5);
@@ -344,6 +344,11 @@ function setSirketOnek(onek) {
   AKTIF_SIRKET_ONEK = onek || "";
   try { localStorage.setItem("atolye_sirket_onek", AKTIF_SIRKET_ONEK); } catch {}
 }
+// ═══ BSP (mum satışı) — sadeleştirilmiş sipariş durumları (mevcut durum kimlikleriyle eşleşir) ═══
+const BSP_DURUM_IDS = ["baslanmadi","cizimde","dokum","teslim"];
+const BSP_DURUM_AD  = { baslanmadi:"Onaylandı", cizimde:"Çiziliyor", dokum:"Makineye atıldı", teslim:"Müşteriye teslim edildi" };
+function durumEtiket(d) { return (AKTIF_SIRKET_ONEK === "bsp2_" && BSP_DURUM_AD[d.id]) ? BSP_DURUM_AD[d.id] : d.l; }
+function durumSecenekleri() { const l = DURUMLAR.filter(d => d.id !== "hurda"); return AKTIF_SIRKET_ONEK === "bsp2_" ? l.filter(d => BSP_DURUM_IDS.includes(d.id)) : l; }
 // Bu anahtarlar şirketten bağımsız (önek ALMAZ) — her iki şirkette ortak kalır
 const SIRKET_BAGIMSIZ = ["atolye_sifre"];
 function sirketAnahtar(k) {
@@ -2132,6 +2137,23 @@ function VitrinModu({ kod, onizleme }) {
   const [siparisBoySonra, setSiparisBoySonra] = useState({}); // { modelId: true } — boyu sonra bildirecek
   const [siparisUrunNot, setSiparisUrunNot] = useState({});   // { modelId: "not" }
   const [siparisHata, setSiparisHata] = useState("");
+  const [sipListeAcik, setSipListeAcik] = useState(false);   // "Siparişlerim" sayfası
+  const [sipListe, setSipListe] = useState(null);              // null = yüklenmedi | dizi | "hata"
+  const [sipListeYukleniyor, setSipListeYukleniyor] = useState(false);
+  const sipListeYukle = async () => {
+    if (!vitrinMusteri) return;
+    setSipListeYukleniyor(true);
+    const r = await siparislerimGetirGuvenli(vitrinMusteri.kod, vitrinMusteri.onek);
+    setSipListe(r && r.gecerli ? (r.siparisler || []) : "hata");
+    setSipListeYukleniyor(false);
+  };
+  const sipListeAc = () => { setSipListeAcik(true); sipListeYukle(); };
+  const sipIptalEt = async (id) => {
+    if (!window.confirm(vitrinDil==="en" ? "Cancel this order?" : vitrinDil==="es" ? "¿Cancelar este pedido?" : "Bu siparişi iptal etmek istiyor musunuz?")) return;
+    const r = await siparisIptalGuvenli(vitrinMusteri.kod, vitrinMusteri.onek, id);
+    if (!r || !r.basarili) alert(vitrinDil==="en" ? "Order could not be cancelled (it may already be approved)." : vitrinDil==="es" ? "No se pudo cancelar (puede estar ya aprobado)." : "İptal edilemedi (sipariş onaylanmış olabilir).");
+    sipListeYukle();
+  };
   const [genelBoy, setGenelBoy] = useState({ sistem:"US", deger:"" });
   const [siparisTeslim, setSiparisTeslim] = useState(""); // istenen teslim tarihi (yyyy-mm-dd)
   const [siparisGonderiliyor, setSiparisGonderiliyor] = useState(false);
@@ -2593,6 +2615,7 @@ function VitrinModu({ kod, onizleme }) {
         teslimTarihi: siparisTeslim || "",
         aciklama: siparisNot.trim(),
         kaynak: "vitrin", // ana sistemde "🛍️ Vitrinden" rozetiyle ayırt edilir
+        ...(aktifOnek === "bsp2_" ? { onayDurum: "bekliyor" } : {}), // BSP: önce senin onayın gerekir
         kalemler,
       };
       const sonuc = await siparisOlusturGuvenli(vitrinMusteri.kod, vitrinMusteri.onek, yeniSiparis);
@@ -2712,6 +2735,11 @@ function VitrinModu({ kod, onizleme }) {
                 : ce("koleksiyon_gir_mesaj")}
             </div>
           </div>
+          {aktifOnek === "bsp2_" && vitrinMusteri && (
+            <button onClick={sipListeAc} style={{ flexShrink:0, background:"var(--vcard)", color:"var(--vt1)", border:"none", borderRadius:980, padding:"10px 20px", fontSize:14, fontWeight:600, cursor:"pointer" }}>
+              📋 {vitrinDil==="en" ? "My Orders" : vitrinDil==="es" ? "Mis pedidos" : "Siparişlerim"}
+            </button>
+          )}
           <button onClick={()=>katalogAl(3)} style={{ flexShrink:0, background:"var(--vcard)", color:"var(--vt1)", border:"none", borderRadius:980, padding:"10px 20px", fontSize:14, fontWeight:600, cursor:"pointer" }}>
             {ce("katalog_al")}{(!aktifKol && !tumGorunum && seciliKlasorler.length > 0) ? " ("+seciliKlasorler.length+")" : ""}
           </button>
@@ -2920,13 +2948,16 @@ function VitrinModu({ kod, onizleme }) {
       {/* ═══ SİPARİŞ MODALI — müşteri kendi siparişini oluşturur (BSP) ═══ */}
       {siparisModal && (
         <div style={{ position:"fixed", inset:0, zIndex:110, background:"var(--vb)", overflow:"auto", color:"var(--vt1)" }}>
-          <style>{".vs-row{display:grid;grid-template-columns:132px 96px 1fr 270px 84px 92px 44px;gap:10px;align-items:start;padding:12px 14px}.vs-hd{display:grid;grid-template-columns:132px 96px 1fr 270px 84px 92px 44px;gap:10px;padding:8px 14px}@media(max-width:860px){.vs-hd{display:none}.vs-row{grid-template-columns:104px 1fr}.vs-row>.vs-boy,.vs-row>.vs-adet,.vs-row>.vs-top,.vs-row>.vs-sil{grid-column:1/-1}.vs-top,.vs-sil,.vs-adet{text-align:left!important}}"}</style>
+          <style>{".vs-row{display:grid;grid-template-columns:168px 96px 1fr 270px 84px 92px 44px;gap:10px;align-items:start;padding:12px 14px}.vs-hd{display:grid;grid-template-columns:168px 96px 1fr 270px 84px 92px 44px;gap:10px;padding:8px 14px}@media(max-width:860px){.vs-hd{display:none}.vs-row{grid-template-columns:132px 1fr}.vs-row>.vs-boy,.vs-row>.vs-adet,.vs-row>.vs-top,.vs-row>.vs-sil{grid-column:1/-1}.vs-top,.vs-sil,.vs-adet{text-align:left!important}}"}</style>
           {siparisBasarili ? (
             <div style={{ maxWidth:520, margin:"18vh auto 0", padding:"40px 28px", textAlign:"center" }}>
               <div style={{ fontSize:48, marginBottom:14 }}>✓</div>
               <div style={{ fontSize:20, fontWeight:600, color:"var(--vt1)", marginBottom:8 }}>{ce("siparis_alindi")}</div>
               <div style={{ fontSize:14, color:"var(--vt2)", marginBottom:24 }}>{ce("en_kisa_surede")}</div>
-              <button onClick={()=>{ setSiparisModal(false); setSiparisBasarili(false); }} style={{ background:"var(--vcard)", border:"1px solid rgba(var(--voverlay-rgb),0.15)", borderRadius:11, padding:"12px 28px", color:"var(--vt1)", fontSize:14, fontWeight:600, cursor:"pointer" }}>Tamam</button>
+              <div style={{ display:"flex", gap:10, justifyContent:"center", flexWrap:"wrap" }}>
+                <button onClick={()=>{ setSiparisModal(false); setSiparisBasarili(false); }} style={{ background:"var(--vcard)", border:"1px solid rgba(var(--voverlay-rgb),0.15)", borderRadius:11, padding:"12px 28px", color:"var(--vt1)", fontSize:14, fontWeight:600, cursor:"pointer" }}>Tamam</button>
+                {aktifOnek === "bsp2_" && <button onClick={()=>{ setSiparisModal(false); setSiparisBasarili(false); sipListeAc(); }} style={{ background:"var(--vurgu)", border:"none", borderRadius:11, padding:"12px 28px", color:"#1d1d1f", fontSize:14, fontWeight:700, cursor:"pointer" }}>📋 {vitrinDil==="en" ? "Track my orders" : vitrinDil==="es" ? "Seguir mis pedidos" : "Siparişlerimi takip et"}</button>}
+              </div>
             </div>
           ) : (() => {
             const kutu = { background:"rgba(var(--voverlay-rgb),0.07)", border:"none", borderRadius:8, padding:"7px 9px", color:"var(--vt1)", fontSize:13, outline:"none", fontFamily:"inherit" };
@@ -3000,8 +3031,8 @@ function VitrinModu({ kod, onizleme }) {
                     )}
                     <div className="vs-row">
                       {uzunUrun ? <div/> : (
-                        <div style={{ width:"min(120px,26vw)", height:"min(120px,26vw)", borderRadius:10, overflow:"hidden", background:"#f3f3f3" }}>
-                          {m.foto ? <img src={m.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"contain", display:"block" }}/> : null}
+                        <div style={{ width:"min(150px,30vw)", height:"min(150px,30vw)", borderRadius:10, overflow:"hidden", background:"#f3f3f3" }}>
+                          {m.foto ? <img src={m.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"contain", display:"block", transform:"scale(1.25)" }}/> : null}
                         </div>
                       )}
                       <div style={{ paddingTop:2 }}>
@@ -3083,6 +3114,90 @@ function VitrinModu({ kod, onizleme }) {
           )}
         </div>
       )}
+
+      {/* ═══ SİPARİŞLERİM — müşteri kendi siparişlerinin durumunu görür ═══ */}
+      {sipListeAcik && (() => {
+        const t3 = (tr, en, es) => vitrinDil==="en" ? en : vitrinDil==="es" ? es : tr;
+        const ADIMLAR = [t3("Onaylandı","Approved","Aprobado"), t3("Çiziliyor","Being drawn","En diseño"), t3("Makineye atıldı","Sent to machine","En máquina"), t3("Müşteriye teslim edildi","Delivered","Entregado")];
+        const adimNo = (d) => { if (d==="baslanmadi") return 0; if (d==="cizimde") return 1; if (d==="tamam"||d==="teslim") return 3; if (d==="hurda") return -1; return 2; };
+        const tarihYaz = (t) => { const n = Number(t); if (!n) return ""; try { return new Date(n).toLocaleDateString(vitrinDil==="en"?"en-GB":vitrinDil==="es"?"es-ES":"tr-TR"); } catch { return ""; } };
+        const liste = Array.isArray(sipListe) ? sipListe : [];
+        const rozet = (renk, yazi) => <span style={{ fontSize:11, fontWeight:700, color:renk, background:"rgba(var(--voverlay-rgb),0.07)", border:"1px solid "+renk, borderRadius:980, padding:"3px 11px", whiteSpace:"nowrap" }}>{yazi}</span>;
+        return (
+        <div style={{ position:"fixed", inset:0, zIndex:111, background:"var(--vb)", overflow:"auto", color:"var(--vt1)" }}>
+          <div style={{ maxWidth:980, margin:"0 auto", padding:"0 20px 60px" }}>
+            <div style={{ position:"sticky", top:0, zIndex:5, background:"var(--vb)", padding:"18px 0 12px", display:"flex", alignItems:"center", gap:12, flexWrap:"wrap", borderBottom:"1px solid rgba(var(--voverlay-rgb),0.08)" }}>
+              <button onClick={()=>setSipListeAcik(false)} style={{ background:"var(--vcard)", border:"1px solid rgba(var(--voverlay-rgb),0.12)", borderRadius:980, padding:"8px 16px", color:"var(--vt1)", fontSize:13, fontWeight:600, cursor:"pointer" }}>‹ {ce("geri")}</button>
+              <div style={{ fontSize:22, fontWeight:700, letterSpacing:"-0.02em" }}>{t3("Siparişlerim","My Orders","Mis pedidos")}</div>
+              {vitrinMusteri && <div style={{ fontSize:13, color:"var(--vt2)", background:"rgba(var(--voverlay-rgb),0.07)", borderRadius:8, padding:"5px 10px", fontWeight:600 }}>{vitrinMusteri.kod}</div>}
+              <div style={{ flex:1 }}/>
+              <button onClick={sipListeYukle} disabled={sipListeYukleniyor} style={{ background:"var(--vcard)", border:"1px solid rgba(var(--voverlay-rgb),0.12)", borderRadius:980, padding:"8px 16px", color:"var(--vt1)", fontSize:13, fontWeight:600, cursor:"pointer" }}>{sipListeYukleniyor ? "…" : "↻ " + t3("Yenile","Refresh","Actualizar")}</button>
+            </div>
+
+            {sipListe === null && <div style={{ padding:"60px 0", textAlign:"center", color:"var(--vt2)" }}>…</div>}
+            {sipListe === "hata" && <div style={{ padding:"60px 0", textAlign:"center", color:"#e85a4f" }}>{t3("Siparişler yüklenemedi. Lütfen tekrar deneyin.","Orders could not be loaded. Please try again.","No se pudieron cargar los pedidos.")}</div>}
+            {Array.isArray(sipListe) && liste.length === 0 && <div style={{ padding:"60px 0", textAlign:"center", color:"var(--vt2)" }}>{t3("Henüz siparişiniz yok.","You have no orders yet.","Aún no tiene pedidos.")}</div>}
+
+            {liste.map(sp => {
+              const kalemler = sp.kalemler || [];
+              const toplamAdet = kalemler.reduce((t,k)=>t+(Number(k.adet)||1),0);
+              const bekliyor = sp.onayDurum === "bekliyor", red = sp.onayDurum === "red", iptal = sp.onayDurum === "iptal";
+              const adimlar = kalemler.map(k => adimNo(k.durum));
+              const hepsiTeslim = kalemler.length > 0 && adimlar.every(a => a === 3);
+              let genel;
+              if (iptal) genel = rozet("#e85a4f", t3("İptal edildi","Cancelled","Cancelado"));
+              else if (red) genel = rozet("#e85a4f", t3("Reddedildi","Declined","Rechazado"));
+              else if (bekliyor) genel = rozet("#d99a1d", "⏳ " + t3("Onay bekleniyor","Awaiting approval","Pendiente de aprobación"));
+              else if (hepsiTeslim) genel = rozet("#2e9e4f", "✓ " + ADIMLAR[3]);
+              else genel = rozet("#2e9e4f", "✓ " + ADIMLAR[0]);
+              return (
+              <div key={sp.id} style={{ background:"var(--vcard)", border:"1px solid rgba(var(--voverlay-rgb),0.08)", borderRadius:14, padding:"16px 18px", marginTop:16, opacity: (iptal||red) ? 0.8 : 1 }}>
+                <div style={{ display:"flex", alignItems:"center", gap:10, flexWrap:"wrap" }}>
+                  <div style={{ fontSize:15, fontWeight:700 }}>{tarihYaz(sp.tarih)}</div>
+                  {genel}
+                  <div style={{ fontSize:12, color:"var(--vt2)" }}>{kalemler.length} {t3("model","models","modelos")} · {toplamAdet} {ce("adet")}</div>
+                  {sp.teslimTarihi && <div style={{ fontSize:12, color:"var(--vt2)" }}>{t3("İstenen teslim","Requested delivery","Entrega deseada")}: {tarihYaz(new Date(sp.teslimTarihi).getTime())}</div>}
+                  <div style={{ flex:1 }}/>
+                  {bekliyor && <button onClick={()=>sipIptalEt(sp.id)} style={{ background:"rgba(232,90,79,0.08)", border:"1px solid rgba(232,90,79,0.3)", borderRadius:9, padding:"6px 14px", color:"#e85a4f", fontSize:12, fontWeight:600, cursor:"pointer" }}>{t3("Siparişi iptal et","Cancel order","Cancelar pedido")}</button>}
+                </div>
+                {red && sp.redNot && <div style={{ marginTop:8, fontSize:13, color:"#e85a4f" }}>{t3("Not","Note","Nota")}: {sp.redNot}</div>}
+                {sp.aciklama && <div style={{ marginTop:8, fontSize:12, color:"var(--vt2)" }}>{sp.aciklama}</div>}
+                <div style={{ marginTop:12, display:"flex", flexDirection:"column", gap:10 }}>
+                  {kalemler.map((k, ki) => {
+                    const adim = (bekliyor || red || iptal) ? -2 : adimNo(k.durum);
+                    const boyYazi = k.boyListesi && k.boyListesi.length ? k.boyListesi.map(b => (b.uzunluk ? b.uzunluk+" "+(b.birim||"cm") : (b.sistem+" "+b.deger)) + " ×" + (b.adet||1)).join(", ") : (k.boy && (k.boy.deger || k.boy.uzunluk) ? ((k.boy.uzunluk ? k.boy.uzunluk+" "+(k.boy.birim||"cm") : k.boy.sistem+" "+k.boy.deger) + " ×" + (k.adet||1)) : "");
+                    return (
+                    <div key={(k.id||"")+ki} style={{ display:"flex", gap:12, alignItems:"center", background:"rgba(var(--voverlay-rgb),0.04)", borderRadius:11, padding:"8px 10px", flexWrap:"wrap" }}>
+                      <div style={{ width:64, height:64, borderRadius:9, overflow:"hidden", background:"#f3f3f3", flexShrink:0 }}>{k.foto ? <img src={k.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"contain", transform: (k.kategori==="bileklik"||k.kategori==="kolye") ? "none" : "scale(1.2)" }}/> : null}</div>
+                      <div style={{ flex:"1 1 150px", minWidth:0 }}>
+                        <div style={{ fontSize:14, fontWeight:700 }}>{k.kod}</div>
+                        <div style={{ fontSize:12, color:"var(--vt2)" }}>{k.secilenAyar ? k.secilenAyar.replace("K"," "+t3("Ayar","K","K")) + " · " : ""}{k.adet||1} {ce("adet")}{boyYazi ? " · " + boyYazi : ""}</div>
+                        {k.sipNot && <div style={{ fontSize:11, color:"var(--vt3)" }}>{k.sipNot}</div>}
+                      </div>
+                      {adim >= 0 ? (
+                        <div style={{ flex:"1 1 300px", display:"flex", alignItems:"flex-start", gap:0 }}>
+                          {ADIMLAR.map((a, ai) => (
+                            <div key={ai} style={{ flex:1, textAlign:"center", position:"relative" }}>
+                              <div style={{ height:3, background: ai<=adim ? "#2e9e4f" : "rgba(var(--voverlay-rgb),0.12)", position:"absolute", top:8, left:0, right:0, zIndex:0 }}/>
+                              <div style={{ width:19, height:19, borderRadius:"50%", margin:"0 auto", position:"relative", zIndex:1, background: ai<=adim ? "#2e9e4f" : "var(--vcard)", border:"2px solid "+(ai<=adim ? "#2e9e4f" : "rgba(var(--voverlay-rgb),0.25)"), color:"#fff", fontSize:11, lineHeight:"15px", fontWeight:800 }}>{ai<=adim ? "✓" : ""}</div>
+                              <div style={{ fontSize:10, marginTop:5, color: ai===adim ? "var(--vt1)" : "var(--vt3)", fontWeight: ai===adim ? 700 : 400, lineHeight:1.2 }}>{a}</div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div style={{ flex:"1 1 200px", fontSize:12, color:"var(--vt3)" }}>{adim === -1 ? "—" : (bekliyor ? t3("Onayınız bekleniyor","Waiting for approval","Esperando aprobación") : "")}</div>
+                      )}
+                    </div>
+                    );
+                  })}
+                </div>
+              </div>
+              );
+            })}
+          </div>
+        </div>
+        );
+      })()}
 
       {/* DETAY */}
       {detayModel && (() => {
@@ -6334,6 +6449,14 @@ function Atolye({ onSirketDegis }) {
                           <div style={{ display:"flex", alignItems:"center", gap:8 }}>
                             <span style={{ fontSize:13, fontWeight:800, color:GOLD }}>{s.musKod||s.musteri||"Isimsiz"}</span>
                             {s.kaynak === "vitrin" && <span style={{ fontSize:9, fontWeight:800, color:"#fff", background:"linear-gradient(135deg,#a78bfa,#8b6fe8)", padding:"2px 8px", borderRadius:980 }}>🛍️ Vitrinden</span>}
+                            {s.onayDurum === "bekliyor" && (<>
+                              <span style={{ fontSize:9, fontWeight:800, color:"#1d1d1f", background:"#f5b942", padding:"2px 8px", borderRadius:980 }}>⏳ Onay bekliyor</span>
+                              <button onClick={e=>{ e.stopPropagation(); svS(siparisler.map(sp=>sp.id===s.id?{...sp,onayDurum:"onaylandi",onayTarih:Date.now()}:sp)); toastGoster("ok","Sipariş onaylandı"); }} style={{ background:"rgba(106,191,105,0.18)", border:"1px solid rgba(106,191,105,0.45)", borderRadius:6, padding:"2px 9px", color:"#6abf69", fontSize:9, fontWeight:800, cursor:"pointer" }}>✓ Onayla</button>
+                              <button onClick={e=>{ e.stopPropagation(); const n = window.prompt("Red sebebi (müşteri görecek, boş bırakabilirsin):", ""); if (n === null) return; svS(siparisler.map(sp=>sp.id===s.id?{...sp,onayDurum:"red",redNot:n.trim(),onayTarih:Date.now()}:sp)); toastGoster("ok","Sipariş reddedildi"); }} style={{ background:"rgba(232,90,79,0.12)", border:"1px solid rgba(232,90,79,0.35)", borderRadius:6, padding:"2px 9px", color:"#e85a4f", fontSize:9, fontWeight:800, cursor:"pointer" }}>✕ Reddet</button>
+                            </>)}
+                            {s.onayDurum === "onaylandi" && <span style={{ fontSize:9, fontWeight:800, color:"#6abf69" }}>✓ Onaylandı</span>}
+                            {s.onayDurum === "red" && <span style={{ fontSize:9, fontWeight:800, color:"#e85a4f" }}>✕ Reddedildi{s.redNot ? " · "+s.redNot : ""}</span>}
+                            {s.onayDurum === "iptal" && <span style={{ fontSize:9, fontWeight:800, color:"#e85a4f" }}>✕ Müşteri iptal etti</span>}
                             <span style={{ fontSize:9, color:"#7a6f5a" }}>{new Date(s.tarih).toLocaleDateString("tr-TR")}</span>
                             <span style={{ fontSize:9, color:"#998a6e" }}>{toplamKalem} kalem</span>
                             <span style={{ fontSize:9, color:"#5b9bd5", fontWeight:700 }}>{fN((s.kalemler||[]).reduce((acc,k)=>{const hc=hesapla(k,k.secilenAyar||k.refAyar,s.altinKgUSD,s.mc);const du=((s.kalemHurda)||{})[k.id]||0;const ia=((s.kalemIade)||{})[k.id]||0;const ta=((s.kalemTamir)||{})[k.id]||0;const net=Math.max(0,(k.adet||1)-du-ia-ta);return acc+hc.mamulGram*net;},0),2)} gr</span>
@@ -6538,10 +6661,10 @@ function Atolye({ onSirketDegis }) {
                               </div>
                               {/* Durum noktaları + hurda */}
                               <div style={{ display:"flex", gap:3, alignItems:"center", flexWrap:"wrap", justifyContent:"flex-end" }}>
-                                {DURUMLAR.filter(d=>d.id!=="hurda").map(d => (
-                                  <button key={d.id} onClick={()=>durumGuncelle(s.id,k.id,d.id)} title={d.l} style={{ width:12, height:12, borderRadius:6, background:mevcDurum===d.id?d.c:"rgba(255,255,255,0.06)", border:mevcDurum===d.id?"2px solid "+d.c:"1px solid rgba(255,255,255,0.1)", cursor:"pointer", padding:0, flexShrink:0 }}/>
+                                {durumSecenekleri().map(d => (
+                                  <button key={d.id} onClick={()=>durumGuncelle(s.id,k.id,d.id)} title={durumEtiket(d)} style={{ width:12, height:12, borderRadius:6, background:mevcDurum===d.id?d.c:"rgba(255,255,255,0.06)", border:mevcDurum===d.id?"2px solid "+d.c:"1px solid rgba(255,255,255,0.1)", cursor:"pointer", padding:0, flexShrink:0 }}/>
                                 ))}
-                                <span style={{ fontSize:8, color:dur.c, fontWeight:700, marginLeft:2, whiteSpace:"nowrap" }}>{dur.l}</span>
+                                <span style={{ fontSize:8, color:dur.c, fontWeight:700, marginLeft:2, whiteSpace:"nowrap" }}>{durumEtiket(dur)}</span>
                                 {/* Hurda butonu */}
                                 {(() => {
                                   const hurdaAdet = (s.kalemHurda||{})[k.id]||0;
