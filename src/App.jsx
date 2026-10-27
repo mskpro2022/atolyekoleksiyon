@@ -2922,6 +2922,7 @@ function VitrinModu({ kod, onizleme }) {
                 <div style={{ display:"flex", flexDirection:"column", gap:10, maxHeight:"64vh", overflow:"auto", marginBottom:16 }}>
                   {seciliModeller.map(m => {
                     const boyli = boyGerekli(m);
+                    const uzunUrun = m.kategori === "bileklik" || m.kategori === "kolye"; // yatay/uzun ürünler tam genişlikte görünsün
                     const sonra = !!siparisBoySonra[m.id];
                     const boylar = siparisBoylar[m.id] || [];
                     const eksik = boyEksikMi(m) && !!siparisHata;
@@ -2929,11 +2930,11 @@ function VitrinModu({ kod, onizleme }) {
                     const adetBtn = { width:26, height:26, borderRadius:7, border:"none", background:"rgba(var(--voverlay-rgb),0.1)", color:"var(--vt1)", fontSize:15, cursor:"pointer" };
                     return (
                     <div key={m.id} style={{ background:"rgba(var(--voverlay-rgb),0.05)", border: eksik ? "1px solid #e85a4f" : "1px solid transparent", borderRadius:11, padding:"9px 12px" }}>
-                      <div style={{ display:"flex", alignItems:"center", gap:12 }}>
-                        <div style={{ width:104, height:104, borderRadius:10, overflow:"hidden", background:"#f7f7f8", flexShrink:0 }}>
+                      <div style={{ display:"flex", alignItems: uzunUrun ? "stretch" : "center", flexDirection: uzunUrun ? "column" : "row", gap: uzunUrun ? 8 : 14 }}>
+                        <div style={{ width: uzunUrun ? "100%" : "min(210px,40vw)", height: uzunUrun ? "min(190px,34vw)" : "min(210px,40vw)", borderRadius:12, overflow:"hidden", background:"#f7f7f8", flexShrink:0 }}>
                           {m.foto ? <img src={m.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"contain" }}/> : null}
                         </div>
-                        <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{ flex: uzunUrun ? "none" : 1, minWidth:0 }}>
                           <div style={{ fontSize:16, color:"var(--vt1)", fontWeight:600, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{m.kod}</div>
                           <div style={{ fontSize:13, color:"var(--vt2)" }}>{ayarliGram(m)} g{satirAdet(m) > 1 ? " × " + satirAdet(m) + " = " : ""}{satirAdet(m) > 1 && <b style={{ color:"var(--vt1)" }}>{satirGram(m).toFixed(2)} g</b>}</div>
                         </div>
