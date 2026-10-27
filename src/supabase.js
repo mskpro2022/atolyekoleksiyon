@@ -32,29 +32,6 @@ export async function fotoYukleStorage(dataUrl, modelId, onek = '') {
   }
 }
 
-// ═══ FOTOĞRAF PARMAK İZİ İNDEKSİ (PDF'ten sipariş — görsel benzerlik) ═══
-// Tek dosya olarak Storage'da tutulur: _vektor/v1-<önek>.json (tablo gerektirmez)
-const vektorYolu = (onek) => '_vektor/v1-' + (onek || 'msk') + '.json'
-export async function vektorDosyaOku(onek) {
-  try {
-    const { data } = supabase.storage.from(FOTO_BUCKET).getPublicUrl(vektorYolu(onek))
-    const r = await fetch(data.publicUrl + '?t=' + Date.now(), { cache: 'no-store' })
-    if (!r.ok) return null
-    return await r.json()
-  } catch (e) { console.warn('vektorDosyaOku:', e.message); return null }
-}
-export async function vektorDosyaYaz(onek, obj) {
-  const blob = new Blob([JSON.stringify(obj)], { type: 'application/json' })
-  let sonHata = null
-  for (let deneme = 0; deneme < 3; deneme++) {
-    const { error } = await supabase.storage.from(FOTO_BUCKET).upload(vektorYolu(onek), blob, { upsert: true, contentType: 'application/json', cacheControl: '60' })
-    if (!error) return true
-    sonHata = error
-    await new Promise(r => setTimeout(r, 500 * (deneme + 1)))
-  }
-  throw new Error('İndeks kaydedilemedi: ' + (sonHata && sonHata.message))
-}
-
 // ═══ OTOMATİK YEDEKLEME (yedekler tablosu) ═══
 // Yedek kaydet — aynı gün + önek için varsa günceller, son 7'yi tutar
 export async function yedekKaydet(onek, veri, modelSayisi, siparisSayisi) {
@@ -95,45 +72,6 @@ export async function yedekGetir(id) {
     if (error || !data) return null
     return data.veri
   } catch (e) { console.error('yedekGetir hata:', e.message); return null }
-}
-
-// ═══ SİPARİŞ YEDEKLERİ (sık, hafif — yalnız siparişler) ═══
-// Aynı `yedekler` tablosunu, ayrı bir onek ile kullanır (tam günlük yedeği etkilemez). Günde birden çok kayıt tutulur.
-const SIP_YEDEK_TUTULAN = 100
-export async function siparisYedekKaydet(onek, siparisler, neden) {
-  try {
-    if (!Array.isArray(siparisler) || siparisler.length === 0) return false
-    const yo = onek + '__sip'
-    const { error } = await supabase.from('yedekler').insert({
-      onek: yo, tarih: new Date().toISOString().slice(0, 10),
-      veri: { siparisler, neden: neden || 'otomatik', v: Date.now() },
-      model_sayisi: 0, siparis_sayisi: siparisler.length
-    })
-    if (error) { console.error('siparisYedekKaydet:', error.message); return false }
-    const { data: hepsi } = await supabase.from('yedekler').select('id').eq('onek', yo).order('olusturma', { ascending: false })
-    if (hepsi && hepsi.length > SIP_YEDEK_TUTULAN) {
-      await supabase.from('yedekler').delete().in('id', hepsi.slice(SIP_YEDEK_TUTULAN).map(x => x.id))
-    }
-    return true
-  } catch (e) { console.error('siparisYedekKaydet hata:', e.message); return false }
-}
-
-export async function siparisYedekListesi(onek) {
-  try {
-    const { data, error } = await supabase.from('yedekler')
-      .select('id, olusturma, siparis_sayisi')
-      .eq('onek', onek + '__sip').order('olusturma', { ascending: false }).limit(SIP_YEDEK_TUTULAN)
-    if (error) { console.error('siparisYedekListesi:', error.message); return [] }
-    return data || []
-  } catch (e) { return [] }
-}
-
-export async function siparisYedekGetir(id) {
-  try {
-    const { data, error } = await supabase.from('yedekler').select('veri').eq('id', id).maybeSingle()
-    if (error || !data) return null
-    return data.veri
-  } catch (e) { return null }
 }
 
 // Bugün yedek alınmış mı? (günde 1 kez kontrolü için)
@@ -745,6 +683,22 @@ export async function siparisOlusturGuvenli(kod, onek, siparis) {
     if (error) { console.error('siparisOlusturGuvenli:', error.message); return { basarili: false } }
     return data || { basarili: false }
   } catch (e) { console.error('siparisOlusturGuvenli:', e.message); return { basarili: false } }
+}
+// Müşterinin kendi siparişleri (sunucu tarafında kod doğrulanır; fiyat/işçilik/kâr DÖNMEZ)
+export async function siparislerimGetirGuvenli(kod, onek = '') {
+  try {
+    const { data, error } = await supabase.rpc('siparislerim_getir', { p_kod: kod, p_onek: onek })
+    if (error) { console.error('siparislerimGetirGuvenli:', error.message); return { gecerli: false, hata: true } }
+    return data || { gecerli: false }
+  } catch (e) { console.error('siparislerimGetirGuvenli:', e.message); return { gecerli: false, hata: true } }
+}
+// Müşteri, onay beklemeyen siparişini iptal eder (sadece onayDurum='bekliyor' iken çalışır)
+export async function siparisIptalGuvenli(kod, onek, id) {
+  try {
+    const { data, error } = await supabase.rpc('siparis_iptal', { p_kod: kod, p_onek: onek, p_id: id })
+    if (error) { console.error('siparisIptalGuvenli:', error.message); return { basarili: false } }
+    return data || { basarili: false }
+  } catch (e) { console.error('siparisIptalGuvenli:', e.message); return { basarili: false } }
 }
 // Vitrin aktivite kaydı — sunucu tarafında müşteri kodu doğrulanır
 export async function vitrinAktiviteKaydetGuvenli(kod, onek, eylem, koleksiyon, modelKod, modelAd, cihazId, cihazBilgi) {
