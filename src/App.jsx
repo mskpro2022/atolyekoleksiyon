@@ -5346,21 +5346,20 @@ function Atolye({ onSirketDegis }) {
   };
   const fotoZoom = async (f) => { if (!fFoto || fotoDurum) return; try { fotoDegistir(await fotoZoomla(fFoto, f)); } catch (e) { toastGoster("hata", "İşlem yapılamadı"); } };
   const fotoYansit = async () => { if (!fFoto || fotoDurum) return; try { fotoDegistir(await fotoCevir(fFoto)); } catch (e) { toastGoster("hata", "İşlem yapılamadı"); } };
-  const _fb = { background:T.card, border:"1px solid "+T.border, borderRadius:10, padding:"10px 12px", color:T.text, fontSize:13, fontWeight:700, cursor:"pointer", textAlign:"center", whiteSpace:"nowrap" };
+  const _fb = { background:"transparent", border:"none", borderRadius:6, padding:"3px 9px", color:T.sub, fontSize:15, fontWeight:700, cursor:"pointer", lineHeight:"22px" };
   const fotoAracCubugu = fFoto ? (
-    <div style={{ marginBottom:12 }}>
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))", gap:8 }}>
-        <button onClick={fotoAI} disabled={!!fotoDurum} style={{ ..._fb, borderColor:"var(--vurgu)", borderWidth:2, color:"var(--vurgu)", opacity:fotoDurum?0.6:1 }}>✨ Arka planı sil</button>
-        <button onClick={()=>setKoruModal(true)} disabled={!!fotoDurum} style={{ ..._fb, ...(_koruMaske && _koruMaske.foto===fFoto ? { borderColor:"#ff2d7a", color:"#e0175f" } : {}) }}>🖌 İşaretle{_koruMaske && _koruMaske.foto===fFoto ? " ✓" : ""}</button>
-        <button onClick={()=>fotoZoom(1.18)} disabled={!!fotoDurum} style={_fb} title="Ürünü büyüt">🔍＋ Yakınlaştır</button>
-        <button onClick={()=>fotoZoom(0.85)} disabled={!!fotoDurum} style={_fb} title="Ürünü küçült">🔍－ Uzaklaştır</button>
-        <button onClick={fotoYansit} disabled={!!fotoDurum} style={_fb} title="Yatay çevir">⇋ Çevir</button>
-        <button onClick={fotoGeriAl} disabled={!!fotoDurum || fGeriVar===0} style={{ ..._fb, opacity:fGeriVar===0?0.4:1 }}>↩ Geri al</button>
-      </div>
-      <div style={{ marginTop:6, fontSize:12, display:"flex", gap:12, alignItems:"center", minHeight:16 }}>
-        {_temizFotolar.has(fFoto) && <span style={{ color:"#2f9e44", fontWeight:700 }}>● arka planı temiz</span>}
-        {fotoDurum && <span style={{ color:T.sub }}>{fotoDurum}</span>}
-      </div>
+    <div style={{ marginBottom:10, display:"flex", alignItems:"center", gap:2, flexWrap:"wrap" }}>
+      <button onClick={fotoAI} disabled={!!fotoDurum} title="Arka planı sil" style={{ ..._fb, color:"var(--vurgu)", opacity:fotoDurum?0.5:1 }}>✨</button>
+      <button onClick={()=>setKoruModal(true)} disabled={!!fotoDurum} title="Korunacak bölgeleri işaretle" style={{ ..._fb, ...(_koruMaske && _koruMaske.foto===fFoto ? { color:"#e0175f" } : {}) }}>🖌{_koruMaske && _koruMaske.foto===fFoto ? "✓" : ""}</button>
+      <span style={{ width:1, height:16, background:T.border, margin:"0 4px" }}/>
+      <button onClick={()=>fotoZoom(1.18)} disabled={!!fotoDurum} style={_fb} title="Yakınlaştır">＋</button>
+      <button onClick={()=>fotoZoom(0.85)} disabled={!!fotoDurum} style={_fb} title="Uzaklaştır">－</button>
+      <button onClick={fotoYansit} disabled={!!fotoDurum} style={_fb} title="Yatay çevir">⇋</button>
+      <button onClick={fotoGeriAl} disabled={!!fotoDurum || fGeriVar===0} style={{ ..._fb, opacity:fGeriVar===0?0.3:1 }} title="Geri al">↩</button>
+      <span style={{ marginLeft:8, fontSize:12 }}>
+        {_temizFotolar.has(fFoto) && <span style={{ color:"#2f9e44", fontWeight:700 }}>● temiz</span>}
+        {fotoDurum && <span style={{ color:T.sub, marginLeft:8 }}>{fotoDurum}</span>}
+      </span>
     </div>
   ) : null;
   const _unusedFotoHandle = () => {
@@ -11032,6 +11031,7 @@ function Atolye({ onSirketDegis }) {
                 <div style={{ background:"rgba(0,0,0,0.6)", color:"#fff", fontSize:10, fontWeight:600, padding:"5px 11px", borderRadius:7, display:"flex", alignItems:"center", gap:5 }}>📷 Fotoğrafı değiştir</div>
               </div>
             </div>
+            {fotoAracCubugu}
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8 }}>
               {["9K","10K","14K","18K","21K","22K"].map(a => {
                 const setIcerik = editM && Array.isArray(editM.setParcalari) && editM.setParcalari.length>0 ? editM.setParcalari : null;
@@ -11058,11 +11058,11 @@ function Atolye({ onSirketDegis }) {
             {fFoto && <button onClick={e=>{e.stopPropagation();setFFoto("");}} style={{ position:"absolute", top:4, right:4, background:"rgba(0,0,0,0.6)", border:"none", borderRadius:4, width:18, height:18, color:"#fff", fontSize:9, cursor:"pointer" }}>X</button>}
             {fFoto && <div onClick={e=>{ e.stopPropagation(); setKirpModal(fFoto); }} style={{ position:"absolute", bottom:4, right:4, background:"rgba(0,0,0,0.6)", color:"#fff", fontSize:9, fontWeight:600, padding:"3px 8px", borderRadius:5, cursor:"pointer" }}>✂️ Kırp</div>}
           </div>
+          {fotoAracCubugu}
         </div>
         )}
         {/* Dosya seçici — hem yeni hem düzenleme için */}
         <input ref={fileRef} type="file" accept="image/*" onChange={handleFoto} style={{ display:"none" }}/>
-        {fotoAracCubugu}
 
         {/* ═══ DETAY NOKTALARI — her üründe opsiyonel, sadece istediğinde aç ═══ */}
         {fFoto && (
