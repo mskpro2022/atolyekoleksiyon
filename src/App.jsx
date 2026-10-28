@@ -2298,6 +2298,7 @@ function VitrinModu({ kod, onizleme }) {
   const [sipKapali, setSipKapali] = useState({});         // { siparisId: true/false } — kart aç/kapa (varsayılan: devam edenler açık)
   const [sipFiltre, setSipFiltre] = useState("tumu");   // tumu | acik | teslim | iptal
   const [sipFoto, setSipFoto] = useState(null);           // büyütülen kalem
+  const [sipAra, setSipAra] = useState("");
   const [sipListeAcik, setSipListeAcik] = useState(false);   // "Siparişlerim" sayfası
   const [sipListe, setSipListe] = useState(null);              // null = yüklenmedi | dizi | "hata"
   const [sipListeYukleniyor, setSipListeYukleniyor] = useState(false);
@@ -3319,8 +3320,13 @@ function VitrinModu({ kod, onizleme }) {
         });
         const sayim = { bekliyor:0, islemde:0, teslim:0, iptal:0 };
         liste.forEach(sp => { sayim[sinif(sp)]++; });
+        const araQ = sipAra.trim().toLowerCase();
         const gorunen = liste.filter(sp => {
           const c = sinif(sp);
+          if (araQ) {
+            const hay = [sp.siparisNo, sp.aciklama, ...(sp.kalemler||[]).map(k=>(k.kod||"")+" "+(k.ad||""))].join(" ").toLowerCase();
+            if (!hay.includes(araQ)) return false;
+          }
           if (sipFiltre === "tumu") return true;
           if (sipFiltre === "acik") return c === "bekliyor" || c === "islemde";
           return c === sipFiltre;
@@ -3361,6 +3367,12 @@ function VitrinModu({ kod, onizleme }) {
               {vitrinMusteri && <div style={{ fontSize:14, color:"var(--vt2)", marginTop:8 }}>{t3("Müşteri kodu","Customer code","Código de cliente")} · <span style={{ color:"var(--vt1)", fontWeight:600 }}>{vitrinMusteri.kod}</span></div>}
             </div>
 
+            {Array.isArray(sipListe) && sipListe.length > 0 && (
+              <div style={{ position:"relative", margin:"6px 0 0" }}>
+                <input value={sipAra} onChange={e=>setSipAra(e.target.value)} placeholder={t3("Sipariş numarası / PO / model kodu ara…","Search order no. / PO / model code…","Buscar nº de pedido / PO / modelo…")} style={{ width:"100%", boxSizing:"border-box", padding:"12px 40px 12px 16px", fontSize:15, borderRadius:980, border:"1px solid rgba(var(--voverlay-rgb),0.18)", background:"transparent", color:"var(--vt1)", outline:"none" }}/>
+                {sipAra && <button onClick={()=>setSipAra("")} style={{ position:"absolute", right:8, top:"50%", transform:"translateY(-50%)", background:"transparent", border:"none", color:"var(--vt2)", fontSize:18, cursor:"pointer", padding:"4px 8px" }}>✕</button>}
+              </div>
+            )}
             {sipListe === null && <div style={{ padding:"60px 0", textAlign:"center", color:"var(--vt2)" }}>…</div>}
             {sipListe === "hata" && <div style={{ padding:"60px 0", textAlign:"center", color:KIRMIZI }}>{t3("Siparişler yüklenemedi. Lütfen tekrar deneyin.","Orders could not be loaded. Please try again.","No se pudieron cargar los pedidos.")}</div>}
 
@@ -3397,7 +3409,7 @@ function VitrinModu({ kod, onizleme }) {
                 <div onClick={()=>setSipKapali(p=>({ ...p, [sp.id]: acik }))} style={{ padding:"22px 26px 20px", cursor:"pointer" }}>
                   <div style={{ display:"flex", alignItems:"flex-start", gap:12 }}>
                     <div style={{ flex:1, minWidth:0 }}>
-                      <div style={{ fontSize:12, color:"var(--vt3)", fontWeight:500, marginBottom:6 }}>{t3("Sipariş","Order","Pedido")} #{sirNo} · {tarihYaz(sp.tarih, true)}</div>
+                      <div style={{ fontSize:12, color:"var(--vt3)", fontWeight:500, marginBottom:6 }}>{t3("Sipariş","Order","Pedido")} {sp.siparisNo ? <b style={{ color:"var(--vt1)" }}>{sp.siparisNo}</b> : "#"+sirNo}{(String(sp.aciklama||"").match(/PO\s*(\d+)/i)||[])[1] ? " · PO "+String(sp.aciklama).match(/PO\s*(\d+)/i)[1] : ""} · {tarihYaz(sp.tarih, true)}</div>
                       <div style={{ fontSize:24, fontWeight:700, letterSpacing:"-0.02em", color:baslikRenk, lineHeight:1.15 }}>{baslik}</div>
                       {altYazi && <div style={{ fontSize:14, color:"var(--vt2)", marginTop:6, lineHeight:1.4 }}>{altYazi}</div>}
                     </div>
