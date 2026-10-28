@@ -6835,6 +6835,7 @@ function Atolye({ onSirketDegis }) {
     if (sipTarih1 && s.tarih < new Date(sipTarih1).getTime()) return false;
     if (sipTarih2 && s.tarih > new Date(sipTarih2).getTime()+86399999) return false;
     if (sipMetal!=="tumu") { const oo=ozet(s); if (sipMetal==="gumus" ? oo.gumus<=0 : oo.altin<=0.0001) return false; }
+    if (sipAsama) { if (s.onayDurum==="bekliyor"||s.onayDurum==="red"||s.onayDurum==="iptal") return false; const kd0=s.kalemDurumlar||{}; if (!(s.kalemler||[]).some(k=>(kd0[k.id]||k.durum||"baslanmadi")===sipAsama)) return false; }
     const son = SON(s);
     if (sipFiltre==="aktif") { if (!son||BIT.includes(son.durum)) return false; }
     if (sipFiltre==="baslanmadi") { if (s.durumGecmisi?.length) return false; }
@@ -7145,17 +7146,27 @@ function Atolye({ onSirketDegis }) {
               <div style={{ display:"flex", border:"1px solid rgba(var(--vurgu-rgb),0.3)", borderRadius:9, overflow:"hidden" }}>{[["tumu","Tümü"],["altin","🥇 Altın"],["gumus","🥈 Gümüş 925"]].map(([id,l])=><button key={id} onClick={()=>setSipMetal(id)} style={{ background:sipMetal===id?"rgba(var(--vurgu-rgb),0.25)":"transparent", border:"none", padding:"6px 12px", color:sipMetal===id?GOLD:"#998a6e", fontSize:12, fontWeight:700, cursor:"pointer" }}>{l}</button>)}</div>
             </div>
             <div style={{ fontSize:11, fontWeight:800, color:"#7a6f5a", letterSpacing:.6, marginBottom:6 }}>ÜRETİM AŞAMALARI <span style={{ fontWeight:600, opacity:.8 }}>· tıkla, hangi ürünler orada gör</span></div>
-            <div style={{ display:"flex", gap:6, overflowX:"auto", paddingBottom:4 }}>
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(104px, 1fr))", gap:6, paddingBottom:4 }}>
+              {[["tumu","Tümü","#998a6e"],["aktif","Aktif","#2f9e44"]].map(([id,l,col])=>{ const f=filtreler.find(x=>x.id===id); const on=!sipAsama && (id==="tumu"?tumuF:sipFiltre===id); return (
+                <button key={id} onClick={()=>{ setSipAsama(""); setSipFiltre(id); }} style={{ minWidth:0, textAlign:"left", cursor:"pointer", background:on?col+"26":T.card, border:"1.5px solid "+(on?col:T.border), borderTop:"4px solid "+col, borderRadius:10, padding:"7px 10px" }}>
+                  <div style={{ fontSize:11, fontWeight:800, color:col }}>{l}</div>
+                  <div style={{ fontSize:20, fontWeight:800, color:T.text, lineHeight:1.2 }}>{f?f.cnt:0}<span style={{ fontSize:11, fontWeight:600, color:"#998a6e" }}> sipariş</span></div>
+                </button>); })}
               {asamalar.map(d => {
                 const l = say(d.id), adet = l.reduce((a,x)=>a+x.net,0), gr = l.reduce((a,x)=>a+x.gram,0), on = sipAsama===d.id;
                 return (
-                  <button key={d.id} onClick={()=>setSipAsama(on?"":d.id)} style={{ flex:"1 0 96px", textAlign:"left", cursor:"pointer", background:on?d.c+"26":T.card, border:"1.5px solid "+(on?d.c:T.border), borderTop:"4px solid "+d.c, borderRadius:10, padding:"7px 10px", opacity:l.length||on?1:0.55 }}>
+                  <button key={d.id} onClick={()=>{ setSipFiltre("tumu"); setSipAsama(on?"":d.id); }} style={{ minWidth:0, textAlign:"left", cursor:"pointer", background:on?d.c+"26":T.card, border:"1.5px solid "+(on?d.c:T.border), borderTop:"4px solid "+d.c, borderRadius:10, padding:"7px 10px", opacity:l.length||on?1:0.55 }}>
                     <div style={{ fontSize:11, fontWeight:800, color:d.c, whiteSpace:"nowrap" }}>{durumEtiket(d)}</div>
                     <div style={{ fontSize:20, fontWeight:800, color:T.text, lineHeight:1.2 }}>{adet}<span style={{ fontSize:11, fontWeight:600, color:"#998a6e" }}> adet</span></div>
                     <div style={{ fontSize:11, color:"#998a6e" }}>{l.length} kalem · {fN(gr,1)} gr</div>
                   </button>
                 );
               })}
+              {[["teslimgecti","Teslimi geçen","#e85a4f"],["geciken","Aşamada 7+ gün","#e8833a"]].map(([id,l,col])=>{ const f=filtreler.find(x=>x.id===id); const on=!sipAsama && sipFiltre===id; return (
+                <button key={id} onClick={()=>{ setSipAsama(""); setSipFiltre(on?"tumu":id); }} style={{ minWidth:0, textAlign:"left", cursor:"pointer", background:on?col+"26":T.card, border:"1.5px solid "+(on?col:T.border), borderTop:"4px solid "+col, borderRadius:10, padding:"7px 10px", opacity:(f&&f.cnt)||on?1:0.55 }}>
+                  <div style={{ fontSize:11, fontWeight:800, color:col, whiteSpace:"nowrap" }}>{l}</div>
+                  <div style={{ fontSize:20, fontWeight:800, color:T.text, lineHeight:1.2 }}>{f?f.cnt:0}<span style={{ fontSize:11, fontWeight:600, color:"#998a6e" }}> sipariş</span></div>
+                </button>); })}
             </div>
             {sipAsama && sd && (
               <div style={{ marginTop:8, background:T.card, border:"1px solid "+sd.c+"88", borderRadius:12, padding:12 }}>
@@ -7192,11 +7203,6 @@ function Atolye({ onSirketDegis }) {
           </div>
         );
       })()}
-      <div style={{ display:"flex", gap:5, flexWrap:"wrap", marginBottom:12 }}>
-        {filtreler.map(f=>(
-          <button key={f.id} onClick={()=>setSipFiltre(f.id)} style={{ background:(sipFiltre===f.id||(f.id==="tumu"&&tumuF))?"rgba(var(--vurgu-rgb),0.2)":"rgba(var(--vurgu-rgb),0.04)", border:"1px solid "+((sipFiltre===f.id||(f.id==="tumu"&&tumuF))?"rgba(var(--vurgu-rgb),0.5)":"rgba(var(--vurgu-rgb),0.12)"), borderRadius:980, padding:"5px 13px", color:(sipFiltre===f.id||(f.id==="tumu"&&tumuF))?GOLD:"#998a6e", fontSize:12, fontWeight:700, cursor:"pointer" }}>{f.l} <span style={{ opacity:.7, fontWeight:600 }}>{f.cnt}</span></button>
-        ))}
-      </div>
       {(() => {
         const oz = liste.map(s=>({ s, o:ozet(s) }));
         const gec = oz.filter(x=>x.o.gecikti);
