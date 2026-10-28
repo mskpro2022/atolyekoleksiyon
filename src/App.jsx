@@ -5290,13 +5290,16 @@ function Atolye({ onSirketDegis }) {
   };
   const [kartGeri, setKartGeri] = useState({});
   const [kartDurum, setKartDurum] = useState({});
+  const [kartKoru, setKartKoru] = useState({});
+  const [kartKoruModal, setKartKoruModal] = useState(null);
   const blobDataUrl = (blob) => new Promise((res) => { const r = new FileReader(); r.onload = () => res(r.result); r.readAsDataURL(blob); });
   const kartFotoAI = async (m) => {
     if (!m.foto || kartDurum[m.id]) return;
     setKartDurum(p => ({ ...p, [m.id]: true }));
     try {
       const orjData = m.foto.startsWith("data:") ? m.foto : await blobDataUrl(await (await fetch(m.foto)).blob());
-      const yeni = await arkaPlanSilAI(m.foto, null, m.kategori !== "kolye", null);
+      const yeni = await arkaPlanSilAI(m.foto, null, m.kategori !== "kolye", kartKoru[m.id] || null);
+      setKartKoru(p => { const n = { ...p }; delete n[m.id]; return n; });
       const url = await fotoYukleStorage(yeni, m.id, AKTIF_SIRKET_ONEK);
       setKartGeri(p => ({ ...p, [m.id]: { foto: orjData, temiz: !!m.fotoTemiz } }));
       _temizFotolar.add(url);
@@ -6239,12 +6242,6 @@ function Atolye({ onSirketDegis }) {
                     <div className="model-foto-wrap" style={{ position:"relative", ...(bilMi ? (katSut>=3 ? { aspectRatio: (5*katSut)+"/12" } : { height:264 }) : { aspectRatio:"5/4" }), background: bilMi ? "#f3f3f3" : "#f0f0f0", overflow:"hidden" }}>
                       {m.foto ? <img onClick={()=>openEM(m)} src={m.foto} alt="" style={{ ...(bilMi ? { width:"100%", height:"100%" } : { position:"absolute", top:"8.5%", left:"8.5%", width:"83%", height:"83%", ...FOTO_KENAR_SOLUK }), objectFit:"cover", objectPosition: m.kategori==="kolye" ? "50% 85%" : "center center", display:"block", ...(m.kategori==="kolye" ? { width:"72%", margin:"0 auto", ...FOTO_KENAR_SOLUK } : {}), cursor:"pointer" }}/> : <div onClick={()=>openEM(m)} style={{ width:"100%", height:"100%", display:"flex", alignItems:"center", justifyContent:"center", color:"rgba(var(--vurgu-rgb),0.1)", fontSize:24, cursor:"pointer" }}>-</div>}
                       {m.fotoTemiz && <div title="Arka planı temiz" style={{ position:"absolute", top:7, left:7, width:11, height:11, borderRadius:"50%", background:"#34c759", border:"2px solid #fff", boxShadow:"0 1px 4px rgba(0,0,0,0.35)", zIndex:5 }}/>}
-                      {m.foto && (!m.fotoTemiz || kartGeri[m.id]) && (
-                        <div onClick={e=>e.stopPropagation()} style={{ position:"absolute", bottom:6, left:0, right:0, display:"flex", justifyContent:"center", gap:5, zIndex:5 }}>
-                          {!m.fotoTemiz && <button onClick={()=>kartFotoAI(m)} disabled={!!kartDurum[m.id]} title="Arka planı sil" style={{ background:"rgba(0,0,0,0.62)", border:"none", borderRadius:6, padding:"3px 9px", color:"#fff", fontSize:11, fontWeight:700, cursor:"pointer" }}>{kartDurum[m.id] ? "⏳" : "✨"}</button>}
-                          {kartGeri[m.id] && <button onClick={()=>kartFotoGeriAl(m)} title="Önceki fotoğrafa dön" style={{ background:"rgba(0,0,0,0.62)", border:"none", borderRadius:6, padding:"3px 9px", color:"#fff", fontSize:11, fontWeight:700, cursor:"pointer" }}>↩</button>}
-                        </div>
-                      )}
                       {/* Detay noktaları — KÖŞELERDE, büyük (56px). Sağ üst köşe V butonunun altına kaydırıldı ki çakışmasın. */}
                       {m.foto && Array.isArray(m.detayNoktalari) && m.detayNoktalari.filter(n=>(n.tip!=="foto")||n.foto).slice(0,4).map((n,di) => {
                         const ayriFoto = n.tip === "foto";
@@ -6268,6 +6265,13 @@ function Atolye({ onSirketDegis }) {
                       {h&&h.karUyari&&!h.gumusMu && <div style={{ position:"absolute", bottom:3, left:3, background:"rgba(232,90,79,0.88)", color:"#fff", padding:"1px 5px", borderRadius:3, fontSize:6, fontWeight:800 }}>⚠ {fN(h.karMly,3)} mly/gr</div>}
                       {(m.satisSayisi||0)>0 && <div style={{ position:"absolute", top:4, left:4, background:"rgba(106,191,105,0.85)", color:"#fff", padding:"1px 5px", borderRadius:3, fontSize:6, fontWeight:800 }}>{m.satisSayisi}x</div>}
                     </div>
+                    {m.foto && (!m.fotoTemiz || kartGeri[m.id]) && (
+                      <div onClick={e=>e.stopPropagation()} style={{ display:"flex", gap:6, padding:"5px 8px 0" }}>
+                        {!m.fotoTemiz && <button onClick={()=>setKartKoruModal(m)} disabled={!!kartDurum[m.id]} title="Silinmesini istemediğin bölgeleri işaretle" style={{ flex:1, background:"rgba(255,255,255,0.06)", border:"1px solid "+(kartKoru[m.id]?"#ff2d7a":"rgba(255,255,255,0.18)"), borderRadius:6, padding:"4px 8px", color:kartKoru[m.id]?"#ff7aa8":"var(--goldtext)", fontSize:11, fontWeight:700, cursor:"pointer" }}>🖌 İşaretle{kartKoru[m.id] ? " ✓" : ""}</button>}
+                        {!m.fotoTemiz && <button onClick={()=>kartFotoAI(m)} disabled={!!kartDurum[m.id]} title="Arka planı sil" style={{ flex:1, background:"rgba(var(--vurgu-rgb),0.12)", border:"1px solid rgba(var(--vurgu-rgb),0.3)", borderRadius:6, padding:"4px 8px", color:GOLD, fontSize:11, fontWeight:700, cursor:"pointer" }}>{kartDurum[m.id] ? "⏳ siliniyor…" : "✨ Arka planı sil"}</button>}
+                        {kartGeri[m.id] && <button onClick={()=>kartFotoGeriAl(m)} title="Önceki fotoğrafa dön" style={{ flex:1, background:"rgba(255,255,255,0.06)", border:"1px solid rgba(255,255,255,0.18)", borderRadius:6, padding:"4px 8px", color:"var(--goldtext)", fontSize:11, fontWeight:700, cursor:"pointer" }}>↩ Geri al</button>}
+                      </div>
+                    )}
                     <div style={{ padding:"6px 8px" }}>
                       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:2 }}>
                         <span style={{ background:T.header, border:"1px solid "+T.border, color:dur.c, padding:"1px 5px", borderRadius:3, fontSize:7, fontWeight:700 }}>{dur.l}</span>
@@ -10956,6 +10960,11 @@ function Atolye({ onSirketDegis }) {
         <FotoKirpModal src={kirpModal}
           onCancel={()=>setKirpModal(null)}
           onConfirm={(sonuc)=>{ setFFoto(fotoTemizTasi(kirpModal, sonuc)); setKirpModal(null); }}/>
+      )}
+      {kartKoruModal && (
+        <FotoKoruModal src={kartKoruModal.foto} baslangic={kartKoru[kartKoruModal.id] || null}
+          onIptal={()=>setKartKoruModal(null)}
+          onTamam={(cv)=>{ const id = kartKoruModal.id; setKartKoru(p => { const n = { ...p }; if (cv) n[id] = cv; else delete n[id]; return n; }); setKartKoruModal(null); }}/>
       )}
       {koruModal && fFoto && (
         <FotoKoruModal src={fFoto} baslangic={_koruMaske && _koruMaske.foto===fFoto ? _koruMaske.canvas : null}
