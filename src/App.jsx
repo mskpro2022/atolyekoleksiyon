@@ -6280,16 +6280,16 @@ function Atolye({ onSirketDegis }) {
                     {m.foto && (() => {
                       const mesgul = !!kartDurum[m.id];
                       const gecmis = (kartGeri[m.id] || []).length;
-                      const ib = { background:"transparent", border:"1px solid "+T.border, borderRadius:6, padding:"2px 9px", color:T.text, fontSize:12, fontWeight:700, cursor:mesgul?"wait":"pointer", lineHeight:"18px", opacity:mesgul?0.5:1 };
+                      const ib = { background:"transparent", border:"none", borderRadius:5, padding:"1px 7px", color:T.sub, fontSize:13, fontWeight:700, cursor:mesgul?"wait":"pointer", lineHeight:"20px", opacity:mesgul?0.45:1 };
                       return (
-                        <div onClick={e=>e.stopPropagation()} style={{ display:"flex", gap:4, padding:"5px 8px 0", alignItems:"center", flexWrap:"wrap" }}>
-                          {!m.fotoTemiz && <button onClick={()=>kartFotoAI(m)} disabled={mesgul} title="Arka planı sil" style={{ ...ib, borderColor:"var(--vurgu)", color:"var(--vurgu)" }}>{mesgul ? "⏳" : "✨"}</button>}
-                          {!m.fotoTemiz && <button onClick={()=>setKartKoruModal(m)} disabled={mesgul} title="Korunacak bölgeleri işaretle" style={{ ...ib, ...(kartKoru[m.id] ? { borderColor:"#ff2d7a", color:"#e0175f" } : {}) }}>🖌{kartKoru[m.id] ? "✓" : ""}</button>}
+                        <div onClick={e=>e.stopPropagation()} style={{ display:"flex", gap:2, padding:"4px 8px 0", alignItems:"center", flexWrap:"wrap" }}>
+                          <button onClick={()=>kartFotoAI(m)} disabled={mesgul} title={m.fotoTemiz ? "Arka planı yeniden sil" : "Arka planı sil"} style={{ ...ib, color:"var(--vurgu)" }}>{mesgul ? "⏳" : "✨"}</button>
+                          <button onClick={()=>setKartKoruModal(m)} disabled={mesgul} title="Korunacak bölgeleri işaretle" style={{ ...ib, ...(kartKoru[m.id] ? { color:"#e0175f" } : {}) }}>🖌{kartKoru[m.id] ? "✓" : ""}</button>
+                          <span style={{ width:1, height:14, background:T.border, margin:"0 3px" }}/>
                           <button onClick={()=>kartFotoIslem(m, ()=>fotoZoomla(m.foto, 1.18), false)} disabled={mesgul} title="Yakınlaştır (kaydedilir)" style={ib}>＋</button>
                           <button onClick={()=>kartFotoIslem(m, ()=>fotoZoomla(m.foto, 0.85), false)} disabled={mesgul} title="Uzaklaştır (kaydedilir)" style={ib}>－</button>
                           <button onClick={()=>kartFotoIslem(m, ()=>fotoCevir(m.foto), false)} disabled={mesgul} title="Yatay çevir (kaydedilir)" style={ib}>⇋</button>
                           {gecmis > 0 && <button onClick={()=>kartFotoGeriAl(m)} disabled={mesgul} title="Son işlemi geri al" style={ib}>↩</button>}
-                          {mesgul && <span style={{ fontSize:10, color:T.sub }}>işleniyor…</span>}
                         </div>
                       );
                     })()}
