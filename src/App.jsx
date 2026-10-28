@@ -5338,17 +5338,21 @@ function Atolye({ onSirketDegis }) {
   };
   const fotoZoom = async (f) => { if (!fFoto || fotoDurum) return; try { fotoDegistir(await fotoZoomla(fFoto, f)); } catch (e) { toastGoster("hata", "İşlem yapılamadı"); } };
   const fotoYansit = async () => { if (!fFoto || fotoDurum) return; try { fotoDegistir(await fotoCevir(fFoto)); } catch (e) { toastGoster("hata", "İşlem yapılamadı"); } };
-  const _fb = { background:"rgba(255,255,255,0.07)", border:"1px solid rgba(255,255,255,0.14)", borderRadius:8, padding:"7px 11px", color:"#f5f5f7", fontSize:12, fontWeight:600, cursor:"pointer", whiteSpace:"nowrap" };
+  const _fb = { background:T.card, border:"1px solid "+T.border, borderRadius:10, padding:"10px 12px", color:T.text, fontSize:13, fontWeight:700, cursor:"pointer", textAlign:"center", whiteSpace:"nowrap" };
   const fotoAracCubugu = fFoto ? (
-    <div style={{ marginBottom:10, display:"flex", gap:6, flexWrap:"wrap", alignItems:"center" }}>
-      <button onClick={fotoAI} disabled={!!fotoDurum} style={{ ..._fb, background:"var(--vurgu)", border:"none", color:"#fff", opacity:fotoDurum?0.6:1 }}>✨ Arka planı sil</button>
-      <button onClick={()=>setKoruModal(true)} disabled={!!fotoDurum} style={{ ..._fb, ...(_koruMaske && _koruMaske.foto===fFoto ? { borderColor:"#ff2d7a", color:"#ff7aa8" } : {}) }}>🖌 İşaretle{_koruMaske && _koruMaske.foto===fFoto ? " ✓" : ""}</button>
-      <button onClick={()=>fotoZoom(1.18)} disabled={!!fotoDurum} style={_fb} title="Ürünü büyüt">🔍＋ Yakınlaştır</button>
-      <button onClick={()=>fotoZoom(0.85)} disabled={!!fotoDurum} style={_fb} title="Ürünü küçült">🔍－ Uzaklaştır</button>
-      <button onClick={fotoYansit} disabled={!!fotoDurum} style={_fb} title="Yatay çevir">⇋ Çevir</button>
-      <button onClick={fotoGeriAl} disabled={!!fotoDurum || fGeriVar===0} style={{ ..._fb, opacity:fGeriVar===0?0.4:1 }}>↩ Geri al</button>
-      {_temizFotolar.has(fFoto) && <span style={{ fontSize:11, color:"#6abf69", fontWeight:700 }}>● temiz</span>}
-      {fotoDurum && <span style={{ fontSize:11, color:"#998a6e" }}>{fotoDurum}</span>}
+    <div style={{ marginBottom:12 }}>
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))", gap:8 }}>
+        <button onClick={fotoAI} disabled={!!fotoDurum} style={{ ..._fb, borderColor:"var(--vurgu)", borderWidth:2, color:"var(--vurgu)", opacity:fotoDurum?0.6:1 }}>✨ Arka planı sil</button>
+        <button onClick={()=>setKoruModal(true)} disabled={!!fotoDurum} style={{ ..._fb, ...(_koruMaske && _koruMaske.foto===fFoto ? { borderColor:"#ff2d7a", color:"#e0175f" } : {}) }}>🖌 İşaretle{_koruMaske && _koruMaske.foto===fFoto ? " ✓" : ""}</button>
+        <button onClick={()=>fotoZoom(1.18)} disabled={!!fotoDurum} style={_fb} title="Ürünü büyüt">🔍＋ Yakınlaştır</button>
+        <button onClick={()=>fotoZoom(0.85)} disabled={!!fotoDurum} style={_fb} title="Ürünü küçült">🔍－ Uzaklaştır</button>
+        <button onClick={fotoYansit} disabled={!!fotoDurum} style={_fb} title="Yatay çevir">⇋ Çevir</button>
+        <button onClick={fotoGeriAl} disabled={!!fotoDurum || fGeriVar===0} style={{ ..._fb, opacity:fGeriVar===0?0.4:1 }}>↩ Geri al</button>
+      </div>
+      <div style={{ marginTop:6, fontSize:12, display:"flex", gap:12, alignItems:"center", minHeight:16 }}>
+        {_temizFotolar.has(fFoto) && <span style={{ color:"#2f9e44", fontWeight:700 }}>● arka planı temiz</span>}
+        {fotoDurum && <span style={{ color:T.sub }}>{fotoDurum}</span>}
+      </div>
     </div>
   ) : null;
   const _unusedFotoHandle = () => {
@@ -6267,9 +6271,9 @@ function Atolye({ onSirketDegis }) {
                     </div>
                     {m.foto && (!m.fotoTemiz || kartGeri[m.id]) && (
                       <div onClick={e=>e.stopPropagation()} style={{ display:"flex", gap:6, padding:"5px 8px 0" }}>
-                        {!m.fotoTemiz && <button onClick={()=>setKartKoruModal(m)} disabled={!!kartDurum[m.id]} title="Silinmesini istemediğin bölgeleri işaretle" style={{ flex:1, background:"rgba(255,255,255,0.06)", border:"1px solid "+(kartKoru[m.id]?"#ff2d7a":"rgba(255,255,255,0.18)"), borderRadius:6, padding:"4px 8px", color:kartKoru[m.id]?"#ff7aa8":"var(--goldtext)", fontSize:11, fontWeight:700, cursor:"pointer" }}>🖌 İşaretle{kartKoru[m.id] ? " ✓" : ""}</button>}
+                        {!m.fotoTemiz && <button onClick={()=>setKartKoruModal(m)} disabled={!!kartDurum[m.id]} title="Silinmesini istemediğin bölgeleri işaretle" style={{ flex:1, background:T.card, border:"1px solid "+(kartKoru[m.id]?"#ff2d7a":T.border), borderRadius:6, padding:"4px 8px", color:kartKoru[m.id]?"#e0175f":T.text, fontSize:11, fontWeight:700, cursor:"pointer" }}>🖌 İşaretle{kartKoru[m.id] ? " ✓" : ""}</button>}
                         {!m.fotoTemiz && <button onClick={()=>kartFotoAI(m)} disabled={!!kartDurum[m.id]} title="Arka planı sil" style={{ flex:1, background:"rgba(var(--vurgu-rgb),0.12)", border:"1px solid rgba(var(--vurgu-rgb),0.3)", borderRadius:6, padding:"4px 8px", color:GOLD, fontSize:11, fontWeight:700, cursor:"pointer" }}>{kartDurum[m.id] ? "⏳ siliniyor…" : "✨ Arka planı sil"}</button>}
-                        {kartGeri[m.id] && <button onClick={()=>kartFotoGeriAl(m)} title="Önceki fotoğrafa dön" style={{ flex:1, background:"rgba(255,255,255,0.06)", border:"1px solid rgba(255,255,255,0.18)", borderRadius:6, padding:"4px 8px", color:"var(--goldtext)", fontSize:11, fontWeight:700, cursor:"pointer" }}>↩ Geri al</button>}
+                        {kartGeri[m.id] && <button onClick={()=>kartFotoGeriAl(m)} title="Önceki fotoğrafa dön" style={{ flex:1, background:T.card, border:"1px solid "+T.border, borderRadius:6, padding:"4px 8px", color:T.text, fontSize:11, fontWeight:700, cursor:"pointer" }}>↩ Geri al</button>}
                       </div>
                     )}
                     <div style={{ padding:"6px 8px" }}>
