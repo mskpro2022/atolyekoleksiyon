@@ -7059,8 +7059,8 @@ function Atolye({ onSirketDegis }) {
       {siparisler.length>0 && aylarModu && aylarGorunum}
       {aylarModu && sec && (
         <div className="sp-drawer" style={{ position:"fixed", inset:0, zIndex:60 }}>
-          <div onClick={()=>setSipDrawer("")} style={{ position:"absolute", inset:0, background:"rgba(0,0,0,0.55)" }}/>
-          <div style={{ position:"absolute", top:0, right:0, bottom:0, width:"min(620px,100vw)", overflowY:"auto", background:"var(--vb, #111)", borderLeft:"1px solid rgba(var(--vurgu-rgb),0.3)", padding:16 }}>
+          <div onClick={()=>setSipDrawer("")} style={{ position:"absolute", inset:0, background:"rgba(0,0,0,0.35)" }}/>
+          <div style={{ position:"absolute", top:0, right:0, bottom:0, width:"min(620px,100vw)", overflowY:"auto", background:T.bg2||T.card, color:T.text, borderLeft:"1px solid "+T.border, boxShadow:"-12px 0 32px rgba(0,0,0,0.25)", padding:16 }}>
             <button onClick={()=>setSipDrawer("")} style={{ ...GH, fontSize:12, padding:"6px 12px", marginBottom:10 }}>✕ Kapat</button>
             {detay}
           </div>
