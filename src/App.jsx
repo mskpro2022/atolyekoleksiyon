@@ -2832,15 +2832,25 @@ function VitrinModu({ kod, onizleme }) {
         const kapakAl = (kid) => [...modeller.filter(m => m.ki === kid && m.foto)].sort((a,b)=>(b.t||0)-(a.t||0)).slice(0,4).map(m => m.foto);
         const tumKapaklar = kollarSirali.reduce((acc, k) => acc.concat(kapakAl(k.id).slice(0,1)), []).slice(0,4);
         // Kart sütun sayısı: kartlar ekrana sığacak en büyük boyutta (az koleksiyon → büyük kart, çok → küçük kart)
-        let kolSayi = null;
+        let kolSayi = null, satirH = null;
         if (ekranBoyut.w > 640 && kollarSirali.length > 0) {
           const N = kollarSirali.length, bosluk = 14, yan = 56;
           const alanH = Math.max(320, ekranBoyut.h - (toplamModel > 0 ? 330 : 240));
           const minC = Math.max(1, Math.ceil((ekranBoyut.w - yan) / 640));
-          for (let c = minC; c <= N; c++) {
+          const enUzunAd = kollarSirali.reduce((m,k)=>Math.max(m,(urunCevir(k.ad)||"").length),0);
+          const hesapSatirH = (c) => {
             const w = (ekranBoyut.w - yan - (c - 1) * bosluk) / c;
-            const kartH = w * 0.75 + 62;
-            if (Math.ceil(N / c) * (kartH + bosluk) <= alanH) { kolSayi = c; break; }
+            const satirSay = Math.ceil(N / c);
+            const adSatir = Math.max(1, Math.ceil(enUzunAd * 9.5 / Math.max(60, w - 28)));
+            const yaziH = 24 + adSatir * 20 + 18;
+            const minGorselH = w * 0.55;
+            const ihtiyac = minGorselH + yaziH;
+            const mevcut = (alanH - (satirSay - 1) * bosluk) / satirSay;
+            return { ok: mevcut >= ihtiyac, h: Math.min(mevcut, w * 1.05 + yaziH) };
+          };
+          for (let c = minC; c <= N; c++) {
+            const r = hesapSatirH(c);
+            if (r.ok) { kolSayi = c; satirH = Math.floor(r.h); break; }
           }
           if (kolSayi === null) kolSayi = Math.max(minC, Math.floor((ekranBoyut.w - yan + bosluk) / (230 + bosluk)));
         }
@@ -2879,7 +2889,7 @@ function VitrinModu({ kod, onizleme }) {
           )}
 
           {/* KOLEKSİYON KARTLARI */}
-          <div className="vm-kart-grid vm-pad" style={{ padding:"14px 28px 8px", ...(kolSayi ? { gridTemplateColumns:"repeat("+kolSayi+", minmax(0,1fr))" } : {}) }}>
+          <div className="vm-kart-grid vm-pad" style={{ padding:"14px 28px 8px", ...(kolSayi ? { gridTemplateColumns:"repeat("+kolSayi+", minmax(0,1fr))" } : {}), ...(satirH ? { gridAutoRows:satirH+"px" } : {}) }}>
             {kollarSirali.map(k => {
               const kolModelleri = modeller.filter(m => m.ki === k.id);
               const kapaklar = kapakAl(k.id);
@@ -2888,7 +2898,7 @@ function VitrinModu({ kod, onizleme }) {
               const secildi = sira >= 0;
               return (
               <div key={k.id} onClick={()=>kolAc(k)} className="vm-card"
-                style={{ borderRadius:14, overflow:"hidden", background:"rgba(var(--voverlay-rgb),0.04)", cursor:"pointer", position:"relative", border: secildi ? "2px solid var(--vurgu)" : (yeniSay>0 ? "1.5px solid rgba(var(--vurgu-rgb),0.4)" : "1.5px solid transparent") }}>
+                style={{ borderRadius:14, overflow:"hidden", background:"rgba(var(--voverlay-rgb),0.04)", cursor:"pointer", position:"relative", ...(satirH ? { display:"flex", flexDirection:"column", minHeight:0 } : {}), border: secildi ? "2px solid var(--vurgu)" : (yeniSay>0 ? "1.5px solid rgba(var(--vurgu-rgb),0.4)" : "1.5px solid transparent") }}>
                 {/* KATALOG SEÇİM BUTONU — sıra numarası */}
                 <button onClick={(e)=>{ e.stopPropagation(); setSeciliKlasorler(p => secildi ? p.filter(x=>x!==k.id) : [...p, k.id]); }}
                   style={{ position:"absolute", top:10, left:10, zIndex:4, minWidth:30, height:30, borderRadius:"50%", background: secildi?"var(--vurgu)":"rgba(255,255,255,0.92)", border: secildi?"none":"1px solid rgba(0,0,0,0.1)", color: secildi?"#fff":"var(--vt2)", fontSize:14, fontWeight:800, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", boxShadow:"0 2px 8px rgba(0,0,0,0.25)", padding:"0 8px" }}>
@@ -2897,14 +2907,14 @@ function VitrinModu({ kod, onizleme }) {
                 {yeniSay > 0 && (
                   <div style={{ position:"absolute", top:10, right:10, zIndex:3, background:"var(--vurgu)", color:"#1d1d1f", fontSize:11, fontWeight:700, padding:"4px 11px", borderRadius:980, boxShadow:"0 2px 8px rgba(0,0,0,0.3)" }}>{yeniSay} yeni</div>
                 )}
-                <div style={{ aspectRatio:"4/3", background:"#f7f7f8", display:"grid", gridTemplateColumns:"1fr 1fr", gridTemplateRows:"1fr 1fr", gap:1 }}>
+                <div style={{ ...(satirH ? { flex:"1 1 0", minHeight:0 } : { aspectRatio:"4/3" }), background:"#f7f7f8", display:"grid", gridTemplateColumns:"1fr 1fr", gridTemplateRows:"1fr 1fr", gap:1 }}>
                   {kapaklar.length > 0 ? [0,1,2,3].map(i => (
                     <div key={i} style={{ overflow:"hidden", background:"#f0f0f0" }}>
                       {kapaklar[i] ? <img src={kapaklar[i]} alt="" style={{ width:"100%", height:"100%", objectFit:"cover", display:"block" }}/> : <div style={{ width:"100%", height:"100%", background:"#eee" }}/>}
                     </div>
                   )) : <div style={{ gridColumn:"1/-1", gridRow:"1/-1", display:"flex", alignItems:"center", justifyContent:"center", color:"#d2d2d7", fontSize:32 }}>◇</div>}
                 </div>
-                <div style={{ padding:"12px 14px" }}>
+                <div style={{ padding:"12px 14px", flexShrink:0 }}>
                   <div style={{ fontSize:15, fontWeight:500, color:"var(--vt1)", letterSpacing:"-0.01em" }}>{urunCevir(k.ad)}</div>
                   <div style={{ fontSize:11, color:"var(--vt2)", marginTop:3 }}>{kolModelleri.length} model</div>
                 </div>
