@@ -5293,28 +5293,36 @@ function Atolye({ onSirketDegis }) {
   const [kartKoru, setKartKoru] = useState({});
   const [kartKoruModal, setKartKoruModal] = useState(null);
   const blobDataUrl = (blob) => new Promise((res) => { const r = new FileReader(); r.onload = () => res(r.result); r.readAsDataURL(blob); });
-  const kartFotoAI = async (m) => {
+  const kartFotoIslem = async (m, islem, temizYap) => {
     if (!m.foto || kartDurum[m.id]) return;
     setKartDurum(p => ({ ...p, [m.id]: true }));
     try {
       const orjData = m.foto.startsWith("data:") ? m.foto : await blobDataUrl(await (await fetch(m.foto)).blob());
-      const yeni = await arkaPlanSilAI(m.foto, null, m.kategori !== "kolye", kartKoru[m.id] || null);
-      setKartKoru(p => { const n = { ...p }; delete n[m.id]; return n; });
-      const url = await fotoYukleStorage(yeni, m.id, AKTIF_SIRKET_ONEK);
-      setKartGeri(p => ({ ...p, [m.id]: { foto: orjData, temiz: !!m.fotoTemiz } }));
-      _temizFotolar.add(url);
-      svMUpsert([{ ...m, foto: url, fotoTemiz: true }]);
-      toastGoster("ok", (m.kod || "Model") + ": arka plan silindi");
-    } catch (e) { toastGoster("hata", "Arka plan silinemedi: " + (e && e.message ? e.message : e)); }
+      const yeniData = await islem();
+      const url = await fotoYukleStorage(yeniData, m.id, AKTIF_SIRKET_ONEK);
+      setKartGeri(p => ({ ...p, [m.id]: [...(p[m.id] || []), { foto: orjData, temiz: !!m.fotoTemiz }] }));
+      const temiz = temizYap ? true : !!m.fotoTemiz;
+      if (temiz) _temizFotolar.add(url);
+      svMUpsert([{ ...m, foto: url, fotoTemiz: temiz }]);
+      return true;
+    } catch (e) { toastGoster("hata", "İşlem yapılamadı: " + (e && e.message ? e.message : e)); }
     finally { setKartDurum(p => { const n = { ...p }; delete n[m.id]; return n; }); }
   };
+  const kartFotoAI = async (m) => {
+    const koru = kartKoru[m.id] || null;
+    const ok = await kartFotoIslem(m, () => arkaPlanSilAI(m.foto, null, m.kategori !== "kolye", koru), true);
+    if (ok) { setKartKoru(p => { const n = { ...p }; delete n[m.id]; return n; }); toastGoster("ok", (m.kod || "Model") + ": arka plan silindi"); }
+  };
   const kartFotoGeriAl = async (m) => {
-    const g = kartGeri[m.id]; if (!g) return;
+    const st = kartGeri[m.id]; if (!st || !st.length || kartDurum[m.id]) return;
+    const g = st[st.length - 1];
+    setKartDurum(p => ({ ...p, [m.id]: true }));
     try {
       const url = await fotoYukleStorage(g.foto, m.id, AKTIF_SIRKET_ONEK);
       svMUpsert([{ ...m, foto: url, fotoTemiz: g.temiz }]);
-      setKartGeri(p => { const n = { ...p }; delete n[m.id]; return n; });
+      setKartGeri(p => ({ ...p, [m.id]: st.slice(0, -1) }));
     } catch (e) { toastGoster("hata", "Geri alınamadı"); }
+    finally { setKartDurum(p => { const n = { ...p }; delete n[m.id]; return n; }); }
   };
   const [fotoDurum, setFotoDurum] = useState("");
   const [koruModal, setKoruModal] = useState(false);
@@ -6269,13 +6277,22 @@ function Atolye({ onSirketDegis }) {
                       {h&&h.karUyari&&!h.gumusMu && <div style={{ position:"absolute", bottom:3, left:3, background:"rgba(232,90,79,0.88)", color:"#fff", padding:"1px 5px", borderRadius:3, fontSize:6, fontWeight:800 }}>⚠ {fN(h.karMly,3)} mly/gr</div>}
                       {(m.satisSayisi||0)>0 && <div style={{ position:"absolute", top:4, left:4, background:"rgba(106,191,105,0.85)", color:"#fff", padding:"1px 5px", borderRadius:3, fontSize:6, fontWeight:800 }}>{m.satisSayisi}x</div>}
                     </div>
-                    {m.foto && (!m.fotoTemiz || kartGeri[m.id]) && (
-                      <div onClick={e=>e.stopPropagation()} style={{ display:"flex", gap:6, padding:"5px 8px 0" }}>
-                        {!m.fotoTemiz && <button onClick={()=>setKartKoruModal(m)} disabled={!!kartDurum[m.id]} title="Silinmesini istemediğin bölgeleri işaretle" style={{ flex:1, background:T.card, border:"1px solid "+(kartKoru[m.id]?"#ff2d7a":T.border), borderRadius:6, padding:"4px 8px", color:kartKoru[m.id]?"#e0175f":T.text, fontSize:11, fontWeight:700, cursor:"pointer" }}>🖌 İşaretle{kartKoru[m.id] ? " ✓" : ""}</button>}
-                        {!m.fotoTemiz && <button onClick={()=>kartFotoAI(m)} disabled={!!kartDurum[m.id]} title="Arka planı sil" style={{ flex:1, background:"rgba(var(--vurgu-rgb),0.12)", border:"1px solid rgba(var(--vurgu-rgb),0.3)", borderRadius:6, padding:"4px 8px", color:GOLD, fontSize:11, fontWeight:700, cursor:"pointer" }}>{kartDurum[m.id] ? "⏳ siliniyor…" : "✨ Arka planı sil"}</button>}
-                        {kartGeri[m.id] && <button onClick={()=>kartFotoGeriAl(m)} title="Önceki fotoğrafa dön" style={{ flex:1, background:T.card, border:"1px solid "+T.border, borderRadius:6, padding:"4px 8px", color:T.text, fontSize:11, fontWeight:700, cursor:"pointer" }}>↩ Geri al</button>}
-                      </div>
-                    )}
+                    {m.foto && (() => {
+                      const mesgul = !!kartDurum[m.id];
+                      const gecmis = (kartGeri[m.id] || []).length;
+                      const ib = { background:"transparent", border:"1px solid "+T.border, borderRadius:6, padding:"2px 9px", color:T.text, fontSize:12, fontWeight:700, cursor:mesgul?"wait":"pointer", lineHeight:"18px", opacity:mesgul?0.5:1 };
+                      return (
+                        <div onClick={e=>e.stopPropagation()} style={{ display:"flex", gap:4, padding:"5px 8px 0", alignItems:"center", flexWrap:"wrap" }}>
+                          {!m.fotoTemiz && <button onClick={()=>kartFotoAI(m)} disabled={mesgul} title="Arka planı sil" style={{ ...ib, borderColor:"var(--vurgu)", color:"var(--vurgu)" }}>{mesgul ? "⏳" : "✨"}</button>}
+                          {!m.fotoTemiz && <button onClick={()=>setKartKoruModal(m)} disabled={mesgul} title="Korunacak bölgeleri işaretle" style={{ ...ib, ...(kartKoru[m.id] ? { borderColor:"#ff2d7a", color:"#e0175f" } : {}) }}>🖌{kartKoru[m.id] ? "✓" : ""}</button>}
+                          <button onClick={()=>kartFotoIslem(m, ()=>fotoZoomla(m.foto, 1.18), false)} disabled={mesgul} title="Yakınlaştır (kaydedilir)" style={ib}>＋</button>
+                          <button onClick={()=>kartFotoIslem(m, ()=>fotoZoomla(m.foto, 0.85), false)} disabled={mesgul} title="Uzaklaştır (kaydedilir)" style={ib}>－</button>
+                          <button onClick={()=>kartFotoIslem(m, ()=>fotoCevir(m.foto), false)} disabled={mesgul} title="Yatay çevir (kaydedilir)" style={ib}>⇋</button>
+                          {gecmis > 0 && <button onClick={()=>kartFotoGeriAl(m)} disabled={mesgul} title="Son işlemi geri al" style={ib}>↩</button>}
+                          {mesgul && <span style={{ fontSize:10, color:T.sub }}>işleniyor…</span>}
+                        </div>
+                      );
+                    })()}
                     <div style={{ padding:"6px 8px" }}>
                       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:2 }}>
                         <span style={{ background:T.header, border:"1px solid "+T.border, color:dur.c, padding:"1px 5px", borderRadius:3, fontSize:7, fontWeight:700 }}>{dur.l}</span>
