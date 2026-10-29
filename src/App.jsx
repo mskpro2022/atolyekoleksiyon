@@ -2325,6 +2325,7 @@ function VitrinModu({ kod, onizleme }) {
   const [genelBoy, setGenelBoy] = useState({ sistem:"US", deger:"" });
   const [siparisTeslim, setSiparisTeslim] = useState(""); // istenen teslim tarihi (yyyy-mm-dd)
   const [siparisGonderiliyor, setSiparisGonderiliyor] = useState(false);
+  const [siparisOzet, setSiparisOzet] = useState(false);
   const [siparisBasarili, setSiparisBasarili] = useState(false);
   const [arama, setArama] = useState("");
   const [aktifAyar, setAktifAyar] = useState("14K"); // üstten seçilen ayar — gramlar buna göre
@@ -2377,6 +2378,11 @@ function VitrinModu({ kod, onizleme }) {
     siparis_ver: { tr:"Sipariş Ver", en:"Place Order", es:"Hacer pedido" },
     siparis_ver_emoji: { tr:"🛍️ Sipariş Ver", en:"🛍️ Place Order", es:"🛍️ Hacer pedido" },
     siparisi_gonder: { tr:"Siparişi Gönder", en:"Send Order", es:"Enviar pedido" },
+    adet_gerekli: { tr:"Boyu sonra bildireceğiniz ürünler için lütfen kaç adet istediğinizi yazın.", en:"Please enter the quantity for items whose size you will confirm later.", es:"Indique la cantidad de los artículos cuya talla confirmará más tarde." },
+    adet_sor: { tr:"Kaç adet?", en:"How many?", es:"¿Cuántos?" },
+    ozet_baslik: { tr:"Siparişinizi kontrol edin", en:"Please review your order", es:"Revise su pedido" },
+    ozet_duzenle: { tr:"Düzenle", en:"Edit", es:"Editar" },
+    ozet_onayla: { tr:"Onayla ve gönder", en:"Confirm and send", es:"Confirmar y enviar" },
     gonderiliyor: { tr:"Gönderiliyor...", en:"Sending...", es:"Enviando..." },
     siparis_alindi: { tr:"Siparişiniz alındı", en:"Your order has been received", es:"Su pedido ha sido recibido" },
     en_kisa_surede: { tr:"En kısa sürede size dönüş yapılacaktır.", en:"We'll get back to you as soon as possible.", es:"Nos pondremos en contacto con usted lo antes posible." },
@@ -2744,8 +2750,10 @@ function VitrinModu({ kod, onizleme }) {
   const boyGuncelle = (id, i, alan, v) => setSiparisBoylar(p => ({ ...p, [id]: (p[id]||[]).map((b,k)=>k===i?{...b,[alan]:v}:b) }));
   const satirAdet = (m) => {
     if (boyGerekli(m) && !siparisBoySonra[m.id]) { const b = siparisBoylar[m.id] || []; if (b.length) return b.reduce((t,x)=>t+(Number(x.adet)||1),0); }
+    if (boyGerekli(m) && siparisBoySonra[m.id]) return Math.max(0, Math.floor(Number(siparisAdetler[m.id]) || 0));
     return Math.max(1, Number(siparisAdetler[m.id]) || 1);
   };
+  const adetEksikMi = (m) => boyGerekli(m) && !!siparisBoySonra[m.id] && !(Number(siparisAdetler[m.id]) >= 1);
   const satirGram = (m) => (Number(ayarliGram(m)) || 0) * satirAdet(m);
   const listeGram = () => seciliModeller.reduce((t,m)=>t+satirGram(m),0);
   const siparisAc = () => {
@@ -2753,9 +2761,17 @@ function VitrinModu({ kod, onizleme }) {
     setSiparisBoylar(p => { const y = { ...p }; seciliModeller.forEach(m => { if (boyGerekli(m) && !(y[m.id]||[]).length) y[m.id] = [boyVarsayilan(m)]; }); return y; });
     setSiparisModal(true);
   };
-  const siparisGonder = async () => {
+  const siparisOnayaGit = () => {
     if (!vitrinMusteri || seciliModeller.length === 0) return;
     if (seciliModeller.some(boyEksikMi)) { setSiparisHata(ce("boy_gerekli")); return; }
+    if (seciliModeller.some(adetEksikMi)) { setSiparisHata(ce("adet_gerekli")); return; }
+    setSiparisHata(""); setSiparisOzet(true);
+  };
+  const siparisGonder = async () => {
+    if (!vitrinMusteri || seciliModeller.length === 0) return;
+    if (seciliModeller.some(boyEksikMi)) { setSiparisOzet(false); setSiparisHata(ce("boy_gerekli")); return; }
+    if (seciliModeller.some(adetEksikMi)) { setSiparisOzet(false); setSiparisHata(ce("adet_gerekli")); return; }
+    setSiparisOzet(false);
     setSiparisHata("");
     setSiparisGonderiliyor(true);
     try {
@@ -3194,7 +3210,7 @@ function VitrinModu({ kod, onizleme }) {
                   const uzunUrun = m.kategori === "bileklik" || m.kategori === "kolye";
                   const sonra = !!siparisBoySonra[m.id];
                   const boylar = siparisBoylar[m.id] || [];
-                  const eksik = boyEksikMi(m) && !!siparisHata;
+                  const eksik = (boyEksikMi(m) || adetEksikMi(m)) && !!siparisHata;
                   return (
                   <div key={m.id} style={{ borderBottom: idx < seciliModeller.length-1 ? "1px solid rgba(var(--voverlay-rgb),0.07)" : "none", outline: eksik ? "2px solid #e85a4f" : "none", outlineOffset:-2 }}>
                     {uzunUrun && m.foto && (
@@ -3221,7 +3237,7 @@ function VitrinModu({ kod, onizleme }) {
                           style={{ ...kutu, width:"100%", marginTop:6, fontSize:12 }}/>
                         {boyli && (
                           <label style={{ display:"flex", alignItems:"center", gap:7, marginTop:8, fontSize:12, color:"var(--vt2)", cursor:"pointer" }}>
-                            <input type="checkbox" checked={sonra} onChange={e=>setSiparisBoySonra(p=>({...p,[m.id]:e.target.checked}))}/>
+                            <input type="checkbox" checked={sonra} onChange={e=>{ const isaret=e.target.checked; if (isaret) { const toplam = boylar.reduce((t,x)=>t+(Number(x.adet)||1),0); setSiparisAdetler(p=>({...p,[m.id]: Number(p[m.id])>=1 ? p[m.id] : (toplam>0 ? toplam : "")})); } setSiparisBoySonra(p=>({...p,[m.id]:isaret})); }}/>
                             {ce("boy_sonra")}
                           </label>
                         )}
@@ -3256,7 +3272,9 @@ function VitrinModu({ kod, onizleme }) {
                         {boyli && !sonra ? (
                           <div><div style={{ fontSize:15, fontWeight:800 }}>{satirAdet(m)}</div><div style={{ fontSize:10, color:"var(--vt3)" }}>{boylar.length} {ce("boy").toLowerCase()}</div></div>
                         ) : (
-                          <input type="number" min="1" value={Number(siparisAdetler[m.id])||1} onChange={e=>setSiparisAdetler(p=>({...p,[m.id]:Math.max(1,Number(e.target.value)||1)}))} style={{ ...kutu, width:68, textAlign:"center", fontWeight:700 }}/>
+                          boyli ? (
+                          <div><div style={{ fontSize:10, color:"var(--vt3)", marginBottom:3 }}>{ce("adet_sor")}</div><input type="number" min="1" inputMode="numeric" placeholder="?" value={siparisAdetler[m.id] ?? ""} onChange={e=>{ const v=e.target.value; setSiparisAdetler(p=>({...p,[m.id]: v==="" ? "" : Math.max(1, Math.floor(Number(v)||1))})); }} style={{ ...kutu, width:68, textAlign:"center", fontWeight:700, border: adetEksikMi(m) ? "2px solid #e85a4f" : kutu.border }}/></div>
+                        ) : <input type="number" min="1" value={Number(siparisAdetler[m.id])||1} onChange={e=>setSiparisAdetler(p=>({...p,[m.id]:Math.max(1,Number(e.target.value)||1)}))} style={{ ...kutu, width:68, textAlign:"center", fontWeight:700 }}/>
                         )}
                       </div>
                       <div className="vs-top" style={{ textAlign:"center", fontSize:14, fontWeight:700 }}>{satirGram(m).toFixed(2)} g</div>
@@ -3275,13 +3293,40 @@ function VitrinModu({ kod, onizleme }) {
             </div>
             );
           })()}
+          {siparisOzet && !siparisBasarili && (
+            <div style={{ position:"fixed", inset:0, zIndex:20, background:"rgba(0,0,0,0.5)", display:"flex", alignItems:"center", justifyContent:"center", padding:16 }} onClick={()=>setSiparisOzet(false)}>
+              <div onClick={e=>e.stopPropagation()} style={{ width:"min(560px,100%)", maxHeight:"86vh", overflowY:"auto", background:"var(--vcard)", color:"var(--vt1)", borderRadius:16, padding:20, boxShadow:"0 20px 60px rgba(0,0,0,0.35)" }}>
+                <div style={{ fontSize:18, fontWeight:700, marginBottom:12 }}>{ce("ozet_baslik")}</div>
+                <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+                  {seciliModeller.map(m => {
+                    const bo = siparisBoylar[m.id] || [], sn = boyGerekli(m) && !!siparisBoySonra[m.id];
+                    return (
+                      <div key={m.id} style={{ display:"flex", gap:10, alignItems:"center", padding:8, border:"1px solid rgba(var(--voverlay-rgb),0.12)", borderRadius:10 }}>
+                        <div style={{ width:48, height:48, borderRadius:8, overflow:"hidden", background:"#f3f3f3", flexShrink:0 }}>{m.foto && <img src={m.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"contain" }}/>}</div>
+                        <div style={{ flex:1, minWidth:0 }}>
+                          <div style={{ fontSize:14, fontWeight:700 }}>{m.kod||"—"}</div>
+                          <div style={{ fontSize:12, color:"var(--vt2)" }}>{boyGerekli(m) ? (sn ? ce("boy_sonra_kisa") : bo.map(b=>(b.uzunluk? b.uzunluk+" "+(b.birim||"cm") : b.sistem+" "+b.deger)+" ×"+(Number(b.adet)||1)).join(", ")) : ""}</div>
+                        </div>
+                        <div style={{ fontSize:16, fontWeight:800 }}>{satirAdet(m)} <span style={{ fontSize:11, fontWeight:500, color:"var(--vt3)" }}>{ce("adet")}</span></div>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div style={{ display:"flex", justifyContent:"space-between", marginTop:12, fontSize:14, fontWeight:700 }}><span>{seciliModeller.reduce((t,m)=>t+satirAdet(m),0)} {ce("adet")}</span><span>{listeGram().toFixed(2)} g</span></div>
+                <div style={{ display:"flex", gap:10, marginTop:16, justifyContent:"flex-end" }}>
+                  <button onClick={()=>setSiparisOzet(false)} style={{ background:"transparent", border:"1px solid rgba(var(--voverlay-rgb),0.25)", borderRadius:10, padding:"11px 20px", color:"var(--vt1)", fontSize:14, cursor:"pointer" }}>{ce("ozet_duzenle")}</button>
+                  <button disabled={siparisGonderiliyor} onClick={siparisGonder} style={{ background:"#2e9e4f", border:"none", borderRadius:10, padding:"11px 24px", color:"#fff", fontSize:14, fontWeight:700, cursor:"pointer" }}>{siparisGonderiliyor ? ce("gonderiliyor") : ce("ozet_onayla")}</button>
+                </div>
+              </div>
+            </div>
+          )}
           {/* Alt çubuk — toplam + gönder */}
           {!siparisBasarili && (
             <div style={{ position:"fixed", left:0, right:0, bottom:0, zIndex:6, background:"var(--vcard)", borderTop:"1px solid rgba(var(--voverlay-rgb),0.12)", padding:"12px 20px", display:"flex", alignItems:"center", gap:16, flexWrap:"wrap", justifyContent:"flex-end" }}>
               {siparisHata && <div style={{ flex:"1 1 260px", fontSize:12, color:"#e85a4f" }}>{siparisHata}</div>}
               <div style={{ fontSize:13, color:"var(--vt2)" }}>{seciliModeller.reduce((t,m)=>t+satirAdet(m),0)} {ce("adet")} · {ce("liste_gram")} · {aktifAyar.replace("K"," Ayar")}</div>
               <div style={{ fontSize:20, fontWeight:700 }}>{listeGram().toFixed(2)} g</div>
-              <button disabled={siparisGonderiliyor} onClick={siparisGonder}
+              <button disabled={siparisGonderiliyor} onClick={siparisOnayaGit}
                 style={{ background: siparisGonderiliyor?"rgba(var(--voverlay-rgb),0.15)":"#2e9e4f", border:"none", borderRadius:11, padding:"13px 34px", color:"#fff", fontSize:15, fontWeight:700, cursor: siparisGonderiliyor?"default":"pointer" }}>
                 {siparisGonderiliyor ? ce("gonderiliyor") : ce("siparisi_gonder")}
               </button>
@@ -6842,7 +6887,7 @@ function Atolye({ onSirketDegis }) {
     const o = DURUMLAR.find(d=>d.id===son.durum);
     return { l:o?durumEtiket(o):son.durum, c:o?.c||"#998a6e" };
   };
-  const isik = (col) => (typeof col==="string" && col[0]==="#" && col.length===7) ? { boxShadow:"0 0 0 1px "+col+"88, 0 0 14px "+col+"55, 0 0 26px "+col+"26" } : {};
+  const isik = (col) => (typeof col==="string" && col[0]==="#" && col.length===7) ? { boxShadow:"0 0 0 1px "+col+"5f, 0 0 10px "+col+"3c, 0 0 18px "+col+"1b" } : {};
   const tumuF = sipFiltre==="tumu" || sipFiltre==="tumü";
   const liste = [...siparisler].reverse().filter(s => {
     if (sipMusF) { const q=sipMusF.toLowerCase(); if (!(s.musteri||"").toLowerCase().includes(q) && !(s.musKod||"").toLowerCase().includes(q)) return false; }
@@ -7077,7 +7122,7 @@ function Atolye({ onSirketDegis }) {
                   return (
                     <div key={s.id} draggable={!bitti(s)} onDragStart={e=>{ setSipSurukle(s.id); e.dataTransfer.setData("text/plain", s.id); e.dataTransfer.effectAllowed="move"; }} onDragEnd={()=>{ setSipSurukle(""); setSipHedefAy(""); }}
                       onClick={()=>setSipDrawer(s.id)}
-                      style={{ cursor:bitti(s)?"default":"grab", opacity:sipSurukle===s.id?0.4:1, padding:"10px 12px", borderRadius:12, background:T.card, ...(gecikti ? { boxShadow:"0 0 0 1px rgba(255,40,40,0.75), 0 0 14px rgba(255,40,40,0.55), 0 0 28px rgba(255,40,40,0.25)" } : (SON(s) ? isik(c.c) : {})), border:"1px solid "+(gecikti?"rgba(232,90,79,0.5)":T.border), borderLeft:"4px solid "+(gecikti?"#e85a4f":c.c) }}>
+                      style={{ cursor:bitti(s)?"default":"grab", opacity:sipSurukle===s.id?0.4:1, padding:"10px 12px", borderRadius:12, background:T.card, ...(gecikti ? { boxShadow:"0 0 0 1px rgba(255,40,40,0.52), 0 0 10px rgba(255,40,40,0.38), 0 0 20px rgba(255,40,40,0.18)" } : (SON(s) ? isik(c.c) : {})), border:"1px solid "+(gecikti?"rgba(232,90,79,0.5)":T.border), borderLeft:"4px solid "+(gecikti?"#e85a4f":c.c) }}>
                       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:6 }}>
                         <span style={{ display:"flex", alignItems:"center", gap:5, flexWrap:"wrap", minWidth:0 }}><span style={{ fontSize:14, fontWeight:600, color:GOLD }}>{s.musKod||s.musteri||"İsimsiz"}</span>{s.siparisNo && kodKutu(s.siparisNo, "#5b9bd5")}{Object.keys(o.ayarlar).map(a=>kodKutu(a, a==="925"?"#9aa4b2":GOLD))}{s.musEtiket && kodKutu(s.musEtiket, "#a78bfa")}{poBul(s) && kodKutu("PO "+poBul(s), "#998a6e")}</span>
                         {rozet(c.l, c.c)}
@@ -7164,7 +7209,7 @@ function Atolye({ onSirketDegis }) {
               {(() => {
                 const kutu = (key, label, col, sayi, birim, alt, on, tikla, sonuk) => (
                   <button key={key} onClick={tikla} style={{ minWidth:0, textAlign:"left", cursor:"pointer", background:on?col+"18":"transparent", border:"1px solid "+(on?col+"77":T.border), borderRadius:9, padding:"6px 10px", opacity:sonuk?0.5:1 }}>
-                    <div style={{ display:"flex", alignItems:"center", gap:6 }}><span style={{ width:7, height:7, borderRadius:"50%", background:col, opacity:.6, flexShrink:0 }}/><span style={{ fontSize:11, fontWeight:600, color:"#998a6e", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{label}</span></div>
+                    <div style={{ minWidth:0 }}><span style={{ display:"inline-block", maxWidth:"100%", fontSize:11, fontWeight:600, color:"#998a6e", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis", paddingBottom:2, borderBottom:"2px solid "+col, verticalAlign:"top" }}>{label}</span></div>
                     <div style={{ fontSize:17, fontWeight:600, color:T.text, lineHeight:1.25, marginTop:2 }}>{sayi}<span style={{ fontSize:10, fontWeight:500, color:"#998a6e" }}> {birim}</span></div>
                     {alt ? <div style={{ fontSize:10, color:"#998a6e" }}>{alt}</div> : null}
                   </button>
@@ -7190,7 +7235,7 @@ function Atolye({ onSirketDegis }) {
                     const toplam = (sp.kalemler||[]).reduce((a,k)=>a+(k.adet||1),0);
                     const fl = items.filter(x=>x.k.foto).slice(0,5);
                     return (
-                      <div key={sp.id} onClick={()=>ac(sp.id)} style={{ cursor:"pointer", border:"1px solid "+T.border, borderLeft:"4px solid "+(od.gecikti?"#e85a4f":sd.c), borderRadius:10, padding:"9px 11px", background:T.bg2||T.card, ...(od.gecikti?{ boxShadow:"0 0 0 1px rgba(255,40,40,0.6), 0 0 12px rgba(255,40,40,0.4)" }:isik(sd.c)) }}>
+                      <div key={sp.id} onClick={()=>ac(sp.id)} style={{ cursor:"pointer", border:"1px solid "+T.border, borderLeft:"4px solid "+(od.gecikti?"#e85a4f":sd.c), borderRadius:10, padding:"9px 11px", background:T.bg2||T.card, ...(od.gecikti?{ boxShadow:"0 0 0 1px rgba(255,40,40,0.42), 0 0 8px rgba(255,40,40,0.28)" }:isik(sd.c)) }}>
                         <div style={{ display:"flex", alignItems:"center", gap:6, flexWrap:"wrap" }}>
                           <span style={{ fontSize:15, fontWeight:600, color:GOLD }}>{sp.musKod||sp.musteri||"İsimsiz"}</span>{kodlar(sp)}
                           {sp.teslimTarihi && <span style={{ fontSize:11, color:od.gecikti?"#e85a4f":"#e8833a", fontWeight:600, marginLeft:"auto" }}>🚚 {new Date(sp.teslimTarihi).toLocaleDateString("tr-TR",{day:"2-digit",month:"short"})}{od.gecikti?" ⚠":""}</span>}
@@ -7248,7 +7293,7 @@ function Atolye({ onSirketDegis }) {
               return (
                 <Fragment key={s.id}>
                   {yeniGrup && <div style={{ fontSize:11, fontWeight:600, color:"#7a6f5a", letterSpacing:.6, textTransform:"uppercase", padding:"8px 4px 2px" }}>{GRUP_AD[g]} <span style={{ opacity:.6 }}>· {sirali.filter(x=>grupNo(x)===g).length}</span></div>}
-                  <div onClick={()=>setSipSecId(s.id)} style={{ cursor:"pointer", padding:"10px 12px", borderRadius:12, background:aktifSec?"rgba(var(--vurgu-rgb),0.12)":"rgba(var(--vurgu-rgb),0.025)", ...(o.gecikti ? { boxShadow:"0 0 0 1px rgba(255,40,40,0.75), 0 0 14px rgba(255,40,40,0.55), 0 0 28px rgba(255,40,40,0.25)" } : (SON(s) ? isik(c.c) : {})), border:"1px solid "+(aktifSec?"rgba(var(--vurgu-rgb),0.5)":"rgba(var(--vurgu-rgb),0.1)"), borderLeft:"4px solid "+(o.gecikti?"#e85a4f":c.c) }}>
+                  <div onClick={()=>setSipSecId(s.id)} style={{ cursor:"pointer", padding:"10px 12px", borderRadius:12, background:aktifSec?"rgba(var(--vurgu-rgb),0.12)":"rgba(var(--vurgu-rgb),0.025)", ...(o.gecikti ? { boxShadow:"0 0 0 1px rgba(255,40,40,0.52), 0 0 10px rgba(255,40,40,0.38), 0 0 20px rgba(255,40,40,0.18)" } : (SON(s) ? isik(c.c) : {})), border:"1px solid "+(aktifSec?"rgba(var(--vurgu-rgb),0.5)":"rgba(var(--vurgu-rgb),0.1)"), borderLeft:"4px solid "+(o.gecikti?"#e85a4f":c.c) }}>
                     <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:8 }}>
                       <span style={{ display:"flex", alignItems:"center", gap:5, flexWrap:"wrap", minWidth:0 }}><span style={{ fontSize:14, fontWeight:600, color:GOLD }}>{s.musKod||s.musteri||"İsimsiz"}</span>{kodlar(s)}</span>
                       <span style={{ fontSize:11, color:"#7a6f5a", flexShrink:0 }}>{new Date(s.tarih).toLocaleDateString("tr-TR")}</span>
