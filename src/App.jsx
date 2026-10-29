@@ -1,4 +1,4 @@
-import { supabase, dbLoad, dbSave, fotoYukleStorage, yedekKaydet, yedekListesi, yedekGetir, bugunYedekVarMi, tabloModelleriSenkron, tabloModelleriToplu, tabloModelSil, tabloSiparisleriSenkron, tabloSiparisleriToplu, tabloMusterileriYaz, akilliModelOku, akilliSiparisOku, akilliMusteriOku, islemKaydet, islemGecmisiGetir, realtimeBaslat, tabloKoleksiyonlariYaz, tabloKasaYaz, akilliKoleksiyonOku, akilliKasaOku, tabloKoleksiyonlariOku, tabloKasaOku, saglikDenetimi, ekranSunucuFarki, toptanciKaydet, toptancilariGetir, toptanciSil, vitrinGecmisiGetir, vitrinEnCokBakilan, vitrinOzetGetir, vitrinAnaliz, vitrinGetirGuvenli, siparisOlusturGuvenli, siparislerimGetirGuvenli, siparisIptalGuvenli, siparisMusteriGizleGuvenli, vitrinAktiviteKaydetGuvenli, vitrinSupheliCihazlar, vitrinCevrimiciMusteriler, radarTrendleriOku, radarKaynaklariOku, radarKanitlariOku, radarTumKanitlariOku, radarTrendGuncelle, radarTrendSil, radarManuelKanitEkle } from "./supabase.js";
+import { supabase, dbLoad, dbSave, fotoYukleStorage, yedekKaydet, yedekListesi, yedekGetir, bugunYedekVarMi, tabloModelleriSenkron, tabloModelleriToplu, tabloModelSil, tabloSiparisleriSenkron, tabloSiparisleriToplu, tabloSiparisSil, tabloMusterileriYaz, akilliModelOku, akilliSiparisOku, akilliMusteriOku, islemKaydet, islemGecmisiGetir, realtimeBaslat, tabloKoleksiyonlariYaz, tabloKasaYaz, akilliKoleksiyonOku, akilliKasaOku, tabloKoleksiyonlariOku, tabloKasaOku, saglikDenetimi, ekranSunucuFarki, toptanciKaydet, toptancilariGetir, toptanciSil, vitrinGecmisiGetir, vitrinEnCokBakilan, vitrinOzetGetir, vitrinAnaliz, vitrinGetirGuvenli, siparisOlusturGuvenli, siparislerimGetirGuvenli, siparisIptalGuvenli, siparisMusteriGizleGuvenli, vitrinAktiviteKaydetGuvenli, vitrinSupheliCihazlar, vitrinCevrimiciMusteriler, radarTrendleriOku, radarKaynaklariOku, radarKanitlariOku, radarTumKanitlariOku, radarTrendGuncelle, radarTrendSil, radarManuelKanitEkle } from "./supabase.js";
 import { useState, useEffect, useCallback, useMemo, useRef, Fragment } from "react";
 
 const uid = () => "x" + Date.now() + Math.random().toString(36).substr(2, 5);
@@ -4937,11 +4937,24 @@ function Atolye({ onSirketDegis }) {
       return { ok: false, hata: e.message };
     }
   }, []);
+  const siparislerRefGuvenli = useRef([]);
+  siparislerRefGuvenli.current = siparisler;
   const svS = useCallback(async d => {
+    // GÜVENLİ SİLME: tabloyu "listede olmayanı sil" diye senkronlamak yerine sadece upsert yap;
+    // silinecek = bu ekranın BİLDİĞİ listeden bu işlemle çıkarılanlar (eski/eksik listeli ekran başkasının siparişini silemez)
+    const onceki = siparislerRefGuvenli.current || [];
+    const yeniIdler = new Set(d.map(x => String(x.id)));
+    const silinen = onceki.filter(x => !yeniIdler.has(String(x.id))).map(x => String(x.id));
+    if (silinen.length > 1 && !window.confirm("⚠ Bu işlem " + silinen.length + " siparişi SİLECEK. Emin misiniz?")) { toastGoster("hata","İptal edildi — siparişler korundu"); return; }
     setSiparisler(d);
     await guvenliKaydet("v7s", d);
     sonKendiYazma.current = Date.now();
-    tabloSiparisleriSenkron(AKTIF_SIRKET_ONEK, d).catch(e => console.error("Sipariş tablo (arka plan):", e.message));
+    (async () => {
+      try {
+        await tabloSiparisleriToplu(AKTIF_SIRKET_ONEK, d);
+        for (const id of silinen) await tabloSiparisSil(id);
+      } catch (e) { console.error("Sipariş tablo (arka plan):", e.message); }
+    })();
   }, [guvenliKaydet]);
 
 
@@ -6829,6 +6842,7 @@ function Atolye({ onSirketDegis }) {
     const o = DURUMLAR.find(d=>d.id===son.durum);
     return { l:o?durumEtiket(o):son.durum, c:o?.c||"#998a6e" };
   };
+  const isik = (col) => (typeof col==="string" && col[0]==="#" && col.length===7) ? { boxShadow:"0 0 0 1px "+col+"88, 0 0 14px "+col+"55, 0 0 26px "+col+"26" } : {};
   const tumuF = sipFiltre==="tumu" || sipFiltre==="tumü";
   const liste = [...siparisler].reverse().filter(s => {
     if (sipMusF) { const q=sipMusF.toLowerCase(); if (!(s.musteri||"").toLowerCase().includes(q) && !(s.musKod||"").toLowerCase().includes(q)) return false; }
@@ -7063,7 +7077,7 @@ function Atolye({ onSirketDegis }) {
                   return (
                     <div key={s.id} draggable={!bitti(s)} onDragStart={e=>{ setSipSurukle(s.id); e.dataTransfer.setData("text/plain", s.id); e.dataTransfer.effectAllowed="move"; }} onDragEnd={()=>{ setSipSurukle(""); setSipHedefAy(""); }}
                       onClick={()=>setSipDrawer(s.id)}
-                      style={{ cursor:bitti(s)?"default":"grab", opacity:sipSurukle===s.id?0.4:1, padding:"10px 12px", borderRadius:12, background:T.card, ...(gecikti ? { boxShadow:"0 0 0 1px rgba(255,40,40,0.75), 0 0 14px rgba(255,40,40,0.55), 0 0 28px rgba(255,40,40,0.25)" } : {}), border:"1px solid "+(gecikti?"rgba(232,90,79,0.5)":T.border), borderLeft:"4px solid "+(gecikti?"#e85a4f":c.c) }}>
+                      style={{ cursor:bitti(s)?"default":"grab", opacity:sipSurukle===s.id?0.4:1, padding:"10px 12px", borderRadius:12, background:T.card, ...(gecikti ? { boxShadow:"0 0 0 1px rgba(255,40,40,0.75), 0 0 14px rgba(255,40,40,0.55), 0 0 28px rgba(255,40,40,0.25)" } : (SON(s) ? isik(c.c) : {})), border:"1px solid "+(gecikti?"rgba(232,90,79,0.5)":T.border), borderLeft:"4px solid "+(gecikti?"#e85a4f":c.c) }}>
                       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:6 }}>
                         <span style={{ display:"flex", alignItems:"center", gap:5, flexWrap:"wrap", minWidth:0 }}><span style={{ fontSize:14, fontWeight:800, color:GOLD }}>{s.musKod||s.musteri||"İsimsiz"}</span>{kodlar(s)}</span>
                         {rozet(c.l, c.c)}
@@ -7182,7 +7196,7 @@ function Atolye({ onSirketDegis }) {
                     const toplam = (sp.kalemler||[]).reduce((a,k)=>a+(k.adet||1),0);
                     const fl = items.filter(x=>x.k.foto).slice(0,5);
                     return (
-                      <div key={sp.id} onClick={()=>ac(sp.id)} style={{ cursor:"pointer", border:"1px solid "+T.border, borderLeft:"4px solid "+(od.gecikti?"#e85a4f":sd.c), borderRadius:10, padding:"9px 11px", background:T.bg2||T.card, ...(od.gecikti?{ boxShadow:"0 0 0 1px rgba(255,40,40,0.6), 0 0 12px rgba(255,40,40,0.4)" }:{}) }}>
+                      <div key={sp.id} onClick={()=>ac(sp.id)} style={{ cursor:"pointer", border:"1px solid "+T.border, borderLeft:"4px solid "+(od.gecikti?"#e85a4f":sd.c), borderRadius:10, padding:"9px 11px", background:T.bg2||T.card, ...(od.gecikti?{ boxShadow:"0 0 0 1px rgba(255,40,40,0.6), 0 0 12px rgba(255,40,40,0.4)" }:isik(sd.c)) }}>
                         <div style={{ display:"flex", alignItems:"center", gap:6, flexWrap:"wrap" }}>
                           <span style={{ fontSize:15, fontWeight:800, color:GOLD }}>{sp.musKod||sp.musteri||"İsimsiz"}</span>{kodlar(sp)}
                           {sp.teslimTarihi && <span style={{ fontSize:11, color:od.gecikti?"#e85a4f":"#e8833a", fontWeight:700, marginLeft:"auto" }}>🚚 {new Date(sp.teslimTarihi).toLocaleDateString("tr-TR",{day:"2-digit",month:"short"})}{od.gecikti?" ⚠":""}</span>}
@@ -7240,7 +7254,7 @@ function Atolye({ onSirketDegis }) {
               return (
                 <Fragment key={s.id}>
                   {yeniGrup && <div style={{ fontSize:11, fontWeight:800, color:"#7a6f5a", letterSpacing:.6, textTransform:"uppercase", padding:"8px 4px 2px" }}>{GRUP_AD[g]} <span style={{ opacity:.6 }}>· {sirali.filter(x=>grupNo(x)===g).length}</span></div>}
-                  <div onClick={()=>setSipSecId(s.id)} style={{ cursor:"pointer", padding:"10px 12px", borderRadius:12, background:aktifSec?"rgba(var(--vurgu-rgb),0.12)":"rgba(var(--vurgu-rgb),0.025)", ...(o.gecikti ? { boxShadow:"0 0 0 1px rgba(255,40,40,0.75), 0 0 14px rgba(255,40,40,0.55), 0 0 28px rgba(255,40,40,0.25)" } : {}), border:"1px solid "+(aktifSec?"rgba(var(--vurgu-rgb),0.5)":"rgba(var(--vurgu-rgb),0.1)"), borderLeft:"4px solid "+(o.gecikti?"#e85a4f":c.c) }}>
+                  <div onClick={()=>setSipSecId(s.id)} style={{ cursor:"pointer", padding:"10px 12px", borderRadius:12, background:aktifSec?"rgba(var(--vurgu-rgb),0.12)":"rgba(var(--vurgu-rgb),0.025)", ...(o.gecikti ? { boxShadow:"0 0 0 1px rgba(255,40,40,0.75), 0 0 14px rgba(255,40,40,0.55), 0 0 28px rgba(255,40,40,0.25)" } : (SON(s) ? isik(c.c) : {})), border:"1px solid "+(aktifSec?"rgba(var(--vurgu-rgb),0.5)":"rgba(var(--vurgu-rgb),0.1)"), borderLeft:"4px solid "+(o.gecikti?"#e85a4f":c.c) }}>
                     <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:8 }}>
                       <span style={{ display:"flex", alignItems:"center", gap:5, flexWrap:"wrap", minWidth:0 }}><span style={{ fontSize:14, fontWeight:800, color:GOLD }}>{s.musKod||s.musteri||"İsimsiz"}</span>{kodlar(s)}</span>
                       <span style={{ fontSize:11, color:"#7a6f5a", flexShrink:0 }}>{new Date(s.tarih).toLocaleDateString("tr-TR")}</span>
