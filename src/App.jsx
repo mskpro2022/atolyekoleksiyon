@@ -7101,17 +7101,37 @@ function Atolye({ onSirketDegis }) {
               onDragLeave={e=>{ if (!e.currentTarget.contains(e.relatedTarget)) setSipHedefAy(""); }}
               onDrop={e=>{ e.preventDefault(); const sp=siparisler.find(x=>x.id===(sipSurukle||e.dataTransfer.getData("text/plain"))); setSipSurukle(""); setSipHedefAy(""); if (sp) aya_tasi(sp,key); }}
               style={{ flex:"0 0 "+(genis+8)+"px", background:hedef?"rgba(var(--vurgu-rgb),0.12)":"rgba(128,128,128,0.07)", backdropFilter:"blur(6px)", WebkitBackdropFilter:"blur(6px)", border:"1px "+(hedef?"dashed":"solid")+" "+(hedef?"var(--vurgu)":"rgba(128,128,128,0.2)"), boxShadow:"0 2px 18px rgba(0,0,0,0.05), inset 0 1px 0 rgba(255,255,255,0.25)", borderRadius:20, padding:14, minHeight:200 }}>
-              <div style={{ padding:"2px 4px 10px" }}>
-                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", gap:8 }}>
-                  <span style={{ fontSize:16, fontWeight:600, color:key===bk?GOLD:"var(--goldtext)" }}>{ayAdi(key)}{key===bk && <span style={{ fontSize:10, marginLeft:6, color:"#6abf69" }}>● bu ay</span>}</span>
-                  <span style={{ fontSize:12, color:"#998a6e", fontWeight:600 }}>{sl.length} sipariş</span>
-                </div>
-                <div style={{ fontSize:18, fontWeight:600, color:T.text, marginTop:4 }}>{sipMetal==="tumu" && topGum>0 ? "🥇 " : ""}{fN(sipMetal==="gumus"?topGum:topAlt,1)} gr{sipMetal==="gumus"&&<span style={{ fontSize:12, marginLeft:6, color:"#9aa4b2" }}>gümüş</span>}</div>
-                {sipMetal==="tumu" && topGum>0 && <div style={{ fontSize:14, fontWeight:600, color:"#9aa4b2", marginTop:2 }}>🥈 Gümüş {fN(topGum,1)} gr</div>}
-                {Object.keys(ayTop).length>1 && <div style={{ display:"flex", gap:4, flexWrap:"wrap", marginTop:4 }}>
-                  {Object.entries(ayTop).sort((a,b)=>b[1]-a[1]).map(([a,g])=><span key={a} style={{ fontSize:11, fontWeight:600, color:a==="925"?"#9aa4b2":GOLD, background:a==="925"?"rgba(154,164,178,0.18)":"rgba(var(--vurgu-rgb),0.12)", borderRadius:6, padding:"2px 7px" }}>{a} · {fN(g,1)}</span>)}
-                </div>}
-              </div>
+              {(() => {
+                const aktifSl = sl.map((s,ix)=>({s,o:oz[ix],g:grupNo(s)})).filter(x=>x.g!==4);
+                const topGr = aktifSl.reduce((a,x)=>a+x.o.gram,0);
+                const tamG = aktifSl.filter(x=>x.g===3).reduce((a,x)=>a+x.o.gram,0);
+                const uretG = aktifSl.filter(x=>x.g===2).reduce((a,x)=>a+x.o.gram,0);
+                const pTam = topGr>0 ? tamG/topGr*100 : 0, pUret = topGr>0 ? uretG/topGr*100 : 0;
+                const altinAyar = Object.entries(ayTop).filter(([a])=>a!=="925").sort((a,b)=>b[1]-a[1]);
+                const sutunlar = [[sipMetal==="gumus"?"Gümüş":"Toplam", sipMetal==="gumus"?topGum:topAlt, true]];
+                if (sipMetal!=="gumus" && altinAyar.length>1) altinAyar.forEach(([a,g])=>sutunlar.push([a,g,false]));
+                if (sipMetal==="tumu" && topGum>0) sutunlar.push(["925 gümüş", topGum, false]);
+                return (
+                  <div style={{ padding:"0 2px 10px" }}>
+                    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", gap:8 }}>
+                      <span style={{ fontSize:15, fontWeight:600, color:key===bk?GOLD:"var(--goldtext)" }}>{ayAdi(key)}{key===bk && <span style={{ fontSize:10, marginLeft:6, color:"#6abf69", fontWeight:500 }}>● bu ay</span>}</span>
+                      <span style={{ fontSize:11, color:"#998a6e" }}>{sl.length} sipariş</span>
+                    </div>
+                    <div title={"%"+Math.round(pTam)+" tamamlandı · %"+Math.round(pUret)+" üretimde"} style={{ display:"flex", height:3, borderRadius:2, overflow:"hidden", background:"rgba(128,128,128,0.2)", margin:"8px 0 7px" }}>
+                      <div style={{ width:pTam+"%", background:"#5fae6e" }}/><div style={{ width:pUret+"%", background:"#d4a017", opacity:.7 }}/>
+                    </div>
+                    <div style={{ display:"flex", gap:16, flexWrap:"wrap" }}>
+                      {sutunlar.map(([e,g,ana])=>(
+                        <div key={e}>
+                          <div style={{ fontSize:10, color:"#998a6e", letterSpacing:.3 }}>{e}</div>
+                          <div style={{ fontSize:ana?15:13, fontWeight:ana?600:500, color:e.startsWith("925")||e==="Gümüş"?"#9aa4b2":T.text }}>{fN(g,1)}{ana && <span style={{ fontSize:10, color:"#998a6e", fontWeight:500 }}> gr</span>}</div>
+                        </div>
+                      ))}
+                      {topGr>0 && <div style={{ marginLeft:"auto", textAlign:"right" }}><div style={{ fontSize:10, color:"#998a6e" }}>ilerleme</div><div style={{ fontSize:13, color:T.text }}>%{Math.round(pTam)}</div></div>}
+                    </div>
+                  </div>
+                );
+              })()}
               <div style={{ display:"grid", gridTemplateColumns:"repeat("+sutun+", minmax(0,1fr))", gap:8, alignItems:"start" }}>
                 {sl.length===0 && <div style={{ gridColumn:"1 / -1", color:"#665d4a", fontSize:12, textAlign:"center", padding:"24px 0" }}>Buraya sürükleyip bırak</div>}
                 {sl.map((s,i) => {
