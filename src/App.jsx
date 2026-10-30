@@ -1504,7 +1504,18 @@ function psKategoriTahmin(k) {
   return "diger";
 }
 
-function PdfSiparisModal({ modeller, kollar, onKapat, onUygula, onModelDuzenle }) {
+function psTemaAcik(T) {
+  const h = String((T && T.bg2) || "").match(/^#([0-9a-f]{6})$/i);
+  if (h) { const n = parseInt(h[1], 16); return (0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) > 150; }
+  return !!T && T.id === "beyaz";
+}
+function PdfSiparisModal({ modeller, kollar, onKapat, onUygula, onModelDuzenle, T: Tprop }) {
+  // Aktif temaya uyar: zemin, yazı, çerçeve ve durum renkleri temadan gelir (açık temada koyu, koyu temada açık)
+  const T = Tprop || _tema;
+  const acik = psTemaAcik(T);
+  const PS = acik ? { ok: "#1f8f3a", warn: "#b45309", bad: "#c62828" } : { ok: "#6abf69", warn: "#e8b04f", bad: "#e85a4f" };
+  const IS_T = { ...IS, background: T.card, border: "1px solid " + T.border, color: T.text, colorScheme: acik ? "light" : "dark" };
+  const GH_T = { ...GH, background: T.card, border: "1px solid " + T.border, color: T.text };
   const [asama, setAsama] = useState("sec"); // sec | okuyor | onay
   const [mesaj, setMesaj] = useState("");
   const [hata, setHata] = useState("");
@@ -1768,77 +1779,77 @@ function PdfSiparisModal({ modeller, kollar, onKapat, onUygula, onModelDuzenle }
 
   const oneriBlok = (s) => (
     <div style={{ marginBottom: 6 }}>
-      {s.oneriDurum === "hesapliyor" && <div style={{ fontSize: 10, color: "#a89c84" }}>📷 Benzer modeller aranıyor…</div>}
-      {s.oneriDurum === "indeksyok" && <div style={{ fontSize: 10, color: "#e8b04f" }}>📷 Fotoğraf indeksi hazır değil — üstteki "Hazırla" düğmesine basın</div>}
-      {s.oneriDurum === "hata" && <div style={{ fontSize: 10, color: "#e85a4f" }}>📷 Benzer arama yapılamadı: {s.oneriHata}</div>}
+      {s.oneriDurum === "hesapliyor" && <div style={{ fontSize: 10, color: T.sub }}>📷 Benzer modeller aranıyor…</div>}
+      {s.oneriDurum === "indeksyok" && <div style={{ fontSize: 10, color: PS.warn }}>📷 Fotoğraf indeksi hazır değil — üstteki "Hazırla" düğmesine basın</div>}
+      {s.oneriDurum === "hata" && <div style={{ fontSize: 10, color: PS.bad }}>📷 Benzer arama yapılamadı: {s.oneriHata}</div>}
       {s.durum !== "yok" && s.oneriler && s.oneriler.length > 0 && (
-        <button onClick={() => guncelle(s.id, { oneriAcik: !s.oneriAcik })} style={{ ...GH, fontSize: 9, padding: "2px 8px", marginBottom: 4 }}>{s.oneriAcik ? "📷 Benzerleri gizle" : "📷 Fotoğrafa göre benzerleri göster (" + s.oneriler.length + ")"}</button>
+        <button onClick={() => guncelle(s.id, { oneriAcik: !s.oneriAcik })} style={{ ...GH_T, fontSize: 9, padding: "2px 8px", marginBottom: 4 }}>{s.oneriAcik ? "📷 Benzerleri gizle" : "📷 Fotoğrafa göre benzerleri göster (" + s.oneriler.length + ")"}</button>
       )}
       {s.oneriler && s.oneriler.length > 0 && (s.durum === "yok" || s.oneriAcik) && (<>
-        <div style={{ fontSize: 9, color: "#8a7d64", fontWeight: 700, marginBottom: 3 }}>📷 FOTOĞRAFA GÖRE BENZER MODELLER — tıkla, satıra bağlansın</div>
-        {s.oneriRenkBilgi && <div style={{ fontSize: 9, color: s.oneriRenkBilgi.startsWith("⚠") ? "#e8b04f" : "#6abf69", marginBottom: 3 }}>{s.oneriRenkBilgi}</div>}
+        <div style={{ fontSize: 9, color: T.sub, fontWeight: 700, marginBottom: 3 }}>📷 FOTOĞRAFA GÖRE BENZER MODELLER — tıkla, satıra bağlansın</div>
+        {s.oneriRenkBilgi && <div style={{ fontSize: 9, color: s.oneriRenkBilgi.startsWith("⚠") ? PS.warn : PS.ok, marginBottom: 3 }}>{s.oneriRenkBilgi}</div>}
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
           {s.oneriler.map(o => (
-            <div key={o.m.id} onClick={() => modelSec(s.id, o.m)} title={o.m.kod + (o.m.ad ? " · " + o.m.ad : "")} style={{ width: 76, cursor: "pointer", border: "1px solid " + (o.m.id === s.secimId ? "#6abf69" : "rgba(255,255,255,0.12)"), borderRadius: 8, overflow: "hidden", background: "rgba(255,255,255,0.04)" }}>
+            <div key={o.m.id} onClick={() => modelSec(s.id, o.m)} title={o.m.kod + (o.m.ad ? " · " + o.m.ad : "")} style={{ width: 76, cursor: "pointer", border: "1px solid " + (o.m.id === s.secimId ? PS.ok : T.card), borderRadius: 8, overflow: "hidden", background: T.card }}>
               <div style={{ height: 70, background: "#f3f3f3", display: "flex", alignItems: "center", justifyContent: "center" }}>
                 {o.m.foto ? <img src={o.m.foto} alt="" loading="lazy" style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }} /> : null}
               </div>
-              <div style={{ fontSize: 10, fontWeight: 700, padding: "2px 4px 0", color: "#e8dcc8", wordBreak: "break-all" }}>{o.m.kod}</div>
-              <div style={{ fontSize: 9, fontWeight: 700, padding: "0 4px 3px", color: o.skor >= 0.88 ? "#6abf69" : o.skor >= 0.8 ? "#e8b04f" : "#8a7d64" }}>%{Math.round(o.skor * 100)}{psModelTasRengi(o.m) ? <span style={{ fontWeight: 600, color: o.renkUyar ? "#6abf69" : "#a89c84" }}> · {o.renkUyar ? "✓ " : ""}{PS_RENK_AD[psModelTasRengi(o.m)]}</span> : null}</div>
+              <div style={{ fontSize: 10, fontWeight: 700, padding: "2px 4px 0", color: T.text, wordBreak: "break-all" }}>{o.m.kod}</div>
+              <div style={{ fontSize: 9, fontWeight: 700, padding: "0 4px 3px", color: o.skor >= 0.88 ? PS.ok : o.skor >= 0.8 ? PS.warn : T.sub }}>%{Math.round(o.skor * 100)}{psModelTasRengi(o.m) ? <span style={{ fontWeight: 600, color: o.renkUyar ? PS.ok : T.sub }}> · {o.renkUyar ? "✓ " : ""}{PS_RENK_AD[psModelTasRengi(o.m)]}</span> : null}</div>
             </div>
           ))}
         </div>
       </>)}
-      {!s.oneriler && s.oneriDurum !== "hesapliyor" && s.kalem.foto && <button onClick={() => oneriHesapla(s.id, s.kalem)} style={{ ...GH, fontSize: 9, padding: "2px 8px", marginTop: 4 }}>📷 Benzer bul</button>}
+      {!s.oneriler && s.oneriDurum !== "hesapliyor" && s.kalem.foto && <button onClick={() => oneriHesapla(s.id, s.kalem)} style={{ ...GH_T, fontSize: 9, padding: "2px 8px", marginTop: 4 }}>📷 Benzer bul</button>}
     </div>
   );
 
-  const kucukIS = { ...IS, padding: "5px 8px", fontSize: 11 };
-  const etiket = { fontSize: 9, color: "#8a7d64", fontWeight: 700, whiteSpace: "nowrap" };
+  const kucukIS = { ...IS_T, padding: "5px 8px", fontSize: 11 };
+  const etiket = { fontSize: 9, color: T.sub, fontWeight: 700, whiteSpace: "nowrap" };
   const rozet = (renk, yazi) => <span style={{ fontSize: 9, fontWeight: 800, padding: "2px 8px", borderRadius: 20, background: renk + "22", border: "1px solid " + renk + "66", color: renk }}>{yazi}</span>;
 
   return (
     <div onClick={() => { if (!uygulaniyor) onKapat(); }} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.82)", zIndex: 300, display: "flex", alignItems: "center", justifyContent: "center", padding: 14 }}>
-      <div onClick={e => e.stopPropagation()} style={{ background: "#1c1c1e", borderRadius: 16, width: "100%", maxWidth: 1040, maxHeight: "94vh", display: "flex", flexDirection: "column", color: "#e8dcc8" }}>
-        <div style={{ padding: "14px 18px", borderBottom: "1px solid rgba(255,255,255,0.08)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-          <div style={{ fontSize: 15, fontWeight: 700, color: "#f5f5f7" }}>📄 PDF'ten sipariş hazırla</div>
-          <button onClick={onKapat} disabled={uygulaniyor} style={{ ...GH, padding: "4px 10px" }}>✕</button>
+      <div onClick={e => e.stopPropagation()} style={{ background: T.bg2, borderRadius: 16, width: "100%", maxWidth: 1040, maxHeight: "94vh", display: "flex", flexDirection: "column", color: T.text }}>
+        <div style={{ padding: "14px 18px", borderBottom: "1px solid " + T.border, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+          <div style={{ fontSize: 15, fontWeight: 700, color: T.text }}>📄 PDF'ten sipariş hazırla</div>
+          <button onClick={onKapat} disabled={uygulaniyor} style={{ ...GH_T, padding: "4px 10px" }}>✕</button>
         </div>
-        <div style={{ padding: "7px 18px", borderBottom: "1px solid rgba(255,255,255,0.06)", display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", fontSize: 11, color: "#a89c84" }}>
+        <div style={{ padding: "7px 18px", borderBottom: "1px solid " + T.border, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", fontSize: 11, color: T.sub }}>
           <span style={{ fontWeight: 700 }}>📷 Fotoğrafa göre eşleştirme:</span>
           {vi.durum === "kontrol" && <span>kontrol ediliyor…</span>}
           {vi.durum !== "kontrol" && vi.durum !== "kuruyor" && <span>{hazirSayi} model hazır{eksikSayi > 0 ? ", " + eksikSayi + " eksik" : " — güncel"}</span>}
           {vi.durum === "kuruyor" && <>
             <span>{vi.mesaj}</span>
-            <span style={{ width: 120, height: 6, background: "rgba(255,255,255,0.1)", borderRadius: 3, overflow: "hidden", display: "inline-block" }}><span style={{ display: "block", height: "100%", width: vi.yuzde + "%", background: "#6abf69" }} /></span>
-            <button onClick={() => { iptalRef.current = true; }} style={{ ...GH, fontSize: 10, padding: "3px 9px" }}>Durdur</button>
+            <span style={{ width: 120, height: 6, background: T.card, borderRadius: 3, overflow: "hidden", display: "inline-block" }}><span style={{ display: "block", height: "100%", width: vi.yuzde + "%", background: PS.ok }} /></span>
+            <button onClick={() => { iptalRef.current = true; }} style={{ ...GH_T, fontSize: 10, padding: "3px 9px" }}>Durdur</button>
           </>}
-          {vi.durum !== "kuruyor" && vi.durum !== "kontrol" && eksikSayi > 0 && <button onClick={indeksBaslat} style={{ ...GH, fontSize: 10, padding: "3px 9px" }}>{hazirSayi ? "Eksikleri ekle" : "Hazırla"} ({eksikSayi})</button>}
-          {vi.durum === "hazir" && vi.mesaj && <span style={{ color: "#6abf69" }}>{vi.mesaj}</span>}
-          {vi.hata && <span style={{ color: "#e85a4f" }}>{vi.hata}</span>}
-          {hazirSayi === 0 && eksikSayi > 0 && vi.durum !== "kuruyor" && <span style={{ fontSize: 10, color: "#7a6f5a", flexBasis: "100%" }}>İlk kurulum: yaklaşık 90 MB'lık model iner ve fotoğraflar işlenir (birkaç on dakika). Sekmeyi açık tutun; kapatırsanız kaldığı yerden devam eder. Sonraki kullanımlarda bu adım gerekmez, sadece yeni modeller eklenir.</span>}
+          {vi.durum !== "kuruyor" && vi.durum !== "kontrol" && eksikSayi > 0 && <button onClick={indeksBaslat} style={{ ...GH_T, fontSize: 10, padding: "3px 9px" }}>{hazirSayi ? "Eksikleri ekle" : "Hazırla"} ({eksikSayi})</button>}
+          {vi.durum === "hazir" && vi.mesaj && <span style={{ color: PS.ok }}>{vi.mesaj}</span>}
+          {vi.hata && <span style={{ color: PS.bad }}>{vi.hata}</span>}
+          {hazirSayi === 0 && eksikSayi > 0 && vi.durum !== "kuruyor" && <span style={{ fontSize: 10, color: T.sub, flexBasis: "100%" }}>İlk kurulum: yaklaşık 90 MB'lık model iner ve fotoğraflar işlenir (birkaç on dakika). Sekmeyi açık tutun; kapatırsanız kaldığı yerden devam eder. Sonraki kullanımlarda bu adım gerekmez, sadece yeni modeller eklenir.</span>}
         </div>
 
         {asama === "sec" && (
           <div style={{ padding: 28, textAlign: "center" }}>
-            <p style={{ fontSize: 12, color: "#a89c84", margin: "0 0 6px" }}>Müşterinin gönderdiği sipariş PDF'ini seçin.</p>
-            <p style={{ fontSize: 10, color: "#7a6f5a", margin: "0 0 16px" }}>Fabor işemri ve Excel'den alınmış tablo PDF'leri okunur. Kodlar bizim modellerle eşleştirilir; bulunamayanlar yeni model olarak eklenebilir.</p>
+            <p style={{ fontSize: 12, color: T.sub, margin: "0 0 6px" }}>Müşterinin gönderdiği sipariş PDF'ini seçin.</p>
+            <p style={{ fontSize: 10, color: T.sub, margin: "0 0 16px" }}>Fabor işemri ve Excel'den alınmış tablo PDF'leri okunur. Kodlar bizim modellerle eşleştirilir; bulunamayanlar yeni model olarak eklenebilir.</p>
             <label style={{ ...BG, display: "inline-block", cursor: "pointer", padding: "10px 22px", fontSize: 12 }}>
               PDF seç
               <input type="file" accept="application/pdf,.pdf" onChange={dosyaSecildi} style={{ display: "none" }} />
             </label>
-            {hata && <div style={{ marginTop: 14, fontSize: 11, color: "#e85a4f" }}>{hata}</div>}
+            {hata && <div style={{ marginTop: 14, fontSize: 11, color: PS.bad }}>{hata}</div>}
           </div>
         )}
 
         {gozSatir && (
           <div onClick={gozAcKapat} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 310, display: "flex", alignItems: "center", justifyContent: "center", padding: 14 }}>
-            <div onClick={e => e.stopPropagation()} style={{ background: "#1c1c1e", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 14, width: "100%", maxWidth: 940, maxHeight: "90vh", display: "flex", flexDirection: "column" }}>
-              <div style={{ padding: "12px 16px", borderBottom: "1px solid rgba(255,255,255,0.08)", display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                {gozKol && !gozAra && <button onClick={() => setGozKol("")} style={{ ...GH, padding: "4px 10px", fontSize: 10 }}>← Koleksiyonlar</button>}
-                <div style={{ fontSize: 13, fontWeight: 700, color: "#f5f5f7" }}>{gozKol && !gozAra ? ((kollar || []).find(k => k.id === gozKol) || {}).ad : "Model seç"}</div>
-                <input autoFocus value={gozAra} onChange={e => setGozAra(e.target.value)} placeholder="Kod veya ad yaz (tüm koleksiyonlarda ara)" style={{ ...IS, flex: "1 1 200px", padding: "6px 10px", fontSize: 11 }} />
-                <button onClick={gozAcKapat} style={{ ...GH, padding: "4px 10px" }}>✕</button>
+            <div onClick={e => e.stopPropagation()} style={{ background: T.bg2, border: "1px solid " + T.border, borderRadius: 14, width: "100%", maxWidth: 940, maxHeight: "90vh", display: "flex", flexDirection: "column" }}>
+              <div style={{ padding: "12px 16px", borderBottom: "1px solid " + T.border, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                {gozKol && !gozAra && <button onClick={() => setGozKol("")} style={{ ...GH_T, padding: "4px 10px", fontSize: 10 }}>← Koleksiyonlar</button>}
+                <div style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{gozKol && !gozAra ? ((kollar || []).find(k => k.id === gozKol) || {}).ad : "Model seç"}</div>
+                <input autoFocus value={gozAra} onChange={e => setGozAra(e.target.value)} placeholder="Kod veya ad yaz (tüm koleksiyonlarda ara)" style={{ ...IS_T, flex: "1 1 200px", padding: "6px 10px", fontSize: 11 }} />
+                <button onClick={gozAcKapat} style={{ ...GH_T, padding: "4px 10px" }}>✕</button>
               </div>
               <div style={{ padding: 14, overflowY: "auto" }}>
                 {!gozKol && !gozAra && (
@@ -1847,12 +1858,12 @@ function PdfSiparisModal({ modeller, kollar, onKapat, onUygula, onModelDuzenle }
                       const ms = (modeller || []).filter(m => m.ki === k.id);
                       const kapak = ms.find(m => m.foto);
                       return (
-                        <div key={k.id} onClick={() => setGozKol(k.id)} style={{ cursor: "pointer", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 10, overflow: "hidden" }}>
+                        <div key={k.id} onClick={() => setGozKol(k.id)} style={{ cursor: "pointer", background: T.card, border: "1px solid " + T.border, borderRadius: 10, overflow: "hidden" }}>
                           <div style={{ height: 100, background: "#f3f3f3", display: "flex", alignItems: "center", justifyContent: "center" }}>
                             {kapak ? <img src={kapak.foto} alt="" loading="lazy" style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }} /> : null}
                           </div>
-                          <div style={{ padding: "6px 8px", fontSize: 11, fontWeight: 700, color: "#e8dcc8" }}>{k.ad}</div>
-                          <div style={{ padding: "0 8px 7px", fontSize: 9, color: "#8a7d64" }}>{ms.length} model</div>
+                          <div style={{ padding: "6px 8px", fontSize: 11, fontWeight: 700, color: T.text }}>{k.ad}</div>
+                          <div style={{ padding: "0 8px 7px", fontSize: 9, color: T.sub }}>{ms.length} model</div>
                         </div>
                       );
                     })}
@@ -1860,25 +1871,25 @@ function PdfSiparisModal({ modeller, kollar, onKapat, onUygula, onModelDuzenle }
                 )}
                 {(gozKol || gozAra) && (
                   gozListe.length === 0
-                    ? <div style={{ textAlign: "center", color: "#8a7d64", fontSize: 12, padding: 24 }}>Model bulunamadı</div>
+                    ? <div style={{ textAlign: "center", color: T.sub, fontSize: 12, padding: 24 }}>Model bulunamadı</div>
                     : <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(120px,1fr))", gap: 10 }}>
                         {gozListe.map(m => (
-                          <div key={m.id} onClick={() => gozTikla(m)} style={{ cursor: "pointer", position: "relative", background: gozSecim.some(x => x.id === m.id) ? "rgba(106,191,105,0.16)" : "rgba(255,255,255,0.04)", border: "2px solid " + (gozSecim.some(x => x.id === m.id) ? "#6abf69" : "rgba(255,255,255,0.08)"), borderRadius: 10, overflow: "hidden" }}>
-                            {gozSecim.some(x => x.id === m.id) && <div style={{ position: "absolute", top: 4, right: 4, zIndex: 2, background: "#6abf69", color: "#fff", borderRadius: 10, fontSize: 10, fontWeight: 800, padding: "1px 7px" }}>✓ {gozSecim.findIndex(x => x.id === m.id) + 1}</div>}
+                          <div key={m.id} onClick={() => gozTikla(m)} style={{ cursor: "pointer", position: "relative", background: gozSecim.some(x => x.id === m.id) ? "rgba(106,191,105,0.16)" : T.card, border: "2px solid " + (gozSecim.some(x => x.id === m.id) ? PS.ok : T.card), borderRadius: 10, overflow: "hidden" }}>
+                            {gozSecim.some(x => x.id === m.id) && <div style={{ position: "absolute", top: 4, right: 4, zIndex: 2, background: PS.ok, color: "#fff", borderRadius: 10, fontSize: 10, fontWeight: 800, padding: "1px 7px" }}>✓ {gozSecim.findIndex(x => x.id === m.id) + 1}</div>}
                             <div style={{ height: 110, background: "#f3f3f3", display: "flex", alignItems: "center", justifyContent: "center" }}>
                               {m.foto ? <img src={m.foto} alt="" loading="lazy" style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }} /> : <span style={{ color: "#bbb", fontSize: 10 }}>foto yok</span>}
                             </div>
-                            <div style={{ padding: "5px 7px", fontSize: 11, fontWeight: 700, color: "#e8dcc8" }}>{m.kod}</div>
-                            <div style={{ padding: "0 7px 6px", fontSize: 9, color: "#8a7d64" }}>{m.gram ? m.gram + " gr" : ""}{gozAra && m.ki ? " · " + ((kollar || []).find(k => k.id === m.ki) || {}).ad : ""}</div>
+                            <div style={{ padding: "5px 7px", fontSize: 11, fontWeight: 700, color: T.text }}>{m.kod}</div>
+                            <div style={{ padding: "0 7px 6px", fontSize: 9, color: T.sub }}>{m.gram ? m.gram + " gr" : ""}{gozAra && m.ki ? " · " + ((kollar || []).find(k => k.id === m.ki) || {}).ad : ""}</div>
                           </div>
                         ))}
                       </div>
                 )}
               </div>
-              <div style={{ padding: "10px 16px", borderTop: "1px solid rgba(255,255,255,0.08)", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-                <span style={{ fontSize: 11, color: "#a89c84" }}>Birden çok resme tıklayıp seçebilirsin (ilk seçilen ana model){gozSecim.length ? ": " + gozSecim.map(x => x.kod).join(", ") : ""}</span>
+              <div style={{ padding: "10px 16px", borderTop: "1px solid " + T.border, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                <span style={{ fontSize: 11, color: T.sub }}>Birden çok resme tıklayıp seçebilirsin (ilk seçilen ana model){gozSecim.length ? ": " + gozSecim.map(x => x.kod).join(", ") : ""}</span>
                 <span style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
-                  {gozSecim.length > 0 && <button onClick={() => setGozSecim([])} style={GH}>Temizle</button>}
+                  {gozSecim.length > 0 && <button onClick={() => setGozSecim([])} style={GH_T}>Temizle</button>}
                   <button onClick={cokluSec} disabled={!gozSecim.length} style={{ ...BG, opacity: gozSecim.length ? 1 : 0.45, cursor: gozSecim.length ? "pointer" : "not-allowed" }}>Seç ({gozSecim.length})</button>
                 </span>
               </div>
@@ -1887,53 +1898,53 @@ function PdfSiparisModal({ modeller, kollar, onKapat, onUygula, onModelDuzenle }
         )}
 
         {asama === "okuyor" && (
-          <div style={{ padding: 40, textAlign: "center", fontSize: 12, color: "#a89c84" }}>{mesaj || "Okunuyor…"}</div>
+          <div style={{ padding: 40, textAlign: "center", fontSize: 12, color: T.sub }}>{mesaj || "Okunuyor…"}</div>
         )}
 
         {asama === "onay" && (<>
-          <div style={{ padding: "10px 18px", borderBottom: "1px solid rgba(255,255,255,0.06)", display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center", fontSize: 11 }}>
-            <span style={{ color: "#f5f5f7", fontWeight: 700 }}>{tip === "fabor" ? "Fabor işemri" : "Excel PDF"}</span>
+          <div style={{ padding: "10px 18px", borderBottom: "1px solid " + T.border, display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center", fontSize: 11 }}>
+            <span style={{ color: T.text, fontWeight: 700 }}>{tip === "fabor" ? "Fabor işemri" : "Excel PDF"}</span>
             {baslik.referans ? <span>Ref: <b>{baslik.referans}</b></span> : null}
             {baslik.po ? <span>PO: <b>{baslik.po}</b></span> : null}
             {baslik.ayar ? <span>Ayar: <b>{baslik.ayar}</b></span> : null}
             {baslik.listeGram ? <span>Liste gramı: <b>{baslik.listeGram}</b></span> : null}
             {baslik.teslimTarihi ? <span>Teslim: <b>{baslik.teslimTarihi}</b></span> : null}
-            {baslik.genelNot ? <span style={{ color: "#e85a4f" }}>⚠ {baslik.genelNot}</span> : null}
+            {baslik.genelNot ? <span style={{ color: PS.bad }}>⚠ {baslik.genelNot}</span> : null}
             <span style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
-              {rozet("#6abf69", sayac.eslesti + " eşleşti")}
-              {sayac.coklu > 0 && rozet("#e8b04f", sayac.coklu + " birden çok model")}
-              {rozet("#e85a4f", sayac.yok + " bulunamadı")}
-              {yerlesmeyen > 0 && rozet("#e8b04f", yerlesmeyen + " yerleştirilmedi")}
+              {rozet(PS.ok, sayac.eslesti + " eşleşti")}
+              {sayac.coklu > 0 && rozet(PS.warn, sayac.coklu + " birden çok model")}
+              {rozet(PS.bad, sayac.yok + " bulunamadı")}
+              {yerlesmeyen > 0 && rozet(PS.warn, yerlesmeyen + " yerleştirilmedi")}
             </span>
           </div>
           {sayac.yok > 0 && (
-            <div style={{ padding: "8px 18px", borderBottom: "1px solid rgba(255,255,255,0.06)", display: "flex", alignItems: "center", gap: 8, fontSize: 11 }}>
+            <div style={{ padding: "8px 18px", borderBottom: "1px solid " + T.border, display: "flex", alignItems: "center", gap: 8, fontSize: 11 }}>
               <span style={etiket}>YENİ MODELLER ŞU KOLEKSİYONA EKLENSİN:</span>
               <select value={yeniKolId} onChange={e => setYeniKolId(e.target.value)} style={{ ...kucukIS, width: "auto", minWidth: 200 }}>
                 <option value="">— koleksiyon seç —</option>
                 {(kollar || []).map(k => <option key={k.id} value={k.id}>{k.ad}</option>)}
               </select>
-              {yeniSayisi > 0 && !yeniKolId && <span style={{ color: "#e85a4f", fontSize: 10 }}>Yeni model eklemek için koleksiyon seçin</span>}
+              {yeniSayisi > 0 && !yeniKolId && <span style={{ color: PS.bad, fontSize: 10 }}>Yeni model eklemek için koleksiyon seçin</span>}
             </div>
           )}
           <div style={{ overflowY: "auto", padding: "10px 14px", flex: 1 }}>
             {satirlar.map((s, sn) => {
               const m = s.durum !== "yok" ? (s.adaylar.find(x => x.id === s.secimId) || s.adaylar[0]) : null;
               return (
-                <div key={s.id} style={{ display: "flex", gap: 12, padding: "10px 8px", marginBottom: 8, borderRadius: 10, background: s.dahil ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.01)", border: "1px solid " + (s.dahil ? "rgba(var(--vurgu-rgb),0.18)" : "rgba(255,255,255,0.05)"), opacity: s.dahil ? 1 : 0.55, alignItems: "flex-start", flexWrap: "wrap" }}>
+                <div key={s.id} style={{ display: "flex", gap: 12, padding: "10px 8px", marginBottom: 8, borderRadius: 10, background: s.dahil ? T.card : "transparent", border: "1px solid " + (s.dahil ? "rgba(var(--vurgu-rgb),0.18)" : T.card), opacity: s.dahil ? 1 : 0.55, alignItems: "flex-start", flexWrap: "wrap" }}>
                   <input type="checkbox" checked={s.dahil} onChange={e => guncelle(s.id, { dahil: e.target.checked })} style={{ marginTop: 4 }} title="Siparişe aktar" />
                   <div style={{ width: 92, flexShrink: 0 }}>
                     <div style={{ width: 92, height: 92, background: "#fff", borderRadius: 8, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center" }}>
                       {s.kalem.foto ? <img src={s.kalem.foto} alt="" style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }} /> : <span style={{ color: "#bbb", fontSize: 10 }}>foto yok</span>}
                     </div>
-                    <div style={{ fontSize: 8, color: "#7a6f5a", marginTop: 3, wordBreak: "break-all" }}>#{sn + 1} · s.{s.kalem.sayfaNo} · {s.kalem.disKod}</div>
+                    <div style={{ fontSize: 8, color: T.sub, marginTop: 3, wordBreak: "break-all" }}>#{sn + 1} · s.{s.kalem.sayfaNo} · {s.kalem.disKod}</div>
                   </div>
                   <div style={{ flex: "1 1 260px", minWidth: 240 }}>
                     <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 6, flexWrap: "wrap" }}>
                       <span style={etiket}>ADET</span>
                       <input type="number" min="1" value={s.adet} onChange={e => guncelle(s.id, { adet: e.target.value })} style={{ ...kucukIS, width: 64 }} />
-                      {s.kalem.gramBirim ? <span style={{ fontSize: 10, color: "#a89c84" }}>PDF gram: {s.kalem.gramBirim}</span> : null}
-                      {!s.kalem.adetBulundu && <span style={{ fontSize: 9, color: "#e8b04f" }}>adet okunamadı, kontrol edin</span>}
+                      {s.kalem.gramBirim ? <span style={{ fontSize: 10, color: T.sub }}>PDF gram: {s.kalem.gramBirim}</span> : null}
+                      {!s.kalem.adetBulundu && <span style={{ fontSize: 9, color: PS.warn }}>adet okunamadı, kontrol edin</span>}
                     </div>
                     <textarea value={s.not} onChange={e => guncelle(s.id, { not: e.target.value })} rows={Math.min(5, Math.max(2, Math.ceil((s.not || "").length / 46)))} placeholder="Açıklama / not" style={{ ...kucukIS, resize: "vertical", fontFamily: "sans-serif", lineHeight: 1.35 }} />
                   </div>
@@ -1946,13 +1957,13 @@ function PdfSiparisModal({ modeller, kollar, onKapat, onUygula, onModelDuzenle }
                         </div>
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
-                            {rozet(s.durum === "coklu" ? "#e8b04f" : "#6abf69", s.durum === "coklu" ? "birden çok model" : "eşleşti")}
-                            <b style={{ fontSize: 13, color: "#f5f5f7" }}>{m.kod}</b>
-                            <span style={{ fontSize: 10, color: "#a89c84" }}>{tipEtiket(m.kategori)}</span>
-                            {onModelDuzenle && <button onClick={() => onModelDuzenle(m)} title="Model kartını aç: gram, taş, ayar vb. düzenle" style={{ ...GH, fontSize: 10, padding: "2px 8px" }}>✏️ Düzenle</button>}
+                            {rozet(s.durum === "coklu" ? PS.warn : PS.ok, s.durum === "coklu" ? "birden çok model" : "eşleşti")}
+                            <b style={{ fontSize: 13, color: T.text }}>{m.kod}</b>
+                            <span style={{ fontSize: 10, color: T.sub }}>{tipEtiket(m.kategori)}</span>
+                            {onModelDuzenle && <button onClick={() => onModelDuzenle(m)} title="Model kartını aç: gram, taş, ayar vb. düzenle" style={{ ...GH_T, fontSize: 10, padding: "2px 8px" }}>✏️ Düzenle</button>}
                           </div>
-                          <div style={{ fontSize: 10, color: "#8a7d64", marginTop: 2 }}>{m.gram ? m.gram + " gr · " : ""}{m.refAyar || ""} · {m.kategori || ""} · bulunan: {s.bulunanKod} ({(s.kalem.kodAdaylari.find(a => a.kod === s.bulunanKod) || {}).kaynak || ""})</div>
-                          {s.renkUyari && <div style={{ fontSize: 10, fontWeight: 700, marginBottom: 4, color: s.renkUyari.startsWith("⚠") ? "#e8b04f" : "#6abf69" }}>🎨 {s.renkUyari}</div>}
+                          <div style={{ fontSize: 10, color: T.sub, marginTop: 2 }}>{m.gram ? m.gram + " gr · " : ""}{m.refAyar || ""} · {m.kategori || ""} · bulunan: {s.bulunanKod} ({(s.kalem.kodAdaylari.find(a => a.kod === s.bulunanKod) || {}).kaynak || ""})</div>
+                          {s.renkUyari && <div style={{ fontSize: 10, fontWeight: 700, marginBottom: 4, color: s.renkUyari.startsWith("⚠") ? PS.warn : PS.ok }}>🎨 {s.renkUyari}</div>}
                           {s.adaylar.length > 1 && (
                             <select value={s.secimId} onChange={e => guncelle(s.id, { secimId: e.target.value })} style={{ ...kucukIS, marginTop: 5 }}>
                               {s.adaylar.map(x => <option key={x.id} value={x.id}>{x.kod} — {(kollar.find(k => k.id === x.ki) || {}).ad || "?"}{x.ad ? " · " + x.ad : ""}</option>)}
@@ -1964,30 +1975,30 @@ function PdfSiparisModal({ modeller, kollar, onKapat, onUygula, onModelDuzenle }
                     {s.durum === "yok" && (
                       <div>
                         <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 6, flexWrap: "wrap" }}>
-                          {rozet("#e85a4f", "bulunamadı")}
-                          {!s.ekle && <span style={{ fontSize: 10, color: "#e8b04f" }}>↑ önerilerden birine tıkla ya da koleksiyondan seç</span>}
+                          {rozet(PS.bad, "bulunamadı")}
+                          {!s.ekle && <span style={{ fontSize: 10, color: PS.warn }}>↑ önerilerden birine tıkla ya da koleksiyondan seç</span>}
                           <label style={{ fontSize: 10, display: "flex", gap: 4, alignItems: "center", cursor: "pointer" }}>
                             <input type="checkbox" checked={s.ekle} onChange={e => guncelle(s.id, { ekle: e.target.checked, cizimde: e.target.checked && !!s.kalem.foto })} /> yeni model olarak ekle
                           </label>
                           {s.ekle && s.kalem.foto && (
-                            <label style={{ fontSize: 10, display: "flex", gap: 4, alignItems: "center", cursor: "pointer", color: "#e8b04f" }} title="Katalogda 'ÇİZİMDE' olarak görünür, müşteri vitrininde görünmez; müşterinin resmi sadece referans olarak saklanır">
+                            <label style={{ fontSize: 10, display: "flex", gap: 4, alignItems: "center", cursor: "pointer", color: PS.warn }} title="Katalogda 'ÇİZİMDE' olarak görünür, müşteri vitrininde görünmez; müşterinin resmi sadece referans olarak saklanır">
                               <input type="checkbox" checked={!!s.cizimde} onChange={e => guncelle(s.id, { cizimde: e.target.checked })} /> 🎨 Çizimde olarak ekle
                             </label>
                           )}
                         </div>
                         {s.ekle && (
                           <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 6 }}>
-                            <input value={s.yeniKod} onChange={e => guncelle(s.id, { yeniKod: e.target.value.toUpperCase() })} placeholder="Kod" style={{ ...kucukIS, width: 120, borderColor: (!String(s.yeniKod).trim() || kodCakisan[psNorm(s.yeniKod)] > 1) ? "#e85a4f" : undefined }} />
+                            <input value={s.yeniKod} onChange={e => guncelle(s.id, { yeniKod: e.target.value.toUpperCase() })} placeholder="Kod" style={{ ...kucukIS, width: 120, borderColor: (!String(s.yeniKod).trim() || kodCakisan[psNorm(s.yeniKod)] > 1) ? PS.bad : undefined }} />
                             <select value={s.yeniKategori} onChange={e => guncelle(s.id, { yeniKategori: e.target.value })} style={{ ...kucukIS, width: "auto" }}>
                               {KATEGORILER.map(k => <option key={k.id} value={k.id}>{k.l}</option>)}
                             </select>
                             <input type="number" step="0.01" value={s.yeniGram} onChange={e => guncelle(s.id, { yeniGram: e.target.value })} placeholder="gram" style={{ ...kucukIS, width: 70 }} />
-                            {kodCakisan[psNorm(s.yeniKod)] > 1 && <span style={{ fontSize: 9, color: "#e85a4f", alignSelf: "center" }}>aynı kod listede birden fazla</span>}
+                            {kodCakisan[psNorm(s.yeniKod)] > 1 && <span style={{ fontSize: 9, color: PS.bad, alignSelf: "center" }}>aynı kod listede birden fazla</span>}
                           </div>
                         )}
                         <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                           <input value={s.ara} onChange={e => modelAra(s.id, e.target.value)} placeholder="Kodu elle yaz: mevcut modeli bul" style={{ ...kucukIS, width: 200 }} />
-                          <button onClick={() => gozAc(s)} style={{ ...GH, fontSize: 10, padding: "5px 9px", whiteSpace: "nowrap" }}>📂 Koleksiyondan seç</button>
+                          <button onClick={() => gozAc(s)} style={{ ...GH_T, fontSize: 10, padding: "5px 9px", whiteSpace: "nowrap" }}>📂 Koleksiyondan seç</button>
                         </div>
                       </div>
                     )}
@@ -1995,16 +2006,16 @@ function PdfSiparisModal({ modeller, kollar, onKapat, onUygula, onModelDuzenle }
                       <div style={{ marginTop: 6 }}>
                         <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
                           <input value={s.ara} onChange={e => modelAra(s.id, e.target.value)} placeholder="Başka model: kodu yaz" style={{ ...kucukIS, width: 170 }} />
-                          <button onClick={() => gozAc(s)} style={{ ...GH, fontSize: 10, padding: "5px 9px", whiteSpace: "nowrap" }}>{s.ekler && s.ekler.length ? "📂 Model/renk ekle-çıkar" : "📂 Koleksiyondan seç (çoklu)"}</button>
+                          <button onClick={() => gozAc(s)} style={{ ...GH_T, fontSize: 10, padding: "5px 9px", whiteSpace: "nowrap" }}>{s.ekler && s.ekler.length ? "📂 Model/renk ekle-çıkar" : "📂 Koleksiyondan seç (çoklu)"}</button>
                         </div>
                         {(() => {
                           const aile = psAileModelleri(modeller, s.bulunanKod || (m && m.kod) || "", s.adaylar).filter(x => x.id !== (m && m.id) && !(s.ekler || []).some(e => e.m.id === x.id));
                           if (!aile.length) return null;
                           return (
                             <div style={{ marginTop: 6, display: "flex", gap: 5, flexWrap: "wrap", alignItems: "center" }}>
-                              <span style={{ fontSize: 9, color: "#8a7d64" }}>Aynı modelin diğer kayıtları:</span>
+                              <span style={{ fontSize: 9, color: T.sub }}>Aynı modelin diğer kayıtları:</span>
                               {aile.map(x => (
-                                <button key={x.id} onClick={() => setSatirlar(p => p.map(r => r.id === s.id ? { ...r, ekler: [...(r.ekler || []), { m: x, adet: r.adetBasi > 0 ? r.adetBasi : 1 }] } : r))} title="Bu kaydı da siparişe ekle" style={{ ...GH, fontSize: 10, padding: "3px 8px", display: "inline-flex", gap: 5, alignItems: "center" }}>
+                                <button key={x.id} onClick={() => setSatirlar(p => p.map(r => r.id === s.id ? { ...r, ekler: [...(r.ekler || []), { m: x, adet: r.adetBasi > 0 ? r.adetBasi : 1 }] } : r))} title="Bu kaydı da siparişe ekle" style={{ ...GH_T, fontSize: 10, padding: "3px 8px", display: "inline-flex", gap: 5, alignItems: "center" }}>
                                   {x.foto ? <img src={x.foto} alt="" loading="lazy" style={{ width: 18, height: 18, objectFit: "contain", background: "#fff", borderRadius: 3 }} /> : null}
                                   ＋ {x.kod}{psModelTasRengi(x) ? " · " + PS_RENK_AD[psModelTasRengi(x)] : ""}{psTrBuyuk(x.kod) === psTrBuyuk(s.bulunanKod) ? " (fotoğraftaki)" : ""}
                                 </button>
@@ -2016,19 +2027,19 @@ function PdfSiparisModal({ modeller, kollar, onKapat, onUygula, onModelDuzenle }
                           const top = (Number(s.adet) || 0) + s.ekler.reduce((a, e) => a + (Number(e.adet) || 0), 0);
                           const esit = top === s.adetPdf;
                           return (
-                            <div style={{ marginTop: 8, borderTop: "1px dashed rgba(255,255,255,0.1)", paddingTop: 6 }}>
+                            <div style={{ marginTop: 8, borderTop: "1px dashed " + T.border, paddingTop: 6 }}>
                               {s.ekler.map(e => (
                                 <div key={e.m.id} style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 4 }}>
                                   <div style={{ width: 38, height: 38, background: "#f3f3f3", borderRadius: 6, overflow: "hidden", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>{e.m.foto ? <img src={e.m.foto} alt="" loading="lazy" style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }} /> : null}</div>
-                                  <b style={{ fontSize: 12, color: "#f5f5f7" }}>{e.m.kod}</b>
-                                  <span style={{ fontSize: 9, color: "#a89c84" }}>{psModelTasRengi(e.m) ? PS_RENK_AD[psModelTasRengi(e.m)] : ""}{e.m.gram ? " · " + e.m.gram + " gr" : ""}</span>
-                                  {onModelDuzenle && <button onClick={() => onModelDuzenle(e.m)} title="Model kartını düzenle" style={{ ...GH, padding: "2px 7px", fontSize: 10 }}>✏️</button>}
+                                  <b style={{ fontSize: 12, color: T.text }}>{e.m.kod}</b>
+                                  <span style={{ fontSize: 9, color: T.sub }}>{psModelTasRengi(e.m) ? PS_RENK_AD[psModelTasRengi(e.m)] : ""}{e.m.gram ? " · " + e.m.gram + " gr" : ""}</span>
+                                  {onModelDuzenle && <button onClick={() => onModelDuzenle(e.m)} title="Model kartını düzenle" style={{ ...GH_T, padding: "2px 7px", fontSize: 10 }}>✏️</button>}
                                   <input type="number" min="1" value={e.adet} onChange={ev => ekAdetYaz(s.id, e.m.id, ev.target.value)} style={{ ...kucukIS, width: 56, marginLeft: "auto" }} />
-                                  <span style={{ fontSize: 9, color: "#a89c84" }}>adet</span>
-                                  <button onClick={() => ekSil(s.id, e.m.id)} title="Bu modeli çıkar" style={{ ...GH, padding: "2px 7px", fontSize: 10 }}>✕</button>
+                                  <span style={{ fontSize: 9, color: T.sub }}>adet</span>
+                                  <button onClick={() => ekSil(s.id, e.m.id)} title="Bu modeli çıkar" style={{ ...GH_T, padding: "2px 7px", fontSize: 10 }}>✕</button>
                                 </div>
                               ))}
-                              <div style={{ fontSize: 10, fontWeight: 700, color: esit ? "#6abf69" : "#e8b04f" }}>Dağılım: {[Number(s.adet) || 0, ...s.ekler.map(e => Number(e.adet) || 0)].join(" + ")} = {top} (müşteri PDF: {s.adetPdf}){esit ? " ✓" : " — kontrol edin"}</div>
+                              <div style={{ fontSize: 10, fontWeight: 700, color: esit ? PS.ok : PS.warn }}>Dağılım: {[Number(s.adet) || 0, ...s.ekler.map(e => Number(e.adet) || 0)].join(" + ")} = {top} (müşteri PDF: {s.adetPdf}){esit ? " ✓" : " — kontrol edin"}</div>
                             </div>
                           );
                         })()}
@@ -2039,17 +2050,17 @@ function PdfSiparisModal({ modeller, kollar, onKapat, onUygula, onModelDuzenle }
               );
             })}
           </div>
-          <div style={{ padding: "12px 18px", borderTop: "1px solid rgba(255,255,255,0.08)", display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-            <span style={{ fontSize: 11, color: "#a89c84" }}>{aktarilacak} kalem aktarılacak{yeniSayisi > 0 ? " · " + yeniSayisi + " yeni model eklenecek" : ""}{yerlesmeyen > 0 ? " · " : ""}{yerlesmeyen > 0 && <b style={{ color: "#e8b04f" }}>{yerlesmeyen} satır yerleştirilmedi</b>}</span>
-            {hata && <span style={{ fontSize: 11, color: "#e85a4f" }}>{hata}</span>}
-            {eksikKod > 0 && <span style={{ fontSize: 10, color: "#e85a4f" }}>{eksikKod} yeni modelin kodu boş</span>}
+          <div style={{ padding: "12px 18px", borderTop: "1px solid " + T.border, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+            <span style={{ fontSize: 11, color: T.sub }}>{aktarilacak} kalem aktarılacak{yeniSayisi > 0 ? " · " + yeniSayisi + " yeni model eklenecek" : ""}{yerlesmeyen > 0 ? " · " : ""}{yerlesmeyen > 0 && <b style={{ color: PS.warn }}>{yerlesmeyen} satır yerleştirilmedi</b>}</span>
+            {hata && <span style={{ fontSize: 11, color: PS.bad }}>{hata}</span>}
+            {eksikKod > 0 && <span style={{ fontSize: 10, color: PS.bad }}>{eksikKod} yeni modelin kodu boş</span>}
             <span style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
-              <button onClick={() => { if (window.confirm("Yaptığın tüm değişiklikler (seçimler, adet, not, model eşleştirmeleri) silinip PDF ilk okunduğu hâle dönsün mü?")) { setSatirlar(ilkSatirlar); setHata(""); } }} disabled={uygulaniyor} title="Tüm satırları PDF'in ilk okunduğu hâle döndür" style={GH}>↺ Sıfırla</button>
-              <button onClick={() => { if (window.confirm("Bu PDF'teki çalışma silinsin ve ekran boşalsın mı?")) { setAsama("sec"); setSatirlar([]); setIlkSatirlar([]); setBaslik({}); setHata(""); } }} disabled={uygulaniyor} style={GH}>🗑 Temizle</button>
-              <label style={{ ...GH, cursor: uygulaniyor ? "default" : "pointer", display: "inline-block" }} title="Başka (veya aynı) PDF'i seç ve yeniden oku">🔄 Tekrar yükle
+              <button onClick={() => { if (window.confirm("Yaptığın tüm değişiklikler (seçimler, adet, not, model eşleştirmeleri) silinip PDF ilk okunduğu hâle dönsün mü?")) { setSatirlar(ilkSatirlar); setHata(""); } }} disabled={uygulaniyor} title="Tüm satırları PDF'in ilk okunduğu hâle döndür" style={GH_T}>↺ Sıfırla</button>
+              <button onClick={() => { if (window.confirm("Bu PDF'teki çalışma silinsin ve ekran boşalsın mı?")) { setAsama("sec"); setSatirlar([]); setIlkSatirlar([]); setBaslik({}); setHata(""); } }} disabled={uygulaniyor} style={GH_T}>🗑 Temizle</button>
+              <label style={{ ...GH_T, cursor: uygulaniyor ? "default" : "pointer", display: "inline-block" }} title="Başka (veya aynı) PDF'i seç ve yeniden oku">🔄 Tekrar yükle
                 <input type="file" accept="application/pdf,.pdf" disabled={uygulaniyor} onChange={e => { if (window.confirm("Yeni PDF yüklenince mevcut çalışma silinir. Devam edilsin mi?")) dosyaSecildi(e); else e.target.value = ""; }} style={{ display: "none" }} />
               </label>
-              <button onClick={onKapat} disabled={uygulaniyor} style={GH}>İptal</button>
+              <button onClick={onKapat} disabled={uygulaniyor} style={GH_T}>İptal</button>
               <button onClick={onayla} disabled={!uygulanabilir || uygulaniyor} style={{ ...BG, opacity: (!uygulanabilir || uygulaniyor) ? 0.45 : 1, cursor: (!uygulanabilir || uygulaniyor) ? "not-allowed" : "pointer" }}>{uygulaniyor ? "Aktarılıyor…" : "Konfirmasyon'a aktar (" + aktarilacak + ")"}</button>
             </span>
           </div>
@@ -7903,7 +7914,7 @@ function Atolye({ onSirketDegis }) {
         {/* KONFİRMASYON */}
         {sayfa==="konfirmasyon" && (
           <div style={{ animation:"fadein .3s" }}>
-            {pdfModal && <PdfSiparisModal modeller={modeller} kollar={kollar} onKapat={()=>setPdfModal(false)} onUygula={pdfSiparisUygula} onModelDuzenle={openEM}/>}
+            {pdfModal && <PdfSiparisModal modeller={modeller} kollar={kollar} onKapat={()=>setPdfModal(false)} onUygula={pdfSiparisUygula} onModelDuzenle={openEM} T={T}/>}
             {/* Header */}
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12, flexWrap:"wrap", gap:6 }}>
               <h2 style={{ margin:0, fontSize:14, fontWeight:700, color:"var(--goldtext)" }}>Konfirmasyon</h2>
