@@ -1627,15 +1627,13 @@ function PdfSiparisModal({ modeller, kollar, onKapat, onUygula, onModelDuzenle }
           durum: !eslesti ? "yok" : (sirali.length > 1 ? "coklu" : "eslesti"),
           adaylar: sirali, secimId: secId, bulunanKod, renkUyari, ekler, adetBasi, adetPdf: k.adet || 1,
           adet: adet0, not: k.aciklama || "",
-          dahil: eslesti || excel,
-          ekle: !eslesti, // eşleşme yoksa varsayılan: yeni model olarak ekle
-          cizimde: !eslesti && !!k.foto, // yeni model, müşteri resmi referans → çizimde olarak eklenir
+          dahil: true, // tüm satırlar hazır gelir; işaretini kaldırarak çıkarırsın
+          ekle: !eslesti && excel, // Excel PDF'inde kodlar bizim kodumuz: bulunamazsa yeni model. Fabor'da kendiliğinden yeni model AÇILMAZ — sen yerleştirirsin ya da "yeni model" dersin
+          cizimde: !eslesti && excel && !!k.foto, // yeni model, müşteri resmi referans → çizimde olarak eklenir
           yeniKod: excel ? ilkKod : (k.disKod || ""), yeniKategori: psKategoriTahmin(k), yeniGram: k.gramBirim || "",
           ara: "",
         };
       });
-      // Fabor'da eşleşmeyen kalemler varsayılan olarak kapalı gelir (iç kodlar bizim kodumuz değil)
-      yeniSatirlar.forEach(s => { if (s.durum === "yok" && s.kalem.tip === "fabor") s.dahil = false; });
       setBaslik(sonuc.baslik || {}); setTip(sonuc.tip); setSatirlar(yeniSatirlar); setIlkSatirlar(yeniSatirlar); setAsama("onay");
       if (psIndeksDepo && psIndeksDepo.ids.length) oneriToplu(yeniSatirlar.filter(x => x.durum === "yok" && x.kalem.foto));
     } catch (err) {
@@ -1738,11 +1736,14 @@ function PdfSiparisModal({ modeller, kollar, onKapat, onUygula, onModelDuzenle }
   const yeniSayisi = secili.filter(s => s.ekle && s.durum === "yok").length;
   const eksikKod = secili.filter(s => s.durum === "yok" && s.ekle && !String(s.yeniKod || "").trim()).length;
   const kodCakisan = (() => { const c = {}; secili.filter(s => s.durum === "yok" && s.ekle).forEach(s => { const k = psNorm(s.yeniKod); if (k) c[k] = (c[k] || 0) + 1; }); return c; })();
-  const uygulanabilir = secili.length > 0 && eksikKod === 0 && (yeniSayisi === 0 || !!yeniKolId);
+  const aktarilacak = secili.filter(s => s.durum !== "yok" || s.ekle).length;
+  const yerlesmeyen = secili.filter(s => s.durum === "yok" && !s.ekle).length; // sistem emin olamadı, sen yerleştirmedin → aktarılmaz
+  const uygulanabilir = aktarilacak > 0 && eksikKod === 0 && (yeniSayisi === 0 || !!yeniKolId);
   const sayac = { eslesti: satirlar.filter(s => s.durum === "eslesti").length, coklu: satirlar.filter(s => s.durum === "coklu").length, yok: satirlar.filter(s => s.durum === "yok").length };
 
   const onayla = async () => {
     if (!uygulanabilir || uygulaniyor) return;
+    if (yerlesmeyen > 0 && !window.confirm(yerlesmeyen + " satır henüz yerleştirilmedi (model seçilmedi, yeni model de denmedi). Bunlar aktarılmayacak. Devam edilsin mi?")) return;
     setUygulaniyor(true);
     try {
       const kalemler = [];
@@ -1902,6 +1903,7 @@ function PdfSiparisModal({ modeller, kollar, onKapat, onUygula, onModelDuzenle }
               {rozet("#6abf69", sayac.eslesti + " eşleşti")}
               {sayac.coklu > 0 && rozet("#e8b04f", sayac.coklu + " birden çok model")}
               {rozet("#e85a4f", sayac.yok + " bulunamadı")}
+              {yerlesmeyen > 0 && rozet("#e8b04f", yerlesmeyen + " yerleştirilmedi")}
             </span>
           </div>
           {sayac.yok > 0 && (
@@ -1963,8 +1965,9 @@ function PdfSiparisModal({ modeller, kollar, onKapat, onUygula, onModelDuzenle }
                       <div>
                         <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 6, flexWrap: "wrap" }}>
                           {rozet("#e85a4f", "bulunamadı")}
+                          {!s.ekle && <span style={{ fontSize: 10, color: "#e8b04f" }}>↑ önerilerden birine tıkla ya da koleksiyondan seç</span>}
                           <label style={{ fontSize: 10, display: "flex", gap: 4, alignItems: "center", cursor: "pointer" }}>
-                            <input type="checkbox" checked={s.ekle} onChange={e => guncelle(s.id, { ekle: e.target.checked })} /> yeni model olarak ekle
+                            <input type="checkbox" checked={s.ekle} onChange={e => guncelle(s.id, { ekle: e.target.checked, cizimde: e.target.checked && !!s.kalem.foto })} /> yeni model olarak ekle
                           </label>
                           {s.ekle && s.kalem.foto && (
                             <label style={{ fontSize: 10, display: "flex", gap: 4, alignItems: "center", cursor: "pointer", color: "#e8b04f" }} title="Katalogda 'ÇİZİMDE' olarak görünür, müşteri vitrininde görünmez; müşterinin resmi sadece referans olarak saklanır">
@@ -2037,7 +2040,7 @@ function PdfSiparisModal({ modeller, kollar, onKapat, onUygula, onModelDuzenle }
             })}
           </div>
           <div style={{ padding: "12px 18px", borderTop: "1px solid rgba(255,255,255,0.08)", display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-            <span style={{ fontSize: 11, color: "#a89c84" }}>{secili.length} kalem seçili{yeniSayisi > 0 ? " · " + yeniSayisi + " yeni model eklenecek" : ""}</span>
+            <span style={{ fontSize: 11, color: "#a89c84" }}>{aktarilacak} kalem aktarılacak{yeniSayisi > 0 ? " · " + yeniSayisi + " yeni model eklenecek" : ""}{yerlesmeyen > 0 ? " · " : ""}{yerlesmeyen > 0 && <b style={{ color: "#e8b04f" }}>{yerlesmeyen} satır yerleştirilmedi</b>}</span>
             {hata && <span style={{ fontSize: 11, color: "#e85a4f" }}>{hata}</span>}
             {eksikKod > 0 && <span style={{ fontSize: 10, color: "#e85a4f" }}>{eksikKod} yeni modelin kodu boş</span>}
             <span style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
@@ -2047,7 +2050,7 @@ function PdfSiparisModal({ modeller, kollar, onKapat, onUygula, onModelDuzenle }
                 <input type="file" accept="application/pdf,.pdf" disabled={uygulaniyor} onChange={e => { if (window.confirm("Yeni PDF yüklenince mevcut çalışma silinir. Devam edilsin mi?")) dosyaSecildi(e); else e.target.value = ""; }} style={{ display: "none" }} />
               </label>
               <button onClick={onKapat} disabled={uygulaniyor} style={GH}>İptal</button>
-              <button onClick={onayla} disabled={!uygulanabilir || uygulaniyor} style={{ ...BG, opacity: (!uygulanabilir || uygulaniyor) ? 0.45 : 1, cursor: (!uygulanabilir || uygulaniyor) ? "not-allowed" : "pointer" }}>{uygulaniyor ? "Aktarılıyor…" : "Konfirmasyon'a aktar (" + secili.length + ")"}</button>
+              <button onClick={onayla} disabled={!uygulanabilir || uygulaniyor} style={{ ...BG, opacity: (!uygulanabilir || uygulaniyor) ? 0.45 : 1, cursor: (!uygulanabilir || uygulaniyor) ? "not-allowed" : "pointer" }}>{uygulaniyor ? "Aktarılıyor…" : "Konfirmasyon'a aktar (" + aktarilacak + ")"}</button>
             </span>
           </div>
         </>)}
