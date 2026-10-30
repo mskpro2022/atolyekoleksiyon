@@ -1495,6 +1495,18 @@ function psBenzerBul(q, modeller, n) {
   return sonuc;
 }
 
+// Bekleyen kartlarda saklanacak müşteri fotoğrafını küçültür (taslak kaydı şişmesin)
+async function psKucukFoto(src, maks = 360) {
+  try {
+    const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = src; });
+    const o = Math.min(1, maks / Math.max(img.width, img.height));
+    const cv = document.createElement("canvas");
+    cv.width = Math.max(1, Math.round(img.width * o)); cv.height = Math.max(1, Math.round(img.height * o));
+    const ctx = cv.getContext("2d"); ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, cv.width, cv.height); ctx.drawImage(img, 0, 0, cv.width, cv.height);
+    return cv.toDataURL("image/jpeg", 0.72);
+  } catch { return src; }
+}
+
 function psKategoriTahmin(k) {
   const t = ((k.aciklama || "") + " " + (k.disKod || "")).toUpperCase();
   if (/BRACELET|BİLEKLİK|BILEKLIK/.test(t)) return "bileklik";
@@ -1531,6 +1543,7 @@ function PdfSiparisModal({ modeller, kollar, onKapat, onUygula, onModelDuzenle, 
   const [gozAra, setGozAra] = useState("");
   const [vi, setVi] = useState({ durum: "kontrol", mesaj: "", yuzde: 0, hata: "" }); // fotoğraf indeksi durumu
   const [viSurum, setViSurum] = useState(0);
+  const [eksikSor, setEksikSor] = useState(false); // bağlanmayan satırlar için "ekleyelim mi?" penceresi
   const iptalRef = useRef(false);
   useEffect(() => {
     let canli = true;
@@ -1749,16 +1762,16 @@ function PdfSiparisModal({ modeller, kollar, onKapat, onUygula, onModelDuzenle, 
   const kodCakisan = (() => { const c = {}; secili.filter(s => s.durum === "yok" && s.ekle).forEach(s => { const k = psNorm(s.yeniKod); if (k) c[k] = (c[k] || 0) + 1; }); return c; })();
   const aktarilacak = secili.filter(s => s.durum !== "yok" || s.ekle).length;
   const yerlesmeyen = secili.filter(s => s.durum === "yok" && !s.ekle).length; // sistem emin olamadı, sen yerleştirmedin → aktarılmaz
-  const uygulanabilir = aktarilacak > 0 && eksikKod === 0 && (yeniSayisi === 0 || !!yeniKolId);
+  const uygulanabilir = (aktarilacak > 0 || yerlesmeyen > 0) && eksikKod === 0 && (yeniSayisi === 0 || !!yeniKolId);
   const sayac = { eslesti: satirlar.filter(s => s.durum === "eslesti").length, coklu: satirlar.filter(s => s.durum === "coklu").length, yok: satirlar.filter(s => s.durum === "yok").length };
 
-  const onayla = async () => {
-    if (!uygulanabilir || uygulaniyor) return;
-    if (yerlesmeyen > 0 && !window.confirm(yerlesmeyen + " satır henüz yerleştirilmedi (model seçilmedi, yeni model de denmedi). Bunlar aktarılmayacak. Devam edilsin mi?")) return;
+  // Verilen satırları Konfirmasyon'a aktarır (bağlanmamış ve "yeni model" denmemiş satırlar atlanır)
+  const aktarCalistir = async (liste, beklet) => {
     setUygulaniyor(true);
     try {
       const kalemler = [];
-      secili.forEach(s => {
+      const bekleyen = beklet ? liste.filter(s => s.durum === "yok" && !s.ekle).map(s => ({ id: "bk" + Date.now() + Math.random().toString(36).slice(2, 7), foto: (s.kalem && s.kalem.foto) || "", disKod: (s.kalem && s.kalem.disKod) || s.yeniKod || "", adet: Math.max(1, Number(s.adet) || 1), not: s.not || "", gramBirim: (s.kalem && s.kalem.gramBirim) || "", kategori: s.yeniKategori || "" })) : [];
+      liste.forEach(s => {
         const ana = {
           yeni: s.durum === "yok" && s.ekle,
           model: s.durum === "yok" ? null : (s.adaylar.find(m => m.id === s.secimId) || s.adaylar[0]),
@@ -1769,12 +1782,33 @@ function PdfSiparisModal({ modeller, kollar, onKapat, onUygula, onModelDuzenle, 
         kalemler.push(ana);
         if (s.durum !== "yok") (s.ekler || []).forEach(e => { if (e.m && !(ana.model && e.m.id === ana.model.id)) kalemler.push({ ...ana, yeni: false, model: e.m, adet: Math.max(1, Number(e.adet) || 1) }); });
       });
-      await onUygula({ baslik, tip, kolId: yeniKolId, satirlar: kalemler });
+      await onUygula({ baslik, tip, kolId: yeniKolId, satirlar: kalemler, bekleyen });
       onKapat();
     } catch (err) {
       console.error("PDF sipariş aktarma hatası:", err);
       setHata("Aktarma sırasında hata: " + (err && err.message ? err.message : err));
     } finally { setUygulaniyor(false); }
+  };
+  const onayla = () => {
+    if (!uygulanabilir || uygulaniyor) return;
+    if (yerlesmeyen > 0) { setEksikSor(true); return; } // bağlanmayan satır varsa sessizce atlama: önce sor
+    aktarCalistir(secili);
+  };
+  // Bağlanmayan satırları müşteri fotoğraflarıyla "Çizimde" yeni model olarak ekleyip aktarır
+  const eksikleriEkleVeAktar = () => {
+    const kullanilan = new Set(secili.filter(s => s.durum === "yok" && s.ekle).map(s => psNorm(s.yeniKod)).filter(Boolean));
+    const eksikler = new Set(secili.filter(s => s.durum === "yok" && !s.ekle).map(s => s.id));
+    const guncel = satirlar.map((s, n) => {
+      if (!eksikler.has(s.id)) return s;
+      let kod = String(s.yeniKod || s.kalem.disKod || "").trim().toUpperCase() || ("PDF-" + (n + 1));
+      const taban = kod; let k = 1;
+      while (kullanilan.has(psNorm(kod))) { k++; kod = taban + "-" + k; } // aynı kod birden çok kalemde varsa -2, -3 eklenir
+      kullanilan.add(psNorm(kod));
+      return { ...s, ekle: true, cizimde: !!s.kalem.foto, yeniKod: kod };
+    });
+    setSatirlar(guncel);
+    setEksikSor(false);
+    aktarCalistir(guncel.filter(s => s.dahil));
   };
 
   const oneriBlok = (s) => (
@@ -1839,6 +1873,43 @@ function PdfSiparisModal({ modeller, kollar, onKapat, onUygula, onModelDuzenle, 
               <input type="file" accept="application/pdf,.pdf" onChange={dosyaSecildi} style={{ display: "none" }} />
             </label>
             {hata && <div style={{ marginTop: 14, fontSize: 11, color: PS.bad }}>{hata}</div>}
+          </div>
+        )}
+
+        {eksikSor && (
+          <div onClick={() => setEksikSor(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 320, display: "flex", alignItems: "center", justifyContent: "center", padding: 14 }}>
+            <div onClick={e => e.stopPropagation()} style={{ background: T.bg2, color: T.text, border: "1px solid " + T.border, borderRadius: 14, width: "100%", maxWidth: 640, maxHeight: "86vh", display: "flex", flexDirection: "column" }}>
+              <div style={{ padding: "14px 18px", borderBottom: "1px solid " + T.border }}>
+                <div style={{ fontSize: 14, fontWeight: 700 }}>{yerlesmeyen} satır modele bağlanmadı</div>
+                <div style={{ fontSize: 11, color: T.sub, marginTop: 3 }}>Bu satırlar siparişte eksik kalmasın: müşterinin PDF'teki fotoğrafıyla "Çizimde" yeni model olarak ekleyip siparişe katalım mı? (Vitrine görünmezler.)</div>
+              </div>
+              <div style={{ padding: "10px 18px", overflowY: "auto", flex: 1 }}>
+                {secili.filter(s => s.durum === "yok" && !s.ekle).map(s => (
+                  <div key={s.id} style={{ display: "flex", gap: 10, alignItems: "center", padding: "6px 0", borderBottom: "1px solid " + T.border }}>
+                    <div style={{ width: 46, height: 46, background: "#f3f3f3", borderRadius: 6, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                      {s.kalem.foto ? <img src={s.kalem.foto} alt="" style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }} /> : <span style={{ color: "#bbb", fontSize: 8 }}>foto yok</span>}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, wordBreak: "break-all" }}>{s.yeniKod || s.kalem.disKod}</div>
+                      <div style={{ fontSize: 10, color: T.sub }}>{s.adet} adet{s.yeniGram ? " · " + s.yeniGram + " gr" : ""}{s.not ? " · " + String(s.not).slice(0, 60) : ""}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div style={{ padding: "10px 18px", borderTop: "1px solid " + T.border, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                <span style={etiket}>YENİ MODEL KOLEKSİYONU:</span>
+                <select value={yeniKolId} onChange={e => setYeniKolId(e.target.value)} style={{ ...kucukIS, width: "auto", minWidth: 180 }}>
+                  <option value="">— koleksiyon seç —</option>
+                  {(kollar || []).map(k => <option key={k.id} value={k.id}>{k.ad}</option>)}
+                </select>
+              </div>
+              <div style={{ padding: "10px 18px", borderTop: "1px solid " + T.border, display: "flex", gap: 8, justifyContent: "flex-end", flexWrap: "wrap" }}>
+                <button onClick={() => setEksikSor(false)} style={GH_T}>Geri dön</button>
+                <button onClick={() => { setEksikSor(false); aktarCalistir(secili); }} disabled={aktarilacak === 0} style={{ ...GH_T, opacity: aktarilacak === 0 ? 0.45 : 1 }} title="Bu satırlar siparişe girmez">Bunlar olmadan aktar</button>
+                <button onClick={() => { setEksikSor(false); aktarCalistir(secili, true); }} style={GH_T} title="Satırlar Konfirmasyon'da 'model bekleniyor' kartı olarak kalır; modeli sonradan bulup bağlarsın">Konfirmasyonda beklet ({yerlesmeyen})</button>
+                <button onClick={eksikleriEkleVeAktar} disabled={!yeniKolId} style={{ ...BG, opacity: yeniKolId ? 1 : 0.45, cursor: yeniKolId ? "pointer" : "not-allowed" }}>Müşteri fotoğraflarıyla ekle ve aktar ({yerlesmeyen})</button>
+              </div>
+            </div>
           </div>
         )}
 
@@ -5690,6 +5761,10 @@ function Atolye({ onSirketDegis }) {
 
   const [konfList,    setKonfList]    = useState([]);
   const [pdfModal, setPdfModal] = useState(false);
+  const [konfBekleyen, setKonfBekleyen] = useState([]); // PDF'ten gelen, modeli henüz bulunamamış kalemler (model bekleniyor)
+  const [bekModal, setBekModal] = useState(null);       // model aranan bekleyen kartın id'si
+  const [bekAra, setBekAra] = useState("");
+  const [bekOneri, setBekOneri] = useState({ yukleniyor: false, liste: [], mesaj: "" });
   const [konfMus,        setKonfMus]        = useState("");
   const [konfSipAciklama, setKonfSipAciklama] = useState(""); // sipariş geneli açıklama
   const [konfTeslim,     setKonfTeslim]     = useState("");
@@ -5732,6 +5807,7 @@ function Atolye({ onSirketDegis }) {
   useEffect(() => {
     if (!loaded) return;
     ld("v7konfdraft", null).then(d => {
+      if (d && Array.isArray(d.bekleyen) && d.bekleyen.length) setKonfBekleyen(d.bekleyen);
       if (d && Array.isArray(d.liste) && d.liste.length) {
         setKonfList(d.liste || []);
         setKonfMus(d.mus || "");
@@ -5754,18 +5830,18 @@ function Atolye({ onSirketDegis }) {
   useEffect(() => {
     if (!konfTaslikYuklendi) return;
     const zamanlayici = setTimeout(() => {
-      if (konfList.length === 0 && !konfMus && !konfSipAciklama) {
+      if (konfList.length === 0 && !konfMus && !konfSipAciklama && konfBekleyen.length === 0) {
         sv("v7konfdraft", { liste: [] });
       } else {
         sv("v7konfdraft", {
           liste: konfList, mus: konfMus, teslim: konfTeslim, aciklama: konfSipAciklama,
           ayar: konfAyar, ayarlar: konfAyarlar, renkler: konfRenkler, adet: konfAdet,
-          not: konfNot, boylar: konfBoylar, fiyatlar: konfFiyatlar, sira: konfSira,
+          not: konfNot, boylar: konfBoylar, fiyatlar: konfFiyatlar, sira: konfSira, bekleyen: konfBekleyen,
         });
       }
     }, 800);
     return () => clearTimeout(zamanlayici);
-  }, [konfTaslikYuklendi, konfList, konfMus, konfTeslim, konfSipAciklama, konfAyar, konfAyarlar, konfRenkler, konfAdet, konfNot, konfBoylar, konfFiyatlar, konfSira]);
+  }, [konfTaslikYuklendi, konfList, konfMus, konfTeslim, konfSipAciklama, konfAyar, konfAyarlar, konfRenkler, konfAdet, konfNot, konfBoylar, konfFiyatlar, konfSira, konfBekleyen]);
 
   // Kol form
   const [fkAd, setFkAd] = useState("");
@@ -6865,7 +6941,7 @@ function Atolye({ onSirketDegis }) {
     setKonfFiyatlar(p => { if (!(eski.id in p)) return p; const { [eski.id]: _at, ...kalan } = p; return kalan; }); // fiyat yeni modelin kendi işçiliğinden gelsin
   };
   // PDF'ten sipariş: onaylanan satırları Konfirmasyon listesine aktarır; eşleşmeyenleri yeni model olarak ekler
-  const pdfSiparisUygula = async ({ baslik, kolId, satirlar }) => {
+  const pdfSiparisUygula = async ({ baslik, kolId, satirlar, bekleyen }) => {
     const onek = AKTIF_SIRKET_ONEK;
     const idle = id => { const x = String(id); return (onek && !x.startsWith(onek)) ? onek + x : x; };
     const refAyar = (baslik && baslik.ayar && AYARLAR.some(x=>x.id===baslik.ayar)) ? baslik.ayar : "14K";
@@ -6912,6 +6988,10 @@ function Atolye({ onSirketDegis }) {
     setKonfList(p => { const var_ = new Set(p.map(x => x.id)); return siraliKonfListe([...p, ...eklenecek.filter(e => !var_.has(e.model.id)).map(e => e.model)]); });
     setKonfAdet(p => { const n = { ...p }; eklenecek.forEach(e => { n[e.model.id] = mevcut.has(e.model.id) ? (Number(p[e.model.id]) || 1) + e.adet : e.adet; }); return n; });
     setKonfNot(p => { const n = { ...p }; eklenecek.forEach(e => { if (e.not) n[e.model.id] = n[e.model.id] ? n[e.model.id] + ", " + e.not : e.not; }); return n; });
+    if (bekleyen && bekleyen.length) {
+      const bk = await Promise.all(bekleyen.map(async b => ({ ...b, foto: b.foto ? await psKucukFoto(b.foto) : "" })));
+      setKonfBekleyen(p => [...p, ...bk]);
+    }
     if (baslik && baslik.ayar && AYARLAR.some(x=>x.id===baslik.ayar)) setKonfAyar(baslik.ayar);
     if (baslik && baslik.teslimTarihi) {
       const mt = String(baslik.teslimTarihi).match(/(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{4})/);
@@ -6990,8 +7070,31 @@ function Atolye({ onSirketDegis }) {
     return { gelir, maliyet, kar: gelir - maliyet, topGram };
   }, [konfKalemler, altinKgUSD, madenCarpan]);
 
+  // ── Konfirmasyonda "model bekleniyor" kartları: modeli sonradan sisteme yüklenince bulup bağla ──
+  const bekAc = async (b) => {
+    setBekModal(b.id); setBekAra("");
+    setBekOneri({ yukleniyor: !!b.foto, liste: [], mesaj: "" });
+    if (!b.foto) return;
+    try {
+      if (!psIndeksDepo || !psIndeksDepo.ids.length) { try { const d = psIndeksCoz(await vektorDosyaOku(AKTIF_SIRKET_ONEK)); if (d) psIndeksDepo = d; } catch {} }
+      if (!psIndeksDepo || !psIndeksDepo.ids.length) { setBekOneri({ yukleniyor: false, liste: [], mesaj: "Fotoğraf indeksi hazır değil — kodla ya da aşağıdan arayarak bulun." }); return; }
+      const q = await clipVektorBlob(await psKareBlob(b.foto));
+      const ist = psNotTasRengi(b.not || "");
+      let liste = psBenzerBul(q, modeller, ist ? 30 : 8);
+      if (ist) { liste = liste.map(o => ({ ...o, renkUyar: psRenkUyar(o.m, ist) })); liste = [...liste.filter(o => o.renkUyar), ...liste.filter(o => !o.renkUyar)].slice(0, 8); }
+      setBekOneri({ yukleniyor: false, liste, mesaj: ist ? "Notta '" + PS_RENK_AD[ist] + " taş' yazıyor — " + PS_RENK_AD[ist] + " taşlı benzerler öne alındı" : "" });
+    } catch (e) { console.error("bekleyen öneri:", e); setBekOneri({ yukleniyor: false, liste: [], mesaj: "Benzer arama yapılamadı — kodla ya da aşağıdan arayarak bulun." }); }
+  };
+  const bekBagla = (b, m) => {
+    setKonfList(p => p.find(x => x.id === m.id) ? p : siraliKonfListe([...p, m]));
+    setKonfAdet(p => ({ ...p, [m.id]: (Number(p[m.id]) || 0) + (Number(b.adet) || 1) }));
+    if ((b.not || "").trim()) setKonfNot(p => ({ ...p, [m.id]: p[m.id] ? p[m.id] + ", " + b.not.trim() : b.not.trim() }));
+    setKonfBekleyen(p => p.filter(x => x.id !== b.id));
+    setBekModal(null);
+  };
   const konfKaydet = () => {
     if (konfKalemler.length === 0) return;
+    if (konfBekleyen.length > 0) { alert(konfBekleyen.length + " model hâlâ bekleniyor — önce 'Model bul' ile modeli bağlayın ya da kartı silin. Sipariş şimdilik kaydedilmedi."); return; }
     const musAd = konfMus.trim() || "Isimsiz";
     let yeniMusteriler = { ...musteriler };
     if (!yeniMusteriler[musAd]) {
@@ -7954,7 +8057,81 @@ function Atolye({ onSirketDegis }) {
               </div>
             </div>
 
-            {konfList.length===0 && <p style={{ color:"#665d4a", textAlign:"center", padding:"30px", fontSize:12 }}>Modeller sayfasinda V ile urun secin</p>}
+            {konfBekleyen.length>0 && (
+              <div style={{ marginBottom:12, border:"1px solid "+T.border, background:T.card, borderRadius:12, padding:"10px 12px" }}>
+                <div style={{ fontSize:11, fontWeight:700, color:T.text, marginBottom:2 }}>⏳ Model bekleniyor ({konfBekleyen.length})</div>
+                <div style={{ fontSize:10, color:T.sub, marginBottom:8 }}>PDF'te modeli bulunamayan kalemler. Model sisteme yüklenince "Model bul" ile bağlayın; bağlanmadan sipariş kaydedilmez.</div>
+                <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+                  {konfBekleyen.map(b => (
+                    <div key={b.id} style={{ display:"flex", gap:10, alignItems:"center", padding:"6px 8px", border:"1px solid "+T.border, borderRadius:10 }}>
+                      <div style={{ width:56, height:56, background:"#f3f3f3", borderRadius:8, overflow:"hidden", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+                        {b.foto ? <img src={b.foto} alt="" style={{ maxWidth:"100%", maxHeight:"100%", objectFit:"contain" }} /> : <span style={{ color:"#bbb", fontSize:9 }}>foto yok</span>}
+                      </div>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{ fontSize:11, fontWeight:700, color:T.text, wordBreak:"break-all" }}>{b.disKod || "—"}</div>
+                        <div style={{ fontSize:10, color:T.sub }}>{b.gramBirim ? b.gramBirim + " gr · " : ""}{b.not ? String(b.not).slice(0, 90) : ""}</div>
+                      </div>
+                      <input type="number" min="1" value={b.adet} onChange={e=>setKonfBekleyen(p=>p.map(x=>x.id===b.id?{...x,adet:e.target.value}:x))} title="Adet" style={{ ...IS, width:60, padding:"4px 6px", fontSize:11, color:T.text }} />
+                      <button onClick={()=>bekAc(b)} style={{ ...GH, fontSize:10, padding:"5px 10px", color:T.text, whiteSpace:"nowrap" }}>🔍 Model bul</button>
+                      <button onClick={()=>{ if (window.confirm("Bu bekleyen kalem silinsin mi? (Siparişe girmeyecek)")) setKonfBekleyen(p=>p.filter(x=>x.id!==b.id)); }} title="Sil" style={{ ...GH, fontSize:10, padding:"5px 8px", color:T.sub }}>✕</button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {bekModal && (() => {
+              const b = konfBekleyen.find(x => x.id === bekModal);
+              if (!b) return null;
+              const q = psNorm(bekAra);
+              const sonuc = q ? (modeller||[]).filter(m => psNorm(m.kod).includes(q) || psNorm(m.ad).includes(q)).slice(0, 60) : [];
+              return (
+                <div onClick={()=>setBekModal(null)} style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.7)", zIndex:400, display:"flex", alignItems:"center", justifyContent:"center", padding:14 }}>
+                  <div onClick={e=>e.stopPropagation()} style={{ background:T.bg2, color:T.text, border:"1px solid "+T.border, borderRadius:14, width:"100%", maxWidth:860, maxHeight:"88vh", display:"flex", flexDirection:"column" }}>
+                    <div style={{ padding:"12px 16px", borderBottom:"1px solid "+T.border, display:"flex", gap:12, alignItems:"center" }}>
+                      <div style={{ width:60, height:60, background:"#f3f3f3", borderRadius:8, overflow:"hidden", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+                        {b.foto ? <img src={b.foto} alt="" style={{ maxWidth:"100%", maxHeight:"100%", objectFit:"contain" }} /> : null}
+                      </div>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{ fontSize:13, fontWeight:700 }}>Model bul — {b.disKod || "kalem"}</div>
+                        <div style={{ fontSize:10, color:T.sub }}>{b.adet} adet{b.not ? " · " + String(b.not).slice(0, 100) : ""}</div>
+                      </div>
+                      <input autoFocus value={bekAra} onChange={e=>setBekAra(e.target.value)} placeholder="Kod veya ad yaz (örn. FER280)" style={{ ...IS, width:230, padding:"6px 10px", fontSize:11, color:T.text }} />
+                      <button onClick={()=>setBekModal(null)} style={{ ...GH, color:T.text }}>✕</button>
+                    </div>
+                    <div style={{ padding:14, overflowY:"auto" }}>
+                      {!q && bekOneri.yukleniyor && <div style={{ fontSize:11, color:T.sub }}>📷 Benzer modeller aranıyor…</div>}
+                      {!q && bekOneri.mesaj && <div style={{ fontSize:10, color:T.sub, marginBottom:6 }}>{bekOneri.mesaj}</div>}
+                      {!q && bekOneri.liste.length>0 && (<>
+                        <div style={{ fontSize:10, fontWeight:700, color:T.sub, marginBottom:6 }}>📷 FOTOĞRAFA GÖRE BENZER MODELLER — tıkla, bağlansın</div>
+                        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(110px,1fr))", gap:8 }}>
+                          {bekOneri.liste.map(o => (
+                            <div key={o.m.id} onClick={()=>bekBagla(b, o.m)} style={{ cursor:"pointer", border:"1px solid "+T.border, borderRadius:8, overflow:"hidden" }}>
+                              <div style={{ height:100, background:"#f3f3f3", display:"flex", alignItems:"center", justifyContent:"center" }}>{o.m.foto ? <img src={o.m.foto} alt="" loading="lazy" style={{ maxWidth:"100%", maxHeight:"100%", objectFit:"contain" }} /> : null}</div>
+                              <div style={{ fontSize:11, fontWeight:700, padding:"3px 6px 0", wordBreak:"break-all" }}>{o.m.kod}</div>
+                              <div style={{ fontSize:9, padding:"0 6px 4px", color:T.sub }}>%{Math.round(o.skor*100)}{psModelTasRengi(o.m) ? " · " + (o.renkUyar ? "✓ " : "") + PS_RENK_AD[psModelTasRengi(o.m)] : ""}</div>
+                            </div>
+                          ))}
+                        </div>
+                      </>)}
+                      {!q && !bekOneri.yukleniyor && bekOneri.liste.length===0 && !bekOneri.mesaj && <div style={{ fontSize:11, color:T.sub }}>Yukarıya model kodu ya da adı yazın.</div>}
+                      {q && (sonuc.length===0
+                        ? <div style={{ fontSize:12, color:T.sub, textAlign:"center", padding:20 }}>Model bulunamadı — henüz yüklenmemiş olabilir</div>
+                        : <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(110px,1fr))", gap:8 }}>
+                            {sonuc.map(m => (
+                              <div key={m.id} onClick={()=>bekBagla(b, m)} style={{ cursor:"pointer", border:"1px solid "+T.border, borderRadius:8, overflow:"hidden" }}>
+                                <div style={{ height:100, background:"#f3f3f3", display:"flex", alignItems:"center", justifyContent:"center" }}>{m.foto ? <img src={m.foto} alt="" loading="lazy" style={{ maxWidth:"100%", maxHeight:"100%", objectFit:"contain" }} /> : <span style={{ color:"#bbb", fontSize:9 }}>foto yok</span>}</div>
+                                <div style={{ fontSize:11, fontWeight:700, padding:"3px 6px 0", wordBreak:"break-all" }}>{m.kod}</div>
+                                <div style={{ fontSize:9, padding:"0 6px 4px", color:T.sub }}>{m.gram ? m.gram + " gr" : ""}</div>
+                              </div>
+                            ))}
+                          </div>)}
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {konfList.length===0 && konfBekleyen.length===0 && <p style={{ color:"#665d4a", textAlign:"center", padding:"30px", fontSize:12 }}>Modeller sayfasinda V ile urun secin</p>}
 
             {konfList.length>0 && (
               <div>
