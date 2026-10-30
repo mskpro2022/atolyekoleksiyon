@@ -153,6 +153,15 @@ const KATEGORILER = [
   { id: "diger",    l: "Diger" },
 ];
 
+const TIP_ETIKET = { yuzuk:"Yüzük", kolye:"Kolye", kupe:"Küpe", bilezik:"Bilezik", bileklik:"Bileklik", pendant:"Pendant", set:"Set", diger:"" };
+function tipEtiket(kat) {
+  const k = String(kat||"").trim();
+  if (!k) return "";
+  const key = k.toLowerCase().replace(/ü/g,"u").replace(/ı/g,"i").replace(/ö/g,"o").replace(/ş/g,"s").replace(/ç/g,"c").replace(/ğ/g,"g");
+  if (key in TIP_ETIKET) return TIP_ETIKET[key];
+  return k.charAt(0).toUpperCase()+k.slice(1);
+}
+
 function gramDonustur(refGram, refAyar, hedefAyar, tasGram) {
   if (refAyar === hedefAyar) return refGram;
   // Yoğunluk bazlı dönüşüm (g/cm³) — sektör standardı
