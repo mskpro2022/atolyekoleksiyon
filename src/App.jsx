@@ -1240,11 +1240,11 @@ async function psFotolariKirp(pdf, kalemler, ilerle) {
 
 // ── Taş rengi: müşteri açıklamasından rengi oku, aynı model ailesinde (ALT209, ALT209-W …) rengi tutan modeli seç ──
 const PS_RENKLER = [
-  ["BEYAZ", /BEYAZ|WHITE/], ["YESIL", /YESIL|ZUMRUT|GREEN|EMERALD/], ["MAVI", /MAVI|BLUE|TOPAZ|AKUA/], ["KIRMIZI", /KIRMIZI|RUBY|RUBI|GARNET|RED/],
+  ["BEYAZ", /BEYAZ|WHITE/], ["YESIL", /YESIL|ZUMRUT|GREEN|EMERALD|MALAHIT|MALACHITE/], ["MAVI", /MAVI|BLUE|\bBLU\b|TOPAZ|AKUA/], ["KIRMIZI", /KIRMIZI|RUBY|RUBI|GARNET|RED/],
   ["SIYAH", /SIYAH|ONIKS|ONYX|BLACK/], ["PEMBE", /PEMBE|PINK/], ["MOR", /\bMOR\b|AMETIST|AMETHYST|PURPLE|VIOLET/], ["LACIVERT", /LACIVERT|SAFIR|SAPPHIRE/],
-  ["TURKUAZ", /TURKUAZ|TURQUOISE/], ["SARI", /SITRIN|CITRINE/], ["KAHVE", /KAHVE|BROWN|SMOKY/],
+  ["TURKUAZ", /TURKUAZ|TURQUOISE/], ["SARI", /SITRIN|CITRINE/], ["KAHVE", /KAHVE|BROWN|SMOKY/], ["RENKLI", /RENKLI|MULTI|COLORFUL/],
 ];
-const PS_RENK_AD = { BEYAZ: "beyaz", YESIL: "yeşil", MAVI: "mavi", KIRMIZI: "kırmızı", SIYAH: "siyah", PEMBE: "pembe", MOR: "mor", LACIVERT: "lacivert", TURKUAZ: "turkuaz", SARI: "sarı", KAHVE: "kahve" };
+const PS_RENK_AD = { BEYAZ: "beyaz", YESIL: "yeşil", MAVI: "mavi", KIRMIZI: "kırmızı", SIYAH: "siyah", PEMBE: "pembe", MOR: "mor", LACIVERT: "lacivert", TURKUAZ: "turkuaz", SARI: "sarı", KAHVE: "kahve", RENKLI: "renkli" };
 function psTrBuyuk(t) {
   return String(t || "").replace(/İ/g, "I").replace(/ı/g, "I").toUpperCase()
     .replace(/Ş/g, "S").replace(/Ğ/g, "G").replace(/Ü/g, "U").replace(/Ö/g, "O").replace(/Ç/g, "C").replace(/İ/g, "I");
@@ -1262,12 +1262,22 @@ function psNotTasRengi(metin) {
 }
 // Modelin taş rengi (kayıtlı ad/açıklama/etiket/taş şekli + "-W" son eki)
 function psModelTasRengi(m) {
-  const parca = [m.ad, m.ac, ...(Array.isArray(m.etiketler) ? m.etiketler : [])];
-  (Array.isArray(m.taslar) ? m.taslar : []).forEach(t => { parca.push(t && t.sekil); parca.push(t && t.boyut); });
-  const t = psTrBuyuk(parca.filter(Boolean).join(" "));
-  for (const [k, re] of PS_RENKLER) if (re.test(t)) return k;
+  const bul = (metin) => { const t = psTrBuyuk(metin); const l = []; for (const [k, re] of PS_RENKLER) if (re.test(t)) l.push(k); return l; };
+  const sec = (l) => { const ay = l.filter(k => k !== "BEYAZ"); return ay.length ? ay[0] : (l.length ? "BEYAZ" : ""); };
+  // 1) Taş kayıtları: boyut/şekil metninde renk yazan taşlar ("8X6 PEMBE", "OCTAGON YEŞİL", "ONYX"); renkli taş varsa o, yoksa beyaz
+  const tl = [];
+  (Array.isArray(m.taslar) ? m.taslar : []).forEach(t => bul([t && t.sekil, t && t.boyut].filter(Boolean).join(" ")).forEach(k => tl.push(k)));
+  const r1 = sec(tl); if (r1) return r1;
+  // 2) Ad / açıklama / etiketler
+  const r2 = sec(bul([m.ad, m.ac, ...(Array.isArray(m.etiketler) ? m.etiketler : [])].filter(Boolean).join(" "))); if (r2) return r2;
   if (/-W$/.test(psTrBuyuk(m.kod || ""))) return "BEYAZ";
   return "";
+}
+// Modelin rengi, istenen renkle uyuşuyor mu? (renk yazılmamış model = beyaz)
+function psRenkUyar(m, ist) {
+  const r = psModelTasRengi(m);
+  if (ist === "BEYAZ") return !r || r === "BEYAZ";
+  return r === ist || (PS_RENK_YAKIN[ist] || []).includes(r);
 }
 function psKodTaban(kod) { return psTrBuyuk(kod).replace(/[\s_.]/g, "").replace(/-[A-Z0-9]{1,2}$/, ""); }
 
@@ -1277,6 +1287,7 @@ function psNotRenkListesi(metin) {
   if (!t || !/COLOU?R|RENK|RENGI|STONE|\bTAS/.test(t)) return [];
   const bulunan = [];
   for (const [k, re] of PS_RENKLER) {
+    if (k === "RENKLI") continue;
     const m = new RegExp("\\b(?:" + re.source + ")\\b").exec(t);
     if (m) bulunan.push({ k, i: m.index });
   }
@@ -1646,7 +1657,16 @@ function PdfSiparisModal({ modeller, kollar, onKapat, onUygula, onModelDuzenle }
     guncelle(id, { oneriDurum: "hesapliyor" });
     try {
       const q = await clipVektorBlob(await psKareBlob(kalem.foto));
-      guncelle(id, { oneriler: psBenzerBul(q, modeller, 6), oneriDurum: "tamam" });
+      const ist = psNotTasRengi([kalem.aciklama, kalem.not].filter(Boolean).join(" "));
+      let liste = psBenzerBul(q, modeller, ist ? 30 : 6);
+      let renkBilgi = "";
+      if (ist) {
+        liste = liste.map(o => ({ ...o, renkUyar: psRenkUyar(o.m, ist) }));
+        const uyan = liste.filter(o => o.renkUyar), digeri = liste.filter(o => !o.renkUyar);
+        liste = [...uyan, ...digeri].slice(0, 6);
+        renkBilgi = uyan.length ? "Notta '" + PS_RENK_AD[ist] + " taş' yazıyor — " + PS_RENK_AD[ist] + " taşlı benzerler öne alındı" : "⚠ Notta '" + PS_RENK_AD[ist] + " taş' yazıyor ama benzer modeller arasında " + PS_RENK_AD[ist] + " taşlı kayıt bulunamadı";
+      }
+      guncelle(id, { oneriler: liste, oneriRenkBilgi: renkBilgi, oneriDurum: "tamam" });
     } catch (e) { console.error("benzer arama:", e); guncelle(id, { oneriDurum: "hata", oneriHata: (e && e.message) || "hata" }); }
   };
   const oneriToplu = async (liste) => { for (const r of liste) { if (iptalRef.current) break; await oneriHesapla(r.id, r.kalem); } };
@@ -1746,6 +1766,7 @@ function PdfSiparisModal({ modeller, kollar, onKapat, onUygula, onModelDuzenle }
       )}
       {s.oneriler && s.oneriler.length > 0 && (s.durum === "yok" || s.oneriAcik) && (<>
         <div style={{ fontSize: 9, color: "#8a7d64", fontWeight: 700, marginBottom: 3 }}>📷 FOTOĞRAFA GÖRE BENZER MODELLER — tıkla, satıra bağlansın</div>
+        {s.oneriRenkBilgi && <div style={{ fontSize: 9, color: s.oneriRenkBilgi.startsWith("⚠") ? "#e8b04f" : "#6abf69", marginBottom: 3 }}>{s.oneriRenkBilgi}</div>}
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
           {s.oneriler.map(o => (
             <div key={o.m.id} onClick={() => modelSec(s.id, o.m)} title={o.m.kod + (o.m.ad ? " · " + o.m.ad : "")} style={{ width: 76, cursor: "pointer", border: "1px solid " + (o.m.id === s.secimId ? "#6abf69" : "rgba(255,255,255,0.12)"), borderRadius: 8, overflow: "hidden", background: "rgba(255,255,255,0.04)" }}>
@@ -1753,7 +1774,7 @@ function PdfSiparisModal({ modeller, kollar, onKapat, onUygula, onModelDuzenle }
                 {o.m.foto ? <img src={o.m.foto} alt="" loading="lazy" style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }} /> : null}
               </div>
               <div style={{ fontSize: 10, fontWeight: 700, padding: "2px 4px 0", color: "#e8dcc8", wordBreak: "break-all" }}>{o.m.kod}</div>
-              <div style={{ fontSize: 9, fontWeight: 700, padding: "0 4px 3px", color: o.skor >= 0.88 ? "#6abf69" : o.skor >= 0.8 ? "#e8b04f" : "#8a7d64" }}>%{Math.round(o.skor * 100)}</div>
+              <div style={{ fontSize: 9, fontWeight: 700, padding: "0 4px 3px", color: o.skor >= 0.88 ? "#6abf69" : o.skor >= 0.8 ? "#e8b04f" : "#8a7d64" }}>%{Math.round(o.skor * 100)}{psModelTasRengi(o.m) ? <span style={{ fontWeight: 600, color: o.renkUyar ? "#6abf69" : "#a89c84" }}> · {o.renkUyar ? "✓ " : ""}{PS_RENK_AD[psModelTasRengi(o.m)]}</span> : null}</div>
             </div>
           ))}
         </div>
