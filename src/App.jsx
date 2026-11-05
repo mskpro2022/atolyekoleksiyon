@@ -2646,6 +2646,43 @@ function DetayDokumIc({ T, x }) {
   );
 }
 
+// Net pozisyon dökümü: stok/alacak/kasa/borç, her satır mizan hesaplarına iner
+function DetayNetIc({ T, miz, stok, alacak, kasa, borc }) {
+  const ac = (ad,on,ters)=>()=>rpDetayAc(ad+" ("+on+") — hesaplar", ()=><DetayMizanIc T={T} miz={miz} onek={on} ters={ters}/>);
+  const net = stok+alacak+kasa-borc;
+  return (
+    <div>
+      <div style={{ fontSize:12, color:T.sub, marginBottom:10 }}>Satıra tıklayınca o grubun mizan hesapları açılır. Net = stok + alacak + kasa − borç (HAS).</div>
+      <DetayTablo T={T} kolonlar={["Kalem","HAS"]} onSec={true}
+        satirlar={[
+          { h:["Stok (153)", rpF(stok,1)], sec:ac("Stok","153") },
+          { h:["Alacak (120)", rpF(alacak,1)], sec:ac("Alacak","120") },
+          { h:["Kasa (100)", rpF(kasa,1)], sec:ac("Kasa","100") },
+          { h:["Borç (320)", rpF(-borc,1)], sec:ac("Borç","320",true) },
+        ]} toplam={["Net pozisyon", rpF(net,1)]}/>
+    </div>
+  );
+}
+// Konum detayı: seçilen konumda hangi ayarda kaç gram
+function DetayKonumIc({ T, altin, ki, ad }) {
+  const satir = altin.map(a=>({ h:[a.ad, rpF(a.konum[ki],2), rpF(a.konum[ki]*Number(a.kod)/1000,2)], sec:()=>rpDetayAc(a.ad+" — depo sayımı", ()=><DetayDepoIc T={T} a={a}/>) })).filter(r=>Math.abs(parseFloat(String(r.h[1]).replace(/\./g,"").replace(",","."))||0)>0.005);
+  const tg = altin.reduce((t,a)=>t+a.konum[ki],0), th = altin.reduce((t,a)=>t+a.konum[ki]*Number(a.kod)/1000,0);
+  return (<div><div style={{ fontSize:12, color:T.sub, marginBottom:10 }}>{ad} konumundaki altın, ayara göre. Satıra tıklayınca o ayarın tüm konumları açılır.</div>
+    <DetayTablo T={T} kolonlar={["Ayar","Gram","Has"]} satirlar={satir} onSec={true} toplam={["Toplam", rpF(tg,2), rpF(th,2)]}/></div>);
+}
+// Atölye haftalık sayım dökümü
+function DetayAtolyeIc({ T, son, AK }) {
+  const num = (x)=>Number(x)||0;
+  const tp = AK.reduce((t,f)=>t+num(son[f.k]),0)||1;
+  return (<div><div style={{ fontSize:12, color:T.sub, marginBottom:10 }}>Sayım tarihi: {new Date(son.tarih).toLocaleDateString("tr-TR")}{son.not?" · Not: "+son.not:""}</div>
+    <DetayTablo T={T} kolonlar={["Kalem","Gram","Pay"]} satirlar={AK.map(f=>({ h:[f.l, rpF(num(son[f.k]),1), "%"+rpF(num(son[f.k])/tp*100,1)] }))} toplam={["Toplam", rpF(AK.reduce((t,f)=>t+num(son[f.k]),0),1), ""]}/></div>);
+}
+// Gümüş/diğer depo satırı: konumlara göre
+function DetayDigerIc({ T, s }) {
+  const satir = RP_LOC.map(l=>({ h:[l.l, rpF(s[l.i],2)] })).filter((r,i)=>Math.abs(s[RP_LOC[i].i]||0)>0.005);
+  return (<div><div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(130px,1fr))", gap:8, marginBottom:14 }}><DetayKpi T={T} l="Toplam (gr)" x={rpF(s[2],1)}/></div>
+    <DetayTablo T={T} kolonlar={["Konum","Gram"]} satirlar={satir}/></div>);
+}
 function RpSutun({ T, veri, renk=RP_RENK[0], birim="", yuk=130, onSec }) {
   const mx = Math.max(1e-9, ...veri.map(x=>Math.abs(x.v)));
   return (
@@ -3456,19 +3493,19 @@ function RpSeg({ T, secenekler, aktif, onSec }) {
   return (
     <div style={{ display:"inline-flex", border:"1px solid "+T.border, borderRadius:8, overflow:"hidden", background:T.card, marginBottom:14 }}>
       {secenekler.map(s => (
-        <button key={s.id} onClick={()=>onSec(s.id)} style={{ border:"none", padding:"6px 14px", fontSize:12, fontWeight:600, cursor:"pointer", background: aktif===s.id?T.text:"transparent", color: aktif===s.id?T.card:T.sub }}>{s.l}</button>
+        <button key={s.id} onClick={()=>onSec(s.id)} style={{ border:"none", padding:"6px 14px", fontSize:12, fontWeight:600, cursor:"pointer", background: aktif===s.id?T.text:"transparent", color: aktif===s.id?(T.id==="beyaz"?"#ffffff":(T.bg2||"#14161a")):T.sub }}>{s.l}</button>
       ))}
     </div>
   );
 }
 
 // ── Genel Bakış ──
-function RpBarListe({ T, items, renk, birim="HAS", d=1 }) {
+function RpBarListe({ T, items, renk, birim="HAS", d=1, onSec }) {
   const mx = Math.max(1e-9, ...items.map(x=>Math.abs(x.v)));
   return (
     <div>
       {items.map((x,i) => (
-        <div key={x.l} style={{ padding:"7px 0", borderBottom: i<items.length-1 ? "1px solid "+T.border : "none" }}>
+        <div key={x.l} onClick={onSec?()=>onSec(x):undefined} style={{ padding:"7px 0", borderBottom: i<items.length-1 ? "1px solid "+T.border : "none", cursor:onSec?"pointer":"default" }}>
           <div style={{ display:"flex", justifyContent:"space-between", fontSize:13, marginBottom:5 }}>
             <span>{x.l}</span><b style={{ fontVariantNumeric:"tabular-nums" }}>{rpF(x.v,d)} <span style={{ fontWeight:500, color:T.sub, fontSize:11 }}>{birim}</span></b>
           </div>
@@ -3498,16 +3535,17 @@ function KasaGenel({ T, GH, atolye, ic, onGit }) {
     { l:"Kasa", x:kasaH, c:RENK.kasa, d:"Merkez kasa (100)", gizle:!mz },
     { l:"Borç", x:borc, c:RENK.borc, d:mz?"Satıcılar (320)":"Dökümcü" },
   ].filter(k=>!k.gizle);
-  const dal = (kod, ust) => { const n = mz && mz.h[kod]; return n ? n.cocuk.map(c=>mz.h[c]).map(x=>({ l:x.ad.replace(/^\d+\s*/,"").replace(/\s*HESAP\s*/i," ").trim(), v:x.has })).filter(x=>Math.abs(x.v)>0.05).sort((a,b)=>Math.abs(b.v)-Math.abs(a.v)) : []; };
-  const stokDal = mz ? ((mz.h["153 001"]||{cocuk:[]}).cocuk||[]).map(c=>mz.h[c]).map(x=>({ l:x.ad, v:x.has })).filter(x=>Math.abs(x.v)>0.05).sort((a,b)=>b.v-a.v) : [];
-  const alacakDal = mz ? (mz.h["120 001"]?.cocuk||[]).map(c=>mz.h[c]).map(x=>({ l:x.ad.replace(/ MÜŞTERİLER$/i,""), v:x.has })).filter(x=>Math.abs(x.v)>0.05).sort((a,b)=>b.v-a.v) : [];
-  const borcDal = mz ? (mz.h["320 001"]?.cocuk||[]).map(c=>mz.h[c]).map(x=>({ l:x.ad.replace(/ SATICILAR$/i,""), v:-x.has })).filter(x=>Math.abs(x.v)>0.05).sort((a,b)=>b.v-a.v) : [];
+  const dal = (kod, ust) => { const n = mz && mz.h[kod]; return n ? n.cocuk.map(c=>({...mz.h[c],kod:c})).map(x=>({ kod:x.kod, l:x.ad.replace(/^\d+\s*/,"").replace(/\s*HESAP\s*/i," ").trim(), v:x.has })).filter(x=>Math.abs(x.v)>0.05).sort((a,b)=>Math.abs(b.v)-Math.abs(a.v)) : []; };
+  const stokDal = mz ? ((mz.h["153 001"]||{cocuk:[]}).cocuk||[]).map(c=>({...mz.h[c],kod:c})).map(x=>({ kod:x.kod, l:x.ad, v:x.has })).filter(x=>Math.abs(x.v)>0.05).sort((a,b)=>b.v-a.v) : [];
+  const alacakDal = mz ? (mz.h["120 001"]?.cocuk||[]).map(c=>({...mz.h[c],kod:c})).map(x=>({ kod:x.kod, l:x.ad.replace(/ MÜŞTERİLER$/i,""), v:x.has })).filter(x=>Math.abs(x.v)>0.05).sort((a,b)=>b.v-a.v) : [];
+  const borcDal = mz ? (mz.h["320 001"]?.cocuk||[]).map(c=>({...mz.h[c],kod:c})).map(x=>({ kod:x.kod, l:x.ad.replace(/ SATICILAR$/i,""), v:-x.has })).filter(x=>Math.abs(x.v)>0.05).sort((a,b)=>b.v-a.v) : [];
   // Dikkat gerekenler
   const uyar = [];
-  altin.forEach(a => { if (a.fark != null && Math.abs(a.fark) >= 10) uyar.push({ s:"r", t:a.ad+" ayarında sayım farkı "+(a.fark>0?"+":"")+rpF(a.fark,0)+" HAS", d:"Mizan "+rpF(a.mizan,1)+" · sayım "+rpF(a.has,1), git:"stok" }); });
-  const ac = ic.musteriler || [];
+  altin.forEach(a => { if (a.fark != null && Math.abs(a.fark) >= 10) uyar.push({ s:"r", t:a.ad+" ayarında sayım farkı "+(a.fark>0?"+":"")+rpF(a.fark,0)+" HAS", d:"Mizan "+rpF(a.mizan,1)+" · sayım "+rpF(a.has,1), git:"stok", ac:()=>rpDetayAc(a.ad+" — depo sayımı", ()=><DetayDepoIc T={T} a={a}/>) }); });
+  const acMiz = mizan ? mizan.satirlar.filter(r => r[2]==="HAS" && String(r[0]).startsWith("120 001 10\\") && r[1] && (r[5]||0)>0.005).map(r=>({ ad:r[1], bakiye:r[5], kod:r[0] })).sort((a,b)=>b.bakiye-a.bakiye) : null;
+  const ac = acMiz || ic.musteriler || [];
   const topAlacak = ac.reduce((s,x)=>s+x.bakiye,0);
-  if (ac.length && topAlacak > 0 && ac[0].bakiye/topAlacak > 0.5) uyar.push({ s:"y", t:ac[0].ad+" bakiyesi alacağın %"+rpF(ac[0].bakiye/topAlacak*100,0)+"'i", d:"Tek müşteride yoğunlaşma", git:"ab" });
+  if (ac.length && topAlacak > 0 && ac[0].bakiye/topAlacak > 0.5) uyar.push({ s:"y", t:ac[0].ad+" bakiyesi alacağın %"+rpF(ac[0].bakiye/topAlacak*100,0)+"'i", d:"Tek müşteride yoğunlaşma", git:"ab", ac:(mizan && ac[0].kod) ? (()=>rpDetayAc(ac[0].ad+" — hesap", ()=><DetayMizanIc T={T} miz={mizan} onek={ac[0].kod}/>)) : undefined });
   if (atolye && atolye.son) { const gun = Math.floor((Date.now()-atolye.son.tarih)/86400000); if (gun > 10) uyar.push({ s:"y", t:"Atölye kasası "+gun+" gün önce güncellendi", d:"Yeni sayım girin", git:"stok" }); }
   if (v.satislar.length || v.giderler.length) {
     const a2 = rpAyListe(v.giderler, v.satislar); const eksik = [];
@@ -3544,21 +3582,21 @@ function KasaGenel({ T, GH, atolye, ic, onGit }) {
 
       <div style={{ ...kart, marginBottom:14, padding:"22px 24px" }}>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-end", gap:20, flexWrap:"wrap" }}>
-          <div>
-            <div style={{ fontSize:12, color:T.sub, fontWeight:700, letterSpacing:".06em", textTransform:"uppercase" }}>Net pozisyon</div>
+          <div onClick={mizan?()=>rpDetayAc("Net pozisyon — döküm", ()=><DetayNetIc T={T} miz={mizan} stok={stok} alacak={alacak} kasa={kasaH} borc={borc}/>):undefined} style={{ cursor:mizan?"pointer":"default" }}>
+            <div style={{ fontSize:12, color:T.sub, fontWeight:700, letterSpacing:".06em", textTransform:"uppercase" }}>Net pozisyon{mizan?" · detay ›":""}</div>
             <div style={{ fontSize:42, fontWeight:800, letterSpacing:"-.03em", lineHeight:1.1, marginTop:4, color: net<0?"#d0584b":T.text, fontVariantNumeric:"tabular-nums" }}>{rpF(net,1)}<span style={{ fontSize:16, color:T.sub, fontWeight:600, marginLeft:8 }}>HAS</span></div>
             <div style={{ fontSize:12, color:T.sub, marginTop:4 }}>Stok + alacak{mz?" + kasa":""} − borç</div>
           </div>
           <div style={{ display:"flex", gap:26, flexWrap:"wrap" }}>
-            <div><div style={{ fontSize:11, color:T.sub }}>Toplam varlık</div><div style={{ fontSize:20, fontWeight:700, fontVariantNumeric:"tabular-nums" }}>{rpF(varlik,1)}</div></div>
-            <div><div style={{ fontSize:11, color:T.sub }}>Toplam borç</div><div style={{ fontSize:20, fontWeight:700, fontVariantNumeric:"tabular-nums", color:RENK.borc }}>{rpF(borc,1)}</div></div>
+            <div onClick={mizan?()=>rpDetayAc("Net pozisyon — döküm", ()=><DetayNetIc T={T} miz={mizan} stok={stok} alacak={alacak} kasa={kasaH} borc={borc}/>):undefined} style={{ cursor:mizan?"pointer":"default" }}><div style={{ fontSize:11, color:T.sub }}>Toplam varlık</div><div style={{ fontSize:20, fontWeight:700, fontVariantNumeric:"tabular-nums" }}>{rpF(varlik,1)}</div></div>
+            <div onClick={mizan?()=>rpDetayAc("Borç (320) — hesaplar", ()=><DetayMizanIc T={T} miz={mizan} onek="320" ters={true}/>):undefined} style={{ cursor:mizan?"pointer":"default" }}><div style={{ fontSize:11, color:T.sub }}>Toplam borç</div><div style={{ fontSize:20, fontWeight:700, fontVariantNumeric:"tabular-nums", color:RENK.borc }}>{rpF(borc,1)}</div></div>
           </div>
         </div>
         <div style={{ display:"flex", height:12, borderRadius:6, overflow:"hidden", gap:2, marginTop:18 }}>
-          {topBar.map(b => b.x>0 && <i key={b.l} style={{ display:"block", height:"100%", width:(b.x/(varlik||1)*100)+"%", background:b.c }}/>)}
+          {topBar.map(b => b.x>0 && <i key={b.l} onClick={mizan?()=>{ const on={Stok:"153",Alacak:"120",Kasa:"100"}[b.l]; rpDetayAc(b.l+" ("+on+") — hesaplar", ()=><DetayMizanIc T={T} miz={mizan} onek={on}/>); }:undefined} style={{ display:"block", height:"100%", width:(b.x/(varlik||1)*100)+"%", background:b.c, cursor:mizan?"pointer":"default" }}/>)}
         </div>
         <div style={{ display:"flex", gap:18, marginTop:8, flexWrap:"wrap", fontSize:12 }}>
-          {topBar.map(b => b.x>0 && <span key={b.l}><i style={{ display:"inline-block", width:9, height:9, borderRadius:3, marginRight:6, background:b.c }}/>{b.l} <b>%{rpF(b.x/(varlik||1)*100,0)}</b></span>)}
+          {topBar.map(b => b.x>0 && <span key={b.l} onClick={mizan?()=>{ const on={Stok:"153",Alacak:"120",Kasa:"100"}[b.l]; rpDetayAc(b.l+" ("+on+") — hesaplar", ()=><DetayMizanIc T={T} miz={mizan} onek={on}/>); }:undefined} style={{ cursor:mizan?"pointer":"default" }}><i style={{ display:"inline-block", width:9, height:9, borderRadius:3, marginRight:6, background:b.c }}/>{b.l} <b>%{rpF(b.x/(varlik||1)*100,0)}</b></span>)}
         </div>
       </div>
 
@@ -3581,9 +3619,9 @@ function KasaGenel({ T, GH, atolye, ic, onGit }) {
 
       {mz && (stokDal.length>0 || alacakDal.length>0 || borcDal.length>0) && (
         <div style={grid("repeat(auto-fit,minmax(300px,1fr))")}>
-          {stokDal.length>0 && <div style={kart}><h3 style={bas}>Stok dağılımı <span style={altBas}>HAS · {rpF(stok,0)} toplam</span></h3><RpBarListe T={T} items={stokDal} renk={RENK.stok}/></div>}
-          {alacakDal.length>0 && <div style={kart}><h3 style={bas}>Alacak dağılımı <span style={altBas}>para birimine göre</span></h3><RpBarListe T={T} items={alacakDal} renk={RENK.alacak}/></div>}
-          {borcDal.length>0 && <div style={kart}><h3 style={bas}>Borç dağılımı <span style={altBas}>para birimine göre</span></h3><RpBarListe T={T} items={borcDal} renk={RENK.borc}/></div>}
+          {stokDal.length>0 && <div style={kart}><h3 style={bas}>Stok dağılımı <span style={altBas}>HAS · {rpF(stok,0)} toplam</span></h3><RpBarListe T={T} items={stokDal} renk={RENK.stok} onSec={(x)=>rpDetayAc(x.l+" — hesaplar", ()=><DetayMizanIc T={T} miz={mizan} onek={x.kod}/>)}/></div>}
+          {alacakDal.length>0 && <div style={kart}><h3 style={bas}>Alacak dağılımı <span style={altBas}>para birimine göre</span></h3><RpBarListe T={T} items={alacakDal} renk={RENK.alacak} onSec={(x)=>rpDetayAc(x.l+" — hesaplar", ()=><DetayMizanIc T={T} miz={mizan} onek={x.kod}/>)}/></div>}
+          {borcDal.length>0 && <div style={kart}><h3 style={bas}>Borç dağılımı <span style={altBas}>para birimine göre</span></h3><RpBarListe T={T} items={borcDal} renk={RENK.borc} onSec={(x)=>rpDetayAc(x.l+" — hesaplar", ()=><DetayMizanIc T={T} miz={mizan} onek={x.kod} ters={true}/>)}/></div>}
         </div>
       )}
 
@@ -3597,7 +3635,7 @@ function KasaGenel({ T, GH, atolye, ic, onGit }) {
               </div>
               <div style={{ marginTop:10 }}>
                 {AK.map(f => (
-                  <div key={f.k} style={{ display:"flex", justifyContent:"space-between", fontSize:13, padding:"6px 0", borderBottom:"1px solid "+T.border }}>
+                  <div key={f.k} onClick={()=>rpDetayAc("Atölyede bu hafta — döküm", ()=><DetayAtolyeIc T={T} son={son} AK={AK}/>)} style={{ display:"flex", justifyContent:"space-between", fontSize:13, padding:"6px 0", borderBottom:"1px solid "+T.border, cursor:"pointer" }}>
                     <span><i style={{ display:"inline-block", width:9, height:9, borderRadius:3, marginRight:8, background:f.c }}/>{f.l}</span>
                     <span><b style={{ fontVariantNumeric:"tabular-nums" }}>{rpF(num(son[f.k]),1)}</b> <span style={{ color:T.sub }}>gr{akToplam>0?" · %"+rpF(num(son[f.k])/akToplam*100,0):""}</span></span>
                   </div>
@@ -3608,7 +3646,7 @@ function KasaGenel({ T, GH, atolye, ic, onGit }) {
               {goldLoc.length>0 && (<div>
                 <div style={{ fontSize:12, color:T.sub, fontWeight:600, marginBottom:6 }}>Altın hangi konumda? <span style={{ fontWeight:400 }}>(depo sayımı, gram)</span></div>
                 <div style={{ display:"flex", flexWrap:"wrap", gap:8 }}>
-                  {goldLoc.map(g => (<div key={g.l} style={{ flex:"1 1 90px", border:"1px solid "+T.border, borderRadius:10, padding:"8px 10px" }}><div style={{ fontSize:11, color:T.sub }}>{g.l}</div><div style={{ fontSize:17, fontWeight:700, fontVariantNumeric:"tabular-nums" }}>{rpF(g.x,0)}</div></div>))}
+                  {goldLoc.map((g,gi) => (<div key={g.l} onClick={()=>{ const ki=RP_LOC.findIndex(x=>x.l===g.l); rpDetayAc(g.l+" — ayara göre", ()=><DetayKonumIc T={T} altin={altin} ki={ki} ad={g.l}/>); }} style={{ flex:"1 1 90px", border:"1px solid "+T.border, borderRadius:10, padding:"8px 10px", cursor:"pointer" }}><div style={{ fontSize:11, color:T.sub }}>{g.l}</div><div style={{ fontSize:17, fontWeight:700, fontVariantNumeric:"tabular-nums" }}>{rpF(g.x,0)}</div></div>))}
                 </div></div>)}
               <div style={{ fontSize:12, color:T.sub, marginTop:12 }}>Toplam (hurda ve toz hariç): <b style={{ color:T.text }}>{rpF(akToplam-num(son.hurda)-num(son.toz),1)}</b> gr</div>
               {son.not ? <div style={{ fontSize:12, color:T.sub, marginTop:4 }}>Not: {son.not}</div> : null}
@@ -3625,24 +3663,24 @@ function KasaGenel({ T, GH, atolye, ic, onGit }) {
 
       {(v.satislar.length>0 || v.giderler.length>0) && (
         <div style={grid("repeat(auto-fit,minmax(300px,1fr))")}>
-          {v.satislar.length>0 && <div style={kart}><h3 style={bas}>Aylık satış <span style={altBas}>HAS gram</span></h3><RpSutun T={T} veri={aylik.map(x=>({ e:rpAyAd(x.a).split(" ")[0], v:x.o.hasGr }))}/></div>}
+          {v.satislar.length>0 && <div style={kart}><h3 style={bas}>Aylık satış <span style={altBas}>HAS gram</span></h3><RpSutun T={T} veri={aylik.map(x=>({ e:rpAyAd(x.a).split(" ")[0], v:x.o.hasGr }))} onSec={(i)=>{ const a=aylik[i].a; rpDetayAc("Satışlar — "+rpAyAd(a), ()=><DetaySatisIc T={T} satislar={v.satislar} f0={{ ay:a }}/>); }}/></div>}
           {v.satislar.length>0 && <div style={kart}><h3 style={bas}>Müşteri yoğunlaşması <span style={altBas}>satış payı</span></h3>
             <div style={{ display:"flex", height:14, borderRadius:7, overflow:"hidden", gap:2 }}>{payList.map((p,i)=><i key={p.ad} style={{ display:"block", height:"100%", width:p.p+"%", background:pCol[i%5] }}/>)}</div>
-            <div style={{ marginTop:10 }}>{payList.map((p,i)=>(<div key={p.ad} style={{ display:"flex", justifyContent:"space-between", fontSize:13, padding:"6px 0", borderBottom:"1px solid "+T.border }}><span><i style={{ display:"inline-block", width:9, height:9, borderRadius:3, marginRight:8, background:pCol[i%5] }}/>{p.ad}</span><b>%{rpF(p.p,1)}</b></div>))}</div></div>}
-          {v.giderler.length>0 && <div style={kart}><h3 style={bas}>Aylık masraf <span style={altBas}>HAS</span></h3><RpSutun T={T} renk="#5b7fa6" veri={aylik.map(x=>({ e:rpAyAd(x.a).split(" ")[0], v:x.o.gider }))} yuk={100}/><div style={{ fontSize:11.5, color:T.sub, marginTop:8 }}>Kapanış aktarımları ve taş kalemleri hariç</div></div>}
+            <div style={{ marginTop:10 }}>{payList.map((p,i)=>(<div key={p.ad} onClick={p.ad!=="Diğer"?()=>rpDetayAc("Satışlar — "+p.ad, ()=><DetaySatisIc T={T} satislar={v.satislar} f0={{ ay, mus:p.ad }}/>):undefined} style={{ display:"flex", justifyContent:"space-between", fontSize:13, padding:"6px 0", borderBottom:"1px solid "+T.border, cursor:p.ad!=="Diğer"?"pointer":"default" }}><span><i style={{ display:"inline-block", width:9, height:9, borderRadius:3, marginRight:8, background:pCol[i%5] }}/>{p.ad}</span><b>%{rpF(p.p,1)}</b></div>))}</div></div>}
+          {v.giderler.length>0 && <div style={kart}><h3 style={bas}>Aylık masraf <span style={altBas}>HAS</span></h3><RpSutun T={T} renk="#5b7fa6" veri={aylik.map(x=>({ e:rpAyAd(x.a).split(" ")[0], v:x.o.gider }))} yuk={100} onSec={(i)=>{ const a=aylik[i].a; rpDetayAc("Masraflar — "+rpAyAd(a), ()=><DetayGiderIc T={T} giderler={v.giderler} ay={a}/>); }}/><div style={{ fontSize:11.5, color:T.sub, marginTop:8 }}>Kapanış aktarımları ve taş kalemleri hariç</div></div>}
         </div>
       )}
 
       <div style={grid("repeat(auto-fit,minmax(320px,1fr))")}>
         <div style={kart}><h3 style={bas}>En büyük alacaklar <span style={{ ...altBas, cursor:"pointer", color:T.gold, fontWeight:600 }} onClick={()=>onGit("ab")}>Tümü →</span></h3>
-          {ac.length===0 ? <div style={{ fontSize:13, color:T.sub }}>Açık bakiye yok</div> : <RpBarListe T={T} items={ac.slice(0,6).map(x=>({ l:x.ad, v:x.bakiye }))} renk="#5b7fa6" d={1}/>}
+          {ac.length===0 ? <div style={{ fontSize:13, color:T.sub }}>Açık bakiye yok</div> : <RpBarListe T={T} items={ac.slice(0,6).map(x=>({ l:x.ad, v:x.bakiye, kod:x.kod }))} renk="#5b7fa6" d={1} onSec={mizan?((x)=>rpDetayAc(x.l+" — hesap", ()=><DetayMizanIc T={T} miz={mizan} onek={x.kod}/>)):undefined}/>}
         </div>
         <div style={kart}><h3 style={bas}>Dikkat gerekenler</h3>
           {uyar.length===0 ? <div style={{ display:"flex", alignItems:"center", gap:10, fontSize:13 }}><i style={{ width:10, height:10, borderRadius:"50%", background:renkS.g }}/>Şu an dikkat gerektiren bir durum yok.</div> : uyar.map((u,i)=>(
-            <div key={i} style={{ display:"flex", gap:10, alignItems:"flex-start", padding:"9px 0", borderBottom: i<uyar.length-1?"1px solid "+T.border:"none" }}>
+            <div key={i} onClick={u.ac} style={{ display:"flex", gap:10, alignItems:"flex-start", padding:"9px 0", borderBottom: i<uyar.length-1?"1px solid "+T.border:"none", cursor:u.ac?"pointer":"default" }}>
               <i style={{ width:9, height:9, borderRadius:"50%", marginTop:5, flex:"none", background:renkS[u.s] }}/>
               <div style={{ flex:1 }}><div style={{ fontSize:13, fontWeight:600 }}>{u.t}</div><div style={{ fontSize:12, color:T.sub }}>{u.d}</div></div>
-              {u.git && <button onClick={()=>onGit(u.git)} style={{ background:"transparent", border:"none", color:T.gold, fontSize:12, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap" }}>Aç →</button>}
+              {u.git && <button onClick={(e)=>{ e.stopPropagation(); onGit(u.git); }} style={{ background:"transparent", border:"none", color:T.gold, fontSize:12, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap" }}>Aç →</button>}
             </div>))}
         </div>
       </div>
@@ -3861,7 +3899,7 @@ function KasaStokAltin({ T, GH }) {
       </div>
       <div style={kart}>
         <h3 style={bas}>Gümüş ve diğer <span style={{ fontWeight:500, textTransform:"none", letterSpacing:0, fontSize:12 }}>gram</span></h3>
-        {diger.length===0 ? <div style={{ fontSize:12, color:T.sub }}>Kayıt yok</div> : diger.map(s=>(<div key={s[0]} style={{ display:"flex", justifyContent:"space-between", padding:"8px 0", borderBottom:"1px solid "+T.border, fontSize:13 }}><span>{s[0]}</span><b style={{ fontVariantNumeric:"tabular-nums" }}>{rpF(s[2],1)}</b></div>))}
+        {diger.length===0 ? <div style={{ fontSize:12, color:T.sub }}>Kayıt yok</div> : diger.map(s=>(<div key={s[0]} onClick={()=>rpDetayAc(s[0]+" — konumlara göre", ()=><DetayDigerIc T={T} s={s}/>)} style={{ display:"flex", justifyContent:"space-between", padding:"8px 0", borderBottom:"1px solid "+T.border, fontSize:13, cursor:"pointer" }}><span>{s[0]}</span><b style={{ fontVariantNumeric:"tabular-nums" }}>{rpF(s[2],1)}</b></div>))}
       </div>
     </div>
   );
