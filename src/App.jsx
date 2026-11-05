@@ -2469,7 +2469,7 @@ function RpKapi({ T, GH, children }) {
 }
 
 // ── Küçük grafik bileşenleri (div tabanlı, temaya uyar) ──
-const RP_RENK = ["#5b9bd5", "#d4a84b", "#6abf69", "#c27ba0"];
+const RP_RENK = ["#5b9bd5", "#8f8a7c", "#6abf69", "#c27ba0"];
 function rpAyAd(a){ const m=["Oca","Şub","Mar","Nis","May","Haz","Tem","Ağu","Eyl","Eki","Kas","Ara"]; const [y,k]=a.split("-"); return m[Number(k)-1]+" "+y.slice(2); }
 const rpF = (v,d=0) => (Math.abs(Number(v)||0)<0.5*Math.pow(10,-d)?0:(Number(v)||0)).toLocaleString("tr-TR",{minimumFractionDigits:d,maximumFractionDigits:d});
 function RpSutun({ T, veri, renk=RP_RENK[0], birim="", yuk=130 }) {
@@ -3213,7 +3213,7 @@ function RaporlarSayfasi({ T, GH, RD, setRhinoMizan }) {
 
 // ═══ KASA & STOK — yeni arayüz bileşenleri ═══
 const RP_LOC = [
-  { k:"anakasa", l:"Anakasa", i:3, c:"#8f8a7c" }, { k:"sayim", l:"Sayım", i:4, c:"#c9a24a" }, { k:"tezgah", l:"Tezgah", i:5, c:"#5b7fa6" },
+  { k:"anakasa", l:"Anakasa", i:3, c:"#8f8a7c" }, { k:"sayim", l:"Sayım", i:4, c:"#7d8aa0" }, { k:"tezgah", l:"Tezgah", i:5, c:"#5b7fa6" },
   { k:"cila", l:"Cila", i:6, c:"#6aa57f" }, { k:"tasdizim", l:"Taş dizim", i:7, c:"#b9739b" }, { k:"firecila", l:"Fire cila", i:8, c:"#d08a4a" },
   { k:"mine", l:"Mine", i:9, c:"#7a6fb0" }, { k:"toz", l:"Toz kutusu", i:10, c:"#b8b09a" }, { k:"dokum", l:"Döküm", i:11, c:"#4f9aa8" },
 ];
@@ -3317,7 +3317,7 @@ function KasaGenel({ T, GH, atolye, ic, onGit }) {
   const aylik = aylar.map(a => ({ a, o:rpOzet(v.giderler, v.satislar, a) }));
   const alacak = mz ? mz.alacak : ic.alacak, borc = mz ? mz.borc : ic.borc, stok = mz ? mz.stok : ic.stok, kasaH = mz ? mz.kasa : 0;
   const varlik = stok + alacak + kasaH, net = varlik - borc;
-  const RENK = { stok:"#c9a24a", alacak:"#2f7fb8", kasa:"#2e9d6a", borc:"#d0584b", net:"#6b5fb5" };
+  const RENK = { stok:"#6b7a8f", alacak:"#2f7fb8", kasa:"#2e9d6a", borc:"#d0584b", net:"#6b5fb5" };
   const kpiler = [
     { l:"Stok", x:stok, c:RENK.stok, d:mz?"Ticari mallar (153)":"Kasa & stok kayıtları" },
     { l:"Alacak", x:alacak, c:RENK.alacak, d:"Müşteriler (120)" },
@@ -3345,7 +3345,7 @@ function KasaGenel({ T, GH, atolye, ic, onGit }) {
   const eksikler = [];
   if (!mizan) eksikler.push("Mizan"); if (!depo) eksikler.push("Depo sayımı"); if (!v.giderler.length) eksikler.push("Giderler"); if (!v.satislar.length) eksikler.push("Satış");
   // Atölye
-  const AK = [{ k:"satilacak", l:"Satılacak ürün", c:"#c9a24a" }, { k:"tel", l:"Tel kaynak", c:"#5b7fa6" }, { k:"yariM", l:"Yarı mamul", c:"#6aa57f" }, { k:"bekleyen", l:"Bekleyen ürün", c:"#b9739b" }, { k:"hurda", l:"Hurda", c:"#8f8a7c" }, { k:"toz", l:"Toz", c:"#b8b09a" }];
+  const AK = [{ k:"satilacak", l:"Satılacak ürün", c:"#6b7a8f" }, { k:"tel", l:"Tel kaynak", c:"#5b7fa6" }, { k:"yariM", l:"Yarı mamul", c:"#6aa57f" }, { k:"bekleyen", l:"Bekleyen ürün", c:"#b9739b" }, { k:"hurda", l:"Hurda", c:"#8f8a7c" }, { k:"toz", l:"Toz", c:"#b8b09a" }];
   const num = (x) => Number(x)||0;
   const son = atolye ? atolye.son : null;
   const akToplam = son ? AK.reduce((s,f)=>s+num(son[f.k]),0) : 0;
@@ -3356,7 +3356,7 @@ function KasaGenel({ T, GH, atolye, ic, onGit }) {
   const grid = (cols) => ({ display:"grid", gridTemplateColumns:cols, gap:14, marginBottom:14 });
   const musPay = Object.values(o.musteri).sort((a,b)=>b.hasGr-a.hasGr);
   const musTop = musPay.reduce((s,m)=>s+m.hasGr,0);
-  const pCol = ["#c9a24a","#2f7fb8","#2e9d6a","#b9739b","#8f8a7c"];
+  const pCol = ["#6b7a8f","#2f7fb8","#2e9d6a","#b9739b","#8f8a7c"];
   const payList = [...musPay.slice(0,4).map(m=>({ ad:m.ad, p:m.hasGr/(musTop||1)*100 })), ...(musPay.length>4 ? [{ ad:"Diğer", p:musPay.slice(4).reduce((s,m)=>s+m.hasGr,0)/(musTop||1)*100 }] : [])];
   const topBar = [{ l:"Stok", x:stok, c:RENK.stok }, { l:"Alacak", x:alacak, c:RENK.alacak }, { l:"Kasa", x:Math.max(0,kasaH), c:RENK.kasa }];
   return (
@@ -3461,7 +3461,7 @@ function KasaGenel({ T, GH, atolye, ic, onGit }) {
 
       <div style={grid("repeat(auto-fit,minmax(320px,1fr))")}>
         <div style={kart}><h3 style={bas}>En büyük alacaklar <span style={{ ...altBas, cursor:"pointer", color:T.gold, fontWeight:600 }} onClick={()=>onGit("ab")}>Tümü →</span></h3>
-          {ac.length===0 ? <div style={{ fontSize:13, color:T.sub }}>Açık bakiye yok</div> : <RpBarListe T={T} items={ac.slice(0,6).map(x=>({ l:x.ad, v:x.bakiye }))} renk="#c9a24a" d={1}/>}
+          {ac.length===0 ? <div style={{ fontSize:13, color:T.sub }}>Açık bakiye yok</div> : <RpBarListe T={T} items={ac.slice(0,6).map(x=>({ l:x.ad, v:x.bakiye }))} renk="#5b7fa6" d={1}/>}
         </div>
         <div style={kart}><h3 style={bas}>Dikkat gerekenler</h3>
           {uyar.length===0 ? <div style={{ display:"flex", alignItems:"center", gap:10, fontSize:13 }}><i style={{ width:10, height:10, borderRadius:"50%", background:renkS.g }}/>Şu an dikkat gerektiren bir durum yok.</div> : uyar.map((u,i)=>(
@@ -3749,7 +3749,7 @@ function MusSatisPaneli({ T, GH, musAd, odemeler }) {
                     <tr key={k} onClick={()=>{ setAralikAcik(false); setYil(y); setAy(mm); }} style={{ cursor:"pointer" }}>
                       <td style={{ ...td, textAlign:"left", fontWeight:600 }}>{RP_AYLAR_UZUN[Number(mm)-1]} {y}</td>
                       <td style={{ ...td, fontWeight:700 }}>{rpF(m.gr,1)}</td><td style={td}>{m.ev.size}</td><td style={td}>{m.tahsilat>0?rpF(m.tahsilat,1):"—"}</td>
-                      <td style={{ ...td, textAlign:"left" }}><div style={{ height:6, borderRadius:3, background:T.border }}><i style={{ display:"block", height:6, borderRadius:3, background:"#c9a24a", width:Math.max(2,m.gr/mxAy*100)+"%" }}/></div></td>
+                      <td style={{ ...td, textAlign:"left" }}><div style={{ height:6, borderRadius:3, background:T.border }}><i style={{ display:"block", height:6, borderRadius:3, background:"#5b7fa6", width:Math.max(2,m.gr/mxAy*100)+"%" }}/></div></td>
                     </tr>); })}
                   <tr><td style={{ ...td, textAlign:"left", fontWeight:700, borderTop:"2px solid "+T.border }}>Toplam</td><td style={{ ...td, fontWeight:700, borderTop:"2px solid "+T.border }}>{rpF(topGr,1)}</td><td style={{ ...td, borderTop:"2px solid "+T.border }}>{evrak}</td><td style={{ ...td, borderTop:"2px solid "+T.border }}>{rpF(topTahsilat,1)}</td><td style={{ ...td, borderTop:"2px solid "+T.border }}/></tr>
                 </tbody>
@@ -3893,7 +3893,7 @@ function MusMizanEkrani({ T, GH, msk, appeGec }) {
               {liste.map((x,ix) => { const sc = secili && secili.kod===x.kod; return (
                 <tr key={x.kod} onClick={()=>setSec(x.kod)} style={{ cursor:"pointer", background: sc ? "rgba(var(--vurgu-rgb),0.14)" : zebra(ix), boxShadow: sc ? "inset 3px 0 0 "+T.gold : "none" }}>
                   <td style={{ ...td, textAlign:"left", fontWeight:700 }}>{x.ad}</td><td style={td}>{rpF(x.borc,1)}</td><td style={td}>{rpF(x.alacak,1)}</td>
-                  <td style={{ ...td, fontWeight:800, minWidth:110 }}>{rpF(x.bak,1)}<div style={{ height:4, background:T.border, borderRadius:2, marginTop:5 }}><i style={{ display:"block", height:4, borderRadius:2, background:x.bak<0?"#2e7d32":"#c9a24a", width:(Math.abs(x.bak)/mx*100)+"%" }}/></div></td>
+                  <td style={{ ...td, fontWeight:800, minWidth:110 }}>{rpF(x.bak,1)}<div style={{ height:4, background:T.border, borderRadius:2, marginTop:5 }}><i style={{ display:"block", height:4, borderRadius:2, background:x.bak<0?"#2e7d32":"#5b7fa6", width:(Math.abs(x.bak)/mx*100)+"%" }}/></div></td>
                   <td style={td}>{pill(x.bak)}</td>
                 </tr>); })}
               <tr><td style={{ ...toplamH, textAlign:"left" }}>Toplam açık</td><td style={toplamH}/><td style={toplamH}/><td style={toplamH}>{rpF(topAcik,1)}</td><td style={toplamH}/></tr>
@@ -3935,7 +3935,7 @@ function KasaMusteriler({ T, GH, BG, RD, musBakiye, kasa, svKasa, kasaModalAc, m
               {liste.map(x => (
                 <tr key={x.ad} onClick={()=>setSec(x.ad)} style={{ cursor:"pointer", background: secili && secili.ad===x.ad ? "rgba(var(--vurgu-rgb),0.10)" : "transparent" }}>
                   <td style={{ ...td, textAlign:"left", fontWeight:600 }}>{x.ad}</td><td style={td}>{rpF(x.d.borc,1)}</td><td style={td}>{rpF(x.d.odenen,1)}</td>
-                  <td style={{ ...td, fontWeight:700 }}>{rpF(x.bakiye,1)}<div style={{ height:4, background:T.border, borderRadius:2, marginTop:4 }}><i style={{ display:"block", height:4, borderRadius:2, background:"#c9a24a", width:Math.max(1,Math.abs(x.bakiye)/mx*100)+"%" }}/></div></td>
+                  <td style={{ ...td, fontWeight:700 }}>{rpF(x.bakiye,1)}<div style={{ height:4, background:T.border, borderRadius:2, marginTop:4 }}><i style={{ display:"block", height:4, borderRadius:2, background:"#5b7fa6", width:Math.max(1,Math.abs(x.bakiye)/mx*100)+"%" }}/></div></td>
                   <td style={td}>{pill(x.bakiye)}</td>
                 </tr>))}
               <tr><td style={{ ...td, textAlign:"left", fontWeight:700, borderTop:"2px solid "+T.border }}>Toplam açık</td><td style={{ ...td, borderTop:"2px solid "+T.border }}/><td style={{ ...td, borderTop:"2px solid "+T.border }}/><td style={{ ...td, fontWeight:700, borderTop:"2px solid "+T.border }}>{rpF(topB,1)}</td><td style={{ ...td, borderTop:"2px solid "+T.border }}/></tr>
@@ -9345,7 +9345,7 @@ function Atolye({ onSirketDegis }) {
                               const acikSayi = kollar.filter(k => Array.isArray(k.vitrinMus) && k.vitrinMus.includes(kod)).length;
                               return (
                                 <button onClick={()=>setMusKolModal(kod)}
-                                  style={{ background: acikSayi>0?"rgba(201,168,76,0.12)":"rgba(232,90,79,0.1)", border:"1px solid "+(acikSayi>0?"rgba(201,168,76,0.3)":"rgba(232,90,79,0.25)"), borderRadius:7, padding:"6px 12px", color: acikSayi>0?T.gold:"#e85a4f", fontSize:10, fontWeight:700, cursor:"pointer" }}>
+                                  style={{ background: acikSayi>0?"rgba(91,127,166,0.12)":"rgba(232,90,79,0.1)", border:"1px solid "+(acikSayi>0?"rgba(91,127,166,0.3)":"rgba(232,90,79,0.25)"), borderRadius:7, padding:"6px 12px", color: acikSayi>0?T.gold:"#e85a4f", fontSize:10, fontWeight:700, cursor:"pointer" }}>
                                   📁 {acikSayi>0 ? acikSayi+" koleksiyon" : "Koleksiyon YOK"}
                                 </button>
                               );
@@ -12105,7 +12105,7 @@ function Atolye({ onSirketDegis }) {
               {kasaSayfa==="g_ab" && <RpSeg T={T} aktif={abSub} onSec={setAbSub} secenekler={[{id:"musteri",l:"Müşteriler"},{id:"dokumcu",l:"Dökümcü"},{id:"muh",l:"Satıcılar & Muhasebe"}]}/>}
               {kasaSayfa==="g_ab" && abSub==="dokumcu" && <KasaDokumcu T={T} GH={GH} BG={BG} RD={RD} kasa={kasa} svKasa={svKasa} kasaModalAc={kasaModalAc} dokumGiden={dokumGiden} dokumOdenen={dokumOdenen} dokumBorc={dokumBorc} fN={fN}/>}
               {kasaSayfa==="g_stok" && stokSub==="oz" && <KasaOzSermaye T={T} fN={fN} fUSD={fUSD} hasGramUSD={hasGramUSD} toplamHas={toplamHas} kalemler={[
-                { l:"Ham altın", v:hamAltinGram, c:"#c9a24a" }, { l:"Üretimdeki altın", v:uretimAltin, c:"#2f7fb8" }, { l:"Üretimdeki taş", v:uretimTas, c:"#7c6abf" },
+                { l:"Ham altın", v:hamAltinGram, c:"#6b7a8f" }, { l:"Üretimdeki altın", v:uretimAltin, c:"#2f7fb8" }, { l:"Üretimdeki taş", v:uretimTas, c:"#7c6abf" },
                 { l:"Satılmamış mamul (altın)", v:satilmamisAltin, c:"#2e9d6a" }, { l:"Satılmamış mamul (taş)", v:satilmamisTas, c:"#a78bfa" }, { l:"İade taşları", v:iadeTas, c:"#c27ba0" },
                 { l:"Hurda altın", v:hurdaAltin, c:"#e8833a" }, { l:"Hurda taş", v:hurdaTas, c:"#b86a3a" }, { l:"Hazır ürün + serbest", v:hazirUrunGram+serbestGram, c:"#8f8a7c" } ]}/>}
               {kasaSayfa==="g_ab" && abSub==="musteri" && <KasaMusteriler msk={AKTIF_SIRKET_ONEK===""} T={T} GH={GH} BG={BG} RD={RD} musBakiye={musBakiye} kasa={kasa} svKasa={svKasa} kasaModalAc={kasaModalAc}/>}
