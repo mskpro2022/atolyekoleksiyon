@@ -2243,10 +2243,26 @@ function rpUpper(s){ try { return String(s??"").toLocaleUpperCase("tr"); } catch
 function rpTurTani(rows, sayfaAdlari){
   const ilk = rows.slice(0,15).map(r=>r.map(c=>rpUpper(c)).join("|")).join("\n");
   if (/HESAP KOD/.test(ilk) && /BORC|BORÇ/.test(ilk)) return "mizan";
+  if (/ST\.M[İI]KTAR/.test(ilk) && /[A-ZÇĞİÖŞÜ]+_20\d\d/.test(ilk)) return "aylik";
   if ((sayfaAdlari||[]).some(s=>/MEVCUT ANALİZ|MEVCUT ANALIZ/.test(rpUpper(s))) || (/GENEL TOPLAM/.test(ilk) && /ÜRÜN NO/.test(ilk))) return "depo";
   if (/SATIR AÇIKLAMA/.test(ilk) && /EVRAK NO/.test(ilk)) return "gider";
   if (/MİLYEM/.test(ilk) && /HAS GR/.test(ilk)) return "satis";
   return "";
+}
+// Rhino "Aylık Karşılaştırmalı Satışlar" (STSAYL): ayar bazında, iadeler düşülmüş NET brüt gram + tutar
+const RP_AY_NO = { "OCAK":"01","ŞUBAT":"02","MART":"03","NİSAN":"04","MAYIS":"05","HAZİRAN":"06","TEMMUZ":"07","AĞUSTOS":"08","EYLÜL":"09","EKİM":"10","KASIM":"11","ARALIK":"12" };
+function rpAylikSatisAyristir(rows){
+  let bi=-1; for(let i=0;i<Math.min(rows.length,10);i++){ if(rows[i].some(c=>/_20\d\d$/.test(String(c||"").trim()))){ bi=i; break; } }
+  if(bi<0) return { aylar:{}, sayi:0 };
+  const kol=[]; rows[bi].forEach((c,i)=>{ const m=rpUpper(String(c||"").trim()).match(/^(.+)_(\d{4})$/); if(m && RP_AY_NO[m[1]]) kol.push({ i, ay:m[2]+"-"+RP_AY_NO[m[1]] }); });
+  const aylar={}; let sayi=0;
+  for(let n=bi+1;n<rows.length;n++){
+    const r=rows[n]; const m=String(r[2]||"").trim().match(/^\d{3}-(\d{1,2})K$/); if(!m || String(r[3]||"").trim()!=="GR") continue;
+    const ayar=m[1]+"K";
+    kol.forEach(k=>{ const gr=Number(r[k.i])||0, tut=Number(r[k.i+1])||0; (aylar[k.ay]||(aylar[k.ay]={}))[ayar]={ gr:Math.round(gr*100)/100, tutar:Math.round(tut*100)/100 }; });
+    sayi++;
+  }
+  return { aylar, sayi };
 }
 function rpMizanAyristir(rows){
   let bas="",bit="",firma="";
@@ -2378,7 +2394,8 @@ async function rpYukleHepsi(){
     ld("v7raporlar", { mizanlar: [] })
   ]);
   const depoK = await ld("v7rp_depo", { sayimlar: [] });
-  return { idx, giderler: g.flat(), satislar: s.flat(), mizanlar: (miz && Array.isArray(miz.mizanlar)) ? miz.mizanlar : [], depo: (depoK && Array.isArray(depoK.sayimlar)) ? depoK.sayimlar : [] };
+  const aylikK = await ld("v7rp_aylik", { aylar: {} });
+  return { aylik: (aylikK && aylikK.aylar) || {}, idx, giderler: g.flat(), satislar: s.flat(), mizanlar: (miz && Array.isArray(miz.mizanlar)) ? miz.mizanlar : [], depo: (depoK && Array.isArray(depoK.sayimlar)) ? depoK.sayimlar : [] };
 }
 // Bir yüklemeyi aylara böler, mevcutla birleştirir (çiftlemez), dizini günceller
 async function rpYuklemeKaydet(tur, satirlar){
@@ -2612,6 +2629,75 @@ function RpGelirTablosu({ T, hes, kayit }) {
 }
 
 // ── Karlılık (şifreli) ──
+// ── Brüt / iade / net satış (gram, ayar bazında) — MSK ──
+function rpBrutGr(s){ const m=String(s[2]).match(/^(\d{3})-(\d{1,2})K$/); return m ? { ayar:m[2]+"K", gr:s[3]/(Number(m[1])/1000) } : null; }
+function BrutSatisKarti({ T, satislar, aylik }) {
+  const [yil, setYil] = useState("");
+  const [ay, setAy] = useState("");
+  const brut = {}; // ay -> ayar -> gr
+  satislar.forEach(s=>{ const b=rpBrutGr(s); if(!b) return; const a=s[0].slice(0,7); ((brut[a]||(brut[a]={}))[b.ayar]=(brut[a][b.ayar]||0)+b.gr); });
+  const aylar = [...new Set([...Object.keys(brut), ...Object.keys(aylik||{})])].sort();
+  const yillar = [...new Set(aylar.map(a=>a.slice(0,4)))];
+  const secAylar = aylar.filter(a=>(!yil||a.startsWith(yil)) && (!ay||a.slice(5,7)===ay));
+  const netVar = (a) => !!(aylik && aylik[a]);
+  const ayarSirasi = (x,y)=>(parseInt(y)||0)-(parseInt(x)||0);
+  const ayarlar = [...new Set(secAylar.flatMap(a=>[...Object.keys(brut[a]||{}), ...Object.keys((aylik&&aylik[a])||{})]))].sort(ayarSirasi);
+  const brutAy = (a,k)=> (brut[a]&&brut[a][k])||0;
+  const netAy = (a,k)=> (aylik&&aylik[a]&&aylik[a][k]) ? aylik[a][k].gr : 0;
+  const tBrut = (k)=>secAylar.reduce((t,a)=>t+brutAy(a,k),0);
+  const tNet = (k)=>secAylar.filter(netVar).reduce((t,a)=>t+netAy(a,k),0);
+  const tBrutNetli = (k)=>secAylar.filter(netVar).reduce((t,a)=>t+brutAy(a,k),0);
+  const topBrut = ayarlar.reduce((t,k)=>t+tBrut(k),0), topNet = ayarlar.reduce((t,k)=>t+tNet(k),0), topBrutNetli = ayarlar.reduce((t,k)=>t+tBrutNetli(k),0);
+  const eksikAy = secAylar.filter(a=>!netVar(a));
+  const th = { fontSize:11, color:T.sub, fontWeight:700, textAlign:"right", padding:"4px 6px" };
+  const td = { fontSize:12, color:T.text, textAlign:"right", padding:"5px 6px", borderTop:"1px solid "+T.border };
+  const dugme = (a) => ({ border:"1px solid "+(a?T.gold:T.border), background:a?"rgba(var(--vurgu-rgb),0.12)":"transparent", color:T.text, borderRadius:8, padding:"4px 10px", fontSize:12, fontWeight:a?700:500, cursor:"pointer", whiteSpace:"nowrap" });
+  const AYK = ["Oca","Şub","Mar","Nis","May","Haz","Tem","Ağu","Eyl","Eki","Kas","Ara"];
+  const gr0 = (x)=>rpF(x,0);
+  const iadeRenk = T.danger||"#e85a4f";
+  if (!aylar.length) return null;
+  return (
+    <RpKart T={T} baslik="SATIŞ (BRÜT GRAM) — AYAR BAZINDA, İADELER DÜŞÜLMÜŞ">
+      <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:8 }}>
+        <button onClick={()=>{setYil("");setAy("");}} style={dugme(!yil&&!ay)}>Tümü</button>
+        {yillar.map(y=><button key={y} onClick={()=>{setYil(y);setAy("");}} style={dugme(yil===y&&!ay)}>{y}</button>)}
+        {AYK.map((n,i)=>{ const k=String(i+1).padStart(2,"0"); const var_=aylar.some(a=>(!yil||a.startsWith(yil))&&a.slice(5,7)===k); return <button key={k} disabled={!var_} onClick={()=>setAy(ay===k?"":k)} style={{ ...dugme(ay===k), opacity:var_?1:0.4, cursor:var_?"pointer":"default" }}>{n}</button>; })}
+      </div>
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))", gap:10, margin:"4px 0 10px" }}>
+        <RpKpi T={T} ad="NET SATIŞ (GR)" deger={gr0(topNet)} alt="İadeler düşülmüş · Rhino aylık satış raporu"/>
+        <RpKpi T={T} ad="BRÜT SATIŞ (GR)" deger={gr0(topBrutNetli)} alt="Satış detay raporu · has ÷ milyem"/>
+        <RpKpi T={T} ad="İADE (GR)" deger={gr0(topBrutNetli-topNet)} renk={iadeRenk} alt={topBrutNetli>0?"Brütün %"+rpF((topBrutNetli-topNet)/topBrutNetli*100,1)+"'i":""}/>
+      </div>
+      {eksikAy.length>0 && <div style={{ fontSize:12, color:iadeRenk, marginBottom:8, lineHeight:1.5 }}>Net rakamı olmayan aylar: {eksikAy.join(", ")} — Raporlar sekmesinden "Aylık Karşılaştırmalı Satışlar" dosyasını yükle. Bu aylar net toplamına katılmadı; tabloda yalnız brüt görünür.</div>}
+      <div style={{ overflowX:"auto" }}>
+        <table style={{ width:"100%", borderCollapse:"collapse", minWidth:420 }}>
+          <thead><tr><th style={{ ...th, textAlign:"left" }}>Ayar</th><th style={th}>Brüt gr</th><th style={th}>İade gr</th><th style={th}>Net gr</th><th style={th}>İade %</th></tr></thead>
+          <tbody>
+            {ayarlar.map(k=>{ const b=tBrutNetli(k), n=tNet(k), i=b-n; return (
+              <tr key={k}><td style={{ ...td, textAlign:"left", fontWeight:700 }}>{k}</td><td style={td}>{gr0(tBrut(k))}</td><td style={{ ...td, color:i>0.5?iadeRenk:T.text }}>{i>0.5?gr0(i):"—"}</td><td style={{ ...td, fontWeight:700 }}>{gr0(n)}</td><td style={td}>{b>0?"%"+rpF(i/b*100,1):"—"}</td></tr>
+            ); })}
+            <tr><td style={{ ...td, textAlign:"left", fontWeight:800 }}>Toplam</td><td style={{ ...td, fontWeight:800 }}>{gr0(topBrut)}</td><td style={{ ...td, fontWeight:800, color:iadeRenk }}>{gr0(topBrutNetli-topNet)}</td><td style={{ ...td, fontWeight:800 }}>{gr0(topNet)}</td><td style={{ ...td, fontWeight:800 }}>{topBrutNetli>0?"%"+rpF((topBrutNetli-topNet)/topBrutNetli*100,1):"—"}</td></tr>
+          </tbody>
+        </table>
+      </div>
+      {secAylar.length>1 && (
+        <div style={{ overflowX:"auto", marginTop:12 }}>
+          <div style={{ fontSize:11, color:T.sub, fontWeight:700, marginBottom:4 }}>AYLIK NET SATIŞ (GR)</div>
+          <table style={{ width:"100%", borderCollapse:"collapse", minWidth:420 }}>
+            <thead><tr><th style={{ ...th, textAlign:"left" }}>Ay</th>{ayarlar.map(k=><th key={k} style={th}>{k}</th>)}<th style={th}>Net</th><th style={th}>Brüt</th><th style={th}>İade</th></tr></thead>
+            <tbody>
+              {secAylar.map(a=>{ const nv=netVar(a); const n=ayarlar.reduce((t,k)=>t+netAy(a,k),0), b=ayarlar.reduce((t,k)=>t+brutAy(a,k),0); return (
+                <tr key={a}><td style={{ ...td, textAlign:"left" }}>{rpAyAd(a)}</td>{ayarlar.map(k=><td key={k} style={td}>{nv?gr0(netAy(a,k)):"—"}</td>)}<td style={{ ...td, fontWeight:700 }}>{nv?gr0(n):"—"}</td><td style={td}>{gr0(b)}</td><td style={{ ...td, color:iadeRenk }}>{nv?gr0(b-n):"—"}</td></tr>
+              ); })}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <div style={{ fontSize:11, color:T.dim||T.sub, marginTop:8, lineHeight:1.5 }}>Net: Rhino "Aylık Karşılaştırmalı Satışlar" raporu (iadeler düşülmüş, MAMUL ÜRÜNLER). Brüt: satış detay raporundaki has gramın milyeme bölünmesi. İade = brüt − net; iade müşteri bazında ayrılamaz. Gümüş bu raporda yok.</div>
+    </RpKart>
+  );
+}
+
 // ── İşçilik analizi: ayar ve müşteri bazında işçilik HAS ÷ satılan HAS (MSK) ──
 function IscAnaliz({ T, satislar }) {
   const [yil, setYil] = useState("");
@@ -2752,6 +2838,7 @@ function RaporKarlilik({ T, GH }) {
             )}
             <div style={{ fontSize:11, color:T.dim||T.sub, marginTop:8, lineHeight:1.5 }}>"Kaba fark" yönetim hesabıdır, muhasebe sonucu değildir. Muhasebe sonucu için aşağıdaki mizan tabanlı gelir tablosuna bak.</div>
           </RpKart>
+          <BrutSatisKarti T={T} satislar={v.satislar} aylik={v.aylik}/>
           <IscAnaliz T={T} satislar={v.satislar}/>
           <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(300px,1fr))", gap:12 }}>
             <RpKart T={T} baslik="AYLIK KABA FARK (HAS)"><RpSutun T={T} renk={RP_RENK[2]} veri={aylik.map(x=>({ e:rpAyAd(x.a).split(" ")[0], v:x.o.sonuc }))}/></RpKart>
@@ -2830,6 +2917,15 @@ function RaporlarSayfasi({ T, GH, RD, setRhinoMizan }) {
           if (!p.satirlar.length) { sonuclar.push("⚠ "+file.name+": satır bulunamadı"+(p.hata?" ("+p.hata+")":"")); continue; }
           const r = await rpYuklemeKaydet(tur==="gider"?"g":"s", p.satirlar);
           sonuclar.push((r.eklenen?"✓ ":"♻ ")+(tur==="gider"?"Giderler":"Satış")+": "+p.satirlar.length+" satır okundu · "+r.eklenen+" yeni eklendi, "+r.atlanan+" zaten vardı (atlandı)"+(p.disarida?" · "+p.disarida+" gider/gelir satırı dışarıda bırakıldı":""));
+        } else if (tur === "aylik") {
+          const ap = rpAylikSatisAyristir(rows);
+          const ayAdet = Object.keys(ap.aylar).length;
+          if (!ayAdet) { sonuclar.push("⚠ "+file.name+": aylık satış raporunda ay/ayar bulunamadı"); continue; }
+          const eskiA = await ld("v7rp_aylik", { aylar: {} });
+          const birlesik = { ...((eskiA && eskiA.aylar) || {}) };
+          Object.entries(ap.aylar).forEach(([ay,o])=>{ birlesik[ay] = { ...(birlesik[ay]||{}), ...o }; });
+          await sv("v7rp_aylik", { aylar: birlesik });
+          sonuclar.push("✓ Aylık satış (iade düşülmüş net): "+ayAdet+" ay, "+ap.sayi+" ayar kaydedildi");
         } else if (tur === "depo") {
           const dp = rpDepoAyristir(rows);
           if (!dp.satirlar.length) { sonuclar.push("⚠ "+file.name+": depo sayımında satır bulunamadı"); continue; }
