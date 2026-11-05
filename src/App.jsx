@@ -2264,16 +2264,20 @@ function rpKapanisTurleri(giderler){
 function rpAyListe(giderler,satislar){
   const a=new Set(); giderler.forEach(s=>a.add(s[0].slice(0,7))); satislar.forEach(s=>a.add(s[0].slice(0,7))); return [...a].sort();
 }
+// Taş kalemleri masraf değil, taş gelirinden düşülür (iade gibi). Taş dizim gideri masrafta kalır.
+function rpTasTuru(tur){ return /^(TAŞ STOĞU|TAŞ DÜŞÜMÜ|MALZEME TAŞ)/.test(rpUpper(String(tur).replace(/\u00a0/g," ").trim())); }
 function rpOzet(giderler,satislar,ay){ // ay: "2026-03" | "" (tümü)
   const kap=rpKapanisTurleri(giderler);
-  const gs=giderler.filter(s=>(!ay||s[0].startsWith(ay)) && !kap.has(s[1]));
+  const donem=giderler.filter(s=>(!ay||s[0].startsWith(ay)) && !kap.has(s[1]));
+  const gs=donem.filter(s=>!rpTasTuru(s[1]));
+  const tasGider=donem.filter(s=>rpTasTuru(s[1])).reduce((t,s)=>t+s[5],0);
   const ss=satislar.filter(s=>!ay||s[0].startsWith(ay));
   const gider=gs.reduce((t,s)=>t+s[5],0);
   const hasGr=ss.reduce((t,s)=>t+s[3],0), isc=ss.reduce((t,s)=>t+s[4],0), usd=ss.reduce((t,s)=>t+s[5],0), maden=ss.reduce((t,s)=>t+s[6],0);
   const turler={}; gs.forEach(s=>{ turler[s[1]]=(turler[s[1]]||0)+s[5]; });
   const musteri={}; ss.forEach(s=>{ const k=s[7]||s[8]||"?"; const m=musteri[k]||(musteri[k]={ad:s[8]||k,hasGr:0,isc:0,usd:0,maden:0,adet:0}); m.hasGr+=s[3]; m.isc+=s[4]; m.usd+=s[5]; m.maden+=s[6]; m.adet++; });
   const ayar={}; ss.forEach(s=>{ const k=(s[2]||"?"); const m=ayar[k]||(ayar[k]={hasGr:0,isc:0,maden:0,adet:0}); m.hasGr+=s[3]; m.isc+=s[4]; m.maden+=s[6]; m.adet++; });
-  return { gider, hasGr, isc, usd, maden, adet:ss.length, evrak:new Set(ss.map(s=>s[1])).size, turler, musteri, ayar, sonuc: isc+maden-gider };
+  return { gider, tasGider, hasGr, isc, usd, maden, adet:ss.length, evrak:new Set(ss.map(s=>s[1])).size, turler, musteri, ayar, sonuc: isc+maden-gider };
 }
 
 // ── Depolama: aylık parçalar (v7rp_g_YYYY-MM, v7rp_s_YYYY-MM), dizin v7rp_idx. Nesne olarak saklanır (dizi parçalanmasın) ──
@@ -2362,7 +2366,7 @@ function RpKapi({ T, GH, children }) {
 // ── Küçük grafik bileşenleri (div tabanlı, temaya uyar) ──
 const RP_RENK = ["#5b9bd5", "#d4a84b", "#6abf69", "#c27ba0"];
 function rpAyAd(a){ const m=["Oca","Şub","Mar","Nis","May","Haz","Tem","Ağu","Eyl","Eki","Kas","Ara"]; const [y,k]=a.split("-"); return m[Number(k)-1]+" "+y.slice(2); }
-const rpF = (v,d=0) => (Number(v)||0).toLocaleString("tr-TR",{minimumFractionDigits:d,maximumFractionDigits:d});
+const rpF = (v,d=0) => (Math.abs(Number(v)||0)<0.5*Math.pow(10,-d)?0:(Number(v)||0)).toLocaleString("tr-TR",{minimumFractionDigits:d,maximumFractionDigits:d});
 function RpSutun({ T, veri, renk=RP_RENK[0], birim="", yuk=130 }) {
   const mx = Math.max(1e-9, ...veri.map(x=>Math.abs(x.v)));
   return (
@@ -2462,7 +2466,7 @@ function RaporPanel({ T, GH, onRapor }) {
         {mz && <RpKpi T={T} ad="BORÇ (HAS)" deger={rpF(mz.borc,1)} alt="Satıcılar"/>}
         {mz && <RpKpi T={T} ad="KASA (HAS)" deger={rpF(mz.kasa,1)} alt="Merkez kasa"/>}
         {v.satislar.length>0 && <RpKpi T={T} ad="SATIŞ (HAS GR)" deger={rpF(o.hasGr)} alt={o.evrak+" evrak · "+o.adet+" kalem"}/>}
-        {v.giderler.length>0 && <RpKpi T={T} ad="MASRAF (HAS)" deger={rpF(o.gider,1)} alt="Kapanış aktarımları hariç"/>}
+        {v.giderler.length>0 && <RpKpi T={T} ad="MASRAF (HAS)" deger={rpF(o.gider,1)} alt="Kapanış aktarımları ve taş kalemleri hariç"/>}
       </div>
       <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(300px,1fr))", gap:12 }}>
         {v.satislar.length>0 && <RpKart T={T} baslik="AYLIK SATIŞ (HAS GR)"><RpSutun T={T} veri={aylik.map(x=>({ e:rpAyAd(x.a).split(" ")[0], v:x.o.hasGr }))}/></RpKart>}
@@ -2530,6 +2534,9 @@ function RaporKarlilik({ T, GH }) {
   const tum = rpOzet(v.giderler, v.satislar, "");
   const aylik = aylar.map(a => ({ a, o:rpOzet(v.giderler, v.satislar, a) }));
   const musteri = Object.values(tum.musteri).sort((a,b)=>b.isc-a.isc).slice(0,10);
+  const tasGeliri = hes ? -((hes["602 001 04"]?.has||0) + (hes["600 001 04"]?.has||0)) : 0;
+  const tasMaliyet = hes ? (hes["621 001 04"]?.has||0) : 0;
+  const netTas = tasGeliri - tasMaliyet - tum.tasGider;
   const th = { fontSize:9, color:T.sub, fontWeight:700, textAlign:"right", padding:"4px 6px" };
   const td = { fontSize:10, color:T.text, textAlign:"right", padding:"4px 6px", borderTop:"1px solid "+T.border };
   const renk = (x) => x<0 ? (T.danger||"#e85a4f") : T.text;
@@ -2542,7 +2549,8 @@ function RaporKarlilik({ T, GH }) {
           <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))", gap:10, marginBottom:12 }}>
             <RpKpi T={T} ad="İŞÇİLİK GELİRİ (HAS)" deger={rpF(tum.isc,1)} alt="Satış raporu · İSÇ.MLT"/>
             <RpKpi T={T} ad="MADEN KÂR/ZARAR (HAS)" deger={rpF(tum.maden,1)} renk={renk(tum.maden)} alt="Satış raporu"/>
-            <RpKpi T={T} ad="MASRAF (HAS)" deger={rpF(tum.gider,1)} alt="Kapanış aktarımları hariç"/>
+            <RpKpi T={T} ad="MASRAF (HAS)" deger={rpF(tum.gider,1)} alt="Kapanış aktarımları ve taş kalemleri hariç"/>
+            <RpKpi T={T} ad="NET TAŞ SONUCU (HAS)" deger={hes?rpF(netTas,1):"—"} renk={hes?renk(netTas):undefined} alt={hes?"Taş geliri − taş giderleri":"Mizan yüklenince görünür"}/>
             <RpKpi T={T} ad="KABA FARK (HAS)" deger={rpF(tum.sonuc,1)} renk={renk(tum.sonuc)} alt="İşçilik + maden − masraf"/>
           </div>
           <RpKart T={T} baslik="AYLIK TABLO (HAS)">
@@ -2557,6 +2565,16 @@ function RaporKarlilik({ T, GH }) {
                 </tbody>
               </table>
             </div>
+            {hes && (
+              <div style={{ marginTop:10, borderTop:"1px solid "+T.border, paddingTop:8 }}>
+                <div style={{ fontSize:9, color:T.sub, fontWeight:700, marginBottom:4 }}>TAŞ SONUCU (dönem toplamı, HAS)</div>
+                {[["Taş geliri (mizan 602/600 taş)", tasGeliri],["Taş stok maliyeti (mizan 621)", -tasMaliyet],["Taş giderleri (Taş Stoğu, Taş Düşümü, Malzeme Taş)", -tum.tasGider]].map(([ad,x])=>(
+                  <div key={ad} style={{ display:"flex", justifyContent:"space-between", fontSize:10, color:T.text, padding:"2px 8px" }}><span>{ad}</span><span style={{ color:renk(x) }}>{rpF(x,2)}</span></div>
+                ))}
+                <div style={{ display:"flex", justifyContent:"space-between", fontSize:11, fontWeight:800, color:T.gold, padding:"4px 8px", borderTop:"1px solid "+T.border, marginTop:4 }}><span>Net taş sonucu</span><span style={{ color:renk(netTas) }}>{rpF(netTas,2)}</span></div>
+                <div style={{ display:"flex", justifyContent:"space-between", fontSize:11, fontWeight:800, color:T.gold, padding:"4px 8px" }}><span>Kaba fark + net taş sonucu</span><span style={{ color:renk(tum.sonuc+netTas) }}>{rpF(tum.sonuc+netTas,2)}</span></div>
+              </div>
+            )}
             <div style={{ fontSize:8, color:T.dim||T.sub, marginTop:8, lineHeight:1.5 }}>"Kaba fark" yönetim hesabıdır, muhasebe sonucu değildir. Muhasebe sonucu için aşağıdaki mizan tabanlı gelir tablosuna bak.</div>
           </RpKart>
           <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(300px,1fr))", gap:12 }}>
