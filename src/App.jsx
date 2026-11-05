@@ -2143,6 +2143,318 @@ function PdfSiparisModal({ modeller, kollar, onKapat, onUygula, onModelDuzenle, 
 
 
 
+// ═══ RAPORLAR (MSK) — Rhino mizan yükleme + bilanço / gelir tablosu ═══
+function rpSayi(v){ if(typeof v==="number") return v; const s=String(v??"").trim(); if(!s) return 0; const n=parseFloat(s.replace(/\./g,"").replace(",",".")); return isNaN(n)?0:n; }
+function rpUst(kod){
+  if(kod.includes("\\")) return kod.split("\\")[0].trim();
+  const p=kod.trim().split(/\s+/); if(p.length>1) return p.slice(0,-1).join(" ");
+  return kod.length>1 ? kod.slice(0,-1) : "";
+}
+function rpUpper(s){ try { return String(s??"").toLocaleUpperCase("tr"); } catch { return String(s??"").toUpperCase(); } }
+// Dosya türünü ilk satırlardan tanır: mizan | depo | gider | satis | ""
+function rpTurTani(rows, sayfaAdlari){
+  const ilk = rows.slice(0,15).map(r=>r.map(c=>rpUpper(c)).join("|")).join("\n");
+  if (/HESAP KOD/.test(ilk) && /BORC|BORÇ/.test(ilk)) return "mizan";
+  if ((sayfaAdlari||[]).some(s=>/MEVCUT ANALİZ|MEVCUT ANALIZ/.test(rpUpper(s))) || (/GENEL TOPLAM/.test(ilk) && /ÜRÜN NO/.test(ilk))) return "depo";
+  if (/SATIR AÇIKLAMA/.test(ilk) && /EVRAK NO/.test(ilk)) return "gider";
+  if (/MİLYEM/.test(ilk) && /HAS GR/.test(ilk)) return "satis";
+  return "";
+}
+function rpMizanAyristir(rows){
+  let bas="",bit="",firma="";
+  const satirlar=[];
+  rows.forEach((r,i)=>{
+    const a=String(r[0]??"").trim();
+    if(i<4){
+      if(i===0 && a) firma=a.replace(/\s+/g," ").trim();
+      const m=a.match(/(\d\d\/\d\d\/\d\d)\s*-\s*(\d\d\/\d\d\/\d\d)/); if(m){bas=m[1];bit=m[2];}
+    }
+    const dvz=String(r[2]??"").trim();
+    if(!a||!/^\d/.test(a)||!/^(TL|HAS|USD|EUR|SLV)$/.test(dvz)) return;
+    satirlar.push([a, String(r[1]??"").trim().replace(/ /g," "), dvz, rpSayi(r[3]), rpSayi(r[4]), rpSayi(r[5])-rpSayi(r[6])]);
+  });
+  return { firma, bas, bit, satirlar };
+}
+function rpAgac(satirlar){
+  const h={}; satirlar.forEach(s=>{h[s[0]]={kod:s[0],ad:s[1],dvz:s[2],bak:s[5],cocuk:[],has:0};});
+  Object.values(h).forEach(n=>{ const u=rpUst(n.kod); n.ust=h[u]?u:""; if(h[u]) h[u].cocuk.push(n.kod); });
+  return h;
+}
+// Kurlar mizandaki üst hesapların TL/HAS karşılıklarından çözülür (mizanda kur satırı yoktur)
+function rpKurBul(h){
+  const k={TL:1}; const g=c=>h[c];
+  const alt=(ust,dvz)=>{ let t=0; (g(ust)?.cocuk||[]).forEach(c=>{ if(g(c).dvz===dvz) t+=g(c).bak; }); return t; };
+  const yuvarla=(x,d)=>{ const y=Math.round(x*Math.pow(10,d))/Math.pow(10,d); return Math.abs(x-Math.round(x))<0.01?Math.round(x):y; };
+  const kasa=g("100");
+  if(kasa){ const tl=alt("100 001","TL"), usd=alt("100 001","USD"), eur=alt("100 001","EUR");
+    if(Math.abs(usd)>0.01 && Math.abs(eur)<0.01) k.USD=(kasa.bak-tl)/usd; }
+  const slv=g("153 001 03");
+  if(slv&&k.USD){ const s=alt("153 001 03","SLV"), u=alt("153 001 03","USD");
+    if(Math.abs(slv.bak-s)>0.01) k.SLV=k.USD*u/(slv.bak-s); }
+  const al=g("120");
+  if(al&&k.USD&&k.SLV){ const tl=alt("120 001","TL"),u=alt("120 001","USD"),s=alt("120 001","SLV"),hs=alt("120 001","HAS");
+    if(Math.abs(hs)>0.01) k.HAS=(al.bak-tl-u*k.USD-s*k.SLV)/hs; }
+  const sat=g("320");
+  if(sat&&k.HAS&&k.USD&&k.SLV){ const tl=alt("320 001","TL"),u=alt("320 001","USD"),e=alt("320 001","EUR"),s=alt("320 001","SLV"),hs=alt("320 001","HAS");
+    if(Math.abs(e)>0.01) k.EUR=(sat.bak*k.HAS-tl-u*k.USD-s*k.SLV-hs*k.HAS)/e; }
+  Object.keys(k).forEach(d=>{ if(d!=="TL") k[d]=yuvarla(k[d],3); });
+  return k;
+}
+// Her hesabın HAS karşılığı: yapraklar kendi dövizinden çevrilir, üst hesaplar yapraklardan toplanır
+function rpHesapla(satirlar,kur){
+  const h=rpAgac(satirlar);
+  Object.values(h).forEach(n=>{
+    if(n.cocuk.length) return;
+    const kd=kur[n.dvz]; const v=(kd&&kur.HAS)? n.bak*kd/kur.HAS : 0;
+    let c=n; while(c){ c.has+=v; c=h[c.ust]; }
+  });
+  return h;
+}
+
+function RaporlarSayfasi({ T, GH, RD, setRhinoMizan, toastGoster }) {
+  const [veri, setVeri] = useState({ mizanlar: [] });
+  const [yuk, setYuk] = useState(true);
+  const [secili, setSecili] = useState("");
+  const [gorunum, setGorunum] = useState("bilanco");
+  const [acik, setAcik] = useState({});
+  const [mesaj, setMesaj] = useState(null);
+  const [kurDuz, setKurDuz] = useState({}); // elle düzeltilen kurlar (kayıt başına)
+  useEffect(() => {
+    let iptal = false;
+    ld("v7raporlar", { mizanlar: [] }).then(d => {
+      if (iptal) return;
+      const v = d && Array.isArray(d.mizanlar) ? d : { mizanlar: [] };
+      setVeri(v); setYuk(false);
+      if (v.mizanlar.length) setSecili(v.mizanlar[v.mizanlar.length-1].id);
+    });
+    return () => { iptal = true; };
+  }, []);
+
+  const kaydet = async (yeni) => { setVeri(yeni); await sv("v7raporlar", yeni); };
+  const tarihSayi = (s) => { const m = String(s).match(/(\d\d)\/(\d\d)\/(\d\d)/); return m ? Number("20"+m[3]+m[2]+m[1]) : 0; };
+
+  const dosyaYukle = async (files) => {
+    const sonuclar = [];
+    let yeni = veri;
+    for (const file of files) {
+      try {
+        const XLSX = await import("https://cdn.jsdelivr.net/npm/xlsx@0.18.5/+esm");
+        const buf = await file.arrayBuffer();
+        const wb = XLSX.read(buf, { type:"array" });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        const rows = XLSX.utils.sheet_to_json(ws, { header:1, defval:"" });
+        const tur = rpTurTani(rows, wb.SheetNames);
+        if (tur === "mizan") {
+          const m = rpMizanAyristir(rows);
+          if (m.satirlar.length < 5) { sonuclar.push("⚠ "+file.name+": mizan satırı bulunamadı"); continue; }
+          const h = rpAgac(m.satirlar);
+          const kur = rpKurBul(h);
+          const id = m.bas+"-"+m.bit;
+          const kayit = { id, bas:m.bas, bit:m.bit, firma:m.firma, dosyaAd:file.name, yuklendi:Date.now(), kur, satirlar:m.satirlar };
+          const var_ = yeni.mizanlar.find(x=>x.id===id);
+          yeni = { ...yeni, mizanlar: [...yeni.mizanlar.filter(x=>x.id!==id), kayit].sort((a,b)=>tarihSayi(a.bit)-tarihSayi(b.bit)) };
+          setSecili(id);
+          // Muhasebe sekmesindeki müşteri/dökümcü/satıcı listesi de güncellensin
+          const musteriHas=[], dokumcuHas=[], saticiUsd=[], saticiEur=[];
+          const bs = String.fromCharCode(92);
+          m.satirlar.forEach(([kod,adRaw,dvz,,,bakiye]) => {
+            const ad = adRaw.replace(/^'+/, "");
+            if (kod.startsWith("120 001 10"+bs) && dvz==="HAS" && ad) musteriHas.push({ ad, bakiye });
+            if (kod.startsWith("320 001 10"+bs) && dvz==="HAS" && ad) dokumcuHas.push({ ad, bakiye });
+            if (kod.startsWith("320 001 02"+bs) && dvz==="USD" && ad) saticiUsd.push({ ad, bakiye });
+            if (kod.startsWith("320 001 03"+bs) && dvz==="EUR" && ad) saticiEur.push({ ad, bakiye });
+          });
+          if (setRhinoMizan) setRhinoMizan({ musteriHas, dokumcuHas, saticiUsd, saticiEur, tarih:new Date().toLocaleDateString("tr-TR"), dosyaAd:file.name });
+          sonuclar.push((var_?"♻ ":"✓ ")+"Mizan "+m.bas+" – "+m.bit+(var_?" (aynı dönem vardı, güncellendi)":" kaydedildi")+" · "+m.satirlar.length+" satır");
+        } else if (tur) {
+          const ad = { depo:"Depo sayımı", gider:"Giderler", satis:"Satış karlılık" }[tur];
+          sonuclar.push("ℹ "+file.name+": "+ad+" dosyası olarak tanındı. Bu tür bir sonraki adımda işlenecek, şimdilik kaydedilmedi.");
+        } else {
+          sonuclar.push("⚠ "+file.name+": dosya türü tanınamadı");
+        }
+      } catch (err) { sonuclar.push("⚠ "+file.name+": okunamadı ("+err.message+")"); }
+    }
+    if (yeni !== veri) await kaydet(yeni);
+    setMesaj(sonuclar);
+  };
+
+  const sil = async (id) => {
+    if (!window.confirm("Bu mizan kaydı silinsin mi?")) return;
+    const yeni = { ...veri, mizanlar: veri.mizanlar.filter(x=>x.id!==id) };
+    await kaydet(yeni);
+    setSecili(yeni.mizanlar.length ? yeni.mizanlar[yeni.mizanlar.length-1].id : "");
+  };
+
+  const kayit = veri.mizanlar.find(x=>x.id===secili) || null;
+  const kur = kayit ? { ...kayit.kur, ...(kurDuz[kayit.id]||{}) } : null;
+  const hes = kayit && kur && kur.HAS ? rpHesapla(kayit.satirlar, kur) : null;
+
+  const kart = { background:T.card, border:"1px solid "+T.border, borderRadius:12, padding:"12px 14px", marginBottom:12 };
+  const baslik = { fontSize:10, fontWeight:800, color:T.gold, letterSpacing:".04em", marginBottom:8 };
+  const f2 = (v) => (Number(v)||0).toLocaleString("tr-TR",{minimumFractionDigits:2,maximumFractionDigits:2});
+  const renk = (v) => v<0 ? (T.danger||"#e85a4f") : T.text;
+
+  // Hiyerarşi satırı (gruplar açılıp kapanır)
+  const Dal = ({ kod, isaret=1, derin=0, goster=0.005 }) => {
+    const n = hes[kod]; if (!n) return null;
+    const v = n.has*isaret;
+    if (Math.abs(v) < goster && !n.cocuk.length) return null;
+    const cocuklar = n.cocuk.filter(c=>Math.abs(hes[c].has)>=goster);
+    const acikMi = !!acik[kod];
+    return (
+      <div>
+        <div onClick={()=>cocuklar.length && setAcik(a=>({...a,[kod]:!a[kod]}))}
+          style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"4px 8px", marginLeft:derin*14, marginBottom:2, borderRadius:6,
+                   background: derin===0 ? "rgba(var(--vurgu-rgb),0.07)" : "transparent", cursor: cocuklar.length?"pointer":"default" }}>
+          <span style={{ fontSize: derin===0?11:10, fontWeight: derin===0?700:500, color:T.text }}>
+            {cocuklar.length>0 && <span style={{ color:T.sub, marginRight:4 }}>{acikMi?"▾":"▸"}</span>}
+            <span style={{ color:T.sub, marginRight:6, fontSize:9 }}>{kod.includes("\\") ? "" : kod}</span>{n.ad}
+          </span>
+          <span style={{ fontSize: derin===0?12:10, fontWeight: derin===0?800:600, color:renk(v) }}>{f2(v)}</span>
+        </div>
+        {acikMi && cocuklar.map(c => <Dal key={c} kod={c} isaret={isaret} derin={derin+1} goster={goster}/>)}
+      </div>
+    );
+  };
+
+  const ust2 = (on) => hes ? Object.keys(hes).filter(k=>/^\d\d$/.test(k) && k[0]===on) : [];
+  const topla = (liste) => liste.reduce((s,k)=>s+(hes[k]?.has||0),0);
+
+  const BilancoGor = () => {
+    const aktifG = ust2("1"), pasifG = [...ust2("3"), ...ust2("4"), ...ust2("5")];
+    const aktif = topla(aktifG), pasif = topla(pasifG);
+    return (
+      <div>
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(280px,1fr))", gap:12 }}>
+          <div style={kart}>
+            <div style={baslik}>AKTİF — Varlıklar (HAS)</div>
+            {aktifG.map(k=>{ const n=hes[k]; if(!n||Math.abs(n.has)<0.005) return null;
+              return <div key={k}><div style={{ fontSize:9, color:T.sub, fontWeight:700, margin:"6px 0 2px" }}>{n.ad}</div>
+                {n.cocuk.map(c=><Dal key={c} kod={c}/>)}</div>; })}
+            <div style={{ display:"flex", justifyContent:"space-between", borderTop:"2px solid "+T.border, marginTop:8, paddingTop:8 }}>
+              <b style={{ fontSize:11, color:T.gold }}>TOPLAM AKTİF</b><b style={{ fontSize:13, color:T.text }}>{f2(aktif)}</b>
+            </div>
+          </div>
+          <div style={kart}>
+            <div style={baslik}>PASİF — Kaynaklar (HAS)</div>
+            {pasifG.map(k=>{ const n=hes[k]; if(!n||Math.abs(n.has)<0.005) return null;
+              return <div key={k}><div style={{ fontSize:9, color:T.sub, fontWeight:700, margin:"6px 0 2px" }}>{n.ad}</div>
+                {n.cocuk.map(c=><Dal key={c} kod={c} isaret={-1}/>)}</div>; })}
+            <div style={{ display:"flex", justifyContent:"space-between", borderTop:"2px solid "+T.border, marginTop:8, paddingTop:8 }}>
+              <b style={{ fontSize:11, color:T.gold }}>TOPLAM PASİF</b><b style={{ fontSize:13, color:T.text }}>{f2(-pasif)}</b>
+            </div>
+          </div>
+        </div>
+        <div style={{ ...kart, textAlign:"center" }}>
+          <div style={{ fontSize:9, color:T.sub, marginBottom:3 }}>AKTİF − PASİF</div>
+          <div style={{ fontSize:16, fontWeight:800, color:renk(aktif+pasif) }}>{f2(aktif+pasif)} has</div>
+          <div style={{ fontSize:8, color:T.dim||T.sub, marginTop:4 }}>Rhino bilançosundaki "SONUÇ KAR / ZARAR" satırıyla aynı hesap. Hesaplar HAS karşılığıdır; döviz hesapları dönem sonu kuruyla çevrilir.</div>
+        </div>
+      </div>
+    );
+  };
+
+  const GelirGor = () => {
+    const h = (k) => (hes[k]?.has||0);
+    const gelir = (k) => -h(k);             // gelir hesapları alacak bakiyeli → pozitif göster
+    const brutSatis = gelir("600") + gelir("602");
+    const netSatis = gelir("600") + gelir("602") - h("610");
+    const maliyet = -h("621") - h("622");
+    const netMalKar = netSatis + maliyet;
+    const milyem = gelir("649") - h("659");
+    const giderKodlar = ["710","740","760"];
+    const bilinen = ["600","602","610","621","622","649","659",...giderKodlar];
+    const digerler = Object.keys(hes).filter(k=>/^[67]\d\d$/.test(k) && !bilinen.includes(k) && Math.abs(hes[k].has)>=0.005);
+    const digerToplam = digerler.reduce((s,k)=>s-h(k),0);
+    const brut = netMalKar + milyem - h("710") - h("740") - h("760") + digerToplam;
+    const Satir = ({ ad, v, kalin, girinti }) => (
+      <div style={{ display:"flex", justifyContent:"space-between", padding:"4px 8px", marginLeft:girinti?14:0, borderTop: kalin?"1px solid "+T.border:"none", marginTop: kalin?6:0 }}>
+        <span style={{ fontSize: kalin?11:10, fontWeight: kalin?800:500, color: kalin?T.gold:T.text }}>{ad}</span>
+        <span style={{ fontSize: kalin?13:11, fontWeight: kalin?800:600, color:renk(v) }}>{f2(v)}</span>
+      </div>
+    );
+    return (
+      <div style={kart}>
+        <div style={baslik}>GELİR TABLOSU (HAS) — {kayit.bas} – {kayit.bit}</div>
+        <Satir ad="Atölye satışları (600)" v={gelir("600")} girinti/>
+        <Satir ad="Diğer gelirler (602)" v={gelir("602")} girinti/>
+        <Satir ad="Brüt satışlar" v={brutSatis}/>
+        <Satir ad="Satış iadeleri (610)" v={-h("610")} girinti/>
+        <Satir ad="NET SATIŞLAR" v={netSatis} kalin/>
+        <Satir ad="Satılan malın maliyeti (621)" v={-h("621")} girinti/>
+        {Math.abs(h("622"))>=0.005 && <Satir ad="Satılan hizmet maliyeti (622)" v={-h("622")} girinti/>}
+        <Satir ad="NET MAL SATIŞ KÂRI" v={netMalKar} kalin/>
+        <Satir ad="Maden milyem kâr/zararı (649/659)" v={milyem} girinti/>
+        <Satir ad="Döküm işçilik giderleri (710)" v={-h("710")} girinti/>
+        <Satir ad="Atölye giderleri (740)" v={-h("740")} girinti/>
+        <Satir ad="Eritme ve taş düşümü giderleri (760)" v={-h("760")} girinti/>
+        {digerler.map(k=><Satir key={k} ad={hes[k].ad+" ("+k+")"} v={-h(k)} girinti/>)}
+        <Satir ad="BRÜT KÂR / ZARAR" v={brut} kalin/>
+        <div style={{ fontSize:8, color:T.dim||T.sub, marginTop:8, lineHeight:1.5 }}>
+          Mizandan hesaplanır. Rhino'nun kendi gelir tablosundan yaklaşık 1 HAS sapabilir: gümüş/taş gibi döviz hesapları Rhino'da işlem günü kuruyla, mizanda ise dönem sonu bakiyesiyle görünür. "Kur farkı" satırı mizanda bulunmadığı için burada yoktur.
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div>
+      <div style={kart}>
+        <div style={baslik}>📂 RAPOR YÜKLE</div>
+        <div style={{ fontSize:9, color:T.sub, marginBottom:8, lineHeight:1.5 }}>
+          Rhino'dan aldığın Excel dosyasını buraya at. Dosya türünü (mizan, depo sayımı, giderler, satış) kendisi tanır. Aynı dönemin mizanı tekrar yüklenirse yenisi eskisinin yerine geçer, çiftlenmez.
+        </div>
+        <label style={{ display:"inline-block", ...GH }}>
+          Dosya seç (.xlsx)
+          <input type="file" accept=".xlsx,.xls" multiple style={{ display:"none" }}
+            onChange={async e => { const f=[...e.target.files]; e.target.value=""; if(f.length) await dosyaYukle(f); }}/>
+        </label>
+        {mesaj && mesaj.length>0 && (
+          <div style={{ marginTop:8 }}>
+            {mesaj.map((m,i)=><div key={i} style={{ fontSize:10, color:T.text, padding:"2px 0" }}>{m}</div>)}
+          </div>
+        )}
+      </div>
+
+      {yuk && <div style={{ fontSize:10, color:T.sub }}>Yükleniyor…</div>}
+      {!yuk && veri.mizanlar.length===0 && <div style={{ fontSize:10, color:T.sub }}>Henüz mizan yüklenmedi.</div>}
+
+      {kayit && (
+        <div>
+          <div style={{ display:"flex", gap:6, alignItems:"center", flexWrap:"wrap", marginBottom:10 }}>
+            <select value={secili} onChange={e=>setSecili(e.target.value)}
+              style={{ background:T.card, border:"1px solid "+T.border, borderRadius:8, padding:"6px 10px", color:T.text, fontSize:11 }}>
+              {veri.mizanlar.map(m=><option key={m.id} value={m.id}>{m.bas} – {m.bit}</option>)}
+            </select>
+            {[{id:"bilanco",l:"Bilanço"},{id:"gelir",l:"Gelir Tablosu"}].map(t=>(
+              <button key={t.id} onClick={()=>setGorunum(t.id)}
+                style={{ background: gorunum===t.id?"rgba(var(--vurgu-rgb),0.15)":"transparent", border:"1px solid "+(gorunum===t.id?"rgba(var(--vurgu-rgb),0.4)":T.border),
+                         borderRadius:7, padding:"5px 12px", color: gorunum===t.id?T.gold:T.sub, fontSize:10, fontWeight: gorunum===t.id?700:400, cursor:"pointer" }}>{t.l}</button>
+            ))}
+            <button onClick={()=>sil(kayit.id)} style={{ ...RD, fontSize:9, padding:"4px 10px", marginLeft:"auto" }}>Bu kaydı sil</button>
+          </div>
+          <div style={{ fontSize:9, color:T.sub, marginBottom:8 }}>
+            {kayit.firma} · {kayit.dosyaAd} · {new Date(kayit.yuklendi).toLocaleDateString("tr-TR")} · {kayit.satirlar.length} hesap satırı
+          </div>
+          <div style={{ ...kart, display:"flex", gap:10, alignItems:"center", flexWrap:"wrap" }}>
+            <span style={{ fontSize:9, color:T.sub, fontWeight:700 }}>Dönem sonu kurları (mizandan çıkarıldı, düzeltebilirsin):</span>
+            {["HAS","USD","EUR","SLV"].map(d=>(
+              <label key={d} style={{ fontSize:9, color:T.sub }}>{d}{" "}
+                <input type="number" step="0.001" value={kur?.[d]??""}
+                  onChange={e=>setKurDuz(o=>({...o,[kayit.id]:{...(o[kayit.id]||{}),[d]:parseFloat(e.target.value)||0}}))}
+                  style={{ width:80, background:T.card, border:"1px solid "+T.border, borderRadius:6, padding:"3px 6px", color:T.text, fontSize:10 }}/>
+              </label>
+            ))}
+          </div>
+          {!hes && <div style={{ ...kart, color:T.danger||"#e85a4f", fontSize:10 }}>Kur çıkarılamadı. HAS kurunu elle gir.</div>}
+          {hes && gorunum==="bilanco" && <BilancoGor/>}
+          {hes && gorunum==="gelir" && <GelirGor/>}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function dogalSirala(a, b, ters) {
   const ka = a.kod || "", kb = b.kod || "";
   // Karmaşık kodları doğru sırala: prefix + ana sayı + suffix
@@ -9610,7 +9922,7 @@ function Atolye({ onSirketDegis }) {
                 <h2 style={{ margin:0, fontSize:14, fontWeight:700, color:T.text }}>💰 Kasa & Stok</h2>
               </div>
               <div style={{ display:"flex", gap:4, marginBottom:14, borderBottom:"1px solid rgba(var(--vurgu-rgb),0.12)", paddingBottom:8 }}>
-                {[{id:"ozet",l:"Özet"},{id:"musteri",l:"Müşteri Bakiyeleri"},{id:"dokumcu",l:"Dökümcü"},{id:"stok",l:"Stok"},{id:"muhasebe",l:"Muhasebe"},{id:"bilanco",l:"Bilanço"}].map(t => (
+                {[{id:"ozet",l:"Özet"},{id:"musteri",l:"Müşteri Bakiyeleri"},{id:"dokumcu",l:"Dökümcü"},{id:"stok",l:"Stok"},{id:"muhasebe",l:"Muhasebe"},{id:"bilanco",l:"Bilanço"},...(AKTIF_SIRKET_ONEK===""?[{id:"raporlar",l:"Raporlar"}]:[])].map(t => (
                   <button key={t.id} onClick={()=>setKasaSayfa(t.id)} style={{ background:kasaSayfa===t.id?"rgba(var(--vurgu-rgb),0.15)":"transparent", border:"1px solid", borderColor:kasaSayfa===t.id?"rgba(var(--vurgu-rgb),0.4)":"transparent", borderRadius:7, padding:"5px 12px", color:kasaSayfa===t.id?GOLD:"#7a6f5a", fontSize:10, fontWeight:kasaSayfa===t.id?700:400, cursor:"pointer" }}>{t.l}</button>
                 ))}
               </div>
@@ -10265,6 +10577,9 @@ function Atolye({ onSirketDegis }) {
                   </div>
                 );
               })()}
+
+              {/* ══ RAPORLAR (yalnız MSK) ══ */}
+              {kasaSayfa==="raporlar" && AKTIF_SIRKET_ONEK==="" && <RaporlarSayfasi T={T} GH={GH} RD={RD} setRhinoMizan={setRhinoMizan} toastGoster={toastGoster}/>}
 
               {/* ══ MODALLAR ══ */}
               {kasaModal && (() => {
