@@ -3131,6 +3131,114 @@ function KasaGenel({ T, GH, atolye, ic, onGit }) {
   );
 }
 
+// ── Dökümcü (yeni tasarım) ──
+function KasaDokumcu({ T, GH, BG, RD, kasa, svKasa, kasaModalAc, dokumGiden, dokumOdenen, dokumBorc, fN }) {
+  const islem = kasa.dokumcuIslemler || [];
+  const bekleyen = islem.filter(x=>x.tip==="gonder"&&!x.teslimTarih).sort((a,b)=>a.tarih-b.tarih);
+  const bekHas = bekleyen.reduce((s,x)=>s+x.has,0);
+  const kart = { background:(T.id==="beyaz"?"#ffffff":T.card), border:"1px solid "+T.border, borderRadius:14, padding:"18px 20px", boxShadow:"0 1px 3px rgba(0,0,0,.08)" };
+  const bas = { margin:"0 0 12px", fontSize:12, fontWeight:700, color:T.text, display:"flex", justifyContent:"space-between", alignItems:"center" };
+  const acikT = T.id==="beyaz";
+  const C = { turuncu: acikT?"#b8641c":"#e8833a", mavi: acikT?"#2f7fb8":"#5b9bd5", yesil: acikT?"#1f7a4d":"#6abf69", kirmizi: acikT?"#c0392b":"#e85a4f", mor:"#7c6abf" };
+  const kpi = [
+    { l:"Dökümde bekleyen", v:bekHas, c:C.turuncu, s:bekleyen.length+" kayıt" },
+    { l:"Toplam gönderilen", v:dokumGiden, c:C.mavi, s:"tüm zamanlar" },
+    { l:"Toplam ödenen", v:dokumOdenen, c:C.yesil, s:"yapılan ödemeler" },
+    { l:"Kalan borç", v:dokumBorc, c:dokumBorc>0?C.kirmizi:C.yesil, s:dokumBorc>0?"ödenmeli":"borç yok" },
+  ];
+  return (
+    <div style={{ color:T.text }}>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:10, flexWrap:"wrap", marginBottom:14 }}>
+        <div style={{ fontSize:13, color:T.sub }}>Dökümcüye gönderilen ve ödenen altın (HAS)</div>
+        <div style={{ display:"flex", gap:8 }}>
+          <button onClick={()=>kasaModalAc({tip:"dokumBorcGir"})} style={{ ...GH, fontSize:12 }}>+ Mevcut borç gir</button>
+          <button onClick={()=>kasaModalAc({tip:"dokumOde"})} style={{ ...BG, fontSize:12 }}>+ Ödeme yap</button>
+        </div>
+      </div>
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(190px,1fr))", gap:14, marginBottom:14 }}>
+        {kpi.map(k => (
+          <div key={k.l} style={{ ...kart, padding:"16px 18px", borderTop:"4px solid "+k.c }}>
+            <div style={{ fontSize:12, color:T.sub, fontWeight:700 }}>{k.l}</div>
+            <div style={{ fontSize:26, fontWeight:800, marginTop:6, letterSpacing:"-.02em", fontVariantNumeric:"tabular-nums" }}>{fN(k.v,2)}<small style={{ fontSize:12, color:T.sub, marginLeft:5 }}>has</small></div>
+            <div style={{ fontSize:12, color:T.sub, marginTop:4 }}>{k.s}</div>
+          </div>
+        ))}
+      </div>
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(340px,1fr))", gap:14 }}>
+        <div style={kart}>
+          <h3 style={bas}>Dökümde bekleyen <span style={{ fontWeight:500, color:T.sub, fontSize:11.5 }}>{bekleyen.length} kayıt</span></h3>
+          {bekleyen.length===0 ? <div style={{ fontSize:13, color:T.sub }}>Şu an dökümde bekleyen yok.</div> : bekleyen.map(x => {
+            const gun = Math.round((Date.now()-x.tarih)/86400000);
+            return (
+              <div key={x.id} style={{ display:"flex", alignItems:"center", gap:10, padding:"9px 0", borderBottom:"1px solid "+T.border }}>
+                <i style={{ width:9, height:9, borderRadius:"50%", background: gun>3?C.kirmizi:C.turuncu, flex:"none" }}/>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontSize:13, fontWeight:600 }}>{x.musteri||"?"}</div>
+                  <div style={{ fontSize:12, color:T.sub }}>{new Date(x.tarih).toLocaleDateString("tr-TR")} · {gun} gün önce{x.aciklama?" · "+x.aciklama:""}</div>
+                </div>
+                <div style={{ textAlign:"right" }}>
+                  <b style={{ fontVariantNumeric:"tabular-nums" }}>{fN(x.has,2)}</b>
+                  {gun>3 && <div style={{ fontSize:11, color:C.kirmizi, fontWeight:700 }}>Gecikiyor</div>}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <div style={kart}>
+          <h3 style={bas}>İşlem geçmişi</h3>
+          {islem.length===0 && <div style={{ fontSize:13, color:T.sub }}>Henüz işlem yok — siparişler döküme geçince otomatik oluşur.</div>}
+          {[...islem].sort((a,b)=>b.tarih-a.tarih).map(x => {
+            const etiket = x.tip==="gonder" ? (x.teslimTarih ? "Teslim alındı" : "Gönderildi") : x.tip==="baslangic_borc" ? "Başlangıç borcu" : "Ödeme yapıldı";
+            const renk = x.tip==="ode" ? C.yesil : x.tip==="baslangic_borc" ? C.mor : C.turuncu;
+            return (
+              <div key={x.id} style={{ display:"flex", alignItems:"center", gap:10, padding:"8px 0", borderBottom:"1px solid "+T.border }}>
+                <i style={{ width:9, height:9, borderRadius:"50%", background:renk, flex:"none" }}/>
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ fontSize:13, fontWeight:600 }}>{etiket}{x.musteri?" · "+x.musteri:""}</div>
+                  <div style={{ fontSize:12, color:T.sub }}>{new Date(x.tarih).toLocaleDateString("tr-TR")}{x.aciklama?" · "+x.aciklama:""}</div>
+                </div>
+                <b style={{ color:renk, fontVariantNumeric:"tabular-nums" }}>{x.tip==="ode"?"+":"−"}{fN(x.has,2)}</b>
+                <button onClick={()=>{ svKasa({ ...kasa, dokumcuIslemler:islem.filter(d=>d.id!==x.id) }); }} style={{ ...RD, fontSize:11, padding:"3px 8px" }}>Sil</button>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+// ── Öz sermaye (yeni tasarım) ──
+function KasaOzSermaye({ T, kalemler, toplamHas, hasGramUSD, fN, fUSD }) {
+  const kart = { background:(T.id==="beyaz"?"#ffffff":T.card), border:"1px solid "+T.border, borderRadius:14, padding:"18px 20px", boxShadow:"0 1px 3px rgba(0,0,0,.08)" };
+  const liste = kalemler.filter(x=>x.v>0.0005);
+  const mx = Math.max(1e-9, ...liste.map(x=>x.v));
+  return (
+    <div style={{ color:T.text }}>
+      <div style={{ ...kart, marginBottom:14, padding:"22px 24px" }}>
+        <div style={{ fontSize:12, color:T.sub, fontWeight:700, letterSpacing:".06em", textTransform:"uppercase" }}>Toplam öz sermaye (iç kayıtlar)</div>
+        <div style={{ fontSize:38, fontWeight:800, letterSpacing:"-.03em", marginTop:4, fontVariantNumeric:"tabular-nums" }}>{fN(toplamHas,2)}<span style={{ fontSize:15, color:T.sub, marginLeft:8 }}>HAS</span></div>
+        {hasGramUSD>0 && <div style={{ fontSize:13, color:T.sub, marginTop:2 }}>≈ {fUSD(toplamHas*hasGramUSD)}</div>}
+        <div style={{ display:"flex", height:12, borderRadius:6, overflow:"hidden", gap:2, marginTop:16 }}>
+          {liste.map(x=><i key={x.l} style={{ display:"block", height:"100%", width:(x.v/(liste.reduce((s,y)=>s+y.v,0)||1)*100)+"%", background:x.c }}/>)}
+        </div>
+      </div>
+      <div style={{ ...kart }}>
+        <div style={{ fontSize:12, fontWeight:700, marginBottom:10 }}>Kalemler <span style={{ fontWeight:500, color:T.sub }}>HAS</span></div>
+        {liste.length===0 && <div style={{ fontSize:13, color:T.sub }}>Kayıt yok.</div>}
+        {liste.map((x,i)=>(
+          <div key={x.l} style={{ padding:"8px 0", borderBottom: i<liste.length-1?"1px solid "+T.border:"none" }}>
+            <div style={{ display:"flex", justifyContent:"space-between", fontSize:13, marginBottom:5 }}>
+              <span><i style={{ display:"inline-block", width:9, height:9, borderRadius:3, marginRight:8, background:x.c }}/>{x.l}</span>
+              <b style={{ fontVariantNumeric:"tabular-nums" }}>{fN(x.v,2)}{hasGramUSD>0 && <span style={{ fontWeight:500, color:T.sub, fontSize:11.5 }}> · ≈ {fUSD(x.v*hasGramUSD)}</span>}</b>
+            </div>
+            <div style={{ height:6, borderRadius:3, background:T.border }}><i style={{ display:"block", height:6, borderRadius:3, background:x.c, width:Math.max(1.5,x.v/mx*100)+"%" }}/></div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ── Stok: altın / gümüş (depo sayımı ↔ mizan) ──
 function KasaStokAltin({ T, GH }) {
   const [v] = useRpVeri();
@@ -6684,9 +6792,8 @@ function Atolye({ onSirketDegis }) {
   setIscilikStandart(kasa.iscilikStandart); // genel ayar-standart işçilik (render sırasında senkron — kart/form hesapları aynı değeri görür)
   const [stdIscGirdi, setStdIscGirdi] = useState(null); // Ayarlar: 10K standart işçilik giriş kutusu (null = kayıtlı değeri göster)
   const [kasaSayfa, setKasaSayfa] = useState("g_genel");
-  const [kasaEski, setKasaEski] = useState(false);
   const [abSub, setAbSub] = useState("musteri");
-  const [stokSub, setStokSub] = useState("altin");
+  const [stokSub, setStokSub] = useState(AKTIF_SIRKET_ONEK==="" ? "altin" : "oz");
   const [rapSub, setRapSub] = useState("yukle");
   // Asistan
   const [ajanSoru, setAjanSoru] = useState("");
@@ -10707,14 +10814,9 @@ function Atolye({ onSirketDegis }) {
                   <h2 style={{ margin:0, fontSize:18, fontWeight:700, color:T.text, letterSpacing:"-.01em" }}>Kasa & Stok</h2>
                   <div style={{ fontSize:12, color:T.sub, marginTop:2 }}>{AKTIF_SIRKET_ONEK==="" ? "MSK" : "BSP"} · Stok, alacak-borç ve raporlar</div>
                 </div>
-                <button onClick={()=>{ setKasaEski(e=>{ const n=!e; setKasaSayfa(n?"ozet":"g_genel"); return n; }); }} style={{ ...GH, fontSize:11, padding:"6px 12px" }}>{kasaEski ? "← Yeni görünüm" : "Eski görünüm"}</button>
+                <span/>
               </div>
-              {!kasaEski && <RpNav T={T} aktif={kasaSayfa==="g_ab"||kasaSayfa==="g_stok"||kasaSayfa==="g_genel"||kasaSayfa==="raporlar"||kasaSayfa==="karlilik" ? kasaSayfa : "g_genel"} onSec={setKasaSayfa} sekmeler={[{id:"g_genel",l:"Genel Bakış"},{id:"g_stok",l:"Stok"},{id:"g_ab",l:"Alacak & Borç"},{id:"raporlar",l:"Raporlar"},{id:"karlilik",l:"🔒 Karlılık"}]}/>}
-              {kasaEski && <div style={{ display:"flex", gap:4, marginBottom:14, borderBottom:"1px solid rgba(var(--vurgu-rgb),0.12)", paddingBottom:8 }}>
-                {[{id:"panel",l:"Panel"},{id:"ozet",l:"Özet"},{id:"musteri",l:"Müşteri Bakiyeleri"},{id:"dokumcu",l:"Dökümcü"},{id:"stok",l:"Stok"},{id:"muhasebe",l:"Muhasebe"},{id:"bilanco",l:"Bilanço"},{id:"raporlar",l:"Raporlar"},{id:"karlilik",l:"🔒 Karlılık"}].map(t => (
-                  <button key={t.id} onClick={()=>setKasaSayfa(t.id)} style={{ background:kasaSayfa===t.id?"rgba(var(--vurgu-rgb),0.15)":"transparent", border:"1px solid", borderColor:kasaSayfa===t.id?"rgba(var(--vurgu-rgb),0.4)":"transparent", borderRadius:7, padding:"5px 12px", color:kasaSayfa===t.id?GOLD:T.sub, fontSize:12, fontWeight:kasaSayfa===t.id?700:400, cursor:"pointer" }}>{t.l}</button>
-                ))}
-              </div>}
+              {<RpNav T={T} aktif={kasaSayfa==="g_ab"||kasaSayfa==="g_stok"||kasaSayfa==="g_genel"||kasaSayfa==="raporlar"||kasaSayfa==="karlilik" ? kasaSayfa : "g_genel"} onSec={setKasaSayfa} sekmeler={[{id:"g_genel",l:"Genel Bakış"},{id:"g_stok",l:"Stok"},{id:"g_ab",l:"Alacak & Borç"},{id:"raporlar",l:"Raporlar"},{id:"karlilik",l:"🔒 Karlılık"}]}/>}
 
               {/* ══ ÖZET ══ */}
               {kasaSayfa==="ozet" && (
@@ -10853,7 +10955,7 @@ function Atolye({ onSirketDegis }) {
               )}
 
               {/* ══ DÖKÜMCÜ ══ */}
-              {(kasaSayfa==="dokumcu" || (kasaSayfa==="g_ab" && abSub==="dokumcu")) && (() => {
+              {kasaSayfa==="dokumcu" && (() => {
                 // Dökümde olan siparişler (otomatik kayıtlardan)
                 const dokumdaOlanlar = (kasa.dokumcuIslemler||[]).filter(x=>x.tip==="gonder"&&!x.teslimTarih);
                 const teslimAlinanlar = (kasa.dokumcuIslemler||[]).filter(x=>x.tip==="gonder"&&x.teslimTarih);
@@ -10935,7 +11037,7 @@ function Atolye({ onSirketDegis }) {
               })()}
 
               {/* ══ STOK ══ */}
-              {(kasaSayfa==="stok" || (kasaSayfa==="g_stok" && (stokSub==="kayit" || AKTIF_SIRKET_ONEK!==""))) && (
+              {(kasaSayfa==="stok" || (kasaSayfa==="g_stok" && stokSub==="kayit")) && (
                 <div>
                   <div style={{ display:"flex", gap:6, marginBottom:12, flexWrap:"wrap" }}>
                     <button onClick={()=>kasaModalAc({tip:"hamAltin"})} style={{ ...BG, padding:"6px 14px", fontSize:12 }}>+ Ham Altın Girişi</button>
@@ -11370,9 +11472,14 @@ function Atolye({ onSirketDegis }) {
               {/* ══ RAPORLAR / PANEL / KARLILIK ══ */}
               {kasaSayfa==="panel" && <RaporPanel T={T} GH={GH} onRapor={()=>setKasaSayfa("raporlar")}/>}
               {kasaSayfa==="g_genel" && <KasaGenel T={T} GH={GH} atolye={AKTIF_SIRKET_ONEK==="" ? { son:[...(kasa.atolyeKasa||[])].sort((x,y)=>(y.tarih||0)-(x.tarih||0))[0]||null } : null} ic={{ alacak:Object.values(musBakiye).reduce((t,d)=>t+Math.max(0,d.borc-d.odenen),0), borc:Math.max(0,dokumBorc), stok:toplamHas, musteriler:Object.entries(musBakiye).map(([ad,d])=>({ad,bakiye:d.borc-d.odenen})).filter(x=>x.bakiye>0.001).sort((a,b)=>b.bakiye-a.bakiye) }} onGit={(h)=>setKasaSayfa(h==="ab"?"g_ab":h==="stok"?"g_stok":"raporlar")}/>}
-              {kasaSayfa==="g_stok" && !kasaEski && <RpSeg T={T} aktif={stokSub} onSec={setStokSub} secenekler={AKTIF_SIRKET_ONEK==="" ? [{id:"altin",l:"Altın & Gümüş"},{id:"kayit",l:"Stok kayıtları"}] : [{id:"kayit",l:"Stok kayıtları"}]}/>}
-              {kasaSayfa==="g_stok" && !kasaEski && stokSub==="altin" && AKTIF_SIRKET_ONEK==="" && <KasaStokAltin T={T} GH={GH}/>}
+              {kasaSayfa==="g_stok" && <RpSeg T={T} aktif={stokSub} onSec={setStokSub} secenekler={AKTIF_SIRKET_ONEK==="" ? [{id:"altin",l:"Altın & Gümüş"},{id:"oz",l:"Öz sermaye"},{id:"kayit",l:"Stok kayıtları"}] : [{id:"oz",l:"Öz sermaye"},{id:"kayit",l:"Stok kayıtları"}]}/>}
+              {kasaSayfa==="g_stok" && stokSub==="altin" && AKTIF_SIRKET_ONEK==="" && <KasaStokAltin T={T} GH={GH}/>}
               {kasaSayfa==="g_ab" && <RpSeg T={T} aktif={abSub} onSec={setAbSub} secenekler={[{id:"musteri",l:"Müşteriler"},{id:"dokumcu",l:"Dökümcü"},{id:"muh",l:"Satıcılar & Muhasebe"}]}/>}
+              {kasaSayfa==="g_ab" && abSub==="dokumcu" && <KasaDokumcu T={T} GH={GH} BG={BG} RD={RD} kasa={kasa} svKasa={svKasa} kasaModalAc={kasaModalAc} dokumGiden={dokumGiden} dokumOdenen={dokumOdenen} dokumBorc={dokumBorc} fN={fN}/>}
+              {kasaSayfa==="g_stok" && stokSub==="oz" && <KasaOzSermaye T={T} fN={fN} fUSD={fUSD} hasGramUSD={hasGramUSD} toplamHas={toplamHas} kalemler={[
+                { l:"Ham altın", v:hamAltinGram, c:"#c9a24a" }, { l:"Üretimdeki altın", v:uretimAltin, c:"#2f7fb8" }, { l:"Üretimdeki taş", v:uretimTas, c:"#7c6abf" },
+                { l:"Satılmamış mamul (altın)", v:satilmamisAltin, c:"#2e9d6a" }, { l:"Satılmamış mamul (taş)", v:satilmamisTas, c:"#a78bfa" }, { l:"İade taşları", v:iadeTas, c:"#c27ba0" },
+                { l:"Hurda altın", v:hurdaAltin, c:"#e8833a" }, { l:"Hurda taş", v:hurdaTas, c:"#b86a3a" }, { l:"Hazır ürün + serbest", v:hazirUrunGram+serbestGram, c:"#8f8a7c" } ]}/>}
               {kasaSayfa==="g_ab" && abSub==="musteri" && <KasaMusteriler T={T} GH={GH} BG={BG} RD={RD} musBakiye={musBakiye} kasa={kasa} svKasa={svKasa} kasaModalAc={kasaModalAc}/>}
               {kasaSayfa==="raporlar" && <RpSeg T={T} aktif={rapSub} onSec={setRapSub} secenekler={[{id:"yukle",l:"Yükleme & kapsam"},{id:"bilanco",l:"İç bilanço"}]}/>}
               {kasaSayfa==="raporlar" && rapSub==="yukle" && <RaporlarSayfasi T={T} GH={GH} RD={RD} setRhinoMizan={setRhinoMizan}/>}
@@ -11696,7 +11803,7 @@ function Atolye({ onSirketDegis }) {
                   return acc;
                 },0);
                 return (
-                  <div onClick={()=>{ setSayfa("kasa"); setKasaSayfa("dokumcu"); }} style={{ background:"rgba(232,131,58,0.02)", border:"1px solid rgba(232,131,58,0.1)", borderRadius:12, padding:"12px 16px", cursor:"pointer" }}>
+                  <div onClick={()=>{ setSayfa("kasa"); setKasaSayfa("g_ab"); setAbSub("dokumcu"); }} style={{ background:"rgba(232,131,58,0.02)", border:"1px solid rgba(232,131,58,0.1)", borderRadius:12, padding:"12px 16px", cursor:"pointer" }}>
                     <div style={{ fontSize:10, fontWeight:700, color:"#e8833a", marginBottom:10 }}>Dökümcü <span style={{ fontSize:8, color:"#5b9bd5", marginLeft:4 }}>→ Git</span></div>
                     <div style={{ fontSize:20, fontWeight:800, color:"#e8833a", marginBottom:2 }}>{fN(dokumBorc,3)} has</div>
                     <div style={{ fontSize:9, color:"#665d4a", marginBottom:10 }}>{altinKgUSD>0?"≈"+fUSD(dokumBorc*(altinKgUSD/1000))+" bekleyen borç":""}</div>
