@@ -2785,6 +2785,166 @@ function IscAnaliz({ T, satislar }) {
   );
 }
 
+// ── Verimlilik & kaçak izleme (MSK): özet veri v7rp_ozet (tezgah hareketleri + ekstrelerden üretilir) ──
+const RP_AYAR_MIL = { "9K":.375, "10K":.417, "14K":.585, "18K":.75, "19K":.801, "21K":.875, "22K":.916 };
+const RP_AYAR_SIRA = ["9K","10K","14K","18K","19K","21K","22K"];
+function VerimlilikPaneli({ T, depo }) {
+  const [oz, setOz] = useState(undefined);
+  const [sek, setSek] = useState("fire");
+  const [yil, setYil] = useState("");
+  const [ay, setAy] = useState("");
+  const [geri, setGeri] = useState(98);
+  const [firma, setFirma] = useState("ÜNVER");
+  useEffect(() => { let i=false; ld("v7rp_ozet", null).then(d=>{ if(!i) setOz(d||null); }); return ()=>{ i=true; }; }, []);
+  if (oz===undefined) return null;
+  if (!oz) return <RpKart T={T} baslik="VERİMLİLİK & KAÇAK İZLEME"><div style={{ fontSize:12, color:T.text, lineHeight:1.6 }}>Henüz özet veri yok. Tezgah hareket raporları ve ekstreler Claude'a gönderilince özet buraya yüklenir.</div></RpKart>;
+  const mil = (a)=>RP_AYAR_MIL[a]||0;
+  const aylarHepsi = Object.keys(oz.aylik).sort();
+  const yillar = [...new Set(aylarHepsi.map(a=>a.slice(0,4)))];
+  const secAy = aylarHepsi.filter(a=>(!yil||a.startsWith(yil)) && (!ay||a.slice(5,7)===ay));
+  const AYK = ["Oca","Şub","Mar","Nis","May","Haz","Tem","Ağu","Eyl","Eki","Kas","Ara"];
+  const th = { fontSize:11, color:T.sub, fontWeight:700, textAlign:"right", padding:"4px 6px" };
+  const td = { fontSize:12, color:T.text, textAlign:"right", padding:"5px 6px", borderTop:"1px solid "+T.border };
+  const dugme = (a) => ({ border:"1px solid "+(a?T.gold:T.border), background:a?"rgba(var(--vurgu-rgb),0.12)":"transparent", color:T.text, borderRadius:8, padding:"4px 10px", fontSize:12, fontWeight:a?700:500, cursor:"pointer", whiteSpace:"nowrap" });
+  const kirmizi = T.danger||"#e85a4f";
+  const f0 = (x)=>rpF(x,0), f1 = (x)=>rpF(x,1);
+  const yuzde = (a,b)=> b>0 ? "%"+rpF(a/b*100,1) : "—";
+  const donem = (
+    <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:10 }}>
+      <button onClick={()=>{setYil("");setAy("");}} style={dugme(!yil&&!ay)}>Tümü</button>
+      {yillar.map(y=><button key={y} onClick={()=>{setYil(y);setAy("");}} style={dugme(yil===y&&!ay)}>{y}</button>)}
+      {AYK.map((n,i)=>{ const k=String(i+1).padStart(2,"0"); const v_=aylarHepsi.some(a=>(!yil||a.startsWith(yil))&&a.slice(5,7)===k); return <button key={k} disabled={!v_} onClick={()=>setAy(ay===k?"":k)} style={{ ...dugme(ay===k), opacity:v_?1:0.4, cursor:v_?"pointer":"default" }}>{n}</button>; })}
+    </div>
+  );
+  // toplama: ayar bazında gr ve has
+  const topla = (aylar) => {
+    const o = {};
+    aylar.forEach(a => Object.entries(oz.aylik[a]||{}).forEach(([ar,d]) => { const m=o[ar]||(o[ar]={}); Object.entries(d).forEach(([k,v])=>{ m[k]=(m[k]||0)+v; }); }));
+    return o;
+  };
+  const hasT = (o, k) => Object.entries(o).reduce((t,[ar,d])=>t+(d[k]||0)*mil(ar), 0);
+  const sirali = (o) => Object.keys(o).sort((a,b)=>RP_AYAR_SIRA.indexOf(a)-RP_AYAR_SIRA.indexOf(b));
+
+  let govde = null;
+  if (sek==="fire") {
+    const o = topla(secAy);
+    const sat=hasT(o,"sat"), iade=hasT(o,"iade"), net=sat-iade, cila=hasT(o,"cila"), tez=hasT(o,"tez"), erit=hasT(o,"erit");
+    const gercek = cila*(100-geri)/100;
+    const yilTablo = yillar.map(y=>{ const q=topla(aylarHepsi.filter(a=>a.startsWith(y))); const s=hasT(q,"sat"), i=hasT(q,"iade"), n=s-i; return { y, s, i, n, c:hasT(q,"cila"), t:hasT(q,"tez"), e:hasT(q,"erit") }; });
+    const ocakAy = Object.keys(oz.ocak||{}).sort(), sabriAy = Object.keys(oz.sabri||{}).sort();
+    const sOcak = ocakAy.reduce((t,a)=>({ g:t.g+oz.ocak[a].gonderHas, d:t.d+oz.ocak[a].donenHas, f:t.f+oz.ocak[a].fireHas, ga:t.ga+oz.ocak[a].geriAyarHas }), { g:0,d:0,f:0,ga:0 });
+    const sSabri = sabriAy.reduce((t,a)=>({ g:t.g+oz.sabri[a].gonderHas, d:t.d+oz.sabri[a].donenHas, f:t.f+oz.sabri[a].fireHas }), { g:0,d:0,f:0 });
+    govde = (
+      <div>
+        {donem}
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))", gap:10, marginBottom:10 }}>
+          <RpKpi T={T} ad="NET SATIŞ (HAS GR)" deger={f0(net)} alt={"Satış "+f0(sat)+" − iade "+f0(iade)}/>
+          <RpKpi T={T} ad="CİLA FİRESİ (HAS)" deger={f0(cila)} alt={yuzde(cila,net)+" · net satışa göre"}/>
+          <RpKpi T={T} ad="CİLA GERÇEK KAYIP" deger={f0(gercek)} alt={"Ramat %"+geri+" geri geliyorsa · "+yuzde(gercek,net)}/>
+          <RpKpi T={T} ad="ERİTME KAYBI (HAS)" deger={f0(erit)} alt={yuzde(erit,net)+" · ocak, taş+yay"}/>
+          <RpKpi T={T} ad="TEZGAH FİRESİ (HAS)" deger={f0(tez)} alt={yuzde(tez,net)}/>
+        </div>
+        <div style={{ fontSize:12, color:T.sub, marginBottom:10 }}>Ramat geri alım oranı: <input type="number" min="80" max="100" value={geri} onChange={e=>setGeri(Math.max(80,Math.min(100,Number(e.target.value)||98)))} style={{ width:56, background:T.card, border:"1px solid "+T.border, borderRadius:6, padding:"2px 6px", color:T.text, fontSize:12 }}/> %</div>
+        <div style={{ overflowX:"auto" }}>
+          <table style={{ width:"100%", borderCollapse:"collapse", minWidth:520 }}>
+            <thead><tr><th style={{ ...th, textAlign:"left" }}>Yıl</th><th style={th}>Net satış</th><th style={th}>Cila fire</th><th style={th}>Cila %</th><th style={th}>Tezgah %</th><th style={th}>Eritme</th><th style={th}>Eritme %</th></tr></thead>
+            <tbody>{yilTablo.map(r=>(<tr key={r.y}><td style={{ ...td, textAlign:"left", fontWeight:700 }}>{r.y}</td><td style={td}>{f0(r.n)}</td><td style={td}>{f0(r.c)}</td><td style={td}>{yuzde(r.c,r.n)}</td><td style={td}>{yuzde(r.t,r.n)}</td><td style={td}>{f0(r.e)}</td><td style={td}>{yuzde(r.e,r.n)}</td></tr>))}</tbody>
+          </table>
+        </div>
+        <div style={{ fontSize:11, color:T.sub, fontWeight:700, margin:"12px 0 4px" }}>AYARA GÖRE (seçili dönem, has gr)</div>
+        <div style={{ overflowX:"auto" }}>
+          <table style={{ width:"100%", borderCollapse:"collapse", minWidth:420 }}>
+            <thead><tr><th style={{ ...th, textAlign:"left" }}>Ayar</th><th style={th}>Net satış</th><th style={th}>Cila fire</th><th style={th}>Cila %</th><th style={th}>Eritme</th><th style={th}>Eritme %</th></tr></thead>
+            <tbody>{sirali(o).filter(a=>(o[a].sat||0)>0).map(a=>{ const n=((o[a].sat||0)-(o[a].iade||0))*mil(a), c=(o[a].cila||0)*mil(a), e=(o[a].erit||0)*mil(a); return (<tr key={a}><td style={{ ...td, textAlign:"left", fontWeight:700 }}>{a}</td><td style={td}>{f0(n)}</td><td style={td}>{f0(c)}</td><td style={td}>{yuzde(c,n)}</td><td style={td}>{f0(e)}</td><td style={td}>{yuzde(e,n)}</td></tr>); })}</tbody>
+          </table>
+        </div>
+        <div style={{ fontSize:11, color:T.sub, fontWeight:700, margin:"12px 0 4px" }}>OCAK VE RAMATÇI (2026 ekstreleri, has gr)</div>
+        <div style={{ overflowX:"auto" }}>
+          <table style={{ width:"100%", borderCollapse:"collapse", minWidth:420 }}>
+            <thead><tr><th style={{ ...th, textAlign:"left" }}>Yer</th><th style={th}>Giden</th><th style={th}>Dönen 995</th><th style={th}>Çöpe giden fire</th><th style={th}>Dönüş %</th></tr></thead>
+            <tbody>
+              <tr><td style={{ ...td, textAlign:"left", fontWeight:700 }}>Altın Ocak</td><td style={td}>{f0(sOcak.g)}</td><td style={td}>{f0(sOcak.d)}</td><td style={{ ...td, color:kirmizi }}>{f1(sOcak.f)}</td><td style={td}>{yuzde(sOcak.d,sOcak.g)}</td></tr>
+              <tr><td style={{ ...td, textAlign:"left", fontWeight:700 }}>Sabri Ramat</td><td style={td}>{f0(sSabri.g)}</td><td style={td}>{f0(sSabri.d)}</td><td style={{ ...td, color:kirmizi }}>{f1(sSabri.f)}</td><td style={td}>{yuzde(sSabri.d,sSabri.g)}</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div style={{ fontSize:11, color:T.dim||T.sub, marginTop:8, lineHeight:1.5 }}>Fire gram değil has gramdır (gram × milyem). Cila firesi ramat olarak Sabri'ye gider; ramat %{geri} geri geldiği varsayılır. Eritme kaybı ocağa giden hurdadaki taş ve yaydır. Dönüş %100'ün üstündeyse ramat/hurdanın gerçek ayarı etiketten yüksek ya da kayıt kaymış olabilir. Veri sonu: {oz.sonKayit}.</div>
+      </div>
+    );
+  } else if (sek==="sayim") {
+    const sy = depo && depo.length ? depo[depo.length-1] : null;
+    const satirlar = sy ? sy.satirlar : [];
+    const dep = {}; satirlar.forEach(r=>{ dep[r[0]] = { anakasa:r[3], sayim:r[4], tezgah:r[5], cila:r[6], tasdizim:r[7], firecila:r[8], mine:r[9], toz:r[10], dokum:r[11] }; });
+    const KAR = [ ["Tezgah (+ sayım)","TEZGAH",(d)=>(d.tezgah||0)+(d.sayim||0)], ["Cila + fire cila","CİLA",(d)=>(d.cila||0)+(d.firecila||0)], ["Taş dizim","TAŞ DİZİM",(d)=>d.tasdizim||0], ["Döküm","DÖKÜM",(d)=>d.dokum||0], ["Fire taş","FİRE TAŞ",()=>0], ["Anakasa","ANAKASA MSK",(d)=>d.anakasa||0] ];
+    const ayarlar = ["10K","14K","18K","9K"].filter(a=>oz.defter[a]);
+    const kayitAd = { "10K":"417-10K", "14K":"585-14K", "18K":"750-18K", "9K":"375-9K" };
+    const satirlarT = []; const topHas = {};
+    ayarlar.forEach(a=>{ const d = dep[kayitAd[a]] || {}; KAR.forEach(([ad,sb,fn])=>{ const def=(oz.defter[a]||{})[sb]||0, say=fn(d); const fark=say-def; if(Math.abs(def)<0.5 && Math.abs(say)<0.5) return; satirlarT.push({ a, ad, def, say, fark, has:fark*mil(a) }); topHas[a]=(topHas[a]||0)+fark*mil(a); }); });
+    const topAll = Object.values(topHas).reduce((t,x)=>t+x,0);
+    govde = (
+      <div>
+        {!sy && <div style={{ fontSize:12, color:kirmizi, marginBottom:8 }}>Depo sayımı yüklü değil (Raporlar → Depo sayımı).</div>}
+        {sy && <div style={{ fontSize:12, color:T.sub, marginBottom:10 }}>Sayım tarihi: {sy.tarih} · Defter: tezgah hareketleri, son kayıt {oz.sonKayit}. Fark = sayım − defter.</div>}
+        {sy && <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(130px,1fr))", gap:10, marginBottom:10 }}>
+          {ayarlar.map(a=><RpKpi key={a} T={T} ad={a+" FARK (HAS)"} deger={(topHas[a]>0?"+":"")+f1(topHas[a]||0)} renk={Math.abs(topHas[a]||0)>20?kirmizi:undefined} alt="sayım − defter"/>)}
+          <RpKpi T={T} ad="TOPLAM (HAS)" deger={(topAll>0?"+":"")+f1(topAll)} alt="Yer farkları toplamı"/>
+        </div>}
+        {sy && <div style={{ overflowX:"auto" }}>
+          <table style={{ width:"100%", borderCollapse:"collapse", minWidth:480 }}>
+            <thead><tr><th style={{ ...th, textAlign:"left" }}>Ayar</th><th style={{ ...th, textAlign:"left" }}>Yer</th><th style={th}>Defter gr</th><th style={th}>Sayım gr</th><th style={th}>Fark gr</th><th style={th}>Fark has</th></tr></thead>
+            <tbody>{satirlarT.map((r,i)=>(<tr key={i}><td style={{ ...td, textAlign:"left", fontWeight:700 }}>{r.a}</td><td style={{ ...td, textAlign:"left" }}>{r.ad}</td><td style={td}>{f1(r.def)}</td><td style={td}>{f1(r.say)}</td><td style={{ ...td, color:Math.abs(r.fark)>100?kirmizi:T.text, fontWeight:Math.abs(r.fark)>100?700:400 }}>{r.fark>0?"+":""}{f1(r.fark)}</td><td style={td}>{r.has>0?"+":""}{f1(r.has)}</td></tr>))}</tbody>
+          </table>
+        </div>}
+        <div style={{ fontSize:11, color:T.dim||T.sub, marginTop:8, lineHeight:1.5 }}>Büyük zıt işaretli farklar birbirini götürebilir; toplam küçük görünse de tek tek yerlere bak. Fire taş defterde kayıp kaydıdır, fiziksel stok değildir. Dökümdeki defter bakiyesi dökümcüde duran mal olabilir. Gümüş ve 995 bu tabloda yok.</div>
+      </div>
+    );
+  } else if (sek==="musteri") {
+    const satir = Object.entries(oz.musteri).map(([ad,aylar])=>{ let s=0,i=0; Object.entries(aylar).forEach(([a,ayr])=>{ if(!secAy.includes(a)) return; Object.values(ayr).forEach(d=>{ s+=d.s||0; i+=d.i||0; }); }); return { ad, s, i, n:s-i }; }).filter(r=>r.s>0||r.i>0).sort((a,b)=>b.s-a.s);
+    const tS=satir.reduce((t,r)=>t+r.s,0), tI=satir.reduce((t,r)=>t+r.i,0);
+    govde = (
+      <div>
+        {donem}
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))", gap:10, marginBottom:10 }}>
+          <RpKpi T={T} ad="BRÜT SATIŞ (GR)" deger={f0(tS)} alt="Defter · stok satış"/>
+          <RpKpi T={T} ad="İADE (GR)" deger={f0(tI)} renk={kirmizi} alt={yuzde(tI,tS)}/>
+          <RpKpi T={T} ad="NET SATIŞ (GR)" deger={f0(tS-tI)} alt="İadeler düşülmüş"/>
+        </div>
+        <div style={{ overflowX:"auto" }}>
+          <table style={{ width:"100%", borderCollapse:"collapse", minWidth:420 }}>
+            <thead><tr><th style={{ ...th, textAlign:"left" }}>Müşteri</th><th style={th}>Brüt gr</th><th style={th}>İade gr</th><th style={th}>Net gr</th><th style={th}>İade %</th></tr></thead>
+            <tbody>{satir.map(r=>(<tr key={r.ad}><td style={{ ...td, textAlign:"left", fontWeight:600 }}>{r.ad}</td><td style={td}>{f0(r.s)}</td><td style={{ ...td, color:r.s>0&&r.i/r.s>0.25?kirmizi:T.text }}>{f0(r.i)}</td><td style={{ ...td, fontWeight:700 }}>{f0(r.n)}</td><td style={td}>{yuzde(r.i,r.s)}</td></tr>))}</tbody>
+          </table>
+        </div>
+        <div style={{ fontSize:11, color:T.dim||T.sub, marginTop:8, lineHeight:1.5 }}>Kaynak: tezgah hareket defteri (STOK SATIŞ ve STOK İADE, firma adına göre). İade oranı %25'in üstündeki müşteriler kırmızıdır. Gümüş hariç, yalnız altın ayarlar.</div>
+      </div>
+    );
+  } else {
+    const firmalar = Object.keys(oz.tas||{});
+    const T1 = (oz.tas||{})[firma] || {};
+    const aylarF = Object.keys(T1).sort();
+    const yilF = [...new Set(aylarF.map(a=>a.slice(0,4)))];
+    const topl = (ys) => { const o={}; aylarF.filter(a=>ys.includes(a.slice(0,4))).forEach(a=>Object.entries(T1[a]).forEach(([ar,d])=>{ const m=o[ar]||(o[ar]={mamul:0,tas:0}); m.mamul+=d.mamul; m.tas+=d.tas; })); return o; };
+    govde = (
+      <div>
+        <div style={{ display:"flex", gap:6, marginBottom:10 }}>{firmalar.map(f=><button key={f} onClick={()=>setFirma(f)} style={dugme(firma===f)}>{f}</button>)}</div>
+        <div style={{ overflowX:"auto" }}>
+          <table style={{ width:"100%", borderCollapse:"collapse", minWidth:480 }}>
+            <thead><tr><th style={{ ...th, textAlign:"left" }}>Yıl</th><th style={{ ...th, textAlign:"left" }}>Dönem</th>{["10K","14K","18K"].map(a=><th key={a} style={th}>{a} taş %</th>)}<th style={th}>Toplam taş %</th><th style={th}>Mamul gr</th></tr></thead>
+            <tbody>{yilF.map(y=>{ const o=topl([y]); const ms=aylarF.filter(a=>a.startsWith(y)); const mT=Object.values(o).reduce((t,d)=>t+d.mamul,0), tT=Object.values(o).reduce((t,d)=>t+d.tas,0); return (<tr key={y}><td style={{ ...td, textAlign:"left", fontWeight:700 }}>{y}</td><td style={{ ...td, textAlign:"left" }}>{rpAyAd(ms[0]).split(" ")[0]}–{rpAyAd(ms[ms.length-1]).split(" ")[0]}</td>{["10K","14K","18K"].map(a=><td key={a} style={td}>{o[a]?yuzde(o[a].tas,o[a].mamul):"—"}</td>)}<td style={{ ...td, fontWeight:700 }}>{yuzde(tT,mT)}</td><td style={td}>{f0(mT)}</td></tr>); })}</tbody>
+          </table>
+        </div>
+        <div style={{ fontSize:11, color:T.dim||T.sub, marginTop:8, lineHeight:1.5 }}>Taş % = dökümcü ekstresindeki TAŞ STOĞU gramı ÷ fason giriş mamul gramı. Veri aralığı: {aylarF[0]} → {aylarF[aylarF.length-1]}. Son aylar eksikse ekstre o tarihte alınmıştır; yeni ekstreyle güncellenir.</div>
+      </div>
+    );
+  }
+  return (
+    <RpKart T={T} baslik="VERİMLİLİK & KAÇAK İZLEME">
+      <RpSeg T={T} aktif={sek} onSec={setSek} secenekler={[{id:"fire",l:"Fire"},{id:"sayim",l:"Sayım farkı"},{id:"musteri",l:"Müşteri iade"},{id:"tas",l:"Taş %"}]}/>
+      {govde}
+    </RpKart>
+  );
+}
+
 function RaporKarlilik({ T, GH }) {
   const [v] = useRpVeri();
   const [mid, setMid] = useState("");
@@ -2839,6 +2999,7 @@ function RaporKarlilik({ T, GH }) {
             <div style={{ fontSize:11, color:T.dim||T.sub, marginTop:8, lineHeight:1.5 }}>"Kaba fark" yönetim hesabıdır, muhasebe sonucu değildir. Muhasebe sonucu için aşağıdaki mizan tabanlı gelir tablosuna bak.</div>
           </RpKart>
           <BrutSatisKarti T={T} satislar={v.satislar} aylik={v.aylik}/>
+          {AKTIF_SIRKET_ONEK==="" && <VerimlilikPaneli T={T} depo={v.depo}/>}
           <IscAnaliz T={T} satislar={v.satislar}/>
           <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(300px,1fr))", gap:12 }}>
             <RpKart T={T} baslik="AYLIK KABA FARK (HAS)"><RpSutun T={T} renk={RP_RENK[2]} veri={aylik.map(x=>({ e:rpAyAd(x.a).split(" ")[0], v:x.o.sonuc }))}/></RpKart>
