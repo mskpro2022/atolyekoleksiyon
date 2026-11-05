@@ -2424,7 +2424,11 @@ async function rpYukleHepsi(){
   const depoK = await ld("v7rp_depo", { sayimlar: [] });
   const ozetK = await ld("v7rp_ozet", null);
   const aylikK = await ld("v7rp_aylik", { aylar: {} });
-  return { aylik: (aylikK && aylikK.aylar) || {}, ozet: ozetK, idx, giderler: g.flat(), satislar: s.flat(), mizanlar: (miz && Array.isArray(miz.mizanlar)) ? miz.mizanlar : [], depo: (depoK && Array.isArray(depoK.sayimlar)) ? depoK.sayimlar : [] };
+  const mzSon = (miz && Array.isArray(miz.mizanlar) && miz.mizanlar.length) ? miz.mizanlar[miz.mizanlar.length-1] : null;
+  const kurYH = mzSon && mzSon.kur && mzSon.kur.HAS && mzSon.kur.USD ? mzSon.kur.HAS/mzSon.kur.USD : 0; // 1 has gram = kaç USD
+  // Satış raporunda gümüş satırlarının işçiliği USD cinsinden gelir; has'a çevrilir (çevrilemezse 0)
+  const satFix = s.flat().map(r => /GÜMÜŞ|GUMUS/i.test(String(r[2])) ? [...r.slice(0,4), kurYH ? (r[4]||0)/kurYH : 0, ...r.slice(5)] : r);
+  return { aylik: (aylikK && aylikK.aylar) || {}, ozet: ozetK, idx, giderler: g.flat(), satislar: satFix, mizanlar: (miz && Array.isArray(miz.mizanlar)) ? miz.mizanlar : [], depo: (depoK && Array.isArray(depoK.sayimlar)) ? depoK.sayimlar : [] };
 }
 // Bir yüklemeyi aylara böler, mevcutla birleştirir (çiftlemez), dizini günceller
 async function rpYuklemeKaydet(tur, satirlar){
@@ -3259,8 +3263,12 @@ function RaporKarlilik({ T, GH }) {
   const tum = rpOzet(v.giderler, v.satislar, "");
   const aylik = aylar.map(a => ({ a, o:rpOzet(v.giderler, v.satislar, a) }));
   const musteri = Object.values(tum.musteri).sort((a,b)=>b.isc-a.isc).slice(0,10);
-  const tasGeliri = hes ? -((hes["602 001 04"]?.has||0) + (hes["600 001 04"]?.has||0)) : 0;
-  const tasMaliyet = hes ? (hes["621 001 04"]?.has||0) : 0;
+  // Rhino hafta hafta gelir/gider hesaplarını kapatır; bakiye yalnızca son kapanıştan sonrasını gösterir.
+  // Yıl içi taş geliri/maliyeti için hesaba yazılan hareket (alacak/borç) toplamı kullanılır.
+  const hasCevir = (r, tutar) => { const kur = kayit && kayit.kur; if (!r || !kur || !kur.HAS) return 0; return r[2]==="HAS" ? tutar : r[2]==="TL" ? tutar/kur.HAS : (tutar*(kur[r[2]]||0))/kur.HAS; };
+  const hareket = (kod, kol) => { const r = kayit && kayit.satirlar.find(x=>x[0]===kod); return r ? hasCevir(r, r[kol]) : 0; };
+  const tasGeliri = hes ? hareket("602 001 04",4) + hareket("600 001 04",4) : 0;
+  const tasMaliyet = hes ? hareket("621 001 04",3) : 0;
   const netTas = tasGeliri - tasMaliyet - tum.tasGider;
   const th = { fontSize:11, color:T.sub, fontWeight:700, textAlign:"right", padding:"4px 6px" };
   const td = { fontSize:12, color:T.text, textAlign:"right", padding:"4px 6px", borderTop:"1px solid "+T.border };
@@ -3293,7 +3301,7 @@ function RaporKarlilik({ T, GH }) {
             {hes && (
               <div style={{ marginTop:10, borderTop:"1px solid "+T.border, paddingTop:8 }}>
                 <div style={{ fontSize:11, color:T.sub, fontWeight:700, marginBottom:4 }}>TAŞ SONUCU (dönem toplamı, HAS)</div>
-                {[["Taş geliri (mizan 602/600 taş)", tasGeliri],["Taş stok maliyeti (mizan 621)", -tasMaliyet],["Taş giderleri (Taş Stoğu, Taş Düşümü, Malzeme Taş)", -tum.tasGider]].map(([ad,x])=>(
+                {[["Taş geliri (mizan 602/600 taş · yıl içi alacak hareketi)", tasGeliri],["Taş stok maliyeti (mizan 621 · yıl içi borç hareketi)", -tasMaliyet],["Taş giderleri (Taş Stoğu, Taş Düşümü, Malzeme Taş)", -tum.tasGider]].map(([ad,x])=>(
                   <div key={ad} style={{ display:"flex", justifyContent:"space-between", fontSize:12, color:T.text, padding:"2px 8px" }}><span>{ad}</span><span style={{ color:renk(x) }}>{rpF(x,2)}</span></div>
                 ))}
                 <div style={{ display:"flex", justifyContent:"space-between", fontSize:11, fontWeight:800, color:T.gold, padding:"4px 8px", borderTop:"1px solid "+T.border, marginTop:4 }}><span>Net taş sonucu</span><span style={{ color:renk(netTas) }}>{rpF(netTas,2)}</span></div>
