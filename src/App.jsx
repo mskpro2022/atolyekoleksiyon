@@ -3767,11 +3767,125 @@ function MusSatisPaneli({ T, GH, musAd, odemeler }) {
 }
 
 // ── Alacak & Borç: Müşteriler (iç sistem bakiyeleri) ──
+// ── Müşteri hesapları (MSK): bakiye = son mizan, hareketler = depo hareket özeti (v7rp_ozet.cari / tahsilat) ──
+function MusMizanEkrani({ T, GH, msk, appeGec }) {
+  const [v] = useRpVeri();
+  const [oz, setOz] = useState(undefined);
+  const [sec, setSec] = useState("");
+  const [sekme, setSekme] = useState("ozet");
+  const [yil, setYil] = useState("");
+  const [sifir, setSifir] = useState(false);
+  useEffect(() => { let i=false; ld("v7rp_ozet", null).then(d=>{ if(!i) setOz(d||null); }); return ()=>{ i=true; }; }, []);
+  if (!v || oz===undefined) return <div style={{ fontSize:12, color:T.sub }}>Yükleniyor…</div>;
+  const miz = rpSonMizan(v.mizanlar);
+  const kart = { background:(T.id==="beyaz"?"#ffffff":T.card), border:"1px solid "+T.border, borderRadius:12, padding:"16px 18px" };
+  const bas = { margin:"0 0 12px", fontSize:11.5, fontWeight:700, color:T.sub, textTransform:"uppercase", letterSpacing:".06em" };
+  const th = { fontSize:11, color:T.sub, fontWeight:600, textAlign:"right", padding:"6px 8px", borderBottom:"1px solid "+T.border, textTransform:"uppercase", letterSpacing:".04em" };
+  const td = { color:T.text, padding:"9px 8px", borderBottom:"1px solid "+T.border, textAlign:"right", fontSize:13, fontVariantNumeric:"tabular-nums" };
+  if (!miz) return (
+    <div style={kart}>
+      <div style={{ fontSize:13, marginBottom:10 }}>Mizan yüklenmemiş. Raporlar sekmesinden Rhino mizanını yükleyince müşteri bakiyeleri burada görünür.</div>
+      <button onClick={appeGec} style={GH}>Uygulama kayıtlarını göster</button>
+    </div>
+  );
+  const norm = (x) => rpUpper(String(x||"")).replace(/\s+/g," ").trim();
+  const tum = miz.satirlar.filter(r => r[2]==="HAS" && String(r[0]).startsWith("120 001 10\\") && r[1]).map(r => ({ kod:r[0], ad:r[1], borc:r[3]||0, alacak:r[4]||0, bak:r[5]||0 }));
+  const liste = tum.filter(x => sifir || Math.abs(x.bak)>0.005).sort((a,b)=>b.bak-a.bak);
+  const cari = (oz && oz.cari) || {}, tahs = (oz && oz.tahsilat) || {};
+  const cariAnahtar = {}; Object.keys(cari).forEach(k => { cariAnahtar[norm(k)] = k; });
+  const secili = liste.find(x=>x.kod===sec) || liste[0];
+  const topAcik = liste.reduce((t,x)=>t+(x.bak>0?x.bak:0),0), mx = Math.max(1e-9, ...liste.map(x=>Math.abs(x.bak)));
+  const pill = (b) => { const a = b>0.005; const k = b<-0.005; return <span style={{ display:"inline-block", padding:"2px 9px", borderRadius:99, fontSize:11, fontWeight:600, background: a?"rgba(179,57,47,.12)":(k?"rgba(var(--vurgu-rgb),0.15)":"rgba(46,125,50,.12)"), color: a?"#b3392f":(k?T.text:"#2e7d32") }}>{a?"Açık":(k?"Alacaklı":"Kapalı")}</span>; };
+  let ic = null;
+  if (secili) {
+    const fk = cariAnahtar[norm(secili.ad)];
+    const cm = fk ? cari[fk] : null;
+    const aylar = cm ? Object.keys(cm).sort().reverse() : [];
+    const yillar = [...new Set(aylar.map(a=>a.slice(0,4)))].sort().reverse();
+    const sa = aylar.filter(a => !yil || a.startsWith(yil));
+    const topl = { s:0, i:0, t:0, a:0 }; sa.forEach(a => { ["s","i","t","a"].forEach(k => { topl[k] += (cm[a][k]||0); }); });
+    const tl = (fk ? (tahs[fk]||[]) : []).filter(x => !yil || x[0].startsWith(yil)).slice().reverse().slice(0,40);
+    const bugun = new Date().toISOString().slice(0,7); const buAy = (cm && cm[bugun]) || { s:0, i:0, t:0, a:0 };
+    const dugme = (aktif) => ({ border:"1px solid "+(aktif?T.gold:T.border), background: aktif?"rgba(var(--vurgu-rgb),0.12)":"transparent", color:T.text, borderRadius:99, padding:"3px 12px", fontSize:12, fontWeight:600, cursor:"pointer" });
+    const kpi = (l, x, alt) => <div key={l} style={{ border:"1px solid "+T.border, borderRadius:10, padding:"8px 10px" }}><div style={{ fontSize:11, color:T.sub }}>{l}</div><div style={{ fontSize:16, fontWeight:700, fontVariantNumeric:"tabular-nums" }}>{x}</div>{alt && <div style={{ fontSize:11, color:T.sub }}>{alt}</div>}</div>;
+    ic = (
+      <div>
+        <RpNav T={T} aktif={sekme} onSec={setSekme} sekmeler={[{id:"ozet",l:"Özet & ödemeler"},{id:"satis",l:"Satış raporu"}]}/>
+        {sekme==="satis" && <MusSatisPaneli T={T} GH={GH} musAd={secili.ad} odemeler={[]}/>}
+        {sekme==="ozet" && <div>
+          <div style={{ fontSize:11, color:T.sub, margin:"2px 0 6px" }}>Mizan ({miz.bas} – {miz.bit})</div>
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(120px,1fr))", gap:8, marginBottom:12 }}>
+            {kpi("Bakiye (has)", rpF(secili.bak,2))}{kpi("Borç (satış)", rpF(secili.borc,2))}{kpi("Alacak (ödeme/iade)", rpF(secili.alacak,2))}
+          </div>
+          {!cm ? <div style={{ fontSize:12, color:T.sub }}>Bu müşteri için depo hareketi özeti bulunamadı (isim eşleşmedi: {secili.ad}).</div> : <div>
+            <div style={{ fontSize:11, color:T.sub, fontWeight:700, textTransform:"uppercase", letterSpacing:".05em", margin:"6px 0 6px" }}>Bu ay ({RP_AYLAR_UZUN[Number(bugun.slice(5,7))-1]} {bugun.slice(0,4)}) · depo hareketi</div>
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(120px,1fr))", gap:8, marginBottom:12 }}>
+              {kpi("Aldığı mal (has)", rpF(buAy.s,1))}{kpi("İade (has)", rpF(buAy.i,1))}{kpi("Ödediği (has)", rpF(buAy.t,1))}
+            </div>
+            <div style={{ display:"flex", gap:6, flexWrap:"wrap", alignItems:"center", marginBottom:8 }}>
+              <span style={{ fontSize:11, color:T.sub, fontWeight:700 }}>YIL</span>
+              <button onClick={()=>setYil("")} style={dugme(!yil)}>Tümü</button>
+              {yillar.map(y=><button key={y} onClick={()=>setYil(y)} style={dugme(yil===y)}>{y}</button>)}
+            </div>
+            <div style={{ overflowX:"auto" }}>
+              <table style={{ width:"100%", borderCollapse:"collapse", minWidth:420 }}>
+                <thead><tr><th style={{ ...th, textAlign:"left" }}>Ay</th><th style={th}>Aldığı</th><th style={th}>İade</th><th style={th}>Ödediği</th><th style={th}>Net</th></tr></thead>
+                <tbody>
+                  {sa.map(a => { const m=cm[a]; const net=(m.s||0)-(m.i||0)-(m.t||0); return (
+                    <tr key={a}><td style={{ ...td, textAlign:"left", fontWeight:600 }}>{RP_AYLAR_UZUN[Number(a.slice(5,7))-1]} {a.slice(0,4)}</td><td style={td}>{rpF(m.s||0,1)}</td><td style={td}>{rpF(m.i||0,1)}</td><td style={td}>{rpF(m.t||0,1)}</td><td style={{ ...td, fontWeight:700 }}>{rpF(net,1)}</td></tr>); })}
+                  <tr><td style={{ ...td, textAlign:"left", fontWeight:700, borderTop:"2px solid "+T.border }}>Toplam</td><td style={{ ...td, fontWeight:700, borderTop:"2px solid "+T.border }}>{rpF(topl.s,1)}</td><td style={{ ...td, fontWeight:700, borderTop:"2px solid "+T.border }}>{rpF(topl.i,1)}</td><td style={{ ...td, fontWeight:700, borderTop:"2px solid "+T.border }}>{rpF(topl.t,1)}</td><td style={{ ...td, fontWeight:700, borderTop:"2px solid "+T.border }}>{rpF(topl.s-topl.i-topl.t,1)}</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div style={{ fontSize:11, color:T.sub, margin:"8px 0 12px", lineHeight:1.5 }}>Aldığı/iade: depo hareketlerindeki satış (FSS) ve iade (FSI), gram × milyem = has; gümüş hariç. Ödediği: #995 HAS tahsilat kayıtları. Mizandaki borç/alacak ile birebir tutmayabilir (işçilik, takas ve düzeltme kayıtları mizanda ayrıca olabilir).</div>
+            <div style={{ fontSize:11, color:T.sub, fontWeight:700, textTransform:"uppercase", letterSpacing:".05em", marginBottom:4 }}>Ödeme geçmişi (has tahsilat)</div>
+            {tl.length===0 ? <div style={{ fontSize:12, color:T.sub }}>Bu dönemde has tahsilat kaydı yok</div> : tl.map((x,i)=>(
+              <div key={i} style={{ display:"flex", justifyContent:"space-between", padding:"7px 0", borderBottom:"1px solid "+T.border, fontSize:13 }}>
+                <span>{new Date(x[0]).toLocaleDateString("tr-TR")}</span><b style={{ fontVariantNumeric:"tabular-nums" }}>{rpF(x[1],2)} has</b>
+              </div>))}
+          </div>}
+        </div>}
+      </div>
+    );
+  }
+  return (
+    <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(340px,1fr))", gap:12, color:T.text }}>
+      <div style={kart}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:4, gap:8, flexWrap:"wrap" }}>
+          <h3 style={{ ...bas, margin:0 }}>Müşteri bakiyeleri <span style={{ fontWeight:500, textTransform:"none", letterSpacing:0, fontSize:12 }}>HAS</span></h3>
+          <div style={{ display:"flex", gap:6 }}>
+            <button onClick={()=>setSifir(a=>!a)} style={{ ...GH, padding:"5px 10px", fontSize:11 }}>{sifir?"Sıfırları gizle":"Sıfırları göster"}</button>
+            <button onClick={appeGec} style={{ ...GH, padding:"5px 10px", fontSize:11 }}>Uygulama kayıtları</button>
+          </div>
+        </div>
+        <div style={{ fontSize:11, color:T.sub, marginBottom:10 }}>Kaynak: Rhino mizanı ({miz.bas} – {miz.bit})</div>
+        <div style={{ overflowX:"auto" }}>
+          <table style={{ width:"100%", borderCollapse:"collapse", minWidth:420 }}>
+            <thead><tr><th style={{ ...th, textAlign:"left" }}>Müşteri</th><th style={th}>Borç</th><th style={th}>Alacak</th><th style={th}>Bakiye</th><th style={th}>Durum</th></tr></thead>
+            <tbody>
+              {liste.map(x => (
+                <tr key={x.kod} onClick={()=>setSec(x.kod)} style={{ cursor:"pointer", background: secili && secili.kod===x.kod ? "rgba(var(--vurgu-rgb),0.10)" : "transparent" }}>
+                  <td style={{ ...td, textAlign:"left", fontWeight:600 }}>{x.ad}</td><td style={td}>{rpF(x.borc,1)}</td><td style={td}>{rpF(x.alacak,1)}</td>
+                  <td style={{ ...td, fontWeight:700 }}>{rpF(x.bak,1)}<div style={{ height:4, background:T.border, borderRadius:2, marginTop:4 }}><i style={{ display:"block", height:4, borderRadius:2, background:"#c9a24a", width:(Math.abs(x.bak)/mx*100)+"%" }}/></div></td>
+                  <td style={td}>{pill(x.bak)}</td>
+                </tr>))}
+              <tr><td style={{ ...td, textAlign:"left", fontWeight:700, borderTop:"2px solid "+T.border }}>Toplam açık</td><td style={{ ...td, borderTop:"2px solid "+T.border }}/><td style={{ ...td, borderTop:"2px solid "+T.border }}/><td style={{ ...td, fontWeight:700, borderTop:"2px solid "+T.border }}>{rpF(topAcik,1)}</td><td style={{ ...td, borderTop:"2px solid "+T.border }}/></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      {secili && <div style={kart}><h3 style={bas}>{secili.ad} <span style={{ fontWeight:500, textTransform:"none", letterSpacing:0, fontSize:12, color:T.sub }}>· {secili.kod.split("\\").pop()}</span></h3>{ic}</div>}
+    </div>
+  );
+}
+
 function KasaMusteriler({ T, GH, BG, RD, musBakiye, kasa, svKasa, kasaModalAc, msk }) {
   const [sekme, setSekme] = useState(msk ? "satis" : "bakiye");
+  const [kaynak, setKaynak] = useState("mizan");
   const liste = Object.entries(musBakiye).map(([ad,d]) => ({ ad, d, bakiye:d.borc-d.odenen })).sort((a,b)=>b.bakiye-a.bakiye);
   const [sec, setSec] = useState("");
   const secili = liste.find(x=>x.ad===sec) || liste[0];
+  if (msk && kaynak==="mizan") return <MusMizanEkrani T={T} GH={GH} msk={msk} appeGec={()=>setKaynak("app")}/>;
   const topB = liste.reduce((s,x)=>s+Math.max(0,x.bakiye),0), mx = Math.max(1e-9, ...liste.map(x=>Math.abs(x.bakiye)));
   const th = { fontSize:11, color:T.sub, fontWeight:600, textAlign:"right", padding:"6px 8px", borderBottom:"1px solid "+T.border, textTransform:"uppercase", letterSpacing:".04em" };
   const td = { color:T.text, padding:"9px 8px", borderBottom:"1px solid "+T.border, textAlign:"right", fontSize:13, fontVariantNumeric:"tabular-nums" };
@@ -3785,7 +3899,7 @@ function KasaMusteriler({ T, GH, BG, RD, musBakiye, kasa, svKasa, kasaModalAc, m
       <div style={kart}>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
           <h3 style={{ ...bas, margin:0 }}>Müşteri bakiyeleri <span style={{ fontWeight:500, textTransform:"none", letterSpacing:0, fontSize:12 }}>HAS</span></h3>
-          <div style={{ display:"flex", gap:6 }}><button onClick={()=>kasaModalAc({tip:"musBaklangic"})} style={{ ...GH, padding:"5px 10px", fontSize:11 }}>+ Başlangıç</button><button onClick={()=>kasaModalAc({tip:"musOde"})} style={{ ...BG, padding:"5px 12px", fontSize:11 }}>+ Ödeme al</button></div>
+          <div style={{ display:"flex", gap:6 }}>{msk && <button onClick={()=>setKaynak("mizan")} style={{ ...GH, padding:"5px 10px", fontSize:11 }}>Mizan</button>}<button onClick={()=>kasaModalAc({tip:"musBaklangic"})} style={{ ...GH, padding:"5px 10px", fontSize:11 }}>+ Başlangıç</button><button onClick={()=>kasaModalAc({tip:"musOde"})} style={{ ...BG, padding:"5px 12px", fontSize:11 }}>+ Ödeme al</button></div>
         </div>
         <div style={{ overflowX:"auto" }}>
           <table style={{ width:"100%", borderCollapse:"collapse", minWidth:420 }}>
