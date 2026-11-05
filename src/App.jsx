@@ -2857,7 +2857,22 @@ function RpSeg({ T, secenekler, aktif, onSec }) {
 }
 
 // ── Genel Bakış ──
-function KasaGenel({ T, GH, atolye, ic, onGit, bos }) {
+function RpBarListe({ T, items, renk, birim="HAS", d=1 }) {
+  const mx = Math.max(1e-9, ...items.map(x=>Math.abs(x.v)));
+  return (
+    <div>
+      {items.map((x,i) => (
+        <div key={x.l} style={{ padding:"7px 0", borderBottom: i<items.length-1 ? "1px solid "+T.border : "none" }}>
+          <div style={{ display:"flex", justifyContent:"space-between", fontSize:13, marginBottom:5 }}>
+            <span>{x.l}</span><b style={{ fontVariantNumeric:"tabular-nums" }}>{rpF(x.v,d)} <span style={{ fontWeight:500, color:T.sub, fontSize:11 }}>{birim}</span></b>
+          </div>
+          <div style={{ height:6, borderRadius:3, background:T.border }}><i style={{ display:"block", height:6, borderRadius:3, background:x.c||renk, width:Math.max(1.5,Math.abs(x.v)/mx*100)+"%" }}/></div>
+        </div>
+      ))}
+    </div>
+  );
+}
+function KasaGenel({ T, GH, atolye, ic, onGit }) {
   const [v] = useRpVeri();
   const [ay, setAy] = useState("");
   if (!v) return <div style={{ fontSize:12, color:T.sub }}>Yükleniyor…</div>;
@@ -2868,17 +2883,19 @@ function KasaGenel({ T, GH, atolye, ic, onGit, bos }) {
   const depo = v.depo.length ? v.depo[v.depo.length-1] : null;
   const altin = rpAltinSatirlari(depo, mz ? mz.h : null);
   const aylik = aylar.map(a => ({ a, o:rpOzet(v.giderler, v.satislar, a) }));
-  const f1 = (x) => rpF(x,1);
-  // KPI: mizan varsa muhasebe, yoksa iç sistem
-  const alacak = mz ? mz.alacak : ic.alacak, borc = mz ? mz.borc : ic.borc, stok = mz ? mz.stok : ic.stok, kasaH = mz ? mz.kasa : null;
-  const net = stok + alacak + (kasaH||0) - borc;
+  const alacak = mz ? mz.alacak : ic.alacak, borc = mz ? mz.borc : ic.borc, stok = mz ? mz.stok : ic.stok, kasaH = mz ? mz.kasa : 0;
+  const varlik = stok + alacak + kasaH, net = varlik - borc;
+  const RENK = { stok:"#c9a24a", alacak:"#2f7fb8", kasa:"#2e9d6a", borc:"#d0584b", net:"#6b5fb5" };
   const kpiler = [
-    { l:"Stok", d: mz ? "153 Ticari mallar" : "Kasa & stok kayıtları", x:stok },
-    { l:"Alacak", d: mz ? "Müşteri bakiyeleri" : "Müşteri bakiyeleri", x:alacak },
-    { l:"Borç", d: mz ? "Satıcılar" : "Dökümcü", x:borc },
-    ...(kasaH!=null ? [{ l:"Kasa", d:"Merkez kasa", x:kasaH }] : []),
-    { l:"Net pozisyon", d:"Stok + alacak"+(kasaH!=null?" + kasa":"")+" − borç", x:net, renk:net<0 },
-  ];
+    { l:"Stok", x:stok, c:RENK.stok, d:mz?"Ticari mallar (153)":"Kasa & stok kayıtları" },
+    { l:"Alacak", x:alacak, c:RENK.alacak, d:"Müşteriler (120)" },
+    { l:"Kasa", x:kasaH, c:RENK.kasa, d:"Merkez kasa (100)", gizle:!mz },
+    { l:"Borç", x:borc, c:RENK.borc, d:mz?"Satıcılar (320)":"Dökümcü" },
+  ].filter(k=>!k.gizle);
+  const dal = (kod, ust) => { const n = mz && mz.h[kod]; return n ? n.cocuk.map(c=>mz.h[c]).map(x=>({ l:x.ad.replace(/^\d+\s*/,"").replace(/\s*HESAP\s*/i," ").trim(), v:x.has })).filter(x=>Math.abs(x.v)>0.05).sort((a,b)=>Math.abs(b.v)-Math.abs(a.v)) : []; };
+  const stokDal = mz ? ((mz.h["153 001"]||{cocuk:[]}).cocuk||[]).map(c=>mz.h[c]).map(x=>({ l:x.ad, v:x.has })).filter(x=>Math.abs(x.v)>0.05).sort((a,b)=>b.v-a.v) : [];
+  const alacakDal = mz ? (mz.h["120 001"]?.cocuk||[]).map(c=>mz.h[c]).map(x=>({ l:x.ad.replace(/ MÜŞTERİLER$/i,""), v:x.has })).filter(x=>Math.abs(x.v)>0.05).sort((a,b)=>b.v-a.v) : [];
+  const borcDal = mz ? (mz.h["320 001"]?.cocuk||[]).map(c=>mz.h[c]).map(x=>({ l:x.ad.replace(/ SATICILAR$/i,""), v:-x.has })).filter(x=>Math.abs(x.v)>0.05).sort((a,b)=>b.v-a.v) : [];
   // Dikkat gerekenler
   const uyar = [];
   altin.forEach(a => { if (a.fark != null && Math.abs(a.fark) >= 10) uyar.push({ s:"r", t:a.ad+" ayarında sayım farkı "+(a.fark>0?"+":"")+rpF(a.fark,0)+" HAS", d:"Mizan "+rpF(a.mizan,1)+" · sayım "+rpF(a.has,1), git:"stok" }); });
@@ -2890,96 +2907,138 @@ function KasaGenel({ T, GH, atolye, ic, onGit, bos }) {
     const a2 = rpAyListe(v.giderler, v.satislar); const eksik = [];
     if (a2.length > 1) { const [y0,m0] = a2[0].split("-").map(Number), [y1,m1] = a2[a2.length-1].split("-").map(Number);
       for (let t = y0*12+m0-1; t <= y1*12+m1-1; t++) { const k = Math.floor(t/12)+"-"+String(t%12+1).padStart(2,"0"); if (!a2.includes(k)) eksik.push(rpAyAd(k)); } }
-    uyar.push(eksik.length ? { s:"y", t:"Eksik rapor ayı: "+eksik.join(", "), d:"Giderler/satış dosyasını yükleyin", git:"raporlar" } : { s:"g", t:"Rapor kapsamı tam", d:rpAyAd(a2[0])+" – "+rpAyAd(a2[a2.length-1]) });
-  } else uyar.push({ s:"y", t:"Henüz rapor yüklenmedi", d:"Raporlar sekmesinden mizan, giderler ve satış dosyalarını yükleyin", git:"raporlar" });
-  const renkS = { r:T.danger||"#e85a4f", y:"#c9a24a", g:"#1f7a4d" };
-  // Atölye kasası kartı
+    if (eksik.length) uyar.push({ s:"y", t:"Eksik rapor ayı: "+eksik.join(", "), d:"Giderler/satış dosyasını yükleyin", git:"raporlar" });
+  }
+  const renkS = { r:"#d0584b", y:"#c9a24a", g:"#2e9d6a" };
+  const eksikler = [];
+  if (!mizan) eksikler.push("Mizan"); if (!depo) eksikler.push("Depo sayımı"); if (!v.giderler.length) eksikler.push("Giderler"); if (!v.satislar.length) eksikler.push("Satış");
+  // Atölye
   const AK = [{ k:"satilacak", l:"Satılacak ürün", c:"#c9a24a" }, { k:"tel", l:"Tel kaynak", c:"#5b7fa6" }, { k:"yariM", l:"Yarı mamul", c:"#6aa57f" }, { k:"bekleyen", l:"Bekleyen ürün", c:"#b9739b" }, { k:"hurda", l:"Hurda", c:"#8f8a7c" }, { k:"toz", l:"Toz", c:"#b8b09a" }];
   const num = (x) => Number(x)||0;
   const son = atolye ? atolye.son : null;
   const akToplam = son ? AK.reduce((s,f)=>s+num(son[f.k]),0) : 0;
   const goldLoc = depo ? ["sayim","tezgah","cila","tasdizim","firecila"].map(k => ({ l:RP_LOC.find(x=>x.k===k).l, x: altin.reduce((s,a)=>s+a.konum[RP_LOC.findIndex(x=>x.k===k)],0) })) : [];
-  const kart = { background:T.card, border:"1px solid "+T.border, borderRadius:12, padding:"16px 18px" };
-  const bas = { margin:"0 0 12px", fontSize:11.5, fontWeight:700, color:T.sub, textTransform:"uppercase", letterSpacing:".06em", display:"flex", justifyContent:"space-between", alignItems:"center" };
-  const grid = (cols) => ({ display:"grid", gridTemplateColumns:cols, gap:12, marginBottom:12 });
+  const kart = { background:T.card, border:"1px solid "+T.border, borderRadius:14, padding:"18px 20px", boxShadow:"0 1px 3px rgba(0,0,0,.08)" };
+  const bas = { margin:"0 0 14px", fontSize:12, fontWeight:700, color:T.text, letterSpacing:".02em", display:"flex", justifyContent:"space-between", alignItems:"center" };
+  const altBas = { fontWeight:500, color:T.sub, fontSize:11.5 };
+  const grid = (cols) => ({ display:"grid", gridTemplateColumns:cols, gap:14, marginBottom:14 });
   const musPay = Object.values(o.musteri).sort((a,b)=>b.hasGr-a.hasGr);
   const musTop = musPay.reduce((s,m)=>s+m.hasGr,0);
-  const pCol = ["#c9a24a","#5b7fa6","#6aa57f","#b9739b","#8f8a7c"];
+  const pCol = ["#c9a24a","#2f7fb8","#2e9d6a","#b9739b","#8f8a7c"];
   const payList = [...musPay.slice(0,4).map(m=>({ ad:m.ad, p:m.hasGr/(musTop||1)*100 })), ...(musPay.length>4 ? [{ ad:"Diğer", p:musPay.slice(4).reduce((s,m)=>s+m.hasGr,0)/(musTop||1)*100 }] : [])];
+  const topBar = [{ l:"Stok", x:stok, c:RENK.stok }, { l:"Alacak", x:alacak, c:RENK.alacak }, { l:"Kasa", x:Math.max(0,kasaH), c:RENK.kasa }];
   return (
     <div style={{ color:T.text }}>
-      <div style={{ display:"flex", gap:8, alignItems:"center", marginBottom:12, flexWrap:"wrap" }}>
-        <select value={ay} onChange={e=>setAy(e.target.value)} style={{ background:T.card, border:"1px solid "+T.border, borderRadius:8, padding:"7px 12px", color:T.text, fontSize:12 }}>
+      <div style={{ display:"flex", gap:10, alignItems:"center", marginBottom:14, flexWrap:"wrap" }}>
+        {aylar.length>0 && <select value={ay} onChange={e=>setAy(e.target.value)} style={{ background:T.card, border:"1px solid "+T.border, borderRadius:8, padding:"7px 12px", color:T.text, fontSize:12 }}>
           <option value="">Tüm dönem</option>{aylar.map(a=><option key={a} value={a}>{rpAyAd(a)}</option>)}
-        </select>
-        <span style={{ fontSize:11, color:T.sub }}>{mizan ? "Muhasebe: son mizan "+mizan.bit : "Mizan yüklenmedi — iç kayıtlar gösteriliyor"}</span>
+        </select>}
+        <span style={{ fontSize:12, color:T.sub }}>{mizan ? "Muhasebe verisi: "+mizan.bas+" – "+mizan.bit+" mizanı" : "Mizan yüklenmedi — iç kayıtlar gösteriliyor"}</span>
       </div>
-      <div style={grid("repeat(auto-fit,minmax(170px,1fr))")}>
+
+      <div style={{ ...kart, marginBottom:14, padding:"22px 24px" }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-end", gap:20, flexWrap:"wrap" }}>
+          <div>
+            <div style={{ fontSize:12, color:T.sub, fontWeight:700, letterSpacing:".06em", textTransform:"uppercase" }}>Net pozisyon</div>
+            <div style={{ fontSize:42, fontWeight:800, letterSpacing:"-.03em", lineHeight:1.1, marginTop:4, color: net<0?"#d0584b":T.text, fontVariantNumeric:"tabular-nums" }}>{rpF(net,1)}<span style={{ fontSize:16, color:T.sub, fontWeight:600, marginLeft:8 }}>HAS</span></div>
+            <div style={{ fontSize:12, color:T.sub, marginTop:4 }}>Stok + alacak{mz?" + kasa":""} − borç</div>
+          </div>
+          <div style={{ display:"flex", gap:26, flexWrap:"wrap" }}>
+            <div><div style={{ fontSize:11, color:T.sub }}>Toplam varlık</div><div style={{ fontSize:20, fontWeight:700, fontVariantNumeric:"tabular-nums" }}>{rpF(varlik,1)}</div></div>
+            <div><div style={{ fontSize:11, color:T.sub }}>Toplam borç</div><div style={{ fontSize:20, fontWeight:700, fontVariantNumeric:"tabular-nums", color:RENK.borc }}>{rpF(borc,1)}</div></div>
+          </div>
+        </div>
+        <div style={{ display:"flex", height:12, borderRadius:6, overflow:"hidden", gap:2, marginTop:18 }}>
+          {topBar.map(b => b.x>0 && <i key={b.l} style={{ display:"block", height:"100%", width:(b.x/(varlik||1)*100)+"%", background:b.c }}/>)}
+        </div>
+        <div style={{ display:"flex", gap:18, marginTop:8, flexWrap:"wrap", fontSize:12 }}>
+          {topBar.map(b => b.x>0 && <span key={b.l}><i style={{ display:"inline-block", width:9, height:9, borderRadius:3, marginRight:6, background:b.c }}/>{b.l} <b>%{rpF(b.x/(varlik||1)*100,0)}</b></span>)}
+        </div>
+      </div>
+
+      <div style={grid("repeat(auto-fit,minmax(200px,1fr))")}>
         {kpiler.map(k => (
-          <div key={k.l} style={{ ...kart, padding:"14px 16px" }}>
-            <div style={{ fontSize:11, color:T.sub, fontWeight:600, textTransform:"uppercase", letterSpacing:".05em" }}>{k.l}</div>
-            <div style={{ fontSize:26, fontWeight:700, marginTop:6, letterSpacing:"-.02em", color: k.renk?(T.danger||"#e85a4f"):T.text, fontVariantNumeric:"tabular-nums" }}>{f1(k.x)}<small style={{ fontSize:12, color:T.sub, marginLeft:4 }}>HAS</small></div>
-            <div style={{ fontSize:11, color:T.sub, marginTop:4 }}>{k.d}</div>
+          <div key={k.l} style={{ ...kart, padding:"16px 18px", borderTop:"4px solid "+k.c }}>
+            <div style={{ fontSize:12, color:T.sub, fontWeight:700 }}>{k.l}</div>
+            <div style={{ fontSize:28, fontWeight:800, marginTop:6, letterSpacing:"-.02em", fontVariantNumeric:"tabular-nums" }}>{rpF(k.x,1)}<small style={{ fontSize:12, color:T.sub, marginLeft:5, fontWeight:600 }}>HAS</small></div>
+            <div style={{ fontSize:12, color:T.sub, marginTop:4 }}>{k.d}</div>
           </div>
         ))}
       </div>
 
-      {atolye && (
-        <div style={{ ...kart, marginBottom:12 }}>
-          <h3 style={bas}>Atölyede bu hafta <span style={{ fontWeight:500, textTransform:"none", letterSpacing:0, color:T.sub, fontSize:12 }}>{son ? "gram · "+new Date(son.tarih).toLocaleDateString("tr-TR") : ""}</span></h3>
-          {!son ? <div style={{ fontSize:12, color:T.sub }}>Henüz atölye kasası kaydı yok. Stok sekmesinden ilk sayımı ekleyin. <button onClick={()=>onGit("stok")} style={{ ...GH, marginLeft:8 }}>Stok'a git</button></div> : (
-            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(300px,1fr))", gap:26 }}>
-              <div>
-                <div style={{ display:"flex", height:14, borderRadius:7, overflow:"hidden", gap:2 }}>
-                  {AK.map(f => num(son[f.k])>0 && <i key={f.k} style={{ display:"block", height:"100%", width:(num(son[f.k])/(akToplam||1)*100)+"%", background:f.c }}/>)}
-                </div>
-                <div style={{ marginTop:10 }}>
-                  {AK.map(f => (
-                    <div key={f.k} style={{ display:"flex", justifyContent:"space-between", fontSize:12.5, padding:"6px 0", borderBottom:"1px solid "+T.border }}>
-                      <span><i style={{ display:"inline-block", width:9, height:9, borderRadius:3, marginRight:8, background:f.c }}/>{f.l}</span>
-                      <span><b style={{ fontVariantNumeric:"tabular-nums" }}>{rpF(num(son[f.k]),1)}</b> <span style={{ color:T.sub }}>gr{akToplam>0?" · %"+rpF(num(son[f.k])/akToplam*100,0):""}</span></span>
-                    </div>
-                  ))}
-                </div>
+      {eksikler.length>0 && (
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:12, flexWrap:"wrap", padding:"12px 16px", borderRadius:12, border:"1px dashed "+T.border, marginBottom:14, fontSize:13 }}>
+          <span><b>Henüz yüklenmedi:</b> {eksikler.join(" · ")} <span style={{ color:T.sub }}>— yüklendikçe bu sayfa zenginleşir.</span></span>
+          <button onClick={()=>onGit("raporlar")} style={{ ...GH, fontSize:12 }}>Raporlar'a git →</button>
+        </div>
+      )}
+
+      {mz && (stokDal.length>0 || alacakDal.length>0 || borcDal.length>0) && (
+        <div style={grid("repeat(auto-fit,minmax(300px,1fr))")}>
+          {stokDal.length>0 && <div style={kart}><h3 style={bas}>Stok dağılımı <span style={altBas}>HAS · {rpF(stok,0)} toplam</span></h3><RpBarListe T={T} items={stokDal} renk={RENK.stok}/></div>}
+          {alacakDal.length>0 && <div style={kart}><h3 style={bas}>Alacak dağılımı <span style={altBas}>para birimine göre</span></h3><RpBarListe T={T} items={alacakDal} renk={RENK.alacak}/></div>}
+          {borcDal.length>0 && <div style={kart}><h3 style={bas}>Borç dağılımı <span style={altBas}>para birimine göre</span></h3><RpBarListe T={T} items={borcDal} renk={RENK.borc}/></div>}
+        </div>
+      )}
+
+      {son && (
+        <div style={{ ...kart, marginBottom:14 }}>
+          <h3 style={bas}>Atölyede bu hafta <span style={altBas}>gram · {new Date(son.tarih).toLocaleDateString("tr-TR")}</span></h3>
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(300px,1fr))", gap:26 }}>
+            <div>
+              <div style={{ display:"flex", height:14, borderRadius:7, overflow:"hidden", gap:2 }}>
+                {AK.map(f => num(son[f.k])>0 && <i key={f.k} style={{ display:"block", height:"100%", width:(num(son[f.k])/(akToplam||1)*100)+"%", background:f.c }}/>)}
               </div>
-              <div>
-                {goldLoc.length>0 && (<div>
-                  <div style={{ fontSize:12, color:T.sub, fontWeight:600, marginBottom:6 }}>Altın hangi konumda? <span style={{ fontWeight:400 }}>(depo sayımı, gram)</span></div>
-                  <div style={{ display:"flex", flexWrap:"wrap", gap:8 }}>
-                    {goldLoc.map(g => (<div key={g.l} style={{ flex:"1 1 90px", background:"rgba(var(--vurgu-rgb),0.07)", borderRadius:8, padding:"8px 10px" }}><div style={{ fontSize:11, color:T.sub }}>{g.l}</div><div style={{ fontSize:16, fontWeight:700, fontVariantNumeric:"tabular-nums" }}>{rpF(g.x,0)}</div></div>))}
-                  </div></div>)}
-                <div style={{ fontSize:11.5, color:T.sub, marginTop:12 }}>Toplam (hurda ve toz hariç): <b style={{ color:T.text }}>{rpF(akToplam-num(son.hurda)-num(son.toz),1)}</b> gr</div>
-                {son.not ? <div style={{ fontSize:11.5, color:T.sub, marginTop:4 }}>Not: {son.not}</div> : null}
+              <div style={{ marginTop:10 }}>
+                {AK.map(f => (
+                  <div key={f.k} style={{ display:"flex", justifyContent:"space-between", fontSize:13, padding:"6px 0", borderBottom:"1px solid "+T.border }}>
+                    <span><i style={{ display:"inline-block", width:9, height:9, borderRadius:3, marginRight:8, background:f.c }}/>{f.l}</span>
+                    <span><b style={{ fontVariantNumeric:"tabular-nums" }}>{rpF(num(son[f.k]),1)}</b> <span style={{ color:T.sub }}>gr{akToplam>0?" · %"+rpF(num(son[f.k])/akToplam*100,0):""}</span></span>
+                  </div>
+                ))}
               </div>
             </div>
-          )}
+            <div>
+              {goldLoc.length>0 && (<div>
+                <div style={{ fontSize:12, color:T.sub, fontWeight:600, marginBottom:6 }}>Altın hangi konumda? <span style={{ fontWeight:400 }}>(depo sayımı, gram)</span></div>
+                <div style={{ display:"flex", flexWrap:"wrap", gap:8 }}>
+                  {goldLoc.map(g => (<div key={g.l} style={{ flex:"1 1 90px", border:"1px solid "+T.border, borderRadius:10, padding:"8px 10px" }}><div style={{ fontSize:11, color:T.sub }}>{g.l}</div><div style={{ fontSize:17, fontWeight:700, fontVariantNumeric:"tabular-nums" }}>{rpF(g.x,0)}</div></div>))}
+                </div></div>)}
+              <div style={{ fontSize:12, color:T.sub, marginTop:12 }}>Toplam (hurda ve toz hariç): <b style={{ color:T.text }}>{rpF(akToplam-num(son.hurda)-num(son.toz),1)}</b> gr</div>
+              {son.not ? <div style={{ fontSize:12, color:T.sub, marginTop:4 }}>Not: {son.not}</div> : null}
+            </div>
+          </div>
+        </div>
+      )}
+      {atolye && !son && (
+        <div style={{ ...kart, marginBottom:14, display:"flex", justifyContent:"space-between", alignItems:"center", gap:10, flexWrap:"wrap" }}>
+          <span style={{ fontSize:13 }}><b>Atölye kasası:</b> <span style={{ color:T.sub }}>henüz kayıt yok. Haftalık sayımı girince burada özet görünür.</span></span>
+          <button onClick={()=>onGit("stok")} style={{ ...GH, fontSize:12 }}>Stok'a git →</button>
         </div>
       )}
 
       {(v.satislar.length>0 || v.giderler.length>0) && (
         <div style={grid("repeat(auto-fit,minmax(300px,1fr))")}>
-          {v.satislar.length>0 && <div style={kart}><h3 style={bas}>Aylık satış <span style={{ fontWeight:500, textTransform:"none", letterSpacing:0, fontSize:12 }}>HAS gram</span></h3><RpSutun T={T} veri={aylik.map(x=>({ e:rpAyAd(x.a).split(" ")[0], v:x.o.hasGr }))}/></div>}
-          {v.satislar.length>0 && <div style={kart}><h3 style={bas}>Müşteri yoğunlaşması <span style={{ fontWeight:500, textTransform:"none", letterSpacing:0, fontSize:12 }}>satış payı</span></h3>
+          {v.satislar.length>0 && <div style={kart}><h3 style={bas}>Aylık satış <span style={altBas}>HAS gram</span></h3><RpSutun T={T} veri={aylik.map(x=>({ e:rpAyAd(x.a).split(" ")[0], v:x.o.hasGr }))}/></div>}
+          {v.satislar.length>0 && <div style={kart}><h3 style={bas}>Müşteri yoğunlaşması <span style={altBas}>satış payı</span></h3>
             <div style={{ display:"flex", height:14, borderRadius:7, overflow:"hidden", gap:2 }}>{payList.map((p,i)=><i key={p.ad} style={{ display:"block", height:"100%", width:p.p+"%", background:pCol[i%5] }}/>)}</div>
-            <div style={{ marginTop:10 }}>{payList.map((p,i)=>(<div key={p.ad} style={{ display:"flex", justifyContent:"space-between", fontSize:12.5, padding:"6px 0", borderBottom:"1px solid "+T.border }}><span><i style={{ display:"inline-block", width:9, height:9, borderRadius:3, marginRight:8, background:pCol[i%5] }}/>{p.ad}</span><b>%{rpF(p.p,1)}</b></div>))}</div></div>}
+            <div style={{ marginTop:10 }}>{payList.map((p,i)=>(<div key={p.ad} style={{ display:"flex", justifyContent:"space-between", fontSize:13, padding:"6px 0", borderBottom:"1px solid "+T.border }}><span><i style={{ display:"inline-block", width:9, height:9, borderRadius:3, marginRight:8, background:pCol[i%5] }}/>{p.ad}</span><b>%{rpF(p.p,1)}</b></div>))}</div></div>}
+          {v.giderler.length>0 && <div style={kart}><h3 style={bas}>Aylık masraf <span style={altBas}>HAS</span></h3><RpSutun T={T} renk="#5b7fa6" veri={aylik.map(x=>({ e:rpAyAd(x.a).split(" ")[0], v:x.o.gider }))} yuk={100}/><div style={{ fontSize:11.5, color:T.sub, marginTop:8 }}>Kapanış aktarımları ve taş kalemleri hariç</div></div>}
         </div>
       )}
-      <div style={grid("repeat(auto-fit,minmax(300px,1fr))")}>
+
+      <div style={grid("repeat(auto-fit,minmax(320px,1fr))")}>
+        <div style={kart}><h3 style={bas}>En büyük alacaklar <span style={{ ...altBas, cursor:"pointer", color:T.gold, fontWeight:600 }} onClick={()=>onGit("ab")}>Tümü →</span></h3>
+          {ac.length===0 ? <div style={{ fontSize:13, color:T.sub }}>Açık bakiye yok</div> : <RpBarListe T={T} items={ac.slice(0,6).map(x=>({ l:x.ad, v:x.bakiye }))} renk="#c9a24a" d={1}/>}
+        </div>
         <div style={kart}><h3 style={bas}>Dikkat gerekenler</h3>
-          {uyar.map((u,i)=>(
+          {uyar.length===0 ? <div style={{ display:"flex", alignItems:"center", gap:10, fontSize:13 }}><i style={{ width:10, height:10, borderRadius:"50%", background:renkS.g }}/>Şu an dikkat gerektiren bir durum yok.</div> : uyar.map((u,i)=>(
             <div key={i} style={{ display:"flex", gap:10, alignItems:"flex-start", padding:"9px 0", borderBottom: i<uyar.length-1?"1px solid "+T.border:"none" }}>
-              <i style={{ width:8, height:8, borderRadius:"50%", marginTop:6, flex:"none", background:renkS[u.s] }}/>
-              <div style={{ flex:1 }}><div style={{ fontSize:12.5, fontWeight:600 }}>{u.t}</div><div style={{ fontSize:11.5, color:T.sub }}>{u.d}</div></div>
-              {u.git && <button onClick={()=>onGit(u.git)} style={{ background:"transparent", border:"none", color:T.gold, fontSize:12, fontWeight:600, cursor:"pointer", whiteSpace:"nowrap" }}>Aç →</button>}
+              <i style={{ width:9, height:9, borderRadius:"50%", marginTop:5, flex:"none", background:renkS[u.s] }}/>
+              <div style={{ flex:1 }}><div style={{ fontSize:13, fontWeight:600 }}>{u.t}</div><div style={{ fontSize:12, color:T.sub }}>{u.d}</div></div>
+              {u.git && <button onClick={()=>onGit(u.git)} style={{ background:"transparent", border:"none", color:T.gold, fontSize:12, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap" }}>Aç →</button>}
             </div>))}
         </div>
-        <div style={kart}><h3 style={bas}>En büyük alacaklar <span style={{ fontWeight:500, textTransform:"none", letterSpacing:0, fontSize:12, cursor:"pointer" }} onClick={()=>onGit("ab")}>Tümü →</span></h3>
-          {ac.length===0 ? <div style={{ fontSize:12, color:T.sub }}>Açık bakiye yok</div> : ac.slice(0,5).map(x=>(
-            <div key={x.ad} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:10, padding:"8px 0", borderBottom:"1px solid "+T.border }}>
-              <span style={{ fontSize:13 }}>{x.ad}</span><span style={{ display:"flex", alignItems:"center", gap:10 }}><b style={{ fontVariantNumeric:"tabular-nums" }}>{rpF(x.bakiye,1)}</b><span style={{ width:70, height:6, background:T.border, borderRadius:3, display:"inline-block" }}><i style={{ display:"block", height:6, borderRadius:3, background:"#c9a24a", width:Math.max(2,x.bakiye/(ac[0].bakiye||1)*100)+"%" }}/></span></span>
-            </div>))}
-        </div>
-        {v.giderler.length>0 && <div style={kart}><h3 style={bas}>Aylık masraf <span style={{ fontWeight:500, textTransform:"none", letterSpacing:0, fontSize:12 }}>HAS</span></h3><RpSutun T={T} renk="#5b7fa6" veri={aylik.map(x=>({ e:rpAyAd(x.a).split(" ")[0], v:x.o.gider }))} yuk={100}/><div style={{ fontSize:11, color:T.sub, marginTop:8 }}>Kapanış aktarımları ve taş kalemleri hariç</div></div>}
       </div>
     </div>
   );
