@@ -3646,6 +3646,7 @@ function MusSatisPaneli({ T, GH, musAd, odemeler }) {
   const [aralikAcik, setAralikAcik] = useState(false);
   const [bas, setBas] = useState(""); const [bit, setBit] = useState("");
   const [eslAcik, setEslAcik] = useState(false);
+  const [birim, setBirim] = useState("brut"); // brut = brüt gram, has = has gram
   useEffect(() => { let i=false; ld("v7rp_eslesme", { harita:{} }).then(d=>{ if(!i) setHarita((d&&d.harita)||{}); }); return ()=>{ i=true; }; }, []);
   if (!v || !harita) return <div style={{ fontSize:12, color:T.sub }}>Yükleniyor…</div>;
   const tumAnahtar = {}; v.satislar.forEach(s => { const k = rpSatisAnahtar(s); if (!tumAnahtar[k]) tumAnahtar[k] = { ad: s[8]||s[7]||"?", kod:s[7]||"", gr:0 }; tumAnahtar[k].gr += s[3]; });
@@ -3665,9 +3666,11 @@ function MusSatisPaneli({ T, GH, musAd, odemeler }) {
     return true;
   };
   const sat = benim.filter(filtre);
-  const topGr = sat.reduce((t,s)=>t+s[3],0), evrak = new Set(sat.map(s=>s[1])).size;
+  const dg = (s) => birim==="has" ? s[3] : (rpBrutGr(s) ? rpBrutGr(s).gr : s[3]);
+  const BR = birim==="has" ? "HAS" : "GR";
+  const topGr = sat.reduce((t,s)=>t+dg(s),0), evrak = new Set(sat.map(s=>s[1])).size;
   // aylık döküm
-  const aylik = {}; sat.forEach(s => { const k = s[0].slice(0,7); const m = aylik[k]||(aylik[k]={ gr:0, kalem:0, ev:new Set(), tahsilat:0 }); m.gr+=s[3]; m.kalem++; m.ev.add(s[1]); });
+  const aylik = {}; sat.forEach(s => { const k = s[0].slice(0,7); const m = aylik[k]||(aylik[k]={ gr:0, kalem:0, ev:new Set(), tahsilat:0 }); m.gr+=dg(s); m.kalem++; m.ev.add(s[1]); });
   const odeme = (odemeler||[]).filter(o=>o.tip!=="baslangic_bakiye");
   const odemeFiltre = odeme.filter(o => { const t = new Date(o.tarih).toISOString().slice(0,10); return filtre([t]); });
   odemeFiltre.forEach(o => { const k = new Date(o.tarih).toISOString().slice(0,7); const m = aylik[k]||(aylik[k]={ gr:0, kalem:0, ev:new Set(), tahsilat:0 }); m.tahsilat += o.has; });
@@ -3675,11 +3678,11 @@ function MusSatisPaneli({ T, GH, musAd, odemeler }) {
   const topTahsilat = odemeFiltre.reduce((t,o)=>t+o.has,0);
   const mxAy = Math.max(1e-9, ...aylikListe.map(k=>aylik[k].gr));
   // dağılım
-  const dag = (fn) => { const m={}; sat.forEach(s=>{ const k=fn(s); m[k]=(m[k]||0)+s[3]; }); return Object.entries(m).sort((a,b)=>b[1]-a[1]).slice(0,6); };
+  const dag = (fn) => { const m={}; sat.forEach(s=>{ const k=fn(s); m[k]=(m[k]||0)+dg(s); }); return Object.entries(m).sort((a,b)=>b[1]-a[1]).slice(0,6); };
   const ayarDag = dag(s => { const m = String(s[2]).match(/(\d{1,2})K\b/i); return m ? m[1]+"K" : "Diğer"; });
   const grupDag = dag(s => s[10] || "Diğer");
   // evrak listesi (tek ay veya aralık seçiliyse)
-  const evrakListe = (() => { const m={}; sat.forEach(s=>{ const e=m[s[1]]||(m[s[1]]={ tarih:s[0], no:s[1], kalem:0, gr:0 }); e.kalem++; e.gr+=s[3]; }); return Object.values(m).sort((a,b)=>b.tarih.localeCompare(a.tarih)||String(b.no).localeCompare(String(a.no))).slice(0,60); })();
+  const evrakListe = (() => { const m={}; sat.forEach(s=>{ const e=m[s[1]]||(m[s[1]]={ tarih:s[0], no:s[1], kalem:0, gr:0 }); e.kalem++; e.gr+=dg(s); }); return Object.values(m).sort((a,b)=>b.tarih.localeCompare(a.tarih)||String(b.no).localeCompare(String(a.no))).slice(0,60); })();
   const th = { fontSize:11, color:T.sub, fontWeight:600, textAlign:"right", padding:"6px 8px", borderBottom:"1px solid "+T.border, textTransform:"uppercase", letterSpacing:".04em" };
   const td = { color:T.text, padding:"8px", borderBottom:"1px solid "+T.border, textAlign:"right", fontSize:13, fontVariantNumeric:"tabular-nums" };
   const dugme = (aktif, pasif=false) => ({ border:"1px solid "+(aktif?T.gold:T.border), background: aktif?"rgba(var(--vurgu-rgb),0.12)":"transparent", color: aktif?T.text:(pasif?T.sub+"":T.text), opacity: pasif?0.45:1, borderRadius:8, padding:"5px 10px", fontSize:12, fontWeight: aktif?700:500, cursor:"pointer" });
@@ -3725,9 +3728,14 @@ function MusSatisPaneli({ T, GH, musAd, odemeler }) {
           </div>
         )}
       </div>
-      <div style={{ fontSize:12, color:T.sub, marginBottom:8 }}>Gösterilen dönem: <b style={{ color:T.text }}>{donemYazi}</b></div>
+      <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap", marginBottom:8 }}>
+        <span style={{ fontSize:12, color:T.sub }}>Gösterilen dönem: <b style={{ color:T.text }}>{donemYazi}</b></span>
+        <span style={{ marginLeft:"auto", display:"inline-flex", border:"1px solid "+T.border, borderRadius:8, overflow:"hidden" }}>
+          {[["brut","Brüt gram"],["has","Has"]].map(([k,l])=><button key={k} onClick={()=>setBirim(k)} style={{ border:"none", padding:"5px 12px", fontSize:12, fontWeight:600, cursor:"pointer", background: birim===k?"rgba(var(--vurgu-rgb),0.18)":"transparent", color:T.text }}>{l}</button>)}
+        </span>
+      </div>
       <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(120px,1fr))", gap:8, marginBottom:14 }}>
-        {[["Satılan mal", rpF(topGr,1)+" HAS"],["Evrak", rpF(evrak,0)],["Kalem", rpF(sat.length,0)],["Tahsilat (iç kayıt)", rpF(topTahsilat,1)+" has"]].map(([l,x])=>(
+        {[["Satılan mal ("+(birim==="has"?"has":"brüt")+")", rpF(topGr,1)+" "+BR],["Evrak", rpF(evrak,0)],["Kalem", rpF(sat.length,0)],["Tahsilat (iç kayıt)", rpF(topTahsilat,1)+" has"]].map(([l,x])=>(
           <div key={l} style={{ border:"1px solid "+T.border, borderRadius:10, padding:"9px 11px" }}><div style={{ fontSize:11, color:T.sub }}>{l}</div><div style={{ fontSize:18, fontWeight:800, fontVariantNumeric:"tabular-nums" }}>{x}</div></div>))}
       </div>
       {sat.length===0 ? <div style={{ fontSize:13, color:T.sub }}>Bu dönemde satış kaydı yok.</div> : (
@@ -3735,7 +3743,7 @@ function MusSatisPaneli({ T, GH, musAd, odemeler }) {
           {aylikListe.length>0 && (
             <div style={{ overflowX:"auto", marginBottom:14 }}>
               <table style={{ width:"100%", borderCollapse:"collapse", minWidth:420 }}>
-                <thead><tr><th style={{ ...th, textAlign:"left" }}>Ay</th><th style={th}>Satış (HAS)</th><th style={th}>Evrak</th><th style={th}>Tahsilat</th><th style={{ ...th, textAlign:"left", width:"22%" }}></th></tr></thead>
+                <thead><tr><th style={{ ...th, textAlign:"left" }}>Ay</th><th style={th}>Satış ({BR})</th><th style={th}>Evrak</th><th style={th}>Tahsilat</th><th style={{ ...th, textAlign:"left", width:"22%" }}></th></tr></thead>
                 <tbody>
                   {aylikListe.map(k => { const m = aylik[k]; const [y, mm] = k.split("-"); return (
                     <tr key={k} onClick={()=>{ setAralikAcik(false); setYil(y); setAy(mm); }} style={{ cursor:"pointer" }}>
@@ -3775,13 +3783,19 @@ function MusMizanEkrani({ T, GH, msk, appeGec }) {
   const [sekme, setSekme] = useState("ozet");
   const [yil, setYil] = useState("");
   const [sifir, setSifir] = useState(false);
+  const [birim, setBirim] = useState("brut");
   useEffect(() => { let i=false; ld("v7rp_ozet", null).then(d=>{ if(!i) setOz(d||null); }); return ()=>{ i=true; }; }, []);
   if (!v || oz===undefined) return <div style={{ fontSize:12, color:T.sub }}>Yükleniyor…</div>;
   const miz = rpSonMizan(v.mizanlar);
   const kart = { background:(T.id==="beyaz"?"#ffffff":T.card), border:"1px solid "+T.border, borderRadius:12, padding:"16px 18px" };
   const bas = { margin:"0 0 12px", fontSize:11.5, fontWeight:700, color:T.sub, textTransform:"uppercase", letterSpacing:".06em" };
-  const th = { fontSize:11, color:T.sub, fontWeight:600, textAlign:"right", padding:"6px 8px", borderBottom:"1px solid "+T.border, textTransform:"uppercase", letterSpacing:".04em" };
-  const td = { color:T.text, padding:"9px 8px", borderBottom:"1px solid "+T.border, textAlign:"right", fontSize:13, fontVariantNumeric:"tabular-nums" };
+  const th = { fontSize:11, color:T.sub, fontWeight:700, textAlign:"right", padding:"9px 12px", borderBottom:"2px solid "+T.border, textTransform:"uppercase", letterSpacing:".05em", background:"rgba(var(--vurgu-rgb),0.06)", position:"sticky", top:0, whiteSpace:"nowrap" };
+  const td = { color:T.text, padding:"10px 12px", borderBottom:"1px solid "+T.border, textAlign:"right", fontSize:13, fontVariantNumeric:"tabular-nums", whiteSpace:"nowrap" };
+  const zebra = (i) => i%2 ? "rgba(var(--vurgu-rgb),0.035)" : "transparent";
+  const tamKutu = { border:"1px solid "+T.border, borderRadius:10, overflow:"auto", maxHeight:520 };
+  const toplamH = { ...td, fontWeight:800, borderTop:"2px solid "+T.border, borderBottom:"none", background:"rgba(var(--vurgu-rgb),0.08)" };
+  const RENK_ISL = "#b3392f", RENK_ODE = "#2e7d32";
+  const sifirSoluk = (x) => Math.abs(x)<0.005 ? { color:T.sub, opacity:0.6 } : null;
   if (!miz) return (
     <div style={kart}>
       <div style={{ fontSize:13, marginBottom:10 }}>Mizan yüklenmemiş. Raporlar sekmesinden Rhino mizanını yükleyince müşteri bakiyeleri burada görünür.</div>
@@ -3791,7 +3805,7 @@ function MusMizanEkrani({ T, GH, msk, appeGec }) {
   const norm = (x) => rpUpper(String(x||"")).replace(/\s+/g," ").trim();
   const tum = miz.satirlar.filter(r => r[2]==="HAS" && String(r[0]).startsWith("120 001 10\\") && r[1]).map(r => ({ kod:r[0], ad:r[1], borc:r[3]||0, alacak:r[4]||0, bak:r[5]||0 }));
   const liste = tum.filter(x => sifir || Math.abs(x.bak)>0.005).sort((a,b)=>b.bak-a.bak);
-  const cari = (oz && oz.cari) || {}, tahs = (oz && oz.tahsilat) || {};
+  const cari = (oz && oz.cari) || {}, cariGr = (oz && oz.cariGr) || {}, tahs = (oz && oz.tahsilat) || {};
   const cariAnahtar = {}; Object.keys(cari).forEach(k => { cariAnahtar[norm(k)] = k; });
   const secili = liste.find(x=>x.kod===sec) || liste[0];
   const topAcik = liste.reduce((t,x)=>t+(x.bak>0?x.bak:0),0), mx = Math.max(1e-9, ...liste.map(x=>Math.abs(x.bak)));
@@ -3800,12 +3814,16 @@ function MusMizanEkrani({ T, GH, msk, appeGec }) {
   if (secili) {
     const fk = cariAnahtar[norm(secili.ad)];
     const cm = fk ? cari[fk] : null;
+    const gm = fk ? (cariGr[fk]||{}) : {};
+    const brut = birim!=="has";
+    const SV = (a) => brut ? ((gm[a]||[0,0])[0]) : (cm[a].s||0);
+    const IV = (a) => brut ? ((gm[a]||[0,0])[1]) : (cm[a].i||0);
     const aylar = cm ? Object.keys(cm).sort().reverse() : [];
     const yillar = [...new Set(aylar.map(a=>a.slice(0,4)))].sort().reverse();
     const sa = aylar.filter(a => !yil || a.startsWith(yil));
-    const topl = { s:0, i:0, t:0, a:0 }; sa.forEach(a => { ["s","i","t","a"].forEach(k => { topl[k] += (cm[a][k]||0); }); });
+    const topl = { s:0, i:0, t:0, a:0 }; sa.forEach(a => { topl.s += SV(a); topl.i += IV(a); topl.t += (cm[a].t||0); });
     const tl = (fk ? (tahs[fk]||[]) : []).filter(x => !yil || x[0].startsWith(yil)).slice().reverse().slice(0,40);
-    const bugun = new Date().toISOString().slice(0,7); const buAy = (cm && cm[bugun]) || { s:0, i:0, t:0, a:0 };
+    const bugun = new Date().toISOString().slice(0,7); const buAy = (cm && cm[bugun]) ? { s:SV(bugun), i:IV(bugun), t:cm[bugun].t||0 } : { s:0, i:0, t:0 };
     const dugme = (aktif) => ({ border:"1px solid "+(aktif?T.gold:T.border), background: aktif?"rgba(var(--vurgu-rgb),0.12)":"transparent", color:T.text, borderRadius:99, padding:"3px 12px", fontSize:12, fontWeight:600, cursor:"pointer" });
     const kpi = (l, x, alt) => <div key={l} style={{ border:"1px solid "+T.border, borderRadius:10, padding:"8px 10px" }}><div style={{ fontSize:11, color:T.sub }}>{l}</div><div style={{ fontSize:16, fontWeight:700, fontVariantNumeric:"tabular-nums" }}>{x}</div>{alt && <div style={{ fontSize:11, color:T.sub }}>{alt}</div>}</div>;
     ic = (
@@ -3820,24 +3838,33 @@ function MusMizanEkrani({ T, GH, msk, appeGec }) {
           {!cm ? <div style={{ fontSize:12, color:T.sub }}>Bu müşteri için depo hareketi özeti bulunamadı (isim eşleşmedi: {secili.ad}).</div> : <div>
             <div style={{ fontSize:11, color:T.sub, fontWeight:700, textTransform:"uppercase", letterSpacing:".05em", margin:"6px 0 6px" }}>Bu ay ({RP_AYLAR_UZUN[Number(bugun.slice(5,7))-1]} {bugun.slice(0,4)}) · depo hareketi</div>
             <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(120px,1fr))", gap:8, marginBottom:12 }}>
-              {kpi("Aldığı mal (has)", rpF(buAy.s,1))}{kpi("İade (has)", rpF(buAy.i,1))}{kpi("Ödediği (has)", rpF(buAy.t,1))}
+              {kpi("Aldığı mal ("+(brut?"brüt gr":"has")+")", rpF(buAy.s,1))}{kpi("İade ("+(brut?"brüt gr":"has")+")", rpF(buAy.i,1))}{kpi("Ödediği (has)", rpF(buAy.t,1))}
             </div>
             <div style={{ display:"flex", gap:6, flexWrap:"wrap", alignItems:"center", marginBottom:8 }}>
               <span style={{ fontSize:11, color:T.sub, fontWeight:700 }}>YIL</span>
               <button onClick={()=>setYil("")} style={dugme(!yil)}>Tümü</button>
               {yillar.map(y=><button key={y} onClick={()=>setYil(y)} style={dugme(yil===y)}>{y}</button>)}
+              <span style={{ marginLeft:"auto", display:"inline-flex", border:"1px solid "+T.border, borderRadius:8, overflow:"hidden" }}>
+                {[["brut","Brüt gram"],["has","Has"]].map(([k,l])=><button key={k} onClick={()=>setBirim(k)} style={{ border:"none", padding:"5px 12px", fontSize:12, fontWeight:600, cursor:"pointer", background: birim===k?"rgba(var(--vurgu-rgb),0.18)":"transparent", color:T.text }}>{l}</button>)}
+              </span>
             </div>
-            <div style={{ overflowX:"auto" }}>
-              <table style={{ width:"100%", borderCollapse:"collapse", minWidth:420 }}>
-                <thead><tr><th style={{ ...th, textAlign:"left" }}>Ay</th><th style={th}>Aldığı</th><th style={th}>İade</th><th style={th}>Ödediği</th><th style={th}>Net</th></tr></thead>
+            <div style={tamKutu}>
+              <table style={{ width:"100%", borderCollapse:"separate", borderSpacing:0, minWidth:460 }}>
+                <thead><tr><th style={{ ...th, textAlign:"left" }}>Ay</th><th style={th}>Aldığı ({brut?"gr":"has"})</th><th style={th}>İade ({brut?"gr":"has"})</th><th style={th}>Ödediği (has)</th>{!brut && <th style={th}>Net (has)</th>}</tr></thead>
                 <tbody>
-                  {sa.map(a => { const m=cm[a]; const net=(m.s||0)-(m.i||0)-(m.t||0); return (
-                    <tr key={a}><td style={{ ...td, textAlign:"left", fontWeight:600 }}>{RP_AYLAR_UZUN[Number(a.slice(5,7))-1]} {a.slice(0,4)}</td><td style={td}>{rpF(m.s||0,1)}</td><td style={td}>{rpF(m.i||0,1)}</td><td style={td}>{rpF(m.t||0,1)}</td><td style={{ ...td, fontWeight:700 }}>{rpF(net,1)}</td></tr>); })}
-                  <tr><td style={{ ...td, textAlign:"left", fontWeight:700, borderTop:"2px solid "+T.border }}>Toplam</td><td style={{ ...td, fontWeight:700, borderTop:"2px solid "+T.border }}>{rpF(topl.s,1)}</td><td style={{ ...td, fontWeight:700, borderTop:"2px solid "+T.border }}>{rpF(topl.i,1)}</td><td style={{ ...td, fontWeight:700, borderTop:"2px solid "+T.border }}>{rpF(topl.t,1)}</td><td style={{ ...td, fontWeight:700, borderTop:"2px solid "+T.border }}>{rpF(topl.s-topl.i-topl.t,1)}</td></tr>
+                  {sa.map((a,ix) => { const m=cm[a]; const sv=SV(a), iv=IV(a); const net=sv-iv-(m.t||0); return (
+                    <tr key={a} style={{ background:zebra(ix) }}>
+                      <td style={{ ...td, textAlign:"left", fontWeight:600 }}>{RP_AYLAR_UZUN[Number(a.slice(5,7))-1]} {a.slice(0,4)}</td>
+                      <td style={{ ...td, ...sifirSoluk(sv) }}>{rpF(sv,1)}</td>
+                      <td style={{ ...td, color:iv>0.005?RENK_ISL:T.sub, ...sifirSoluk(iv) }}>{rpF(iv,1)}</td>
+                      <td style={{ ...td, color:(m.t||0)>0.005?RENK_ODE:T.sub, fontWeight:(m.t||0)>0.005?700:400, ...sifirSoluk(m.t||0) }}>{rpF(m.t||0,1)}</td>
+                      {!brut && <td style={{ ...td, fontWeight:700 }}>{rpF(net,1)}</td>}
+                    </tr>); })}
+                  <tr><td style={{ ...toplamH, textAlign:"left" }}>Toplam</td><td style={toplamH}>{rpF(topl.s,1)}</td><td style={{ ...toplamH, color:RENK_ISL }}>{rpF(topl.i,1)}</td><td style={{ ...toplamH, color:RENK_ODE }}>{rpF(topl.t,1)}</td>{!brut && <td style={toplamH}>{rpF(topl.s-topl.i-topl.t,1)}</td>}</tr>
                 </tbody>
               </table>
             </div>
-            <div style={{ fontSize:11, color:T.sub, margin:"8px 0 12px", lineHeight:1.5 }}>Aldığı/iade: depo hareketlerindeki satış (FSS) ve iade (FSI), gram × milyem = has; gümüş hariç. Ödediği: #995 HAS tahsilat kayıtları. Mizandaki borç/alacak ile birebir tutmayabilir (işçilik, takas ve düzeltme kayıtları mizanda ayrıca olabilir).</div>
+            <div style={{ fontSize:11, color:T.sub, margin:"8px 0 12px", lineHeight:1.5 }}>Aldığı/iade: depo hareketlerindeki satış (FSS) ve iade (FSI); brüt = tezgah gramı, has = gram × milyem; gümüş hariç. Ödediği her zaman has. Ödediği: #995 HAS tahsilat kayıtları. Mizandaki borç/alacak ile birebir tutmayabilir (işçilik, takas ve düzeltme kayıtları mizanda ayrıca olabilir).</div>
             <div style={{ fontSize:11, color:T.sub, fontWeight:700, textTransform:"uppercase", letterSpacing:".05em", marginBottom:4 }}>Ödeme geçmişi (has tahsilat)</div>
             {tl.length===0 ? <div style={{ fontSize:12, color:T.sub }}>Bu dönemde has tahsilat kaydı yok</div> : tl.map((x,i)=>(
               <div key={i} style={{ display:"flex", justifyContent:"space-between", padding:"7px 0", borderBottom:"1px solid "+T.border, fontSize:13 }}>
@@ -3859,17 +3886,17 @@ function MusMizanEkrani({ T, GH, msk, appeGec }) {
           </div>
         </div>
         <div style={{ fontSize:11, color:T.sub, marginBottom:10 }}>Kaynak: Rhino mizanı ({miz.bas} – {miz.bit})</div>
-        <div style={{ overflowX:"auto" }}>
-          <table style={{ width:"100%", borderCollapse:"collapse", minWidth:420 }}>
+        <div style={tamKutu}>
+          <table style={{ width:"100%", borderCollapse:"separate", borderSpacing:0, minWidth:460 }}>
             <thead><tr><th style={{ ...th, textAlign:"left" }}>Müşteri</th><th style={th}>Borç</th><th style={th}>Alacak</th><th style={th}>Bakiye</th><th style={th}>Durum</th></tr></thead>
             <tbody>
-              {liste.map(x => (
-                <tr key={x.kod} onClick={()=>setSec(x.kod)} style={{ cursor:"pointer", background: secili && secili.kod===x.kod ? "rgba(var(--vurgu-rgb),0.10)" : "transparent" }}>
-                  <td style={{ ...td, textAlign:"left", fontWeight:600 }}>{x.ad}</td><td style={td}>{rpF(x.borc,1)}</td><td style={td}>{rpF(x.alacak,1)}</td>
-                  <td style={{ ...td, fontWeight:700 }}>{rpF(x.bak,1)}<div style={{ height:4, background:T.border, borderRadius:2, marginTop:4 }}><i style={{ display:"block", height:4, borderRadius:2, background:"#c9a24a", width:(Math.abs(x.bak)/mx*100)+"%" }}/></div></td>
+              {liste.map((x,ix) => { const sc = secili && secili.kod===x.kod; return (
+                <tr key={x.kod} onClick={()=>setSec(x.kod)} style={{ cursor:"pointer", background: sc ? "rgba(var(--vurgu-rgb),0.14)" : zebra(ix), boxShadow: sc ? "inset 3px 0 0 "+T.gold : "none" }}>
+                  <td style={{ ...td, textAlign:"left", fontWeight:700 }}>{x.ad}</td><td style={td}>{rpF(x.borc,1)}</td><td style={td}>{rpF(x.alacak,1)}</td>
+                  <td style={{ ...td, fontWeight:800, minWidth:110 }}>{rpF(x.bak,1)}<div style={{ height:4, background:T.border, borderRadius:2, marginTop:5 }}><i style={{ display:"block", height:4, borderRadius:2, background:x.bak<0?"#2e7d32":"#c9a24a", width:(Math.abs(x.bak)/mx*100)+"%" }}/></div></td>
                   <td style={td}>{pill(x.bak)}</td>
-                </tr>))}
-              <tr><td style={{ ...td, textAlign:"left", fontWeight:700, borderTop:"2px solid "+T.border }}>Toplam açık</td><td style={{ ...td, borderTop:"2px solid "+T.border }}/><td style={{ ...td, borderTop:"2px solid "+T.border }}/><td style={{ ...td, fontWeight:700, borderTop:"2px solid "+T.border }}>{rpF(topAcik,1)}</td><td style={{ ...td, borderTop:"2px solid "+T.border }}/></tr>
+                </tr>); })}
+              <tr><td style={{ ...toplamH, textAlign:"left" }}>Toplam açık</td><td style={toplamH}/><td style={toplamH}/><td style={toplamH}>{rpF(topAcik,1)}</td><td style={toplamH}/></tr>
             </tbody>
           </table>
         </div>
