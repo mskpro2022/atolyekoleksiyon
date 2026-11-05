@@ -7943,6 +7943,7 @@ function Atolye({ onSirketDegis }) {
   const [analizTarih2,setAnalizTarih2]= useState("");
   const [analizDonem, setAnalizDonem] = useState("bu_ay"); // bu_ay, gecen_ay, 3ay, 6ay, yil, ozel
   const [kesfetSekme, setKesfetSekme] = useState("yeni"); // yeni, coksatan, arizali, karli
+  const [musAra, setMusAra] = useState("");
   const [editMusteri, setEditMusteri] = useState(null); // {ad, kod} düzenleme
   const [konfAyarlar, setKonfAyarlar] = useState({});
   const [konfBoylar,  setKonfBoylar]  = useState({}); // id -> [{sistem, deger, adet}]
@@ -11495,154 +11496,145 @@ function Atolye({ onSirketDegis }) {
           );
         })()}
 
-        {sayfa==="musteriler" && (
+        {sayfa==="musteriler" && (() => {
+          const kartM = { background:(T.id==="beyaz"?"#ffffff":T.card), border:"1px solid "+T.border, borderRadius:12 };
+          const thM = { textAlign:"left", padding:"10px 12px", fontSize:11, fontWeight:700, color:T.sub, textTransform:"uppercase", letterSpacing:".05em", background:"rgba(var(--vurgu-rgb),0.06)", whiteSpace:"nowrap" };
+          const tdM = { padding:"12px", fontSize:13, color:T.text, borderTop:"1px solid "+T.border };
+          const lblM = { display:"block", fontSize:12, color:T.sub, marginBottom:4 };
+          const q = (musAra||"").trim().toLowerCase();
+          const liste = Object.entries(musteriler).sort((a,b)=>a[1].localeCompare(b[1])).filter(([ad,kod])=>!q || ad.toLowerCase().includes(q) || kod.toLowerCase().includes(q));
+          const yeniMod = !!editMusteri?.yeni;
+          const secAd = (!yeniMod && editMusteri && musteriler[editMusteri.ad]) ? editMusteri.ad : null;
+          const secKod = secAd ? musteriler[secAd] : null;
+          const musSip = secAd ? siparisler.filter(s=>(s.musteri||"Isimsiz").trim()===secAd) : [];
+          const pill = (acik) => <span style={{ display:"inline-block", borderRadius:99, padding:"3px 10px", fontSize:12, fontWeight:600, background: acik?"rgba(46,125,50,.14)":"rgba(var(--vurgu-rgb),0.10)", color: acik?"#2e7d32":T.sub }}>{acik?"Açık":"Kapalı"}</span>;
+          const kaydetYeni = () => {
+            const ad = (editMusteri.yeniAd||"").trim();
+            if (!ad) return;
+            const mevcKodlar = Object.values(musteriler);
+            let kod = editMusteri.yeniKod?.trim() || "MUS-" + String(mevcKodlar.length + 1).padStart(3,"0");
+            while (mevcKodlar.includes(kod)) { const n = parseInt(kod.split("-")[1]||"0") + 1; kod = "MUS-" + String(n).padStart(3,"0"); }
+            svMus({ ...musteriler, [ad]: kod });
+            if (editMusteri.yeniTel?.trim()) svMusTel({ ...musteriTel, [ad]: editMusteri.yeniTel.trim() });
+            setEditMusteri(null);
+          };
+          const kaydetDuzenle = () => {
+            const ad = secAd, kod = secKod;
+            const yeniAd = (editMusteri.yeniAd||"").trim();
+            const tel = (editMusteri.yeniTel||"").replace(/[^0-9]/g,"");
+            if (yeniAd && yeniAd!==ad) {
+              const yeni = { ...musteriler }; delete yeni[ad]; yeni[yeniAd] = kod; svMus(yeni);
+              svS(siparisler.map(s=>(s.musteri||"").trim()===ad?{...s,musteri:yeniAd}:s));
+              const t = { ...musteriTel }; const eski = t[ad]; delete t[ad]; if (tel) t[yeniAd] = tel; else if (eski && !tel) { /* telefon silindi */ }
+              svMusTel(t);
+              setEditMusteri({ ad:yeniAd, yeniAd, yeniTel:tel });
+            } else {
+              const t = { ...musteriTel }; if (tel) t[ad] = tel; else delete t[ad];
+              svMusTel(t);
+            }
+            toastGoster("ok","Müşteri kaydedildi");
+          };
+          const bildir = (ad,kod) => {
+            const YEDI_GUN = 7*24*60*60*1000, simdi = Date.now();
+            const gk = kollar.filter(k => Array.isArray(k.vitrinMus) && k.vitrinMus.includes(kod));
+            const yeniSayi = modeller.filter(m => gk.some(k=>k.id===m.ki) && m.t && (simdi-m.t)<YEDI_GUN).length;
+            const url = window.location.origin + "?vitrin=" + kod;
+            const mesaj = yeniSayi>0 ? `Merhaba ${ad}, koleksiyonunuza ${yeniSayi} yeni model eklendi! 🛍️ Görmek için: ${url}` : `Merhaba ${ad}, size özel katalogumuzu inceleyebilirsiniz: ${url}`;
+            window.open("https://wa.me/90"+musteriTel[ad]+"?text="+encodeURIComponent(mesaj), "_blank");
+          };
+          return (
           <div style={{ animation:"fadein .3s" }}>
-            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>
-              <h2 style={{ margin:0, fontSize:14, fontWeight:700, color:"var(--goldtext)" }}>Musteriler ({Object.keys(musteriler).length})</h2>
-              <button onClick={()=>setEditMusteri({ad:"", yeniAd:"", yeni:true})} style={{ ...BG, padding:"6px 14px", fontSize:11 }}>+ Musteri Ekle</button>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-end", flexWrap:"wrap", gap:12, marginBottom:16 }}>
+              <div>
+                <h2 style={{ margin:0, fontSize:22, fontWeight:600, color:T.text }}>Müşteriler</h2>
+                <div style={{ marginTop:4, fontSize:13, color:T.sub }}>Müşteri kodu, telefon ve vitrin erişimi. Sipariş ekranlarında yalnızca kod görünür.</div>
+              </div>
+              <button onClick={()=>setEditMusteri({ad:"", yeniAd:"", yeni:true})} style={{ ...BG, padding:"9px 18px", fontSize:13 }}>Müşteri ekle</button>
             </div>
-
-            {/* Yeni müşteri ekleme formu */}
-            {editMusteri?.yeni && (
-              <div style={{ background:"rgba(var(--vurgu-rgb),0.04)", border:"1px solid rgba(var(--vurgu-rgb),0.15)", borderRadius:10, padding:"12px 14px", marginBottom:10 }}>
-                <div style={{ fontSize:9, color:GOLD, fontWeight:700, marginBottom:8 }}>YENİ MÜŞTERİ</div>
-                <div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}>
-                  <div style={{ flex:1, minWidth:140 }}>
-                    <div style={{ fontSize:8, color:"#998a6e", marginBottom:3 }}>Müşteri Adı</div>
-                    <input autoFocus value={editMusteri.yeniAd} onChange={e=>setEditMusteri(p=>({...p,yeniAd:e.target.value}))}
-                      placeholder="Ad Soyad veya Firma" style={{ ...IS, padding:"6px 10px", fontSize:12 }}/>
-                  </div>
-                  <div>
-                    <div style={{ fontSize:8, color:"#998a6e", marginBottom:3 }}>Kod (opsiyonel)</div>
-                    <input value={editMusteri.yeniKod||""} onChange={e=>setEditMusteri(p=>({...p,yeniKod:e.target.value.toUpperCase()}))}
-                      placeholder="MUS-001" style={{ ...IS, width:110, padding:"6px 10px", fontSize:12 }}/>
-                  </div>
-                  <div>
-                    <div style={{ fontSize:8, color:"#998a6e", marginBottom:3 }}>Telefon (WhatsApp, opsiyonel)</div>
-                    <input value={editMusteri.yeniTel||""} onChange={e=>setEditMusteri(p=>({...p,yeniTel:e.target.value.replace(/[^0-9]/g,"")}))}
-                      placeholder="5551234567" style={{ ...IS, width:130, padding:"6px 10px", fontSize:12 }}/>
-                  </div>
-                  <div style={{ display:"flex", gap:6, alignSelf:"flex-end" }}>
-                    <button onClick={()=>{
-                      const ad = editMusteri.yeniAd.trim();
-                      if (!ad) return;
-                      // Kod: girilmişse kullan, yoksa otomatik üret
-                      const mevcKodlar = Object.values(musteriler);
-                      let kod = editMusteri.yeniKod?.trim() ||
-                        "MUS-" + String(mevcKodlar.length + 1).padStart(3,"0");
-                      // Çakışma varsa sayıyı artır
-                      while (mevcKodlar.includes(kod)) {
-                        const n = parseInt(kod.split("-")[1]||"0") + 1;
-                        kod = "MUS-" + String(n).padStart(3,"0");
-                      }
-                      const yeni = { ...musteriler, [ad]: kod };
-                      svMus(yeni);
-                      if (editMusteri.yeniTel?.trim()) svMusTel({ ...musteriTel, [ad]: editMusteri.yeniTel.trim() });
-                      setEditMusteri(null);
-                    }} style={{ ...BG, padding:"6px 14px", fontSize:11 }}>Kaydet</button>
-                    <button onClick={()=>setEditMusteri(null)} style={{ ...GH, padding:"6px 10px", fontSize:11 }}>İptal</button>
-                  </div>
+            <div style={{ display:"flex", flexWrap:"wrap", gap:16, alignItems:"flex-start" }}>
+              <div style={{ ...kartM, flex:"2 1 560px", minWidth:0, overflow:"hidden" }}>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"14px 16px", borderBottom:"1px solid "+T.border, gap:12, flexWrap:"wrap" }}>
+                  <input value={musAra} onChange={e=>setMusAra(e.target.value)} placeholder="Müşteri ara…" style={{ ...IS, padding:"8px 12px", fontSize:13, minWidth:220, maxWidth:320 }}/>
+                  <div style={{ fontSize:12, color:T.sub }}>{liste.length} müşteri</div>
+                </div>
+                <div style={{ overflowX:"auto" }}>
+                  <table style={{ width:"100%", borderCollapse:"collapse", minWidth:520 }}>
+                    <thead><tr><th style={thM}>Müşteri</th><th style={thM}>Kod</th><th style={thM}>Telefon</th><th style={thM}>Vitrin</th></tr></thead>
+                    <tbody>
+                      {liste.length===0 && <tr><td colSpan={4} style={{ ...tdM, color:T.sub, textAlign:"center", padding:28 }}>{Object.keys(musteriler).length===0?"Henüz müşteri kaydı yok.":"Eşleşen müşteri yok."}</td></tr>}
+                      {liste.map(([ad,kod],ix) => {
+                        const sec = secAd===ad;
+                        const acikKol = kollar.filter(k => Array.isArray(k.vitrinMus) && k.vitrinMus.includes(kod)).length;
+                        return (
+                          <tr key={kod} onClick={()=>setEditMusteri({ ad, yeniAd:ad, yeniTel:musteriTel[ad]||"" })} style={{ cursor:"pointer", background: sec?"rgba(var(--vurgu-rgb),0.12)":(ix%2?"rgba(var(--vurgu-rgb),0.035)":"transparent"), boxShadow: sec?"inset 3px 0 0 var(--vurgu)":"none" }}>
+                            <td style={{ ...tdM, fontWeight: sec?700:600 }}>{ad}</td>
+                            <td style={{ ...tdM, color:T.sub }}>{kod}</td>
+                            <td style={{ ...tdM, color: musteriTel[ad]?T.text:T.sub }}>{musteriTel[ad] || "telefon yok"}</td>
+                            <td style={tdM}>{pill(acikKol>0)} {acikKol>0 && <span style={{ fontSize:12, color:T.sub, marginLeft:6 }}>{acikKol} koleksiyon</span>}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
                 </div>
               </div>
-            )}
 
-            {Object.keys(musteriler).length===0 && !editMusteri?.yeni && <p style={{ color:"#665d4a", textAlign:"center", padding:"30px", fontSize:12 }}>Henuz musteri kaydi yok.</p>}
-            <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
-              {Object.entries(musteriler).sort((a,b)=>a[1].localeCompare(b[1])).map(([ad, kod]) => {
-                const musSiparisler = siparisler.filter(s=>(s.musteri||"Isimsiz").trim()===ad);
-                const topKar = musSiparisler.reduce((s,x)=>s+(x.kar||0),0);
-                const topGram = musSiparisler.reduce((sum,s)=>{
-                  (s.kalemler||[]).forEach(k=>{ const hc=hesapla(k,k.secilenAyar||k.refAyar,s.altinKgUSD,s.mc); sum+=hc.mamulGram*(k.adet||1); });
-                  return sum;
-                }, 0);
-                const sonTarih = musSiparisler.reduce((mx,s)=>Math.max(mx,s.tarih||0),0);
-                const duzenleniyor = editMusteri?.ad===ad && !editMusteri?.yeni;
-                return (
-                  <div key={kod} style={{ background:"rgba(var(--vurgu-rgb),0.02)", border:"1px solid rgba(var(--vurgu-rgb),0.08)", borderRadius:10, padding:"10px 14px", display:"flex", alignItems:"center", gap:12 }}>
-                    {/* Kod badge */}
-                    <div style={{ background:"rgba(var(--vurgu-rgb),0.12)", borderRadius:7, padding:"4px 10px", textAlign:"center", flexShrink:0 }}>
-                      <div style={{ fontSize:11, fontWeight:800, color:GOLD }}>{kod}</div>
+              <div style={{ ...kartM, flex:"1 1 320px", minWidth:0, padding:18 }}>
+                {!editMusteri && <div style={{ fontSize:13, color:T.sub, lineHeight:1.6 }}>Düzenlemek için soldaki listeden bir müşteri seçin ya da <b>Müşteri ekle</b>'ye basın.</div>}
+                {yeniMod && (<div>
+                  <div style={{ fontSize:14, fontWeight:700, color:T.text }}>Yeni müşteri</div>
+                  <div style={{ marginTop:2, marginBottom:16, fontSize:12, color:T.sub }}>Kod boş bırakılırsa otomatik üretilir.</div>
+                  <label style={lblM}>Müşteri adı</label>
+                  <input autoFocus value={editMusteri.yeniAd||""} onChange={e=>setEditMusteri(p=>({...p,yeniAd:e.target.value}))} placeholder="Ad Soyad veya Firma" style={{ ...IS, padding:"9px 12px", fontSize:13, marginBottom:12 }}/>
+                  <div style={{ display:"flex", gap:10, marginBottom:12 }}>
+                    <div style={{ flex:1 }}><label style={lblM}>Kod</label><input value={editMusteri.yeniKod||""} onChange={e=>setEditMusteri(p=>({...p,yeniKod:e.target.value.toUpperCase()}))} placeholder="MUS-001" style={{ ...IS, padding:"9px 12px", fontSize:13 }}/></div>
+                    <div style={{ flex:1 }}><label style={lblM}>Telefon (WhatsApp)</label><input value={editMusteri.yeniTel||""} onChange={e=>setEditMusteri(p=>({...p,yeniTel:e.target.value.replace(/[^0-9]/g,"")}))} placeholder="5551234567" style={{ ...IS, padding:"9px 12px", fontSize:13 }}/></div>
+                  </div>
+                  <div style={{ display:"flex", gap:8, marginTop:18 }}>
+                    <button onClick={kaydetYeni} style={{ ...BG, padding:"10px 18px", fontSize:13 }}>Kaydet</button>
+                    <button onClick={()=>setEditMusteri(null)} style={{ ...GH, padding:"10px 16px", fontSize:13 }}>Vazgeç</button>
+                  </div>
+                </div>)}
+                {secAd && (<div>
+                  <div style={{ fontSize:14, fontWeight:700, color:T.text }}>Müşteri düzenle</div>
+                  <div style={{ marginTop:2, marginBottom:16, fontSize:12, color:T.sub }}>{secAd} · {secKod} · {musSip.length} sipariş</div>
+                  <label style={lblM}>Müşteri adı</label>
+                  <input value={editMusteri.yeniAd||""} onChange={e=>setEditMusteri(p=>({...p,yeniAd:e.target.value}))} style={{ ...IS, padding:"9px 12px", fontSize:13, marginBottom:12 }}/>
+                  <div style={{ display:"flex", gap:10, marginBottom:12 }}>
+                    <div style={{ flex:1 }}><label style={lblM}>Kod</label><input value={secKod} disabled style={{ ...IS, padding:"9px 12px", fontSize:13, opacity:.7 }}/></div>
+                    <div style={{ flex:1 }}><label style={lblM}>Telefon (WhatsApp)</label><input value={editMusteri.yeniTel||""} onChange={e=>setEditMusteri(p=>({...p,yeniTel:e.target.value.replace(/[^0-9]/g,"")}))} placeholder="5551234567" style={{ ...IS, padding:"9px 12px", fontSize:13 }}/></div>
+                  </div>
+                  <div style={{ borderTop:"1px solid "+T.border, margin:"16px 0 12px", paddingTop:14 }}>
+                    <div style={{ fontSize:12, color:T.sub, marginBottom:6 }}>Vitrin linki</div>
+                    <div style={{ display:"flex", gap:8, alignItems:"center" }}>
+                      <div style={{ flex:1, minWidth:0, border:"1px solid "+T.border, borderRadius:8, padding:"8px 12px", fontSize:12, color:T.text, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{"…/?vitrin="+secKod}</div>
+                      <button onClick={()=>{ const url = window.location.origin + "?vitrin=" + secKod; navigator.clipboard?.writeText(url); toastGoster("ok","🛍 Vitrin linki kopyalandı"); }} style={{ ...GH, padding:"8px 12px", fontSize:12 }}>Kopyala</button>
                     </div>
-                    {/* İsim — düzenlenebilir */}
-                    <div style={{ flex:1, minWidth:0 }}>
-                      {duzenleniyor ? (
-                        <div style={{ display:"flex", gap:6, alignItems:"center" }}>
-                          <input autoFocus value={editMusteri.yeniAd} onChange={e=>setEditMusteri(p=>({...p,yeniAd:e.target.value}))} style={{ ...IS, padding:"4px 8px", fontSize:12, width:200 }}/>
-                          <button onClick={()=>{
-                            const yeniAd = editMusteri.yeniAd.trim();
-                            if (!yeniAd || yeniAd===ad) { setEditMusteri(null); return; }
-                            const yeni = { ...musteriler };
-                            delete yeni[ad];
-                            yeni[yeniAd] = kod;
-                            svMus(yeni);
-                            svS(siparisler.map(s=>(s.musteri||"").trim()===ad?{...s,musteri:yeniAd}:s));
-                            setEditMusteri(null);
-                          }} style={{ ...BG, padding:"4px 10px", fontSize:10 }}>Kaydet</button>
-                          <button onClick={()=>setEditMusteri(null)} style={{ ...GH, padding:"4px 8px", fontSize:10 }}>Vazgec</button>
-                        </div>
-                      ) : (
-                        <div style={{ display:"flex", alignItems:"baseline", gap:8 }}>
-                          <span style={{ fontSize:13, fontWeight:700, color:"var(--goldtext)" }}>{ad}</span>
-                          <button onClick={()=>setEditMusteri({ad,yeniAd:ad})} style={{ background:"none", border:"none", color:"#665d4a", fontSize:9, cursor:"pointer", textDecoration:"underline" }}>Duzenle</button>
-                        </div>
-                      )}
-                      <div style={{ fontSize:8, color:"#7a6f5a", marginTop:2 }}>
-                        {musSiparisler.length} siparis · {fN(topGram,1)} gr · son: {sonTarih?new Date(sonTarih).toLocaleDateString("tr-TR"):"—"}
-                      </div>
-                      <div style={{ fontSize:8, marginTop:3 }}>
-                        {musteriTel[ad] ? (
-                          <span style={{ color:"#6abf69" }}>📱 {musteriTel[ad]} <button onClick={()=>{ const yeni=prompt("Telefon numarasını düzenle (başında 0 olmadan, örn 5551234567):", musteriTel[ad]); if(yeni!==null){ const t={...musteriTel}; if(yeni.trim()) t[ad]=yeni.replace(/[^0-9]/g,""); else delete t[ad]; svMusTel(t);} }} style={{ background:"none", border:"none", color:"#665d4a", cursor:"pointer", textDecoration:"underline", fontSize:8, padding:0, marginLeft:4 }}>düzenle</button></span>
-                        ) : (
-                          <button onClick={()=>{ const yeni=prompt("Telefon numarası (başında 0 olmadan, örn 5551234567):"); if(yeni?.trim()) svMusTel({...musteriTel,[ad]:yeni.replace(/[^0-9]/g,"")}); }} style={{ background:"none", border:"none", color:"#665d4a", cursor:"pointer", textDecoration:"underline", fontSize:8, padding:0 }}>+ Telefon ekle (WhatsApp için)</button>
-                        )}
-                      </div>
-                    </div>
-                    {/* Butonlar */}
-                    <div style={{ display:"flex", gap:5, flexShrink:0 }}>
-                      {(() => {
-                        // Bu müşterinin görebildiği koleksiyonlardaki, son 7 günde eklenen model sayısı
-                        const YEDI_GUN = 7*24*60*60*1000;
-                        const simdi = Date.now();
-                        const gorduguKollar = kollar.filter(k => Array.isArray(k.vitrinMus) && k.vitrinMus.includes(kod));
-                        const yeniSayi = modeller.filter(m => gorduguKollar.some(k=>k.id===m.ki) && m.t && (simdi-m.t)<YEDI_GUN).length;
-                        if (!musteriTel[ad]) return null;
-                        return (
-                          <button onClick={()=>{
-                            const url = window.location.origin + "?vitrin=" + kod;
-                            const mesaj = yeniSayi>0
-                              ? `Merhaba ${ad}, koleksiyonunuza ${yeniSayi} yeni model eklendi! 🛍️ Görmek için: ${url}`
-                              : `Merhaba ${ad}, size özel katalogumuzu inceleyebilirsiniz: ${url}`;
-                            window.open("https://wa.me/90"+musteriTel[ad]+"?text="+encodeURIComponent(mesaj), "_blank");
-                          }} style={{ background: yeniSayi>0?"rgba(37,211,102,0.15)":"rgba(106,191,105,0.1)", border:"1px solid "+(yeniSayi>0?"rgba(37,211,102,0.4)":"rgba(106,191,105,0.25)"), borderRadius:5, padding:"5px 10px", color:"#25D366", fontSize:9, fontWeight:700, cursor:"pointer" }}>
-                            📱 Bildir{yeniSayi>0?" ("+yeniSayi+" yeni)":""}
-                          </button>
-                        );
-                      })()}
-                      <button onClick={()=>{ const url = window.location.origin + "?vitrin=" + kod; navigator.clipboard?.writeText(url); toastGoster("ok","🛍 Vitrin linki kopyalandı"); }} style={{ background:"rgba(106,191,105,0.1)", border:"1px solid rgba(106,191,105,0.25)", borderRadius:5, padding:"5px 10px", color:"#6abf69", fontSize:9, fontWeight:700, cursor:"pointer" }}>🛍 Link</button>
+                    <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginTop:10 }}>
+                      {musteriTel[secAd] && <button onClick={()=>bildir(secAd,secKod)} style={{ ...GH, padding:"7px 12px", fontSize:12 }}>📱 WhatsApp ile bildir</button>}
                       <button onClick={async()=>{
-                        setVitrinGecmis({ musteriAd:ad, kod, kayitlar:null, encok:null });
-                        const [kayitlar, encok] = await Promise.all([
-                          vitrinGecmisiGetir(AKTIF_SIRKET_ONEK, kod, 100),
-                          vitrinEnCokBakilan(AKTIF_SIRKET_ONEK, kod)
-                        ]);
-                        setVitrinGecmis({ musteriAd:ad, kod, kayitlar, encok });
-                      }} style={{ background:"rgba(91,155,213,0.1)", border:"1px solid rgba(91,155,213,0.25)", borderRadius:5, padding:"5px 10px", color:"#5b9bd5", fontSize:9, fontWeight:700, cursor:"pointer" }}>📊 Geçmiş</button>
-                      <button onClick={()=>downloadPDF(buildMusteriDetayHTML(ad,kod,siparisler),kod+"-detay")} style={{ ...GH, fontSize:9, padding:"5px 10px" }}>PDF</button>
-                      <button onClick={()=>{
-                        if (musSiparisler.length > 0) {
-                          if (!window.confirm(ad+" adlı müşterinin "+musSiparisler.length+" siparişi var. Müşteriyi silmek istediğinize emin misiniz? Siparişler silinmez.")) return;
-                        }
-                        const yeni = { ...musteriler };
-                        delete yeni[ad];
-                        svMus(yeni);
-                      }} style={{ ...RD, fontSize:9, padding:"5px 10px" }}>Sil</button>
+                        setVitrinGecmis({ musteriAd:secAd, kod:secKod, kayitlar:null, encok:null });
+                        const [kayitlar, encok] = await Promise.all([ vitrinGecmisiGetir(AKTIF_SIRKET_ONEK, secKod, 100), vitrinEnCokBakilan(AKTIF_SIRKET_ONEK, secKod) ]);
+                        setVitrinGecmis({ musteriAd:secAd, kod:secKod, kayitlar, encok });
+                      }} style={{ ...GH, padding:"7px 12px", fontSize:12 }}>📊 Geçmiş</button>
+                      <button onClick={()=>downloadPDF(buildMusteriDetayHTML(secAd,secKod,siparisler),secKod+"-detay")} style={{ ...GH, padding:"7px 12px", fontSize:12 }}>PDF</button>
                     </div>
                   </div>
-                );
-              })}
+                  <div style={{ display:"flex", gap:8, marginTop:18 }}>
+                    <button onClick={kaydetDuzenle} style={{ ...BG, padding:"10px 18px", fontSize:13 }}>Kaydet</button>
+                    <button onClick={()=>setEditMusteri(null)} style={{ ...GH, padding:"10px 16px", fontSize:13 }}>Vazgeç</button>
+                    <div style={{ flex:1 }}/>
+                    <button onClick={()=>{
+                      if (musSip.length > 0) { if (!window.confirm(secAd+" adlı müşterinin "+musSip.length+" siparişi var. Müşteriyi silmek istediğinize emin misiniz? Siparişler silinmez.")) return; }
+                      const yeni = { ...musteriler }; delete yeni[secAd]; svMus(yeni); setEditMusteri(null);
+                    }} style={{ ...RD, padding:"10px 14px", fontSize:13 }}>Sil</button>
+                  </div>
+                </div>)}
+              </div>
             </div>
           </div>
-        )}
+          );
+        })()}
 
         {/* KASA */}
         {sayfa==="kasa" && (() => {
