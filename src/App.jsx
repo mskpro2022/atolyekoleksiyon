@@ -2419,14 +2419,14 @@ function RpKapi({ T, GH, children }) {
     setKayitli(h); RP_ACIK = true; setDurum("acik"); setA(""); setB(""); setHata(""); setDegistir(false);
   };
   const ac = async () => { const h = await rpHash(a); if (h === kayitli) { RP_ACIK = true; setDurum("acik"); setA(""); setHata(""); } else setHata("Şifre yanlış"); };
-  if (durum === "yukleniyor") return <div style={{ fontSize:10, color:T.sub }}>Yükleniyor…</div>;
+  if (durum === "yukleniyor") return <div style={{ fontSize:12, color:T.sub }}>Yükleniyor…</div>;
   if (durum === "kur" || (durum === "acik" && degistir)) return (
     <div style={{ maxWidth:260, margin:"30px auto", textAlign:"center" }}>
       <div style={{ fontSize:13, fontWeight:700, color:T.gold, marginBottom:6 }}>{degistir ? "Şifreyi değiştir" : "Karlılık şifresi belirle"}</div>
-      <div style={{ fontSize:10, color:T.sub, marginBottom:12 }}>Kâr/zarar bilgisini yalnızca bu şifreyi bilenler görür.</div>
+      <div style={{ fontSize:12, color:T.sub, marginBottom:12 }}>Kâr/zarar bilgisini yalnızca bu şifreyi bilenler görür.</div>
       <input type="password" placeholder="Yeni şifre" value={a} onChange={e=>setA(e.target.value)} style={girdi}/><br/>
       <input type="password" placeholder="Şifre tekrar" value={b} onChange={e=>setB(e.target.value)} onKeyDown={e=>e.key==="Enter"&&kur()} style={{ ...girdi, marginTop:8 }}/><br/>
-      {hata && <div style={{ fontSize:10, color:T.danger||"#e85a4f", marginTop:6 }}>{hata}</div>}
+      {hata && <div style={{ fontSize:12, color:T.danger||"#e85a4f", marginTop:6 }}>{hata}</div>}
       <button onClick={kur} style={{ ...GH, marginTop:10 }}>Kaydet</button>
       {degistir && <button onClick={()=>{setDegistir(false);setA("");setB("");setHata("");}} style={{ ...GH, marginTop:10, marginLeft:6 }}>Vazgeç</button>}
     </div>
@@ -2436,15 +2436,15 @@ function RpKapi({ T, GH, children }) {
       <div style={{ fontSize:26, marginBottom:6 }}>🔒</div>
       <div style={{ fontSize:13, fontWeight:700, color:T.gold, marginBottom:12 }}>Karlılık</div>
       <input type="password" autoFocus placeholder="Şifre" value={a} onChange={e=>setA(e.target.value)} onKeyDown={e=>e.key==="Enter"&&ac()} style={girdi}/>
-      {hata && <div style={{ fontSize:10, color:T.danger||"#e85a4f", marginTop:6 }}>{hata}</div>}
+      {hata && <div style={{ fontSize:12, color:T.danger||"#e85a4f", marginTop:6 }}>{hata}</div>}
       <div><button onClick={ac} style={{ ...GH, marginTop:10 }}>Aç</button></div>
     </div>
   );
   return (
     <div>
       <div style={{ display:"flex", justifyContent:"flex-end", gap:6, marginBottom:6 }}>
-        <button onClick={()=>{setA("");setB("");setDegistir(true);}} style={{ ...GH, fontSize:9, padding:"3px 9px" }}>Şifreyi değiştir</button>
-        <button onClick={()=>{ RP_ACIK=false; setDurum("kilitli"); }} style={{ ...GH, fontSize:9, padding:"3px 9px" }}>🔒 Kilitle</button>
+        <button onClick={()=>{setA("");setB("");setDegistir(true);}} style={{ ...GH, fontSize:11, padding:"3px 9px" }}>Şifreyi değiştir</button>
+        <button onClick={()=>{ RP_ACIK=false; setDurum("kilitli"); }} style={{ ...GH, fontSize:11, padding:"3px 9px" }}>🔒 Kilitle</button>
       </div>
       {children}
     </div>
@@ -2461,22 +2461,22 @@ function RpSutun({ T, veri, renk=RP_RENK[0], birim="", yuk=130 }) {
     <div style={{ display:"flex", alignItems:"flex-end", gap:6, height:yuk+34, paddingTop:14 }}>
       {veri.map(x=>(
         <div key={x.e} style={{ flex:1, minWidth:0, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"flex-end", height:"100%" }}>
-          <div style={{ fontSize:8, color:T.sub, marginBottom:2, whiteSpace:"nowrap" }}>{rpF(x.v)}{birim}</div>
+          <div style={{ fontSize:11, color:T.sub, marginBottom:2, whiteSpace:"nowrap" }}>{rpF(x.v)}{birim}</div>
           <div title={x.e+": "+rpF(x.v,1)} style={{ width:"70%", maxWidth:34, height:Math.max(2, Math.abs(x.v)/mx*yuk), background: x.v<0?(T.danger||"#e85a4f"):renk, borderRadius:"4px 4px 0 0" }}/>
-          <div style={{ fontSize:8, color:T.sub, marginTop:4, whiteSpace:"nowrap" }}>{x.e}</div>
+          <div style={{ fontSize:11, color:T.sub, marginTop:4, whiteSpace:"nowrap" }}>{x.e}</div>
         </div>
       ))}
     </div>
   );
 }
 function RpYatay({ T, satirlar, renk=RP_RENK[0], fmt=(v)=>rpF(v,1), bos="Veri yok" }) {
-  if (!satirlar.length) return <div style={{ fontSize:10, color:T.sub }}>{bos}</div>;
+  if (!satirlar.length) return <div style={{ fontSize:12, color:T.sub }}>{bos}</div>;
   const mx = Math.max(1e-9, ...satirlar.map(x=>Math.abs(x.v)));
   return (
     <div>
       {satirlar.map(x=>(
         <div key={x.ad} style={{ marginBottom:5 }}>
-          <div style={{ display:"flex", justifyContent:"space-between", fontSize:10, color:T.text, marginBottom:2 }}>
+          <div style={{ display:"flex", justifyContent:"space-between", fontSize:12, color:T.text, marginBottom:2 }}>
             <span style={{ overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", maxWidth:"68%" }}>{x.ad}</span>
             <span style={{ fontWeight:700 }}>{fmt(x.v)}{x.alt ? <span style={{ color:T.sub, fontWeight:400, marginLeft:6 }}>{x.alt}</span> : null}</span>
           </div>
@@ -2491,7 +2491,7 @@ function RpYatay({ T, satirlar, renk=RP_RENK[0], fmt=(v)=>rpF(v,1), bos="Veri yo
 function RpKart({ T, baslik, children, genis }) {
   return (
     <div style={{ background:T.card, border:"1px solid "+T.border, borderRadius:12, padding:"12px 14px", marginBottom:12, gridColumn: genis?"1 / -1":undefined }}>
-      {baslik && <div style={{ fontSize:10, fontWeight:800, color:T.gold, letterSpacing:".04em", marginBottom:8 }}>{baslik}</div>}
+      {baslik && <div style={{ fontSize:12, fontWeight:800, color:T.gold, letterSpacing:".04em", marginBottom:8 }}>{baslik}</div>}
       {children}
     </div>
   );
@@ -2499,9 +2499,9 @@ function RpKart({ T, baslik, children, genis }) {
 function RpKpi({ T, ad, deger, alt, renk }) {
   return (
     <div style={{ background:T.card, border:"1px solid "+T.border, borderRadius:12, padding:"10px 14px" }}>
-      <div style={{ fontSize:9, color:T.sub, fontWeight:700, marginBottom:4 }}>{ad}</div>
+      <div style={{ fontSize:11, color:T.sub, fontWeight:700, marginBottom:4 }}>{ad}</div>
       <div style={{ fontSize:20, fontWeight:800, color:renk||T.text, lineHeight:1.1 }}>{deger}</div>
-      {alt && <div style={{ fontSize:9, color:T.sub, marginTop:4 }}>{alt}</div>}
+      {alt && <div style={{ fontSize:11, color:T.sub, marginTop:4 }}>{alt}</div>}
     </div>
   );
 }
@@ -2524,7 +2524,7 @@ function rpHasToplam(mizan){ // son mizandan başlıca bakiyeler (HAS)
 function RaporPanel({ T, GH, onRapor }) {
   const [v] = useRpVeri();
   const [ay, setAy] = useState("");
-  if (!v) return <div style={{ fontSize:10, color:T.sub }}>Yükleniyor…</div>;
+  if (!v) return <div style={{ fontSize:12, color:T.sub }}>Yükleniyor…</div>;
   const aylar = rpAyListe(v.giderler, v.satislar);
   const bos = !v.giderler.length && !v.satislar.length && !v.mizanlar.length;
   if (bos) return (
@@ -2546,7 +2546,7 @@ function RaporPanel({ T, GH, onRapor }) {
           <option value="">Tüm dönem</option>
           {aylar.map(a=><option key={a} value={a}>{rpAyAd(a)}</option>)}
         </select>
-        {mz && <span style={{ fontSize:9, color:T.sub }}>Stok/alacak/borç: son mizan ({rpSonMizan(v.mizanlar).bit})</span>}
+        {mz && <span style={{ fontSize:11, color:T.sub }}>Stok/alacak/borç: son mizan ({rpSonMizan(v.mizanlar).bit})</span>}
       </div>
       <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))", gap:10, marginBottom:12 }}>
         {mz && <RpKpi T={T} ad="STOK (HAS)" deger={rpF(mz.stok,1)} alt="153 Ticari Mallar"/>}
@@ -2569,7 +2569,7 @@ function RaporPanel({ T, GH, onRapor }) {
 
 // ── Gelir tablosu (mizandan) ──
 function RpGelirTablosu({ T, hes, kayit }) {
-  const kart = { background:T.card, border:"1px solid "+T.border, borderRadius:12, padding:"12px 14px", marginBottom:12 };
+  const kart = { background:(T.id==="beyaz"?"#ffffff":T.card), border:"1px solid "+T.border, borderRadius:12, padding:"12px 14px", marginBottom:12 };
   const f2 = (v) => rpF(v,2);
   const renk = (v) => v<0 ? (T.danger||"#e85a4f") : T.text;
   const h = (k) => (hes[k]?.has||0);
@@ -2589,7 +2589,7 @@ function RpGelirTablosu({ T, hes, kayit }) {
   );
   return (
     <div style={kart}>
-      <div style={{ fontSize:10, fontWeight:800, color:T.gold, marginBottom:8 }}>GELİR TABLOSU (HAS) — {kayit.bas} – {kayit.bit}</div>
+      <div style={{ fontSize:12, fontWeight:800, color:T.gold, marginBottom:8 }}>GELİR TABLOSU (HAS) — {kayit.bas} – {kayit.bit}</div>
       <Satir ad="Atölye satışları (600)" v={gelir("600")} girinti/>
       <Satir ad="Diğer gelirler (602)" v={gelir("602")} girinti/>
       <Satir ad="Brüt satışlar" v={brutSatis}/>
@@ -2604,7 +2604,7 @@ function RpGelirTablosu({ T, hes, kayit }) {
       <Satir ad="Eritme ve taş düşümü giderleri (760)" v={-h("760")} girinti/>
       {digerler.map(k=><Satir key={k} ad={hes[k].ad+" ("+k+")"} v={-h(k)} girinti/>)}
       <Satir ad="BRÜT KÂR / ZARAR" v={brut} kalin/>
-      <div style={{ fontSize:8, color:T.dim||T.sub, marginTop:8, lineHeight:1.5 }}>
+      <div style={{ fontSize:11, color:T.dim||T.sub, marginTop:8, lineHeight:1.5 }}>
         Mizandan hesaplanır. Rhino'nun kendi gelir tablosundan yaklaşık 1 HAS sapabilir: gümüş/taş gibi döviz hesapları Rhino'da işlem günü kuruyla, mizanda ise dönem sonu bakiyesiyle görünür. "Kur farkı" satırı mizanda bulunmadığı için burada yoktur.
       </div>
     </div>
@@ -2615,7 +2615,7 @@ function RpGelirTablosu({ T, hes, kayit }) {
 function RaporKarlilik({ T, GH }) {
   const [v] = useRpVeri();
   const [mid, setMid] = useState("");
-  if (!v) return <div style={{ fontSize:10, color:T.sub }}>Yükleniyor…</div>;
+  if (!v) return <div style={{ fontSize:12, color:T.sub }}>Yükleniyor…</div>;
   const aylar = rpAyListe(v.giderler, v.satislar);
   const kayit = v.mizanlar.find(m=>m.id===mid) || rpSonMizan(v.mizanlar);
   const hes = kayit && kayit.kur && kayit.kur.HAS ? rpHesapla(kayit.satirlar, kayit.kur) : null;
@@ -2625,8 +2625,8 @@ function RaporKarlilik({ T, GH }) {
   const tasGeliri = hes ? -((hes["602 001 04"]?.has||0) + (hes["600 001 04"]?.has||0)) : 0;
   const tasMaliyet = hes ? (hes["621 001 04"]?.has||0) : 0;
   const netTas = tasGeliri - tasMaliyet - tum.tasGider;
-  const th = { fontSize:9, color:T.sub, fontWeight:700, textAlign:"right", padding:"4px 6px" };
-  const td = { fontSize:10, color:T.text, textAlign:"right", padding:"4px 6px", borderTop:"1px solid "+T.border };
+  const th = { fontSize:11, color:T.sub, fontWeight:700, textAlign:"right", padding:"4px 6px" };
+  const td = { fontSize:12, color:T.text, textAlign:"right", padding:"4px 6px", borderTop:"1px solid "+T.border };
   const renk = (x) => x<0 ? (T.danger||"#e85a4f") : T.text;
   const aktifPasif = hes ? Object.keys(hes).filter(k=>/^[1345]\d$/.test(k)).reduce((t,k)=>t+hes[k].has,0) : null;
   return (
@@ -2655,15 +2655,15 @@ function RaporKarlilik({ T, GH }) {
             </div>
             {hes && (
               <div style={{ marginTop:10, borderTop:"1px solid "+T.border, paddingTop:8 }}>
-                <div style={{ fontSize:9, color:T.sub, fontWeight:700, marginBottom:4 }}>TAŞ SONUCU (dönem toplamı, HAS)</div>
+                <div style={{ fontSize:11, color:T.sub, fontWeight:700, marginBottom:4 }}>TAŞ SONUCU (dönem toplamı, HAS)</div>
                 {[["Taş geliri (mizan 602/600 taş)", tasGeliri],["Taş stok maliyeti (mizan 621)", -tasMaliyet],["Taş giderleri (Taş Stoğu, Taş Düşümü, Malzeme Taş)", -tum.tasGider]].map(([ad,x])=>(
-                  <div key={ad} style={{ display:"flex", justifyContent:"space-between", fontSize:10, color:T.text, padding:"2px 8px" }}><span>{ad}</span><span style={{ color:renk(x) }}>{rpF(x,2)}</span></div>
+                  <div key={ad} style={{ display:"flex", justifyContent:"space-between", fontSize:12, color:T.text, padding:"2px 8px" }}><span>{ad}</span><span style={{ color:renk(x) }}>{rpF(x,2)}</span></div>
                 ))}
                 <div style={{ display:"flex", justifyContent:"space-between", fontSize:11, fontWeight:800, color:T.gold, padding:"4px 8px", borderTop:"1px solid "+T.border, marginTop:4 }}><span>Net taş sonucu</span><span style={{ color:renk(netTas) }}>{rpF(netTas,2)}</span></div>
                 <div style={{ display:"flex", justifyContent:"space-between", fontSize:11, fontWeight:800, color:T.gold, padding:"4px 8px" }}><span>Kaba fark + net taş sonucu</span><span style={{ color:renk(tum.sonuc+netTas) }}>{rpF(tum.sonuc+netTas,2)}</span></div>
               </div>
             )}
-            <div style={{ fontSize:8, color:T.dim||T.sub, marginTop:8, lineHeight:1.5 }}>"Kaba fark" yönetim hesabıdır, muhasebe sonucu değildir. Muhasebe sonucu için aşağıdaki mizan tabanlı gelir tablosuna bak.</div>
+            <div style={{ fontSize:11, color:T.dim||T.sub, marginTop:8, lineHeight:1.5 }}>"Kaba fark" yönetim hesabıdır, muhasebe sonucu değildir. Muhasebe sonucu için aşağıdaki mizan tabanlı gelir tablosuna bak.</div>
           </RpKart>
           <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(300px,1fr))", gap:12 }}>
             <RpKart T={T} baslik="AYLIK KABA FARK (HAS)"><RpSutun T={T} renk={RP_RENK[2]} veri={aylik.map(x=>({ e:rpAyAd(x.a).split(" ")[0], v:x.o.sonuc }))}/></RpKart>
@@ -2676,7 +2676,7 @@ function RaporKarlilik({ T, GH }) {
       {v.mizanlar.length>0 && (
         <div style={{ marginTop:6 }}>
           <div style={{ display:"flex", gap:8, alignItems:"center", marginBottom:8 }}>
-            <span style={{ fontSize:10, color:T.sub, fontWeight:700 }}>Mizan:</span>
+            <span style={{ fontSize:12, color:T.sub, fontWeight:700 }}>Mizan:</span>
             <select value={kayit?.id||""} onChange={e=>setMid(e.target.value)} style={{ background:T.card, border:"1px solid "+T.border, borderRadius:8, padding:"5px 10px", color:T.text, fontSize:11 }}>
               {v.mizanlar.map(m=><option key={m.id} value={m.id}>{m.bas} – {m.bit}</option>)}
             </select>
@@ -2685,7 +2685,7 @@ function RaporKarlilik({ T, GH }) {
           {hes && aktifPasif!==null && (
             <RpKart T={T} baslik="BİLANÇO FARKI (AKTİF − PASİF)">
               <div style={{ fontSize:18, fontWeight:800, color:renk(aktifPasif) }}>{rpF(aktifPasif,2)} has</div>
-              <div style={{ fontSize:8, color:T.dim||T.sub, marginTop:4 }}>Rhino bilançosundaki "SONUÇ KAR / ZARAR" satırıyla aynı hesap.</div>
+              <div style={{ fontSize:11, color:T.dim||T.sub, marginTop:4 }}>Rhino bilançosundaki "SONUÇ KAR / ZARAR" satırıyla aynı hesap.</div>
             </RpKart>
           )}
         </div>
@@ -2784,7 +2784,7 @@ function RaporlarSayfasi({ T, GH, RD, setRhinoMizan }) {
           style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"4px 8px", marginLeft:derin*14, marginBottom:2, borderRadius:6, background: derin===0?"rgba(var(--vurgu-rgb),0.07)":"transparent", cursor: cocuklar.length?"pointer":"default" }}>
           <span style={{ fontSize: derin===0?11:10, fontWeight: derin===0?700:500, color:T.text }}>
             {cocuklar.length>0 && <span style={{ color:T.sub, marginRight:4 }}>{acikMi?"▾":"▸"}</span>}
-            <span style={{ color:T.sub, marginRight:6, fontSize:9 }}>{kod.includes("\\") ? "" : kod}</span>{n.ad}
+            <span style={{ color:T.sub, marginRight:6, fontSize:11 }}>{kod.includes("\\") ? "" : kod}</span>{n.ad}
           </span>
           <span style={{ fontSize: derin===0?12:10, fontWeight: derin===0?800:600, color:renk(x) }}>{f2(x)}</span>
         </div>
@@ -2797,7 +2797,7 @@ function RaporlarSayfasi({ T, GH, RD, setRhinoMizan }) {
   const Bilanco = () => {
     const aktifG = ust2("1"), pasifG = [...ust2("3"), ...ust2("4"), ...ust2("5")];
     const blok = (liste, isaret) => liste.map(k=>{ const n=hes[k]; if(!n||Math.abs(n.has)<0.005) return null;
-      return <div key={k}><div style={{ fontSize:9, color:T.sub, fontWeight:700, margin:"6px 0 2px" }}>{n.ad}</div>{n.cocuk.map(c=><Dal key={c} kod={c} isaret={isaret}/>)}</div>; });
+      return <div key={k}><div style={{ fontSize:11, color:T.sub, fontWeight:700, margin:"6px 0 2px" }}>{n.ad}</div>{n.cocuk.map(c=><Dal key={c} kod={c} isaret={isaret}/>)}</div>; });
     return (
       <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(280px,1fr))", gap:12 }}>
         <RpKart T={T} baslik="AKTİF — Varlıklar (HAS)">
@@ -2816,7 +2816,7 @@ function RaporlarSayfasi({ T, GH, RD, setRhinoMizan }) {
   return (
     <div>
       <RpKart T={T} baslik="📂 RAPOR YÜKLE">
-        <div style={{ fontSize:9, color:T.sub, marginBottom:8, lineHeight:1.5 }}>
+        <div style={{ fontSize:11, color:T.sub, marginBottom:8, lineHeight:1.5 }}>
           Rhino'dan aldığın Excel dosyasını buraya at. Dosya türünü (mizan, depo sayımı, giderler, satış) kendisi tanır. Aynı dönem veya aynı satırlar tekrar yüklenirse çiftlenmez.
         </div>
         <label style={{ display:"inline-block", ...GH, opacity: mesgul?0.5:1 }}>
@@ -2824,18 +2824,18 @@ function RaporlarSayfasi({ T, GH, RD, setRhinoMizan }) {
           <input type="file" accept=".xlsx,.xls" multiple disabled={mesgul} style={{ display:"none" }}
             onChange={async e => { const f=[...e.target.files]; e.target.value=""; if(f.length) await dosyaYukle(f); }}/>
         </label>
-        {mesaj && mesaj.length>0 && <div style={{ marginTop:8 }}>{mesaj.map((m,i)=><div key={i} style={{ fontSize:10, color:T.text, padding:"2px 0" }}>{m}</div>)}</div>}
+        {mesaj && mesaj.length>0 && <div style={{ marginTop:8 }}>{mesaj.map((m,i)=><div key={i} style={{ fontSize:12, color:T.text, padding:"2px 0" }}>{m}</div>)}</div>}
       </RpKart>
       {v && (
         <RpKart T={T} baslik="YÜKLÜ KAYITLAR">
-          <div style={{ fontSize:10, color:T.text, lineHeight:1.7 }}>
+          <div style={{ fontSize:12, color:T.text, lineHeight:1.7 }}>
             <div><b>Giderler:</b> {idxOzet("g")}</div>
             <div><b>Satış:</b> {idxOzet("s")}</div>
             <div><b>Mizan:</b> {v.mizanlar.length ? v.mizanlar.map(m=>m.bas+" – "+m.bit).join(" · ") : "yüklenmedi"}</div>
           </div>
         </RpKart>
       )}
-      {!v && <div style={{ fontSize:10, color:T.sub }}>Yükleniyor…</div>}
+      {!v && <div style={{ fontSize:12, color:T.sub }}>Yükleniyor…</div>}
       {kayit && (
         <div>
           <div style={{ display:"flex", gap:6, alignItems:"center", flexWrap:"wrap", marginBottom:10 }}>
@@ -2843,21 +2843,21 @@ function RaporlarSayfasi({ T, GH, RD, setRhinoMizan }) {
             <select value={secili} onChange={e=>setSecili(e.target.value)} style={{ background:T.card, border:"1px solid "+T.border, borderRadius:8, padding:"6px 10px", color:T.text, fontSize:11 }}>
               {v.mizanlar.map(m=><option key={m.id} value={m.id}>{m.bas} – {m.bit}</option>)}
             </select>
-            <button onClick={()=>mizSil(kayit.id)} style={{ ...RD, fontSize:9, padding:"4px 10px", marginLeft:"auto" }}>Bu mizanı sil</button>
+            <button onClick={()=>mizSil(kayit.id)} style={{ ...RD, fontSize:11, padding:"4px 10px", marginLeft:"auto" }}>Bu mizanı sil</button>
           </div>
-          <div style={{ fontSize:9, color:T.sub, marginBottom:8 }}>{kayit.firma} · {kayit.dosyaAd} · {new Date(kayit.yuklendi).toLocaleDateString("tr-TR")} · {kayit.satirlar.length} hesap satırı</div>
+          <div style={{ fontSize:11, color:T.sub, marginBottom:8 }}>{kayit.firma} · {kayit.dosyaAd} · {new Date(kayit.yuklendi).toLocaleDateString("tr-TR")} · {kayit.satirlar.length} hesap satırı</div>
           <RpKart T={T}>
             <div style={{ display:"flex", gap:10, alignItems:"center", flexWrap:"wrap" }}>
-              <span style={{ fontSize:9, color:T.sub, fontWeight:700 }}>Dönem sonu kurları (mizandan çıkarıldı, düzeltebilirsin):</span>
+              <span style={{ fontSize:11, color:T.sub, fontWeight:700 }}>Dönem sonu kurları (mizandan çıkarıldı, düzeltebilirsin):</span>
               {["HAS","USD","EUR","SLV"].map(d=>(
-                <label key={d} style={{ fontSize:9, color:T.sub }}>{d}{" "}
+                <label key={d} style={{ fontSize:11, color:T.sub }}>{d}{" "}
                   <input type="number" step="0.001" value={kur?.[d]??""} onChange={e=>setKurDuz(o=>({...o,[kayit.id]:{...(o[kayit.id]||{}),[d]:parseFloat(e.target.value)||0}}))}
-                    style={{ width:80, background:T.card, border:"1px solid "+T.border, borderRadius:6, padding:"3px 6px", color:T.text, fontSize:10 }}/>
+                    style={{ width:80, background:T.card, border:"1px solid "+T.border, borderRadius:6, padding:"3px 6px", color:T.text, fontSize:12 }}/>
                 </label>
               ))}
             </div>
           </RpKart>
-          {!hes && <RpKart T={T}><div style={{ color:T.danger||"#e85a4f", fontSize:10 }}>Kur çıkarılamadı. HAS kurunu elle gir.</div></RpKart>}
+          {!hes && <RpKart T={T}><div style={{ color:T.danger||"#e85a4f", fontSize:12 }}>Kur çıkarılamadı. HAS kurunu elle gir.</div></RpKart>}
           {hes && <Bilanco/>}
         </div>
       )}
@@ -3005,7 +3005,7 @@ function KasaGenel({ T, GH, atolye, ic, onGit }) {
   const son = atolye ? atolye.son : null;
   const akToplam = son ? AK.reduce((s,f)=>s+num(son[f.k]),0) : 0;
   const goldLoc = depo ? ["sayim","tezgah","cila","tasdizim","firecila"].map(k => ({ l:RP_LOC.find(x=>x.k===k).l, x: altin.reduce((s,a)=>s+a.konum[RP_LOC.findIndex(x=>x.k===k)],0) })) : [];
-  const kart = { background:T.card, border:"1px solid "+T.border, borderRadius:14, padding:"18px 20px", boxShadow:"0 1px 3px rgba(0,0,0,.08)" };
+  const kart = { background:(T.id==="beyaz"?"#ffffff":T.card), border:"1px solid "+T.border, borderRadius:14, padding:"18px 20px", boxShadow:"0 1px 3px rgba(0,0,0,.08)" };
   const bas = { margin:"0 0 14px", fontSize:12, fontWeight:700, color:T.text, letterSpacing:".02em", display:"flex", justifyContent:"space-between", alignItems:"center" };
   const altBas = { fontWeight:500, color:T.sub, fontSize:11.5 };
   const grid = (cols) => ({ display:"grid", gridTemplateColumns:cols, gap:14, marginBottom:14 });
@@ -3145,7 +3145,7 @@ function KasaStokAltin({ T, GH }) {
   const tG = altin.reduce((s,a)=>s+a.genel,0), tH = altin.reduce((s,a)=>s+a.has,0), tM = altin.some(a=>a.mizan!=null) ? altin.reduce((s,a)=>s+(a.mizan||0),0) : null;
   const diger = depo.satirlar.filter(s => s[1]==="GR" && /GÜMÜŞ|925|995|999|^FİRE/i.test(s[0]) && !/FASON|İŞÇİLİK/i.test(s[0]) && s[2]>0.01);
   const chip = (f) => f==null ? <span style={{ color:T.sub }}>—</span> : <span style={{ display:"inline-block", padding:"1px 8px", borderRadius:99, fontSize:11, fontWeight:700, background: Math.abs(f)<10?"rgba(31,122,77,.12)":"rgba(179,57,47,.12)", color: Math.abs(f)<10?"#1f7a4d":(T.danger||"#b3392f") }}>{f>0?"+":""}{rpF(f,1)}</span>;
-  const kart = { background:T.card, border:"1px solid "+T.border, borderRadius:12, padding:"16px 18px" };
+  const kart = { background:(T.id==="beyaz"?"#ffffff":T.card), border:"1px solid "+T.border, borderRadius:12, padding:"16px 18px" };
   const bas = { margin:"0 0 12px", fontSize:11.5, fontWeight:700, color:T.sub, textTransform:"uppercase", letterSpacing:".06em", display:"flex", justifyContent:"space-between" };
   return (
     <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(320px,1fr))", gap:12, color:T.text }}>
@@ -3184,7 +3184,7 @@ function KasaMusteriler({ T, GH, BG, RD, musBakiye, kasa, svKasa, kasaModalAc })
   const topB = liste.reduce((s,x)=>s+Math.max(0,x.bakiye),0), mx = Math.max(1e-9, ...liste.map(x=>Math.abs(x.bakiye)));
   const th = { fontSize:11, color:T.sub, fontWeight:600, textAlign:"right", padding:"6px 8px", borderBottom:"1px solid "+T.border, textTransform:"uppercase", letterSpacing:".04em" };
   const td = { padding:"9px 8px", borderBottom:"1px solid "+T.border, textAlign:"right", fontSize:13, fontVariantNumeric:"tabular-nums" };
-  const kart = { background:T.card, border:"1px solid "+T.border, borderRadius:12, padding:"16px 18px" };
+  const kart = { background:(T.id==="beyaz"?"#ffffff":T.card), border:"1px solid "+T.border, borderRadius:12, padding:"16px 18px" };
   const bas = { margin:"0 0 12px", fontSize:11.5, fontWeight:700, color:T.sub, textTransform:"uppercase", letterSpacing:".06em" };
   const pill = (b) => { const a = b>0.001; const k = b<-0.001; return <span style={{ display:"inline-block", padding:"2px 9px", borderRadius:99, fontSize:11, fontWeight:600, background: a?"rgba(179,57,47,.12)":(k?"rgba(var(--vurgu-rgb),0.12)":"rgba(31,122,77,.12)"), color: a?(T.danger||"#b3392f"):(k?T.gold:"#1f7a4d") }}>{a?"Açık":(k?"Alacaklı":"Kapalı")}</span>; };
   if (!liste.length) return <div style={kart}><div style={{ fontSize:13, marginBottom:10 }}>Henüz müşteri hareketi yok.</div><button onClick={()=>kasaModalAc({tip:"musBaklangic"})} style={GH}>+ Başlangıç bakiyesi</button></div>;
@@ -10694,9 +10694,10 @@ function Atolye({ onSirketDegis }) {
           const dokumOdenen = (kasa.dokumcuIslemler||[]).filter(x=>x.tip==="ode").reduce((s,x)=>s+x.has,0);
           const dokumBorc   = dokumGiden - dokumOdenen;
 
-          const KCARD = { background:"rgba(0,0,0,0.2)", border:"1px solid rgba(255,255,255,0.06)", borderRadius:12, padding:"12px 16px", marginBottom:12 };
-          const KSEC  = { fontSize:10, fontWeight:700, color:GOLD, marginBottom:10, letterSpacing:".04em" };
-          const KIN   = { ...IS, padding:"5px 8px", fontSize:10, marginBottom:6, width:"100%" };
+          const KACIK = T.id==="beyaz"; const KOK = KACIK?"#1f7a4d":"#6abf69"; const KMAVI = KACIK?"#2f7fb8":"#5b9bd5"; const KTUR = KACIK?"#b8641c":"#e8833a";
+          const KCARD = { background:(T.id==="beyaz"?"#ffffff":T.card), border:"1px solid "+T.border, borderRadius:12, padding:"14px 18px", marginBottom:12, boxShadow:"0 1px 3px rgba(0,0,0,.08)" };
+          const KSEC  = { fontSize:12, fontWeight:700, color:GOLD, marginBottom:10, letterSpacing:".04em" };
+          const KIN   = { ...IS, padding:"5px 8px", fontSize:12, marginBottom:6, width:"100%" };
 
           return (
             <div style={{ animation:"fadein .3s" }}>
@@ -10711,7 +10712,7 @@ function Atolye({ onSirketDegis }) {
               {!kasaEski && <RpNav T={T} aktif={kasaSayfa==="g_ab"||kasaSayfa==="g_stok"||kasaSayfa==="g_genel"||kasaSayfa==="raporlar"||kasaSayfa==="karlilik" ? kasaSayfa : "g_genel"} onSec={setKasaSayfa} sekmeler={[{id:"g_genel",l:"Genel Bakış"},{id:"g_stok",l:"Stok"},{id:"g_ab",l:"Alacak & Borç"},{id:"raporlar",l:"Raporlar"},{id:"karlilik",l:"🔒 Karlılık"}]}/>}
               {kasaEski && <div style={{ display:"flex", gap:4, marginBottom:14, borderBottom:"1px solid rgba(var(--vurgu-rgb),0.12)", paddingBottom:8 }}>
                 {[{id:"panel",l:"Panel"},{id:"ozet",l:"Özet"},{id:"musteri",l:"Müşteri Bakiyeleri"},{id:"dokumcu",l:"Dökümcü"},{id:"stok",l:"Stok"},{id:"muhasebe",l:"Muhasebe"},{id:"bilanco",l:"Bilanço"},{id:"raporlar",l:"Raporlar"},{id:"karlilik",l:"🔒 Karlılık"}].map(t => (
-                  <button key={t.id} onClick={()=>setKasaSayfa(t.id)} style={{ background:kasaSayfa===t.id?"rgba(var(--vurgu-rgb),0.15)":"transparent", border:"1px solid", borderColor:kasaSayfa===t.id?"rgba(var(--vurgu-rgb),0.4)":"transparent", borderRadius:7, padding:"5px 12px", color:kasaSayfa===t.id?GOLD:"#7a6f5a", fontSize:10, fontWeight:kasaSayfa===t.id?700:400, cursor:"pointer" }}>{t.l}</button>
+                  <button key={t.id} onClick={()=>setKasaSayfa(t.id)} style={{ background:kasaSayfa===t.id?"rgba(var(--vurgu-rgb),0.15)":"transparent", border:"1px solid", borderColor:kasaSayfa===t.id?"rgba(var(--vurgu-rgb),0.4)":"transparent", borderRadius:7, padding:"5px 12px", color:kasaSayfa===t.id?GOLD:T.sub, fontSize:12, fontWeight:kasaSayfa===t.id?700:400, cursor:"pointer" }}>{t.l}</button>
                 ))}
               </div>}
 
@@ -10724,27 +10725,27 @@ function Atolye({ onSirketDegis }) {
                     <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:8, marginBottom:12 }}>
                       {[
                         { l:"Ham Altın", v:hamAltinGram, c:GOLD },
-                        { l:"Üretimdeki Altın", v:uretimAltin, c:"#5b9bd5" },
+                        { l:"Üretimdeki Altın", v:uretimAltin, c:KMAVI },
                         { l:"Üretimdeki Taş", v:uretimTas, c:"#a78bfa" },
-                        { l:"Satılmamış Mamul (Altın)", v:satilmamisAltin, c:"#6abf69" },
+                        { l:"Satılmamış Mamul (Altın)", v:satilmamisAltin, c:KOK },
                         { l:"Satılmamış Mamul (Taş)", v:satilmamisTas, c:"#7c6abf" },
                         { l:"İade Taşları", v:iadeTas, c:"#c27ba0" },
-                        { l:"Hurda Altın", v:hurdaAltin, c:"#e8833a" },
+                        { l:"Hurda Altın", v:hurdaAltin, c:KTUR },
                         { l:"Hurda Taş", v:hurdaTas, c:"#b86a3a" },
-                        { l:"Hazır Ürün + Serbest", v:hazirUrunGram+serbestGram, c:"#e8dcc8" },
+                        { l:"Hazır Ürün + Serbest", v:hazirUrunGram+serbestGram, c:T.text },
                       ].filter(x=>x.v>0).map((x,i) => (
-                        <div key={i} style={{ background:"rgba(0,0,0,0.15)", borderRadius:8, padding:"8px 10px" }}>
-                          <div style={{ fontSize:7, color:"#665d4a", textTransform:"uppercase", marginBottom:3 }}>{x.l}</div>
-                          <div style={{ fontSize:13, fontWeight:800, color:x.c }}>{fN(x.v,3)} <span style={{ fontSize:8 }}>has</span></div>
-                          {hasGramUSD>0 && <div style={{ fontSize:8, color:"#665d4a" }}>≈ {fUSD(x.v*hasGramUSD)}</div>}
+                        <div key={i} style={{ background:T.card, borderRadius:8, padding:"8px 10px" }}>
+                          <div style={{ fontSize:11, color:T.sub, textTransform:"uppercase", marginBottom:3 }}>{x.l}</div>
+                          <div style={{ fontSize:13, fontWeight:800, color:x.c }}>{fN(x.v,3)} <span style={{ fontSize:11 }}>has</span></div>
+                          {hasGramUSD>0 && <div style={{ fontSize:11, color:T.sub }}>≈ {fUSD(x.v*hasGramUSD)}</div>}
                         </div>
                       ))}
                     </div>
                     <div style={{ background:"rgba(var(--vurgu-rgb),0.08)", border:"1px solid rgba(var(--vurgu-rgb),0.2)", borderRadius:8, padding:"10px 14px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-                      <span style={{ fontSize:10, fontWeight:700, color:GOLD }}>TOPLAM ÖZ SERMAYE</span>
+                      <span style={{ fontSize:12, fontWeight:700, color:GOLD }}>TOPLAM ÖZ SERMAYE</span>
                       <div style={{ textAlign:"right" }}>
                         <div style={{ fontSize:16, fontWeight:800, color:GOLD }}>{fN(toplamHas,3)} has</div>
-                        {hasGramUSD>0 && <div style={{ fontSize:10, color:"#6abf69", fontWeight:700 }}>{fUSD(toplamUSD)}</div>}
+                        {hasGramUSD>0 && <div style={{ fontSize:12, color:KOK, fontWeight:700 }}>{fUSD(toplamUSD)}</div>}
                       </div>
                     </div>
                   </div>
@@ -10756,15 +10757,15 @@ function Atolye({ onSirketDegis }) {
                       {Object.entries(musBakiye).filter(([,d])=>(d.borc-d.odenen)>0.001).sort((a,b)=>(b[1].borc-b[1].odenen)-(a[1].borc-a[1].odenen)).slice(0,5).map(([mus,d]) => {
                         const bakiye = d.borc - d.odenen;
                         return (
-                          <div key={mus} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"5px 0", borderBottom:"1px solid rgba(255,255,255,0.04)" }}>
-                            <span style={{ fontSize:9, color:"var(--goldtext)", fontWeight:600 }}>{mus}</span>
-                            <span style={{ fontSize:10, fontWeight:800, color:"#e85a4f" }}>{fN(bakiye,3)} has</span>
+                          <div key={mus} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"5px 0", borderBottom:"1px solid "+T.border }}>
+                            <span style={{ fontSize:11, color:"var(--goldtext)", fontWeight:600 }}>{mus}</span>
+                            <span style={{ fontSize:12, fontWeight:800, color:"#e85a4f" }}>{fN(bakiye,3)} has</span>
                           </div>
                         );
                       })}
-                      {Object.values(musBakiye).every(d=>d.borc-d.odenen<=0.001) && <div style={{ fontSize:9, color:"#665d4a" }}>Açık bakiye yok</div>}
+                      {Object.values(musBakiye).every(d=>d.borc-d.odenen<=0.001) && <div style={{ fontSize:11, color:T.sub }}>Açık bakiye yok</div>}
                       <div style={{ marginTop:8, paddingTop:8, borderTop:"1px solid rgba(var(--vurgu-rgb),0.1)", display:"flex", justifyContent:"space-between" }}>
-                        <span style={{ fontSize:8, color:"#8a7d64" }}>TOPLAM ALACAK</span>
+                        <span style={{ fontSize:11, color:T.sub }}>TOPLAM ALACAK</span>
                         <span style={{ fontSize:11, fontWeight:800, color:"#e85a4f" }}>{fN(Object.values(musBakiye).reduce((s,d)=>s+Math.max(0,d.borc-d.odenen),0),3)} has</span>
                       </div>
                     </div>
@@ -10772,12 +10773,12 @@ function Atolye({ onSirketDegis }) {
                       <div style={KSEC}>🏭 DÖKÜMCÜ BORCU</div>
                       <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
                         {[
-                          { l:"Toplam Gönderilen", v:dokumGiden, c:"#e8833a" },
-                          { l:"Toplam Ödenen",     v:dokumOdenen, c:"#6abf69" },
-                          { l:"Kalan Borç",        v:dokumBorc, c:dokumBorc>0?"#e85a4f":"#6abf69" },
+                          { l:"Toplam Gönderilen", v:dokumGiden, c:KTUR },
+                          { l:"Toplam Ödenen",     v:dokumOdenen, c:KOK },
+                          { l:"Kalan Borç",        v:dokumBorc, c:dokumBorc>0?"#e85a4f":KOK },
                         ].map((x,i) => (
-                          <div key={i} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"5px 0", borderBottom:i<2?"1px solid rgba(255,255,255,0.04)":"2px solid rgba(var(--vurgu-rgb),0.15)" }}>
-                            <span style={{ fontSize:9, color:"#998a6e" }}>{x.l}</span>
+                          <div key={i} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"5px 0", borderBottom:i<2?"1px solid "+T.border:"2px solid rgba(var(--vurgu-rgb),0.15)" }}>
+                            <span style={{ fontSize:11, color:T.sub }}>{x.l}</span>
                             <span style={{ fontSize:11, fontWeight:800, color:x.c }}>{fN(x.v,3)} has</span>
                           </div>
                         ))}
@@ -10791,8 +10792,8 @@ function Atolye({ onSirketDegis }) {
               {kasaSayfa==="musteri" && (
                 <div>
                   <div style={{ display:"flex", justifyContent:"flex-end", gap:6, marginBottom:10 }}>
-                    <button onClick={()=>kasaModalAc({tip:"musBaklangic"})} style={{ ...GH, padding:"6px 14px", fontSize:10 }}>+ Başlangıç Bakiyesi</button>
-                    <button onClick={()=>kasaModalAc({tip:"musOde"})} style={{ ...BG, padding:"6px 14px", fontSize:10 }}>+ Ödeme Al</button>
+                    <button onClick={()=>kasaModalAc({tip:"musBaklangic"})} style={{ ...GH, padding:"6px 14px", fontSize:12 }}>+ Başlangıç Bakiyesi</button>
+                    <button onClick={()=>kasaModalAc({tip:"musOde"})} style={{ ...BG, padding:"6px 14px", fontSize:12 }}>+ Ödeme Al</button>
                   </div>
                   {Object.entries(musBakiye).sort((a,b)=>(b[1].borc-b[1].odenen)-(a[1].borc-a[1].odenen)).map(([mus,d]) => {
                     const bakiye = d.borc - d.odenen;
@@ -10802,49 +10803,49 @@ function Atolye({ onSirketDegis }) {
                         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
                           <div>
                             <div style={{ fontSize:12, fontWeight:800, color:"var(--goldtext)" }}>{mus}</div>
-                            <div style={{ fontSize:8, color:"#665d4a" }}>{d.siparisler.length} sipariş</div>
+                            <div style={{ fontSize:11, color:T.sub }}>{d.siparisler.length} sipariş</div>
                           </div>
                           <div style={{ textAlign:"right" }}>
-                            <div style={{ fontSize:8, color:"#665d4a" }}>Toplam Borç</div>
+                            <div style={{ fontSize:11, color:T.sub }}>Toplam Borç</div>
                             <div style={{ fontSize:13, fontWeight:800, color:GOLD }}>{fN(d.borc,3)} has</div>
                           </div>
                         </div>
                         <div style={{ background:bakiye>0?"rgba(232,90,79,0.06)":"rgba(106,191,105,0.06)", border:"1px solid", borderColor:bakiye>0?"rgba(232,90,79,0.15)":"rgba(106,191,105,0.15)", borderRadius:9, padding:"10px 14px", marginBottom:8, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
                           <div>
-                            <div style={{ fontSize:7, color:"#665d4a", textTransform:"uppercase", marginBottom:2 }}>NET BAKİYE</div>
-                            <div style={{ fontSize:16, fontWeight:800, color:bakiye>0?"#e85a4f":"#6abf69" }}>{fN(Math.abs(bakiye),3)} has</div>
-                            <div style={{ fontSize:8, color:"#665d4a" }}>{bakiye>0?"müşteri borçlu":"müşteri alacaklı"}</div>
+                            <div style={{ fontSize:11, color:T.sub, textTransform:"uppercase", marginBottom:2 }}>NET BAKİYE</div>
+                            <div style={{ fontSize:16, fontWeight:800, color:bakiye>0?"#e85a4f":KOK }}>{fN(Math.abs(bakiye),3)} has</div>
+                            <div style={{ fontSize:11, color:T.sub }}>{bakiye>0?"müşteri borçlu":"müşteri alacaklı"}</div>
                           </div>
                           <div style={{ textAlign:"right" }}>
-                            {d.baslangicBorc>0 && <div style={{ fontSize:8, color:"#a78bfa" }}>Başlangıç: {fN(d.baslangicBorc,3)} has</div>}
-                            {d.siparisler.length>0 && <div style={{ fontSize:8, color:"#665d4a" }}>Sipariş: {fN(d.borc-d.baslangicBorc,3)} has</div>}
-                            <div style={{ fontSize:8, color:"#6abf69" }}>Ödenen: {fN(d.odenen,3)} has</div>
+                            {d.baslangicBorc>0 && <div style={{ fontSize:11, color:"#a78bfa" }}>Başlangıç: {fN(d.baslangicBorc,3)} has</div>}
+                            {d.siparisler.length>0 && <div style={{ fontSize:11, color:T.sub }}>Sipariş: {fN(d.borc-d.baslangicBorc,3)} has</div>}
+                            <div style={{ fontSize:11, color:KOK }}>Ödenen: {fN(d.odenen,3)} has</div>
                           </div>
                         </div>
                         {(d.odemeler||[]).length>0 && (
-                          <div style={{ borderTop:"1px solid rgba(255,255,255,0.05)", paddingTop:8 }}>
-                            <div style={{ fontSize:7, color:"#665d4a", fontWeight:700, marginBottom:4 }}>HAREKET GEÇMİŞİ</div>
+                          <div style={{ borderTop:"1px solid "+T.border, paddingTop:8 }}>
+                            <div style={{ fontSize:11, color:T.sub, fontWeight:700, marginBottom:4 }}>HAREKET GEÇMİŞİ</div>
                             {[...(d.odemeler||[])].sort((a,b)=>b.tarih-a.tarih).map(o => (
-                              <div key={o.id} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"3px 0", borderBottom:"1px solid rgba(255,255,255,0.03)" }}>
+                              <div key={o.id} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"3px 0", borderBottom:"1px solid "+T.border }}>
                                 <div>
-                                  <span style={{ fontSize:8, color:"#998a6e" }}>{new Date(o.tarih).toLocaleDateString("tr-TR")}</span>
-                                  {o.aciklama && <span style={{ fontSize:8, color:"#665d4a", marginLeft:6 }}>{o.aciklama}</span>}
+                                  <span style={{ fontSize:11, color:T.sub }}>{new Date(o.tarih).toLocaleDateString("tr-TR")}</span>
+                                  {o.aciklama && <span style={{ fontSize:11, color:T.sub, marginLeft:6 }}>{o.aciklama}</span>}
                                 </div>
                                 <div style={{ display:"flex", alignItems:"center", gap:6 }}>
-                                  <span style={{ fontSize:8, color:"#998a6e", marginRight:2 }}>{o.tip==="baslangic_bakiye"?"Başlangıç":o.tip==="ode"?"Ödeme":"?"}</span>
-                                  <span style={{ fontSize:9, fontWeight:800, color:o.tip==="baslangic_bakiye"?"#a78bfa":"#6abf69" }}>{fN(o.has,3)} has</span>
+                                  <span style={{ fontSize:11, color:T.sub, marginRight:2 }}>{o.tip==="baslangic_bakiye"?"Başlangıç":o.tip==="ode"?"Ödeme":"?"}</span>
+                                  <span style={{ fontSize:11, fontWeight:800, color:o.tip==="baslangic_bakiye"?"#a78bfa":KOK }}>{fN(o.has,3)} has</span>
                                   <button onClick={()=>{
                                     const yeni = { ...kasa };
                                     yeni.musteriOdemeler = { ...yeni.musteriOdemeler };
                                     yeni.musteriOdemeler[mus] = (yeni.musteriOdemeler[mus]||[]).filter(x=>x.id!==o.id);
                                     svKasa(yeni);
-                                  }} style={{ ...RD, fontSize:8, padding:"2px 5px" }}>Sil</button>
+                                  }} style={{ ...RD, fontSize:11, padding:"2px 5px" }}>Sil</button>
                                 </div>
                               </div>
                             ))}
                           </div>
                         )}
-                        <button onClick={()=>kasaModalAc({tip:"musOde",mus})} style={{ ...GH, fontSize:9, padding:"4px 10px", marginTop:8 }}>+ Ödeme Al</button>
+                        <button onClick={()=>kasaModalAc({tip:"musOde",mus})} style={{ ...GH, fontSize:11, padding:"4px 10px", marginTop:8 }}>+ Ödeme Al</button>
                       </div>
                     );
                   })}
@@ -10861,23 +10862,23 @@ function Atolye({ onSirketDegis }) {
                   {/* Özet */}
                   <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:8, marginBottom:12 }}>
                     {[
-                      { l:"Dökümde Bekleyen", v:dokumdaOlanlar.reduce((s,x)=>s+x.has,0), c:"#e8833a", sub:dokumdaOlanlar.length+" sipariş" },
-                      { l:"Toplam Gönderilen", v:dokumGiden, c:"#5b9bd5", sub:"tüm zamanlar" },
-                      { l:"Toplam Ödenen",     v:dokumOdenen, c:"#6abf69", sub:"yapılan ödemeler" },
-                      { l:"Kalan Borç",        v:dokumBorc, c:dokumBorc>0?"#e85a4f":"#6abf69", sub:dokumBorc>0?"ödenmeli":"borç yok" },
+                      { l:"Dökümde Bekleyen", v:dokumdaOlanlar.reduce((s,x)=>s+x.has,0), c:KTUR, sub:dokumdaOlanlar.length+" sipariş" },
+                      { l:"Toplam Gönderilen", v:dokumGiden, c:KMAVI, sub:"tüm zamanlar" },
+                      { l:"Toplam Ödenen",     v:dokumOdenen, c:KOK, sub:"yapılan ödemeler" },
+                      { l:"Kalan Borç",        v:dokumBorc, c:dokumBorc>0?"#e85a4f":KOK, sub:dokumBorc>0?"ödenmeli":"borç yok" },
                     ].map((x,i) => (
-                      <div key={i} style={{ background:"rgba(0,0,0,0.2)", borderRadius:10, padding:"10px 14px", textAlign:"center" }}>
-                        <div style={{ fontSize:7, color:"#665d4a", textTransform:"uppercase", marginBottom:4 }}>{x.l}</div>
+                      <div key={i} style={{ background:T.card, borderRadius:10, padding:"10px 14px", textAlign:"center" }}>
+                        <div style={{ fontSize:11, color:T.sub, textTransform:"uppercase", marginBottom:4 }}>{x.l}</div>
                         <div style={{ fontSize:13, fontWeight:800, color:x.c }}>{fN(x.v,3)} has</div>
-                        {hasGramUSD>0 && <div style={{ fontSize:8, color:"#665d4a" }}>≈ {fUSD(x.v*hasGramUSD)}</div>}
-                        <div style={{ fontSize:7, color:"#665d4a", marginTop:2 }}>{x.sub}</div>
+                        {hasGramUSD>0 && <div style={{ fontSize:11, color:T.sub }}>≈ {fUSD(x.v*hasGramUSD)}</div>}
+                        <div style={{ fontSize:11, color:T.sub, marginTop:2 }}>{x.sub}</div>
                       </div>
                     ))}
                   </div>
 
                   <div style={{ display:"flex", gap:6, marginBottom:12 }}>
-                    <button onClick={()=>kasaModalAc({tip:"dokumOde"})} style={{ ...BG, padding:"6px 14px", fontSize:10 }}>+ Ödeme Yap</button>
-                    <button onClick={()=>kasaModalAc({tip:"dokumBorcGir"})} style={{ ...GH, padding:"6px 14px", fontSize:10 }}>+ Mevcut Borç Gir</button>
+                    <button onClick={()=>kasaModalAc({tip:"dokumOde"})} style={{ ...BG, padding:"6px 14px", fontSize:12 }}>+ Ödeme Yap</button>
+                    <button onClick={()=>kasaModalAc({tip:"dokumBorcGir"})} style={{ ...GH, padding:"6px 14px", fontSize:12 }}>+ Mevcut Borç Gir</button>
                   </div>
 
                   {/* Şu an dökümde bekleyen siparişler */}
@@ -10887,16 +10888,16 @@ function Atolye({ onSirketDegis }) {
                       {dokumdaOlanlar.sort((a,b)=>a.tarih-b.tarih).map(x => {
                         const beklemeSure = Math.round((Date.now()-x.tarih)/86400000);
                         return (
-                          <div key={x.id} style={{ display:"flex", alignItems:"center", gap:8, padding:"7px 0", borderBottom:"1px solid rgba(255,255,255,0.04)" }}>
-                            <div style={{ width:8, height:8, borderRadius:"50%", background:"#e8833a", flexShrink:0 }}/>
+                          <div key={x.id} style={{ display:"flex", alignItems:"center", gap:8, padding:"7px 0", borderBottom:"1px solid "+T.border }}>
+                            <div style={{ width:8, height:8, borderRadius:"50%", background:KTUR, flexShrink:0 }}/>
                             <div style={{ flex:1 }}>
-                              <div style={{ fontSize:9, fontWeight:700, color:"var(--goldtext)" }}>{x.musteri||"?"}</div>
-                              <div style={{ fontSize:7, color:"#665d4a" }}>{new Date(x.tarih).toLocaleDateString("tr-TR")} · {beklemeSure} gün önce gönderildi</div>
-                              {x.aciklama && <div style={{ fontSize:7, color:"#665d4a" }}>{x.aciklama}</div>}
+                              <div style={{ fontSize:11, fontWeight:700, color:"var(--goldtext)" }}>{x.musteri||"?"}</div>
+                              <div style={{ fontSize:11, color:T.sub }}>{new Date(x.tarih).toLocaleDateString("tr-TR")} · {beklemeSure} gün önce gönderildi</div>
+                              {x.aciklama && <div style={{ fontSize:11, color:T.sub }}>{x.aciklama}</div>}
                             </div>
                             <div style={{ textAlign:"right" }}>
-                              <div style={{ fontSize:10, fontWeight:800, color:"#e8833a" }}>{fN(x.has,3)} has</div>
-                              <div style={{ fontSize:7, color:beklemeSure>3?"#e85a4f":"#665d4a", fontWeight:beklemeSure>3?700:400 }}>{beklemeSure>3?"⚠ Gecikiyor":""}</div>
+                              <div style={{ fontSize:12, fontWeight:800, color:KTUR }}>{fN(x.has,3)} has</div>
+                              <div style={{ fontSize:11, color:beklemeSure>3?"#e85a4f":T.sub, fontWeight:beklemeSure>3?700:400 }}>{beklemeSure>3?"⚠ Gecikiyor":""}</div>
                             </div>
                           </div>
                         );
@@ -10909,25 +10910,25 @@ function Atolye({ onSirketDegis }) {
                     <div style={KSEC}>İŞLEM GEÇMİŞİ</div>
                     {[...(kasa.dokumcuIslemler||[])].sort((a,b)=>b.tarih-a.tarih).map(x => {
                       const etiket = x.tip==="gonder" ? (x.teslimTarih ? "✓ Döküm Teslim Alındı" : "→ Döküm Gönderildi") : x.tip==="baslangic_borc" ? "Başlangıç Borcu" : "✓ Ödeme Yapıldı";
-                      const renk   = x.tip==="ode" ? "#6abf69" : x.tip==="baslangic_borc" ? "#a78bfa" : "#e8833a";
+                      const renk   = x.tip==="ode" ? KOK : x.tip==="baslangic_borc" ? "#a78bfa" : KTUR;
                       const isaretli = x.teslimTarih ? "rgba(106,191,105,0.04)" : undefined;
                       return (
-                        <div key={x.id} style={{ display:"flex", alignItems:"center", gap:8, padding:"6px 0", borderBottom:"1px solid rgba(255,255,255,0.04)", background:isaretli }}>
+                        <div key={x.id} style={{ display:"flex", alignItems:"center", gap:8, padding:"6px 0", borderBottom:"1px solid "+T.border, background:isaretli }}>
                           <div style={{ width:8, height:8, borderRadius:"50%", background:renk, flexShrink:0 }}/>
                           <div style={{ flex:1 }}>
-                            <div style={{ fontSize:9, fontWeight:700, color:renk }}>{etiket}</div>
-                            {x.musteri && <div style={{ fontSize:8, color:"#998a6e" }}>{x.musteri}</div>}
-                            {x.aciklama && <div style={{ fontSize:7, color:"#665d4a" }}>{x.aciklama}</div>}
-                            <div style={{ fontSize:7, color:"#665d4a" }}>{new Date(x.tarih).toLocaleDateString("tr-TR")}</div>
+                            <div style={{ fontSize:11, fontWeight:700, color:renk }}>{etiket}</div>
+                            {x.musteri && <div style={{ fontSize:11, color:T.sub }}>{x.musteri}</div>}
+                            {x.aciklama && <div style={{ fontSize:11, color:T.sub }}>{x.aciklama}</div>}
+                            <div style={{ fontSize:11, color:T.sub }}>{new Date(x.tarih).toLocaleDateString("tr-TR")}</div>
                           </div>
                           <div style={{ display:"flex", alignItems:"center", gap:6 }}>
-                            <span style={{ fontSize:10, fontWeight:800, color:renk }}>{x.tip==="ode"?"+":"-"}{fN(x.has,3)} has</span>
-                            <button onClick={()=>{ const yeni={...kasa,dokumcuIslemler:(kasa.dokumcuIslemler||[]).filter(d=>d.id!==x.id)}; svKasa(yeni); }} style={{ ...RD, fontSize:8, padding:"2px 5px" }}>Sil</button>
+                            <span style={{ fontSize:12, fontWeight:800, color:renk }}>{x.tip==="ode"?"+":"-"}{fN(x.has,3)} has</span>
+                            <button onClick={()=>{ const yeni={...kasa,dokumcuIslemler:(kasa.dokumcuIslemler||[]).filter(d=>d.id!==x.id)}; svKasa(yeni); }} style={{ ...RD, fontSize:11, padding:"2px 5px" }}>Sil</button>
                           </div>
                         </div>
                       );
                     })}
-                    {!(kasa.dokumcuIslemler||[]).length && <div style={{ fontSize:9, color:"#665d4a", textAlign:"center", padding:"20px" }}>Henüz işlem yok — siparişler döküme geçince otomatik oluşur</div>}
+                    {!(kasa.dokumcuIslemler||[]).length && <div style={{ fontSize:11, color:T.sub, textAlign:"center", padding:"20px" }}>Henüz işlem yok — siparişler döküme geçince otomatik oluşur</div>}
                   </div>
                 </div>
                 );
@@ -10937,9 +10938,9 @@ function Atolye({ onSirketDegis }) {
               {(kasaSayfa==="stok" || (kasaSayfa==="g_stok" && (stokSub==="kayit" || AKTIF_SIRKET_ONEK!==""))) && (
                 <div>
                   <div style={{ display:"flex", gap:6, marginBottom:12, flexWrap:"wrap" }}>
-                    <button onClick={()=>kasaModalAc({tip:"hamAltin"})} style={{ ...BG, padding:"6px 14px", fontSize:10 }}>+ Ham Altın Girişi</button>
-                    <button onClick={()=>kasaModalAc({tip:"hazirUrun"})} style={{ ...GH, padding:"6px 14px", fontSize:10 }}>+ Hazır Ürün</button>
-                    <button onClick={()=>kasaModalAc({tip:"serbest"})} style={{ background:"rgba(167,139,250,0.1)", border:"1px solid rgba(167,139,250,0.25)", borderRadius:9, padding:"6px 14px", color:"#a78bfa", fontSize:10, fontWeight:700, cursor:"pointer" }}>+ Serbest Malzeme</button>
+                    <button onClick={()=>kasaModalAc({tip:"hamAltin"})} style={{ ...BG, padding:"6px 14px", fontSize:12 }}>+ Ham Altın Girişi</button>
+                    <button onClick={()=>kasaModalAc({tip:"hazirUrun"})} style={{ ...GH, padding:"6px 14px", fontSize:12 }}>+ Hazır Ürün</button>
+                    <button onClick={()=>kasaModalAc({tip:"serbest"})} style={{ background:"rgba(167,139,250,0.1)", border:"1px solid rgba(167,139,250,0.25)", borderRadius:9, padding:"6px 14px", color:"#a78bfa", fontSize:12, fontWeight:700, cursor:"pointer" }}>+ Serbest Malzeme</button>
                   </div>
 
                   {/* ══ ATÖLYE KASASI (sadece MSK): atölyedeki ürün/tel/yarı mamul/hurda/toz takibi (gram) ══ */}
@@ -10962,39 +10963,39 @@ function Atolye({ onSirketDegis }) {
                     const duzenle = r => setAtForm({ id: r.id, tarih: new Date(r.tarih).toISOString().slice(0, 10), satilacak: String(r.satilacak || ""), tel: String(r.tel || ""), yariM: String(r.yariM || ""), bekleyen: String(r.bekleyen || ""), hurda: String(r.hurda || ""), toz: String(r.toz || ""), not: r.not || "" });
                     const sil = r => { if (window.confirm("Bu atölye kasası kaydı silinsin mi?")) svKasa({ ...kasa, atolyeKasa: (kasa.atolyeKasa || []).filter(x => x.id !== r.id) }); };
                     const hucre = { padding: "6px 8px", textAlign: "right", fontSize: 11, color: T.text, whiteSpace: "nowrap" };
-                    const baslik = { ...hucre, fontSize: 9, fontWeight: 700, color: T.sub };
+                    const baslik = { ...hucre, fontSize: 11, fontWeight: 700, color: T.sub };
                     return (
                       <div style={KCARD}>
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8, flexWrap: "wrap", gap: 6 }}>
                           <div style={KSEC}>🏭 ATÖLYE KASASI <span style={{ color: T.sub, fontWeight: 500 }}>(gram)</span></div>
-                          {son && <div style={{ fontSize: 10, color: T.sub }}>Güncel durum: {new Date(son.tarih).toLocaleDateString("tr-TR")}</div>}
+                          {son && <div style={{ fontSize: 12, color: T.sub }}>Güncel durum: {new Date(son.tarih).toLocaleDateString("tr-TR")}</div>}
                         </div>
                         {son && (
                           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
                             {ALANLAR.map(f => (
                               <div key={f.k} style={{ flex: "1 1 110px", border: "1px solid " + T.border, borderRadius: 10, padding: "8px 10px" }}>
-                                <div style={{ fontSize: 9, color: T.sub }}>{f.l}</div>
+                                <div style={{ fontSize: 11, color: T.sub }}>{f.l}</div>
                                 <div style={{ fontSize: 15, fontWeight: 800, color: T.text }}>{fN(num(son[f.k]), 2)}</div>
                               </div>
                             ))}
                             <div style={{ flex: "1 1 110px", border: "1px solid " + T.border, borderRadius: 10, padding: "8px 10px", background: T.card }}>
-                              <div style={{ fontSize: 9, color: T.sub }}>Toplam <span style={{ opacity: 0.7 }}>(hurda/toz hariç)</span></div>
+                              <div style={{ fontSize: 11, color: T.sub }}>Toplam <span style={{ opacity: 0.7 }}>(hurda/toz hariç)</span></div>
                               <div style={{ fontSize: 15, fontWeight: 800, color: T.text }}>{fN(toplam(son), 2)}</div>
                             </div>
                           </div>
                         )}
                         <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "flex-end", marginBottom: 10 }}>
-                          <div><div style={{ fontSize: 8, color: T.sub, marginBottom: 2 }}>Tarih</div>
+                          <div><div style={{ fontSize: 11, color: T.sub, marginBottom: 2 }}>Tarih</div>
                             <input type="date" value={atForm.tarih} onChange={e => setAtForm(p => ({ ...p, tarih: e.target.value }))} style={{ ...IS, width: 130, padding: "5px 8px", fontSize: 11 }} /></div>
                           {ALANLAR.map(f => (
-                            <div key={f.k}><div style={{ fontSize: 8, color: T.sub, marginBottom: 2 }}>{f.l}</div>
+                            <div key={f.k}><div style={{ fontSize: 11, color: T.sub, marginBottom: 2 }}>{f.l}</div>
                               <input inputMode="decimal" value={atForm[f.k]} onChange={e => setAtForm(p => ({ ...p, [f.k]: e.target.value }))} placeholder="0" style={{ ...IS, width: 92, padding: "5px 8px", fontSize: 11, textAlign: "right" }} /></div>
                           ))}
-                          <div style={{ fontSize: 10, color: T.sub, paddingBottom: 6 }}>Toplam: <b style={{ color: T.text }}>{fN(toplam(atForm), 2)}</b></div>
-                          <div><div style={{ fontSize: 8, color: T.sub, marginBottom: 2 }}>Not</div>
+                          <div style={{ fontSize: 12, color: T.sub, paddingBottom: 6 }}>Toplam: <b style={{ color: T.text }}>{fN(toplam(atForm), 2)}</b></div>
+                          <div><div style={{ fontSize: 11, color: T.sub, marginBottom: 2 }}>Not</div>
                             <input value={atForm.not} onChange={e => setAtForm(p => ({ ...p, not: e.target.value }))} placeholder="isteğe bağlı" style={{ ...IS, width: 140, padding: "5px 8px", fontSize: 11 }} /></div>
-                          <button onClick={kaydet} style={{ ...BG, padding: "6px 14px", fontSize: 10 }}>{atForm.id ? "Güncelle" : "+ Kayıt ekle"}</button>
-                          {atForm.id && <button onClick={() => setAtForm(bos)} style={{ ...GH, padding: "6px 10px", fontSize: 10 }}>Vazgeç</button>}
+                          <button onClick={kaydet} style={{ ...BG, padding: "6px 14px", fontSize: 12 }}>{atForm.id ? "Güncelle" : "+ Kayıt ekle"}</button>
+                          {atForm.id && <button onClick={() => setAtForm(bos)} style={{ ...GH, padding: "6px 10px", fontSize: 12 }}>Vazgeç</button>}
                         </div>
                         {kayitlar.length > 0 ? (
                           <div style={{ overflowX: "auto" }}>
@@ -11012,15 +11013,15 @@ function Atolye({ onSirketDegis }) {
                                     <td style={{ ...hucre, fontWeight: 800 }}>{fN(toplam(r), 2)}</td>
                                     <td style={{ ...hucre, textAlign: "left", color: T.sub, whiteSpace: "normal", maxWidth: 160 }}>{r.not || ""}</td>
                                     <td style={{ ...hucre, whiteSpace: "nowrap" }}>
-                                      <button onClick={() => duzenle(r)} style={{ ...GH, fontSize: 8, padding: "2px 6px", marginRight: 4 }}>Düzenle</button>
-                                      <button onClick={() => sil(r)} style={{ ...RD, fontSize: 8, padding: "2px 6px" }}>Sil</button>
+                                      <button onClick={() => duzenle(r)} style={{ ...GH, fontSize: 11, padding: "2px 6px", marginRight: 4 }}>Düzenle</button>
+                                      <button onClick={() => sil(r)} style={{ ...RD, fontSize: 11, padding: "2px 6px" }}>Sil</button>
                                     </td>
                                   </tr>
                                 ))}
                               </tbody>
                             </table>
                           </div>
-                        ) : <div style={{ fontSize: 10, color: T.sub }}>Henüz kayıt yok — yukarıdan ilk sayımı ekleyin.</div>}
+                        ) : <div style={{ fontSize: 12, color: T.sub }}>Henüz kayıt yok — yukarıdan ilk sayımı ekleyin.</div>}
                       </div>
                     );
                   })()}
@@ -11032,19 +11033,19 @@ function Atolye({ onSirketDegis }) {
                       <div style={{ fontSize:13, fontWeight:800, color:GOLD }}>{fN(hamAltinGram,3)} has</div>
                     </div>
                     {[...(kasa.hamAltin||[])].sort((a,b)=>b.tarih-a.tarih).slice(0,8).map(x => (
-                      <div key={x.id} style={{ display:"flex", alignItems:"center", gap:8, padding:"5px 0", borderBottom:"1px solid rgba(255,255,255,0.04)" }}>
-                        <div style={{ width:7, height:7, borderRadius:"50%", background:x.tip==="giris"?"#6abf69":"#e85a4f", flexShrink:0 }}/>
+                      <div key={x.id} style={{ display:"flex", alignItems:"center", gap:8, padding:"5px 0", borderBottom:"1px solid "+T.border }}>
+                        <div style={{ width:7, height:7, borderRadius:"50%", background:x.tip==="giris"?KOK:"#e85a4f", flexShrink:0 }}/>
                         <div style={{ flex:1 }}>
-                          <span style={{ fontSize:9, color:"var(--goldtext)" }}>{x.aciklama||"—"}</span>
-                          <div style={{ fontSize:7, color:"#665d4a" }}>{new Date(x.tarih).toLocaleDateString("tr-TR")}</div>
+                          <span style={{ fontSize:11, color:"var(--goldtext)" }}>{x.aciklama||"—"}</span>
+                          <div style={{ fontSize:11, color:T.sub }}>{new Date(x.tarih).toLocaleDateString("tr-TR")}</div>
                         </div>
                         <div style={{ display:"flex", alignItems:"center", gap:6 }}>
-                          <span style={{ fontSize:9, fontWeight:800, color:x.tip==="giris"?"#6abf69":"#e85a4f" }}>{x.tip==="giris"?"+":"-"}{fN(x.has,3)} has</span>
-                          <button onClick={()=>{ const yeni={...kasa,hamAltin:(kasa.hamAltin||[]).filter(d=>d.id!==x.id)}; svKasa(yeni); }} style={{ ...RD, fontSize:8, padding:"2px 5px" }}>Sil</button>
+                          <span style={{ fontSize:11, fontWeight:800, color:x.tip==="giris"?KOK:"#e85a4f" }}>{x.tip==="giris"?"+":"-"}{fN(x.has,3)} has</span>
+                          <button onClick={()=>{ const yeni={...kasa,hamAltin:(kasa.hamAltin||[]).filter(d=>d.id!==x.id)}; svKasa(yeni); }} style={{ ...RD, fontSize:11, padding:"2px 5px" }}>Sil</button>
                         </div>
                       </div>
                     ))}
-                    {!(kasa.hamAltin||[]).length && <div style={{ fontSize:9, color:"#665d4a" }}>Henüz giriş yok</div>}
+                    {!(kasa.hamAltin||[]).length && <div style={{ fontSize:11, color:T.sub }}>Henüz giriş yok</div>}
                   </div>
 
                   {/* Hazır Ürün */}
@@ -11055,17 +11056,17 @@ function Atolye({ onSirketDegis }) {
                         const m = modeller.find(mo=>mo.id===x.modelId);
                         const hc = m ? hesapla(m, m.secilenAyar||m.refAyar, altinKgUSD, parseFloat(mc)||0.030) : null;
                         return (
-                          <div key={x.id} style={{ display:"flex", alignItems:"center", gap:8, padding:"6px 0", borderBottom:"1px solid rgba(255,255,255,0.04)" }}>
+                          <div key={x.id} style={{ display:"flex", alignItems:"center", gap:8, padding:"6px 0", borderBottom:"1px solid "+T.border }}>
                             {m?.foto && <img src={m.foto} style={{ width:32, height:32, objectFit:"cover", borderRadius:5 }} alt=""/>}
                             <div style={{ flex:1 }}>
-                              <div style={{ fontSize:9, fontWeight:700, color:"var(--goldtext)" }}>{x.ad}</div>
-                              {x.aciklama && <div style={{ fontSize:7, color:"#665d4a" }}>{x.aciklama}</div>}
+                              <div style={{ fontSize:11, fontWeight:700, color:"var(--goldtext)" }}>{x.ad}</div>
+                              {x.aciklama && <div style={{ fontSize:11, color:T.sub }}>{x.aciklama}</div>}
                             </div>
                             <div style={{ textAlign:"right" }}>
-                              <div style={{ fontSize:10, fontWeight:800, color:GOLD }}>{x.adet} adet</div>
-                              {hc && <div style={{ fontSize:8, color:"#665d4a" }}>{fN(hc.mamulGram*x.adet,2)} has</div>}
+                              <div style={{ fontSize:12, fontWeight:800, color:GOLD }}>{x.adet} adet</div>
+                              {hc && <div style={{ fontSize:11, color:T.sub }}>{fN(hc.mamulGram*x.adet,2)} has</div>}
                             </div>
-                            <button onClick={()=>{ const yeni={...kasa,hazirUrun:(kasa.hazirUrun||[]).filter(d=>d.id!==x.id)}; svKasa(yeni); }} style={{ ...RD, fontSize:8, padding:"2px 5px" }}>Sil</button>
+                            <button onClick={()=>{ const yeni={...kasa,hazirUrun:(kasa.hazirUrun||[]).filter(d=>d.id!==x.id)}; svKasa(yeni); }} style={{ ...RD, fontSize:11, padding:"2px 5px" }}>Sil</button>
                           </div>
                         );
                       })}
@@ -11077,15 +11078,15 @@ function Atolye({ onSirketDegis }) {
                     <div style={KCARD}>
                       <div style={KSEC}>📦 SERBEST MALZEME</div>
                       {(kasa.serbest||[]).map(x => (
-                        <div key={x.id} style={{ display:"flex", alignItems:"center", gap:8, padding:"5px 0", borderBottom:"1px solid rgba(255,255,255,0.04)" }}>
+                        <div key={x.id} style={{ display:"flex", alignItems:"center", gap:8, padding:"5px 0", borderBottom:"1px solid "+T.border }}>
                           <div style={{ flex:1 }}>
-                            <div style={{ fontSize:9, fontWeight:700, color:"var(--goldtext)" }}>{x.ad}</div>
-                            {x.aciklama && <div style={{ fontSize:7, color:"#665d4a" }}>{x.aciklama}</div>}
+                            <div style={{ fontSize:11, fontWeight:700, color:"var(--goldtext)" }}>{x.ad}</div>
+                            {x.aciklama && <div style={{ fontSize:11, color:T.sub }}>{x.aciklama}</div>}
                           </div>
                           <div style={{ textAlign:"right", marginRight:8 }}>
-                            <div style={{ fontSize:9, color:GOLD }}>{x.adet||1} adet · {fN((x.gram||0)*(x.adet||1),3)} gr</div>
+                            <div style={{ fontSize:11, color:GOLD }}>{x.adet||1} adet · {fN((x.gram||0)*(x.adet||1),3)} gr</div>
                           </div>
-                          <button onClick={()=>{ const yeni={...kasa,serbest:(kasa.serbest||[]).filter(d=>d.id!==x.id)}; svKasa(yeni); }} style={{ ...RD, fontSize:8, padding:"2px 5px" }}>Sil</button>
+                          <button onClick={()=>{ const yeni={...kasa,serbest:(kasa.serbest||[]).filter(d=>d.id!==x.id)}; svKasa(yeni); }} style={{ ...RD, fontSize:11, padding:"2px 5px" }}>Sil</button>
                         </div>
                       ))}
                     </div>
@@ -11098,13 +11099,13 @@ function Atolye({ onSirketDegis }) {
                 <div>
                   <div style={{ background:"rgba(91,155,213,0.03)", border:"1px solid rgba(91,155,213,0.1)", borderRadius:12, padding:"12px 16px", marginBottom:12 }}>
                     <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
-                      <div style={{ fontSize:10, fontWeight:700, color:"#5b9bd5" }}>📊 RHİNO ERP MİZAN</div>
-                      {rhinoMizan && <button onClick={()=>setRhinoMizan(null)} style={{ ...RD, fontSize:8, padding:"2px 8px" }}>Temizle</button>}
+                      <div style={{ fontSize:12, fontWeight:700, color:KMAVI }}>📊 RHİNO ERP MİZAN</div>
+                      {rhinoMizan && <button onClick={()=>setRhinoMizan(null)} style={{ ...RD, fontSize:11, padding:"2px 8px" }}>Temizle</button>}
                     </div>
                     {!rhinoMizan ? (
                       <div>
-                        <div style={{ fontSize:9, color:"#665d4a", marginBottom:8 }}>Excel mizan dosyasını yükleyin — müşteri bakiyeleri, dökümcü ve satıcı borçları otomatik okunur. Asistan sekmesinde ajan da bu veriyi kullanır.</div>
-                        <label style={{ display:"inline-block", background:"rgba(91,155,213,0.1)", border:"1px solid rgba(91,155,213,0.25)", borderRadius:8, padding:"6px 14px", color:"#5b9bd5", fontSize:10, fontWeight:700, cursor:"pointer" }}>
+                        <div style={{ fontSize:11, color:T.sub, marginBottom:8 }}>Excel mizan dosyasını yükleyin — müşteri bakiyeleri, dökümcü ve satıcı borçları otomatik okunur. Asistan sekmesinde ajan da bu veriyi kullanır.</div>
+                        <label style={{ display:"inline-block", background:"rgba(91,155,213,0.1)", border:"1px solid rgba(91,155,213,0.25)", borderRadius:8, padding:"6px 14px", color:KMAVI, fontSize:12, fontWeight:700, cursor:"pointer" }}>
                           📂 Mizan Yükle (.xlsx)
                           <input type="file" accept=".xlsx,.xls" style={{ display:"none" }} onChange={async e => {
                             const file = e.target.files[0];
@@ -11140,27 +11141,27 @@ function Atolye({ onSirketDegis }) {
                       </div>
                     ) : (
                       <div>
-                        <div style={{ fontSize:8, color:"#665d4a", marginBottom:12 }}>{rhinoMizan.dosyaAd} · {rhinoMizan.tarih} · Asistan sekmesinde ajan bu veriyi kullanıyor</div>
+                        <div style={{ fontSize:11, color:T.sub, marginBottom:12 }}>{rhinoMizan.dosyaAd} · {rhinoMizan.tarih} · Asistan sekmesinde ajan bu veriyi kullanıyor</div>
                         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:10 }}>
                           {/* Müşteri HAS */}
                           <div style={KCARD}>
-                            <div style={{ fontSize:9, fontWeight:700, color:"#6abf69", marginBottom:8 }}>👤 MÜŞTERİ ALACAKLAR (HAS)</div>
+                            <div style={{ fontSize:11, fontWeight:700, color:KOK, marginBottom:8 }}>👤 MÜŞTERİ ALACAKLAR (HAS)</div>
                             {rhinoMizan.musteriHas.filter(x=>Math.abs(x.bakiye)>0.001).sort((a,b)=>b.bakiye-a.bakiye).map((x,i)=>(
-                              <div key={i} style={{ display:"flex", justifyContent:"space-between", padding:"4px 0", borderBottom:"1px solid rgba(255,255,255,0.04)", fontSize:9 }}>
+                              <div key={i} style={{ display:"flex", justifyContent:"space-between", padding:"4px 0", borderBottom:"1px solid "+T.border, fontSize:11 }}>
                                 <span style={{ color:"var(--goldtext)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", maxWidth:120 }}>{x.ad}</span>
-                                <span style={{ fontWeight:700, color:x.bakiye>0?"#6abf69":"#e85a4f", flexShrink:0, marginLeft:6 }}>{fN(x.bakiye,3)} has</span>
+                                <span style={{ fontWeight:700, color:x.bakiye>0?KOK:"#e85a4f", flexShrink:0, marginLeft:6 }}>{fN(x.bakiye,3)} has</span>
                               </div>
                             ))}
-                            {rhinoMizan.musteriHas.filter(x=>Math.abs(x.bakiye)>0.001).length===0 && <div style={{ fontSize:8, color:"#665d4a" }}>Açık bakiye yok</div>}
+                            {rhinoMizan.musteriHas.filter(x=>Math.abs(x.bakiye)>0.001).length===0 && <div style={{ fontSize:11, color:T.sub }}>Açık bakiye yok</div>}
                             <div style={{ borderTop:"1px solid rgba(var(--vurgu-rgb),0.1)", paddingTop:6, marginTop:6, display:"flex", justifyContent:"space-between" }}>
-                              <span style={{ fontSize:8, color:"#8a7d64" }}>TOPLAM</span>
-                              <span style={{ fontSize:10, fontWeight:800, color:"#6abf69" }}>{fN(rhinoMizan.musteriHas.reduce((s,x)=>s+x.bakiye,0),3)} has</span>
+                              <span style={{ fontSize:11, color:T.sub }}>TOPLAM</span>
+                              <span style={{ fontSize:12, fontWeight:800, color:KOK }}>{fN(rhinoMizan.musteriHas.reduce((s,x)=>s+x.bakiye,0),3)} has</span>
                             </div>
                           </div>
                           {/* Müşteri Eşleştirme */}
                           <div style={{ ...KCARD, gridColumn:"1 / -1" }}>
-                            <div style={{ fontSize:9, fontWeight:700, color:GOLD, marginBottom:10 }}>🔗 MÜŞTERİ EŞLEŞTİRME — Mizan ↔ Sistem</div>
-                            <div style={{ fontSize:8, color:"#665d4a", marginBottom:10 }}>Mizan'daki müşteri adlarını sisteminizdeki müşterilerle eşleştirin. Eşleştirme kaydedilir, bir dahaki yüklemede otomatik uygulanır.</div>
+                            <div style={{ fontSize:11, fontWeight:700, color:GOLD, marginBottom:10 }}>🔗 MÜŞTERİ EŞLEŞTİRME — Mizan ↔ Sistem</div>
+                            <div style={{ fontSize:11, color:T.sub, marginBottom:10 }}>Mizan'daki müşteri adlarını sisteminizdeki müşterilerle eşleştirin. Eşleştirme kaydedilir, bir dahaki yüklemede otomatik uygulanır.</div>
                             <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
                               {rhinoMizan.musteriHas.filter(x=>Math.abs(x.bakiye)>0.001).map((x,i) => {
                                 // Otomatik eşleştirme — normalize karşılaştırma
@@ -11172,15 +11173,15 @@ function Atolye({ onSirketDegis }) {
                                 return (
                                   <div key={i} style={{ display:"flex", alignItems:"center", gap:8, padding:"5px 8px", background:eslesti?"rgba(106,191,105,0.04)":"rgba(232,90,79,0.04)", border:"1px solid", borderColor:eslesti?"rgba(106,191,105,0.1)":"rgba(232,90,79,0.1)", borderRadius:7 }}>
                                     <div style={{ flex:1, minWidth:0 }}>
-                                      <div style={{ fontSize:9, fontWeight:700, color:"var(--goldtext)" }}>{x.ad}</div>
-                                      <div style={{ fontSize:8, color:x.bakiye>0?"#6abf69":"#e85a4f" }}>{fN(x.bakiye,3)} has</div>
+                                      <div style={{ fontSize:11, fontWeight:700, color:"var(--goldtext)" }}>{x.ad}</div>
+                                      <div style={{ fontSize:11, color:x.bakiye>0?KOK:"#e85a4f" }}>{fN(x.bakiye,3)} has</div>
                                     </div>
-                                    <div style={{ fontSize:12, color:eslesti?"#6abf69":"#e85a4f" }}>{eslesti?"↔":"?"}</div>
+                                    <div style={{ fontSize:12, color:eslesti?KOK:"#e85a4f" }}>{eslesti?"↔":"?"}</div>
                                     <select value={secili} onChange={e => {
                                       const yeni = { ...mizanEslestirme, [x.ad]: e.target.value };
                                       setMizanEslestirme(yeni);
                                       try { localStorage.setItem("mizan_eslestirme", JSON.stringify(yeni)); } catch {}
-                                    }} style={{ ...IS, width:150, padding:"3px 6px", fontSize:9 }}>
+                                    }} style={{ ...IS, width:150, padding:"3px 6px", fontSize:11 }}>
                                       <option value="">— Eşleştir —</option>
                                       {Object.keys(musteriler).sort().map(m => <option key={m} value={m}>{m}</option>)}
                                     </select>
@@ -11190,16 +11191,16 @@ function Atolye({ onSirketDegis }) {
                                         delete yeni[x.ad];
                                         setMizanEslestirme(yeni);
                                         try { localStorage.setItem("mizan_eslestirme", JSON.stringify(yeni)); } catch {}
-                                      }} style={{ ...RD, fontSize:8, padding:"2px 6px" }}>↺</button>
+                                      }} style={{ ...RD, fontSize:11, padding:"2px 6px" }}>↺</button>
                                     )}
                                     {otomatik && !mizanEslestirme[x.ad] && (
-                                      <span style={{ fontSize:7, color:"#6abf69", background:"rgba(106,191,105,0.1)", padding:"1px 5px", borderRadius:4 }}>otomatik</span>
+                                      <span style={{ fontSize:11, color:KOK, background:"rgba(106,191,105,0.1)", padding:"1px 5px", borderRadius:4 }}>otomatik</span>
                                     )}
                                   </div>
                                 );
                               })}
                             </div>
-                            <div style={{ marginTop:10, fontSize:8, color:"#665d4a" }}>
+                            <div style={{ marginTop:10, fontSize:11, color:T.sub }}>
                               {rhinoMizan.musteriHas.filter(x=>Math.abs(x.bakiye)>0.001).filter(x=>{
                                 const norm = s => s.toLowerCase().replace(/[^a-z0-9ğüşıöçâîû]/gi,"").trim();
                                 return !mizanEslestirme[x.ad] && !Object.keys(musteriler).find(s=>norm(s)===norm(x.ad));
@@ -11208,42 +11209,42 @@ function Atolye({ onSirketDegis }) {
                           </div>
                           {/* Satıcı/Dökümcü HAS */}
                           <div style={KCARD}>
-                            <div style={{ fontSize:9, fontWeight:700, color:"#e8833a", marginBottom:8 }}>🏭 SATICI / DÖKÜMCÜ (HAS)</div>
+                            <div style={{ fontSize:11, fontWeight:700, color:KTUR, marginBottom:8 }}>🏭 SATICI / DÖKÜMCÜ (HAS)</div>
                             {rhinoMizan.dokumcuHas.filter(x=>Math.abs(x.bakiye)>0.001).sort((a,b)=>a.bakiye-b.bakiye).map((x,i)=>(
-                              <div key={i} style={{ display:"flex", justifyContent:"space-between", padding:"4px 0", borderBottom:"1px solid rgba(255,255,255,0.04)", fontSize:9 }}>
+                              <div key={i} style={{ display:"flex", justifyContent:"space-between", padding:"4px 0", borderBottom:"1px solid "+T.border, fontSize:11 }}>
                                 <span style={{ color:"var(--goldtext)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", maxWidth:120 }}>{x.ad}</span>
-                                <span style={{ fontWeight:700, color:x.bakiye<0?"#e85a4f":x.bakiye>0?"#6abf69":"#665d4a", flexShrink:0, marginLeft:6 }}>{fN(x.bakiye,3)} has</span>
+                                <span style={{ fontWeight:700, color:x.bakiye<0?"#e85a4f":x.bakiye>0?KOK:T.sub, flexShrink:0, marginLeft:6 }}>{fN(x.bakiye,3)} has</span>
                               </div>
                             ))}
-                            {rhinoMizan.dokumcuHas.filter(x=>Math.abs(x.bakiye)>0.001).length===0 && <div style={{ fontSize:8, color:"#665d4a" }}>Açık bakiye yok</div>}
+                            {rhinoMizan.dokumcuHas.filter(x=>Math.abs(x.bakiye)>0.001).length===0 && <div style={{ fontSize:11, color:T.sub }}>Açık bakiye yok</div>}
                             <div style={{ borderTop:"1px solid rgba(var(--vurgu-rgb),0.1)", paddingTop:6, marginTop:6, display:"flex", justifyContent:"space-between" }}>
-                              <span style={{ fontSize:8, color:"#8a7d64" }}>TOPLAM BORÇ</span>
-                              <span style={{ fontSize:10, fontWeight:800, color:"#e85a4f" }}>{fN(Math.abs(rhinoMizan.dokumcuHas.filter(x=>x.bakiye<0).reduce((s,x)=>s+x.bakiye,0)),3)} has</span>
+                              <span style={{ fontSize:11, color:T.sub }}>TOPLAM BORÇ</span>
+                              <span style={{ fontSize:12, fontWeight:800, color:"#e85a4f" }}>{fN(Math.abs(rhinoMizan.dokumcuHas.filter(x=>x.bakiye<0).reduce((s,x)=>s+x.bakiye,0)),3)} has</span>
                             </div>
                           </div>
                           {/* Satıcı USD */}
                           <div style={KCARD}>
-                            <div style={{ fontSize:9, fontWeight:700, color:"#a78bfa", marginBottom:8 }}>💵 SATICI BORÇLAR (USD)</div>
+                            <div style={{ fontSize:11, fontWeight:700, color:"#a78bfa", marginBottom:8 }}>💵 SATICI BORÇLAR (USD)</div>
                             {rhinoMizan.saticiUsd.filter(x=>Math.abs(x.bakiye)>0.001).sort((a,b)=>a.bakiye-b.bakiye).map((x,i)=>(
-                              <div key={i} style={{ display:"flex", justifyContent:"space-between", padding:"4px 0", borderBottom:"1px solid rgba(255,255,255,0.04)", fontSize:9 }}>
+                              <div key={i} style={{ display:"flex", justifyContent:"space-between", padding:"4px 0", borderBottom:"1px solid "+T.border, fontSize:11 }}>
                                 <span style={{ color:"var(--goldtext)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", maxWidth:120 }}>{x.ad}</span>
-                                <span style={{ fontWeight:700, color:x.bakiye<0?"#e85a4f":x.bakiye>0?"#6abf69":"#665d4a", flexShrink:0, marginLeft:6 }}>${fN(Math.abs(x.bakiye),2)}</span>
+                                <span style={{ fontWeight:700, color:x.bakiye<0?"#e85a4f":x.bakiye>0?KOK:T.sub, flexShrink:0, marginLeft:6 }}>${fN(Math.abs(x.bakiye),2)}</span>
                               </div>
                             ))}
-                            {rhinoMizan.saticiUsd.filter(x=>Math.abs(x.bakiye)>0.001).length===0 && <div style={{ fontSize:8, color:"#665d4a" }}>Açık bakiye yok</div>}
+                            {rhinoMizan.saticiUsd.filter(x=>Math.abs(x.bakiye)>0.001).length===0 && <div style={{ fontSize:11, color:T.sub }}>Açık bakiye yok</div>}
                             <div style={{ borderTop:"1px solid rgba(var(--vurgu-rgb),0.1)", paddingTop:6, marginTop:6, display:"flex", justifyContent:"space-between" }}>
-                              <span style={{ fontSize:8, color:"#8a7d64" }}>TOPLAM BORÇ</span>
-                              <span style={{ fontSize:10, fontWeight:800, color:"#e85a4f" }}>${fN(Math.abs(rhinoMizan.saticiUsd.filter(x=>x.bakiye<0).reduce((s,x)=>s+x.bakiye,0)),2)}</span>
+                              <span style={{ fontSize:11, color:T.sub }}>TOPLAM BORÇ</span>
+                              <span style={{ fontSize:12, fontWeight:800, color:"#e85a4f" }}>${fN(Math.abs(rhinoMizan.saticiUsd.filter(x=>x.bakiye<0).reduce((s,x)=>s+x.bakiye,0)),2)}</span>
                             </div>
                           </div>
                           {/* Satıcı EUR */}
                           {rhinoMizan.saticiEur.filter(x=>Math.abs(x.bakiye)>0.001).length>0 && (
                             <div style={KCARD}>
-                              <div style={{ fontSize:9, fontWeight:700, color:"#5b9bd5", marginBottom:8 }}>💶 SATICI BORÇLAR (EUR)</div>
+                              <div style={{ fontSize:11, fontWeight:700, color:KMAVI, marginBottom:8 }}>💶 SATICI BORÇLAR (EUR)</div>
                               {rhinoMizan.saticiEur.filter(x=>Math.abs(x.bakiye)>0.001).sort((a,b)=>a.bakiye-b.bakiye).map((x,i)=>(
-                                <div key={i} style={{ display:"flex", justifyContent:"space-between", padding:"4px 0", borderBottom:"1px solid rgba(255,255,255,0.04)", fontSize:9 }}>
+                                <div key={i} style={{ display:"flex", justifyContent:"space-between", padding:"4px 0", borderBottom:"1px solid "+T.border, fontSize:11 }}>
                                   <span style={{ color:"var(--goldtext)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", maxWidth:120 }}>{x.ad}</span>
-                                  <span style={{ fontWeight:700, color:x.bakiye<0?"#e85a4f":x.bakiye>0?"#6abf69":"#665d4a", flexShrink:0, marginLeft:6 }}>€{fN(Math.abs(x.bakiye),2)}</span>
+                                  <span style={{ fontWeight:700, color:x.bakiye<0?"#e85a4f":x.bakiye>0?KOK:T.sub, flexShrink:0, marginLeft:6 }}>€{fN(Math.abs(x.bakiye),2)}</span>
                                 </div>
                               ))}
                             </div>
@@ -11266,17 +11267,17 @@ function Atolye({ onSirketDegis }) {
                 // ÖZ SERMAYE
                 const ozSermaye = topAktifToplam - topPasif;
 
-                const BLK = { background:"rgba(0,0,0,0.15)", borderRadius:7, padding:"5px 10px", display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:4 };
+                const BLK = { background:T.card, borderRadius:7, padding:"5px 10px", display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:4 };
                 const BLV = (v, renk) => (
                   <span style={{ fontSize:11, fontWeight:800, color:renk||GOLD }}>
-                    {fN(v,3)} <span style={{ fontSize:8, fontWeight:400 }}>has</span>
-                    {hasGramUSD>0 && <span style={{ fontSize:8, color:"#665d4a", marginLeft:4 }}>≈{fUSD(v*hasGramUSD)}</span>}
+                    {fN(v,3)} <span style={{ fontSize:11, fontWeight:400 }}>has</span>
+                    {hasGramUSD>0 && <span style={{ fontSize:11, color:T.sub, marginLeft:4 }}>≈{fUSD(v*hasGramUSD)}</span>}
                   </span>
                 );
 
                 return (
                   <div>
-                    <div style={{ fontSize:9, color:"#665d4a", marginBottom:12 }}>
+                    <div style={{ fontSize:11, color:T.sub, marginBottom:12 }}>
                       {new Date().toLocaleDateString("tr-TR",{day:"2-digit",month:"long",year:"numeric"})} tarihi itibarıyla
                     </div>
 
@@ -11284,40 +11285,40 @@ function Atolye({ onSirketDegis }) {
 
                       {/* AKTİF */}
                       <div style={{ background:"rgba(var(--vurgu-rgb),0.02)", border:"1px solid rgba(var(--vurgu-rgb),0.1)", borderRadius:12, padding:"12px 14px" }}>
-                        <div style={{ fontSize:10, fontWeight:800, color:GOLD, marginBottom:10, letterSpacing:".04em" }}>AKTİF — Varlıklar</div>
+                        <div style={{ fontSize:12, fontWeight:800, color:GOLD, marginBottom:10, letterSpacing:".04em" }}>AKTİF — Varlıklar</div>
 
-                        <div style={{ fontSize:8, color:"#8a7d64", fontWeight:700, marginBottom:6, textTransform:"uppercase" }}>Stok & Üretim</div>
+                        <div style={{ fontSize:11, color:T.sub, fontWeight:700, marginBottom:6, textTransform:"uppercase" }}>Stok & Üretim</div>
                         {[
                           { l:"Ham Altın Stoğu",           v:hamAltinGram,      c:GOLD },
-                          { l:"Üretimdeki Altın",          v:uretimAltin,       c:"#5b9bd5" },
+                          { l:"Üretimdeki Altın",          v:uretimAltin,       c:KMAVI },
                           { l:"Üretimdeki Taş",            v:uretimTas,         c:"#a78bfa" },
-                          { l:"Satılmamış Mamul — Altın",  v:satilmamisAltin,   c:"#6abf69" },
+                          { l:"Satılmamış Mamul — Altın",  v:satilmamisAltin,   c:KOK },
                           { l:"Satılmamış Mamul — Taş",    v:satilmamisTas,     c:"#7c6abf" },
                           { l:"İade Taşları",              v:iadeTas,           c:"#c27ba0" },
-                          { l:"Hurda Altın",               v:hurdaAltin,        c:"#e8833a" },
+                          { l:"Hurda Altın",               v:hurdaAltin,        c:KTUR },
                           { l:"Hurda Taş",                 v:hurdaTas,          c:"#b86a3a" },
                           { l:"Hazır Ürün Stoğu",          v:hazirUrunGram,     c:GOLD },
-                          { l:"Serbest Malzeme",           v:serbestGram,       c:"#e8dcc8" },
+                          { l:"Serbest Malzeme",           v:serbestGram,       c:T.text },
                         ].filter(x=>x.v>0).map((x,i) => (
                           <div key={i} style={BLK}>
-                            <span style={{ fontSize:9, color:"#998a6e" }}>{x.l}</span>
+                            <span style={{ fontSize:11, color:T.sub }}>{x.l}</span>
                             {BLV(x.v, x.c)}
                           </div>
                         ))}
 
                         <div style={{ height:1, background:"rgba(var(--vurgu-rgb),0.1)", margin:"8px 0" }}/>
-                        <div style={{ fontSize:8, color:"#8a7d64", fontWeight:700, marginBottom:6, textTransform:"uppercase" }}>Alacaklar</div>
+                        <div style={{ fontSize:11, color:T.sub, fontWeight:700, marginBottom:6, textTransform:"uppercase" }}>Alacaklar</div>
                         {Object.entries(musBakiye).filter(([,d])=>d.borc-d.odenen>0).map(([mus,d]) => (
                           <div key={mus} style={BLK}>
-                            <span style={{ fontSize:9, color:"#998a6e" }}>{mus}</span>
-                            {BLV(d.borc-d.odenen, "#5b9bd5")}
+                            <span style={{ fontSize:11, color:T.sub }}>{mus}</span>
+                            {BLV(d.borc-d.odenen, KMAVI)}
                           </div>
                         ))}
-                        {topAlacak===0 && <div style={{ fontSize:8, color:"#665d4a" }}>Açık alacak yok</div>}
+                        {topAlacak===0 && <div style={{ fontSize:11, color:T.sub }}>Açık alacak yok</div>}
 
                         <div style={{ height:2, background:"rgba(var(--vurgu-rgb),0.2)", margin:"10px 0" }}/>
                         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-                          <span style={{ fontSize:10, fontWeight:800, color:GOLD }}>TOPLAM AKTİF</span>
+                          <span style={{ fontSize:12, fontWeight:800, color:GOLD }}>TOPLAM AKTİF</span>
                           {BLV(topAktifToplam, GOLD)}
                         </div>
                       </div>
@@ -11326,23 +11327,23 @@ function Atolye({ onSirketDegis }) {
                       <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
                         {/* Pasif */}
                         <div style={{ background:"rgba(232,90,79,0.02)", border:"1px solid rgba(232,90,79,0.1)", borderRadius:12, padding:"12px 14px" }}>
-                          <div style={{ fontSize:10, fontWeight:800, color:"#e85a4f", marginBottom:10, letterSpacing:".04em" }}>PASİF — Borçlar</div>
+                          <div style={{ fontSize:12, fontWeight:800, color:"#e85a4f", marginBottom:10, letterSpacing:".04em" }}>PASİF — Borçlar</div>
                           <div style={BLK}>
-                            <span style={{ fontSize:9, color:"#998a6e" }}>Dökümcü Borcu</span>
+                            <span style={{ fontSize:11, color:T.sub }}>Dökümcü Borcu</span>
                             {BLV(dokumBorc, "#e85a4f")}
                           </div>
                           <div style={{ height:2, background:"rgba(232,90,79,0.15)", margin:"10px 0" }}/>
                           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-                            <span style={{ fontSize:10, fontWeight:800, color:"#e85a4f" }}>TOPLAM PASİF</span>
+                            <span style={{ fontSize:12, fontWeight:800, color:"#e85a4f" }}>TOPLAM PASİF</span>
                             {BLV(topPasif, "#e85a4f")}
                           </div>
                         </div>
 
                         {/* Öz Sermaye */}
                         <div style={{ background:"rgba(106,191,105,0.03)", border:"2px solid rgba(106,191,105,0.2)", borderRadius:12, padding:"12px 14px", flex:1 }}>
-                          <div style={{ fontSize:10, fontWeight:800, color:"#6abf69", marginBottom:10, letterSpacing:".04em" }}>ÖZ SERMAYE</div>
-                          <div style={{ fontSize:8, color:"#665d4a", marginBottom:8 }}>Aktif − Pasif</div>
-                          <div style={{ fontSize:20, fontWeight:800, color:ozSermaye>=0?"#6abf69":"#e85a4f" }}>
+                          <div style={{ fontSize:12, fontWeight:800, color:KOK, marginBottom:10, letterSpacing:".04em" }}>ÖZ SERMAYE</div>
+                          <div style={{ fontSize:11, color:T.sub, marginBottom:8 }}>Aktif − Pasif</div>
+                          <div style={{ fontSize:20, fontWeight:800, color:ozSermaye>=0?KOK:"#e85a4f" }}>
                             {fN(ozSermaye,3)} has
                           </div>
                           {hasGramUSD>0 && (
@@ -11353,9 +11354,9 @@ function Atolye({ onSirketDegis }) {
                         </div>
 
                         {/* Denklik kontrol */}
-                        <div style={{ background:"rgba(0,0,0,0.15)", borderRadius:8, padding:"8px 12px", textAlign:"center" }}>
-                          <div style={{ fontSize:7, color:"#665d4a", marginBottom:3 }}>AKTİF = PASİF + ÖZ SERMAYE</div>
-                          <div style={{ fontSize:9, fontWeight:700, color:Math.abs(topAktifToplam-(topPasif+ozSermaye))<0.001?"#6abf69":"#e85a4f" }}>
+                        <div style={{ background:T.card, borderRadius:8, padding:"8px 12px", textAlign:"center" }}>
+                          <div style={{ fontSize:11, color:T.sub, marginBottom:3 }}>AKTİF = PASİF + ÖZ SERMAYE</div>
+                          <div style={{ fontSize:11, fontWeight:700, color:Math.abs(topAktifToplam-(topPasif+ozSermaye))<0.001?KOK:"#e85a4f" }}>
                             {Math.abs(topAktifToplam-(topPasif+ozSermaye))<0.001 ? "✓ Bilanço dengeli" : "⚠ Fark var"}
                           </div>
                         </div>
@@ -11415,7 +11416,7 @@ function Atolye({ onSirketDegis }) {
 
                 return (
                   <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.7)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:9999 }} onClick={kapat}>
-                    <div style={{ background:"#1a1710", border:"1px solid rgba(var(--vurgu-rgb),0.2)", borderRadius:16, padding:"20px 24px", width:340, maxWidth:"95vw" }} onClick={e=>e.stopPropagation()}>
+                    <div style={{ background:(T.bg2||"#1a1710"), border:"1px solid "+T.border, boxShadow:"0 10px 40px rgba(0,0,0,.35)", borderRadius:16, padding:"20px 24px", width:340, maxWidth:"95vw" }} onClick={e=>e.stopPropagation()}>
                       <div style={{ fontSize:13, fontWeight:700, color:GOLD, marginBottom:14 }}>{baslik}</div>
 
                       {/* Müşteri seç */}
@@ -11435,7 +11436,7 @@ function Atolye({ onSirketDegis }) {
                       {tip==="hamAltin" && (
                         <div style={{ display:"flex", gap:4, marginBottom:8 }}>
                           {["giris","cikis"].map(t => (
-                            <button key={t} onClick={()=>setKfTip(t)} style={{ flex:1, padding:"5px", background:kfTip===t?"rgba(var(--vurgu-rgb),0.2)":"rgba(255,255,255,0.04)", border:"1px solid", borderColor:kfTip===t?GOLD:"rgba(255,255,255,0.08)", borderRadius:7, color:kfTip===t?GOLD:"#998a6e", fontSize:9, fontWeight:700, cursor:"pointer" }}>
+                            <button key={t} onClick={()=>setKfTip(t)} style={{ flex:1, padding:"5px", background:kfTip===t?"rgba(var(--vurgu-rgb),0.2)":T.border, border:"1px solid", borderColor:kfTip===t?GOLD:T.border, borderRadius:7, color:kfTip===t?GOLD:T.sub, fontSize:9, fontWeight:700, cursor:"pointer" }}>
                               {t==="giris"?"Giriş":"Çıkış"}
                             </button>
                           ))}
