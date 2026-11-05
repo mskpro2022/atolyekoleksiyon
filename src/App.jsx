@@ -1163,6 +1163,89 @@ function psExcelSatirlar(sayfa, sayfaNo, belge) {
   });
 }
 
+// ═══ TABLO PDF (3. biçim) — başlık satırı: No | KOD | ADET | RENK | AÇIKLAMA | AD GR | TOPLAM GR | ÜRÜN GÖRSELİ ═══
+// Kodlar önek taşımaz (FB170, FB185-5mm). Sütunlar başlık konumlarından, satırlar "No" sütunundaki sayılardan bulunur.
+function psTabloBaslikBul(sayfa) {
+  const it = sayfa.items;
+  const kod = it.find(x => /^KOD$/i.test(x.s));
+  if (!kod) return null;
+  const ayni = it.filter(x => Math.abs(x.y - kod.y) < 4);
+  const bul = (re) => ayni.find(x => re.test(x.s.toUpperCase()));
+  const adet = bul(/^ADET$/), gram = bul(/^AD GR$|^BİRİM GR|^GRAM$/), no = bul(/^NO\.?$/);
+  if (!adet || !gram) return null;
+  const cols = [
+    { k: "no", x: no ? no.x : 0, h: no },
+    { k: "kod", x: kod.x }, { k: "adet", x: adet.x },
+    ...(bul(/^RENK$/) ? [{ k: "renk", x: bul(/^RENK$/).x }] : []),
+    ...(bul(/^AÇIKLAMA$|^ACIKLAMA$/) ? [{ k: "acik", x: bul(/^AÇIKLAMA$|^ACIKLAMA$/).x }] : []),
+    { k: "gram", x: gram.x },
+    ...(bul(/^TOPLAM GR$/) ? [{ k: "top", x: bul(/^TOPLAM GR$/).x }] : []),
+    ...(bul(/GÖRSEL|GORSEL|FOTO|PHOTO/) ? [{ k: "gorsel", x: bul(/GÖRSEL|GORSEL|FOTO|PHOTO/).x }] : []),
+  ].sort((a, b) => a.x - b.x);
+  cols.forEach((c, i) => {
+    c.x0 = i === 0 ? -1e9 : (cols[i - 1].x + c.x) / 2;
+    c.x1 = i === cols.length - 1 ? 1e9 : (c.x + cols[i + 1].x) / 2;
+  });
+  return { y: kod.y, cols };
+}
+function psTabloBaslikBilgi(sayfa) {
+  const it = sayfa.items;
+  const sag = (re, maxDx = 140) => {
+    const e = it.find(x => re.test(x.s.toUpperCase()));
+    if (!e) return "";
+    const s = it.filter(x => Math.abs(x.y - e.y) < 4 && x.x > e.x + 5 && x.x < e.x + maxDx + 200).sort((a, b) => a.x - b.x)[0];
+    return s ? s.s : "";
+  };
+  const ayarM = (sag(/^AYAR$/) || "").match(/(\d{1,2})/);
+  const damga = sag(/^DAMGA$/);
+  const dM = (damga || "").match(/(\d{1,2})\s*K/i);
+  return {
+    referans: sag(/^SİPARİŞ NO$|^SIPARIS NO$/),
+    ayar: dM ? dM[1] + "K" : (ayarM ? ayarM[1] + "K" : ""),
+    teslimTarihi: sag(/^TESLİM TARİHİ$|^TESLIM TARIHI$/),
+    genelNot: "",
+  };
+}
+function psTabloSatirlar(sayfa, sayfaNo) {
+  const { H, items, imgs } = sayfa;
+  const bs = psTabloBaslikBul(sayfa);
+  if (!bs) return [];
+  const col = (x) => bs.cols.find(c => x >= c.x0 && x < c.x1);
+  const noCol = bs.cols.find(c => c.k === "no") || bs.cols.find(c => c.k === "kod");
+  const toplamY = Math.min(1e9, ...items.filter(x => /^TOPLAM\b/i.test(x.s) && x.y > bs.y + 8).map(x => x.y));
+  const govde = items.filter(x => x.y > bs.y + 6 && x.y < toplamY - 4);
+  const ankraj = govde.filter(x => /^\d{1,3}$/.test(x.s) && col(x.x) && col(x.x).k === "no").sort((a, b) => a.y - b.y);
+  if (!ankraj.length) return [];
+  const enYakin = (y, maxDy) => { let en = -1, f = 1e9; ankraj.forEach((a, i) => { const d = Math.abs(a.y - y); if (d < f) { f = d; en = i; } }); return f <= maxDy ? en : -1; };
+  const satir = ankraj.map(a => ({ y: a.y, kod: "", adet: 0, renk: "", gram: 0, acik: [], foto: [] }));
+  for (const x of govde) {
+    const c = col(x.x); if (!c || c.k === "no") continue;
+    if (c.k === "acik") { const i = enYakin(x.y, 22); if (i >= 0) satir[i].acik.push(x); continue; }
+    const i = enYakin(x.y, 8); if (i < 0) continue;
+    if (c.k === "kod") satir[i].kod = (satir[i].kod ? satir[i].kod + " " : "") + x.s;
+    else if (c.k === "adet" && /^\d+$/.test(x.s)) satir[i].adet = +x.s;
+    else if (c.k === "renk") satir[i].renk = (satir[i].renk ? satir[i].renk + " " : "") + x.s;
+    else if (c.k === "gram" && /^\d+[.,]?\d*$/.test(x.s)) satir[i].gram = psSayi(x.s);
+  }
+  const gorsel = bs.cols.find(c => c.k === "gorsel");
+  if (gorsel) {
+    imgs.filter(r => (r.x0 + r.x1) / 2 > gorsel.x0 && r.y0 > bs.y).forEach(r => { const i = enYakin((r.y0 + r.y1) / 2, 60); if (i >= 0) satir[i].foto.push(r); });
+  }
+  return satir.filter(r => r.kod).map(r => {
+    const kod = r.kod.trim();
+    const taban = kod.replace(/[-_]\s*\d+(\.\d+)?\s*(mm|cm)$/i, "");
+    const acik = r.acik.sort((a, b) => a.y - b.y || a.x - b.x).map(q => q.s).join(" ").replace(/\s+/g, " ").trim();
+    const aday = [{ kod, kaynak: "kod" }]; if (taban !== kod) aday.push({ kod: taban, kaynak: "taban" });
+    const metin = [r.renk, acik].filter(Boolean).join(" · ");
+    return {
+      tip: "excel", sayfaNo, disKod: kod, kodAdaylari: aday,
+      adet: r.adet || 1, adetBulundu: !!r.adet, gramBirim: r.gram,
+      aciklama: metin, not: metin,
+      fotoKutular: r.foto.sort((a, b) => a.x0 - b.x0).map(q => ({ sayfaNo, x0: q.x0, y0: q.y0, x1: q.x1, y1: q.y1 })),
+    };
+  });
+}
+
 // ═══ ANA GİRİŞ ═══
 // pdfjsLib: pdf.js kütüphanesi, data: Uint8Array, dönüş: { tip, baslik, kalemler, sayfaSayisi, pdf }
 async function psPdfAyristir(pdfjsLib, data) {
@@ -1184,6 +1267,10 @@ async function psPdfAyristir(pdfjsLib, data) {
     sayfalar.forEach((s, i) => { psExcelSatirlar(s, i + 1, belge); });
     sayfalar.forEach((s, i) => { kalemler.push(...psExcelSatirlar(s, i + 1, belge)); });
     if (kalemler.length) tip = "excel";
+    else if (sayfalar.some(sf => psTabloBaslikBul(sf))) {
+      sayfalar.forEach((sf, i) => { kalemler.push(...psTabloSatirlar(sf, i + 1)); });
+      if (kalemler.length) { tip = "excel"; baslik = psTabloBaslikBilgi(sayfalar[0]); }
+    }
   }
   kalemler.forEach((k, i) => { k.id = "pk" + (i + 1); });
   return { tip, baslik, kalemler, sayfaSayisi: pdf.numPages, pdf };
