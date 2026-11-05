@@ -2369,7 +2369,22 @@ function rpAyListe(giderler,satislar){
 }
 // Taş kalemleri masraf değil, taş gelirinden düşülür (iade gibi). Taş dizim gideri masrafta kalır.
 function rpTasTuru(tur){ return /^(TAŞ STOĞU|TAŞ DÜŞÜMÜ|MALZEME TAŞ)/.test(rpUpper(String(tur).replace(/\u00a0/g," ").trim())); }
-function rpOzet(giderler,satislar,ay,brut){ // ay: "2026-03" | "" (tümü)
+// Defter (depo hareketi) bazlı satış: brüt satış, iade ve net — Rhino "Aylık Karşılaştırmalı Satışlar" ile aynı. Yalnızca MSK.
+function rpDefter(oz, ay, satislar, brut){
+  if (AKTIF_SIRKET_ONEK!=="" || !oz || !oz.cariGr || !oz.cari) return null;
+  const aylar = ay ? [ay] : [...new Set((satislar||[]).map(x=>String(x[0]).slice(0,7)))];
+  const fm = {}; let sat=0, iade=0;
+  const kaynak = brut ? oz.cariGr : oz.cari;
+  Object.keys(kaynak).forEach(f=>{
+    aylar.forEach(m=>{
+      const d = kaynak[f] && kaynak[f][m]; if (!d) return;
+      const sv_ = brut ? (d[0]||0) : (d.s||0), iv_ = brut ? (d[1]||0) : (d.i||0);
+      const e = fm[f] || (fm[f]={ sat:0, iade:0, net:0 }); e.sat+=sv_; e.iade+=iv_; e.net+=sv_-iv_; sat+=sv_; iade+=iv_;
+    });
+  });
+  return { sat, iade, net:sat-iade, firmalar:fm, aylar };
+}
+function rpOzet(giderler,satislar,ay,brut,oz){ // ay: "2026-03" | "" (tümü)
   const kap=rpKapanisTurleri(giderler);
   const donem=giderler.filter(s=>(!ay||s[0].startsWith(ay)) && !kap.has(s[1]));
   const gs=donem.filter(s=>!rpTasTuru(s[1]));
@@ -2381,7 +2396,19 @@ function rpOzet(giderler,satislar,ay,brut){ // ay: "2026-03" | "" (tümü)
   const turler={}; gs.forEach(s=>{ turler[s[1]]=(turler[s[1]]||0)+s[5]; });
   const musteri={}; ss.forEach(s=>{ const k=s[7]||s[8]||"?"; const m=musteri[k]||(musteri[k]={ad:s[8]||k,hasGr:0,isc:0,usd:0,maden:0,adet:0}); m.hasGr+=gg(s); m.isc+=s[4]; m.usd+=s[5]; m.maden+=s[6]; m.adet++; });
   const ayar={}; ss.forEach(s=>{ const k=(s[2]||"?"); const m=ayar[k]||(ayar[k]={hasGr:0,isc:0,maden:0,adet:0}); m.hasGr+=gg(s); m.isc+=s[4]; m.maden+=s[6]; m.adet++; });
-  return { gider, tasGider, hasGr, isc, usd, maden, adet:ss.length, evrak:new Set(ss.map(s=>s[1])).size, turler, musteri, ayar, sonuc: isc+maden-gider };
+  const defter = rpDefter(oz, ay, satislar, brut);
+  let hasGr2 = hasGr, musteri2 = musteri, ayar2 = ayar;
+  if (defter) {
+    hasGr2 = defter.net;
+    musteri2 = {};
+    Object.keys(defter.firmalar).forEach(f=>{ const e=defter.firmalar[f]; if (Math.abs(e.net)<0.005 && !e.sat) return; const eski = Object.values(musteri).find(m=>m.ad===f) || {};
+      musteri2[f] = { ad:f, hasGr:e.net, isc:eski.isc||0, usd:eski.usd||0, maden:eski.maden||0, adet:eski.adet||0 }; });
+    if (brut && oz.ayarGr) {
+      ayar2 = {};
+      defter.aylar.forEach(m=>{ const d=oz.ayarGr[m]; if (!d) return; Object.keys(d).forEach(k=>{ const e=ayar2[k]||(ayar2[k]={ hasGr:0, isc:(ayar[k]&&ayar[k].isc)||0, maden:(ayar[k]&&ayar[k].maden)||0, adet:(ayar[k]&&ayar[k].adet)||0 }); e.hasGr+=d[k]; }); });
+    }
+  }
+  return { gider, tasGider, hasGr:hasGr2, isc, usd, maden, adet:ss.length, evrak:new Set(ss.map(s=>s[1])).size, turler, musteri:musteri2, ayar:ayar2, defter, sonuc: isc+maden-gider };
 }
 
 // ── Depolama: aylık parçalar (v7rp_g_YYYY-MM, v7rp_s_YYYY-MM), dizin v7rp_idx. Nesne olarak saklanır (dizi parçalanmasın) ──
@@ -2395,8 +2422,9 @@ async function rpYukleHepsi(){
     ld("v7raporlar", { mizanlar: [] })
   ]);
   const depoK = await ld("v7rp_depo", { sayimlar: [] });
+  const ozetK = await ld("v7rp_ozet", null);
   const aylikK = await ld("v7rp_aylik", { aylar: {} });
-  return { aylik: (aylikK && aylikK.aylar) || {}, idx, giderler: g.flat(), satislar: s.flat(), mizanlar: (miz && Array.isArray(miz.mizanlar)) ? miz.mizanlar : [], depo: (depoK && Array.isArray(depoK.sayimlar)) ? depoK.sayimlar : [] };
+  return { aylik: (aylikK && aylikK.aylar) || {}, ozet: ozetK, idx, giderler: g.flat(), satislar: s.flat(), mizanlar: (miz && Array.isArray(miz.mizanlar)) ? miz.mizanlar : [], depo: (depoK && Array.isArray(depoK.sayimlar)) ? depoK.sayimlar : [] };
 }
 // Bir yüklemeyi aylara böler, mevcutla birleştirir (çiftlemez), dizini günceller
 async function rpYuklemeKaydet(tur, satirlar){
@@ -2523,6 +2551,11 @@ function DetayKpi({ T, l, x, alt, renk }) {
 // Satış detayı: kime ne sattık (müşteri / ürün grubu / ayar / ay / evrak). Kâr sütunları sadece Karlılık şifresi açıkken.
 function DetaySatisIc({ T, satislar, f0 }) {
   const [f, setF] = useState(f0 || {});
+  const [oz, setOz] = useState(null);
+  useEffect(()=>{ let iptal=false; ld("v7rp_ozet", null).then(x=>{ if(!iptal) setOz(x); }); return ()=>{ iptal=true; }; }, []);
+  const dB = rpDefter(oz, f.ay||"", satislar, true), dH = rpDefter(oz, f.ay||"", satislar, false);
+  const dSat = dB ? Object.keys(dB.firmalar).filter(k=>!f.mus || rpMusNorm(k)===rpMusNorm(f.mus)).map(k=>({ k, b:dB.firmalar[k], h:(dH&&dH.firmalar[k])||{sat:0,iade:0,net:0} })).sort((a,b)=>b.b.net-a.b.net) : [];
+  const dTop = dSat.reduce((t,e)=>({ sat:t.sat+e.b.sat, iade:t.iade+e.b.iade, net:t.net+e.b.net, hnet:t.hnet+e.h.net }), { sat:0, iade:0, net:0, hnet:0 });
   const kar = RP_ACIK;
   const mAd = (s) => s[8] || s[7] || "?";
   const ayarOf = (s) => { const m = String(s[2]).match(/(\d{1,2})K\b/i); return m ? m[1]+"K" : "Diğer"; };
@@ -2559,6 +2592,19 @@ function DetaySatisIc({ T, satislar, f0 }) {
         {kar && <DetayKpi T={T} l="Maden kârı (has)" x={rpF(T0.maden,1)}/>}
         {kar && <DetayKpi T={T} l="Tutar (USD)" x={rpF(T0.usd,0)}/>}
       </div>
+      {dB && <div style={{ marginBottom:14 }}>
+        {bas("Defter özeti — iade düşülmüş net (Rhino aylık satış raporu ile aynı)")}
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(130px,1fr))", gap:8, marginBottom:10 }}>
+          <DetayKpi T={T} l="Brüt satış (gr)" x={rpF(dTop.sat,1)}/>
+          <DetayKpi T={T} l="İade (gr)" x={rpF(dTop.iade,1)}/>
+          <DetayKpi T={T} l="Net brüt (gr)" x={rpF(dTop.net,1)}/>
+          <DetayKpi T={T} l="Net has" x={rpF(dTop.hnet,1)}/>
+        </div>
+        <DetayTablo T={T} kolonlar={["Müşteri","Brüt satış","İade","Net brüt","Net has"]} onSec={false}
+          satirlar={dSat.map(e=>({ h:[e.k, rpF(e.b.sat,1), rpF(e.b.iade,1), rpF(e.b.net,1), rpF(e.h.net,1)] }))}
+          toplam={["Toplam", rpF(dTop.sat,1), rpF(dTop.iade,1), rpF(dTop.net,1), rpF(dTop.hnet,1)]}/>
+        <div style={{ fontSize:12, color:T.sub, marginTop:8 }}>Aşağıdaki tablolar Satış Karlılık raporundaki fatura satırlarıdır (iade ve gümüş dahil değildir; gram has÷milyem ile türetilir), bu yüzden yukarıdaki net rakamla birebir aynı olmaz.</div>
+      </div>}
       {!kar && <div style={{ fontSize:12, color:T.sub, marginBottom:12 }}>İşçilik ve kâr bilgisi, Karlılık sekmesinde şifreyi girince bu ekranda da görünür.</div>}
       {!f.mus && <div>{bas("Kime ne sattık (müşteri)")}<DetayTablo T={T} kolonlar={["Müşteri"].concat(kol.slice(1))} satirlar={musList} onSec={true} toplam={topSatir("Toplam")}/></div>}
       {!f.ay && <div>{bas("Aylara göre")}<DetayTablo T={T} kolonlar={["Ay"].concat(kol.slice(1))} satirlar={ayList} onSec={true}/></div>}
@@ -2807,9 +2853,9 @@ function RaporPanel({ T, GH, onRapor }) {
       <button onClick={onRapor} style={GH}>Raporlar sekmesine git</button>
     </RpKart>
   );
-  const o = rpOzet(v.giderler, v.satislar, ay, birim==="brut");
+  const o = rpOzet(v.giderler, v.satislar, ay, birim==="brut", v.ozet);
   const mz = rpHasToplam(rpSonMizan(v.mizanlar));
-  const aylik = aylar.map(a => ({ a, o:rpOzet(v.giderler, v.satislar, a, birim==="brut") }));
+  const aylik = aylar.map(a => ({ a, o:rpOzet(v.giderler, v.satislar, a, birim==="brut", v.ozet) }));
   const turler = Object.entries(o.turler).filter(([,x])=>x>0.005).sort((a,b)=>b[1]-a[1]).slice(0,12).map(([ad,x])=>({ ad, v:x }));
   const musteri = Object.values(o.musteri).sort((a,b)=>b.hasGr-a.hasGr).slice(0,10).map(m=>({ ad:m.ad, v:m.hasGr, alt:m.adet+" kalem" }));
   const ayarlar = Object.entries(o.ayar).sort((a,b)=>b[1].hasGr-a[1].hasGr).slice(0,8).map(([ad,m])=>({ ad, v:m.hasGr }));
@@ -3568,12 +3614,12 @@ function KasaGenel({ T, GH, atolye, ic, onGit }) {
   const [birim, setBirim] = useState("brut");
   if (!v) return <div style={{ fontSize:12, color:T.sub }}>Yükleniyor…</div>;
   const aylar = rpAyListe(v.giderler, v.satislar);
-  const o = rpOzet(v.giderler, v.satislar, ay, birim==="brut");
+  const o = rpOzet(v.giderler, v.satislar, ay, birim==="brut", v.ozet);
   const mizan = rpSonMizan(v.mizanlar);
   const mz = rpHasToplam(mizan);
   const depo = v.depo.length ? v.depo[v.depo.length-1] : null;
   const altin = rpAltinSatirlari(depo, mz ? mz.h : null);
-  const aylik = aylar.map(a => ({ a, o:rpOzet(v.giderler, v.satislar, a, birim==="brut") }));
+  const aylik = aylar.map(a => ({ a, o:rpOzet(v.giderler, v.satislar, a, birim==="brut", v.ozet) }));
   const alacak = mz ? mz.alacak : ic.alacak, borc = mz ? mz.borc : ic.borc, stok = mz ? mz.stok : ic.stok, kasaH = mz ? mz.kasa : 0;
   const varlik = stok + alacak + kasaH, net = varlik - borc;
   const RENK = { stok:"#6b7a8f", alacak:"#2f7fb8", kasa:"#2e9d6a", borc:"#d0584b", net:"#6b5fb5" };
