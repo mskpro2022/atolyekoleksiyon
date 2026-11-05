@@ -2612,6 +2612,93 @@ function RpGelirTablosu({ T, hes, kayit }) {
 }
 
 // ── Karlılık (şifreli) ──
+// ── İşçilik analizi: ayar ve müşteri bazında işçilik HAS ÷ satılan HAS (MSK) ──
+function IscAnaliz({ T, satislar }) {
+  const [yil, setYil] = useState("");
+  const [ay, setAy] = useState("");
+  const [aralik, setAralik] = useState(false);
+  const [bas, setBas] = useState(""); const [bit, setBit] = useState("");
+  const [acikMus, setAcikMus] = useState("");
+  const yillar = [...new Set(satislar.map(s=>s[0].slice(0,4)))].sort();
+  const ayVar = new Set(satislar.filter(s=>!yil || s[0].startsWith(yil)).map(s=>s[0].slice(5,7)));
+  const filtre = (s) => {
+    if (aralik) return (!bas || s[0]>=bas) && (!bit || s[0]<=bit);
+    if (yil && !s[0].startsWith(yil)) return false;
+    if (ay && s[0].slice(5,7)!==ay) return false;
+    return true;
+  };
+  const sat = satislar.filter(filtre);
+  const ayarAd = (s) => { const m = String(s[2]).match(/(\d{1,2})K\b/i); if (m) return m[1]+"K"; return /G[ÜU]M[ÜU]Ş/i.test(String(s[2])) ? "Gümüş" : "Diğer"; };
+  const altinMi = (k) => /^\d+K$/.test(k);
+  const topla = (liste, fn) => { const o={}; liste.forEach(s=>{ const k=fn(s); const m=o[k]||(o[k]={ k, gr:0, isc:0, adet:0 }); m.gr+=s[3]; m.isc+=s[4]; m.adet++; }); return Object.values(o); };
+  const altSat = sat.filter(s=>altinMi(ayarAd(s)));
+  const toplamGr = altSat.reduce((t,s)=>t+s[3],0), toplamIsc = altSat.reduce((t,s)=>t+s[4],0);
+  const ort = toplamGr>0 ? toplamIsc/toplamGr*100 : 0;
+  const ayarlar = topla(sat, ayarAd).sort((a,b)=>(altinMi(b.k)?parseInt(b.k):-1)-(altinMi(a.k)?parseInt(a.k):-1));
+  const musteriler = topla(altSat, s=>s[8]||s[7]||"?").sort((a,b)=>b.gr-a.gr).slice(0,15);
+  const oran = (x) => x.gr>0 ? x.isc/x.gr*100 : 0;
+  const dusuk = (x) => altinMi(x.k) && x.gr>0 && oran(x) < ort*0.8;
+  const th = { fontSize:11, color:T.sub, fontWeight:700, textAlign:"right", padding:"4px 6px" };
+  const td = { fontSize:12, color:T.text, textAlign:"right", padding:"5px 6px", borderTop:"1px solid "+T.border };
+  const dugme = (a) => ({ border:"1px solid "+(a?T.gold:T.border), background:a?"rgba(var(--vurgu-rgb),0.12)":"transparent", color:T.text, borderRadius:8, padding:"4px 10px", fontSize:12, fontWeight:a?700:500, cursor:"pointer", whiteSpace:"nowrap" });
+  const AYK = ["Oca","Şub","Mar","Nis","May","Haz","Tem","Ağu","Eyl","Eki","Kas","Ara"];
+  const inp = { background:T.card, border:"1px solid "+T.border, borderRadius:8, padding:"4px 8px", color:T.text, fontSize:12 };
+  const uyari = T.danger||"#e85a4f";
+  return (
+    <RpKart T={T} baslik="İŞÇİLİK ANALİZİ — AYAR VE MÜŞTERİ (HAS)">
+      <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:8 }}>
+        <button onClick={()=>{setAralik(false);setYil("");setAy("");}} style={dugme(!aralik&&!yil)}>Tümü</button>
+        {yillar.map(y=><button key={y} onClick={()=>{setAralik(false);setYil(y);setAy("");}} style={dugme(!aralik&&yil===y)}>{y}</button>)}
+        <button onClick={()=>setAralik(a=>!a)} style={dugme(aralik)}>Tarih aralığı</button>
+      </div>
+      {!aralik && (
+        <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:8 }}>
+          {AYK.map((n,i)=>{ const k=String(i+1).padStart(2,"0"); const var_=ayVar.has(k); return <button key={k} disabled={!var_} onClick={()=>setAy(ay===k?"":k)} style={{ ...dugme(ay===k), opacity:var_?1:0.4, cursor:var_?"pointer":"default" }}>{n}</button>; })}
+        </div>
+      )}
+      {aralik && (
+        <div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap", marginBottom:8 }}>
+          <input type="date" value={bas} onChange={e=>setBas(e.target.value)} style={inp}/><span style={{ color:T.sub }}>→</span><input type="date" value={bit} onChange={e=>setBit(e.target.value)} style={inp}/>
+        </div>
+      )}
+      <div style={{ display:"flex", gap:16, flexWrap:"wrap", margin:"6px 0 10px", fontSize:12, color:T.text }}>
+        <span>Satılan (altın): <b>{rpF(toplamGr,1)}</b> has gr</span>
+        <span>İşçilik: <b>{rpF(toplamIsc,1)}</b> has gr</span>
+        <span>Ortalama oran: <b style={{ color:T.gold }}>%{rpF(ort,1)}</b></span>
+      </div>
+      <div style={{ fontSize:11, color:T.sub, fontWeight:700, marginBottom:4 }}>AYARA GÖRE</div>
+      <div style={{ overflowX:"auto" }}>
+        <table style={{ width:"100%", borderCollapse:"collapse", minWidth:380 }}>
+          <thead><tr><th style={{ ...th, textAlign:"left" }}>Ayar</th><th style={th}>Satılan HAS</th><th style={th}>İşçilik HAS</th><th style={th}>İşçilik %</th><th style={th}>Kalem</th></tr></thead>
+          <tbody>
+            {ayarlar.map(x=>(
+              <tr key={x.k}><td style={{ ...td, textAlign:"left", fontWeight:700 }}>{x.k}</td><td style={td}>{rpF(x.gr,1)}</td><td style={td}>{rpF(x.isc,1)}</td>
+                <td style={{ ...td, fontWeight:700, color:dusuk(x)?uyari:T.text }}>%{rpF(oran(x),1)}{dusuk(x)?" ▼":""}</td><td style={td}>{x.adet}</td></tr>
+            ))}
+            {!ayarlar.length && <tr><td colSpan={5} style={{ ...td, textAlign:"left", color:T.sub }}>Bu dönemde satış yok.</td></tr>}
+          </tbody>
+        </table>
+      </div>
+      <div style={{ fontSize:11, color:T.sub, fontWeight:700, margin:"12px 0 4px" }}>MÜŞTERİYE GÖRE (en çok satılan 15) — satıra tıkla: ayar kırılımı</div>
+      <div style={{ overflowX:"auto" }}>
+        <table style={{ width:"100%", borderCollapse:"collapse", minWidth:380 }}>
+          <thead><tr><th style={{ ...th, textAlign:"left" }}>Müşteri</th><th style={th}>Satılan HAS</th><th style={th}>İşçilik HAS</th><th style={th}>İşçilik %</th></tr></thead>
+          <tbody>
+            {musteriler.map(x=>{ const acik = acikMus===x.k; const alt = acik ? topla(altSat.filter(s=>(s[8]||s[7]||"?")===x.k), ayarAd).sort((a,b)=>(parseInt(b.k)||0)-(parseInt(a.k)||0)) : []; return (
+              <Fragment key={x.k}>
+                <tr onClick={()=>setAcikMus(acik?"":x.k)} style={{ cursor:"pointer" }}><td style={{ ...td, textAlign:"left", fontWeight:600 }}>{acik?"▾ ":"▸ "}{x.k}</td><td style={td}>{rpF(x.gr,1)}</td><td style={td}>{rpF(x.isc,1)}</td>
+                  <td style={{ ...td, fontWeight:700, color:dusuk(x)?uyari:T.text }}>%{rpF(oran(x),1)}{dusuk(x)?" ▼":""}</td></tr>
+                {alt.map(a=>(<tr key={x.k+a.k}><td style={{ ...td, textAlign:"left", paddingLeft:22, color:T.sub }}>{a.k}</td><td style={{ ...td, color:T.sub }}>{rpF(a.gr,1)}</td><td style={{ ...td, color:T.sub }}>{rpF(a.isc,1)}</td><td style={{ ...td, color:dusuk(a)?uyari:T.sub }}>%{rpF(oran(a),1)}</td></tr>))}
+              </Fragment>
+            ); })}
+          </tbody>
+        </table>
+      </div>
+      <div style={{ fontSize:11, color:T.dim||T.sub, marginTop:8, lineHeight:1.5 }}>İşçilik % = işçilik HAS ÷ satılan HAS. ▼ işaretli satırlar dönem ortalamasının %20'den fazla altında. Ortalama ve müşteri tablosu yalnız altın satışlardır; gümüş ve taş kalemleri ayar tablosunda ayrı gösterilir, oranı karşılaştırmaya girmez. Ayar, ürün adındaki "10K/14K…" ifadesinden alınır.</div>
+    </RpKart>
+  );
+}
+
 function RaporKarlilik({ T, GH }) {
   const [v] = useRpVeri();
   const [mid, setMid] = useState("");
@@ -2665,6 +2752,7 @@ function RaporKarlilik({ T, GH }) {
             )}
             <div style={{ fontSize:11, color:T.dim||T.sub, marginTop:8, lineHeight:1.5 }}>"Kaba fark" yönetim hesabıdır, muhasebe sonucu değildir. Muhasebe sonucu için aşağıdaki mizan tabanlı gelir tablosuna bak.</div>
           </RpKart>
+          <IscAnaliz T={T} satislar={v.satislar}/>
           <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(300px,1fr))", gap:12 }}>
             <RpKart T={T} baslik="AYLIK KABA FARK (HAS)"><RpSutun T={T} renk={RP_RENK[2]} veri={aylik.map(x=>({ e:rpAyAd(x.a).split(" ")[0], v:x.o.sonuc }))}/></RpKart>
             <RpKart T={T} baslik="MÜŞTERİ BAZINDA İŞÇİLİK (HAS)">
