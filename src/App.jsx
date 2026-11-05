@@ -800,6 +800,7 @@ async function vektorDosyaYaz(onek, obj) {
 //   2) "fabor"  : Fabor işemri — kutu (kart) başına: "NNN # KOD" veya "ModelID : N | Kod : KOD", Adet, Dikkat notu, foto
 // Sadece yapıyı çıkarır (metin + foto kutuları). Fotoğrafları kırpma ve model eşleştirme App.jsx tarafında.
 
+const SIP_OZET_ONB = new WeakMap(); // sipariş özeti önbelleği (sipariş nesnesi değişmedikçe yeniden hesaplanmaz)
 const PS_KOD_ONEK = /^(\d{1,4}[A-Z]{1,3})-(.+)$/; // 109KP-FB141 → ön ek + bizim kod
 
 function psNorm(s) {
@@ -10622,6 +10623,14 @@ function Atolye({ onSirketDegis }) {
   const BIT = ["tamam","teslim","hurda"];
   const SON = s => (s.durumGecmisi||[]).slice(-1)[0];
   const ozet = s => {
+    const damga = durumSecenekleri().map(d=>d.id).join(",") + "|" + new Date().toDateString();
+    const onb = SIP_OZET_ONB.get(s);
+    if (onb && onb.damga===damga) return onb.v;
+    const v = ozetHesapla(s);
+    SIP_OZET_ONB.set(s, { damga, v });
+    return v;
+  };
+  const ozetHesapla = s => {
     const kd = s.kalemDurumlar||{}; const kl = s.kalemler||[];
     const hurda = kl.reduce((a,k)=>a+(((s.kalemHurda)||{})[k.id]||0),0);
     const aktif = kl.length - hurda;
@@ -10826,7 +10835,7 @@ function Atolye({ onSirketDegis }) {
             return (
               <div key={k.id} className="sp-kalem" style={{ display:"flex", gap:10, alignItems:"center", flexWrap:"wrap", padding:8, background:"rgba(var(--vurgu-rgb),0.02)", border:"1px solid rgba(var(--vurgu-rgb),0.08)", borderRadius:12, borderLeft:"4px solid "+dur.c }}>
                 <div onClick={()=>k.foto&&setSipBuyuk({src:k.foto,ad:(k.kod||"")+" "+(k.ad||"")})} style={{ width:84, height:84, borderRadius:10, overflow:"hidden", flexShrink:0, background:"rgba(0,0,0,0.08)", cursor:k.foto?"zoom-in":"default" }}>
-                  {k.foto ? <img src={k.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"cover", display:"block" }}/> : <div style={{ width:"100%", height:"100%" }}/>}
+                  {k.foto ? <img loading="lazy" decoding="async" src={k.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"cover", display:"block" }}/> : <div style={{ width:"100%", height:"100%" }}/>}
                 </div>
                 <div style={{ flex:"1 1 120px", minWidth:0 }}>
                   <div style={{ fontSize:13, fontWeight:600, color:"var(--goldtext)" }}><span style={{ color:GOLD, marginRight:6 }}>{k.kod||""}</span>{k.ad}{k.renk && <span style={{ color:"var(--gold)", marginLeft:8, fontSize:12 }}>{k.renk}</span>}</div>
@@ -10935,7 +10944,7 @@ function Atolye({ onSirketDegis }) {
                       {Object.keys(o.ayarlar).length>1 && <div style={{ display:"flex", gap:4, flexWrap:"wrap", marginTop:4 }}>
                         {Object.entries(o.ayarlar).sort((a,b)=>b[1]-a[1]).map(([a,g])=><span key={a} style={{ fontSize:11, fontWeight:600, color:a==="925"?"#9aa4b2":GOLD, background:a==="925"?"rgba(154,164,178,0.2)":"rgba(var(--vurgu-rgb),0.14)", borderRadius:6, padding:"2px 7px" }}>{a} · {fN(g,1)} gr</span>)}
                       </div>}
-                      {fotolar.length>0 && <div style={{ display:"grid", gridTemplateColumns:"repeat(4, minmax(0,1fr))", gap:5, marginTop:8 }}>{fotolar.map((k,ix)=><div key={k.id} title={(k.kod||"")+" "+(k.ad||"")} style={{ position:"relative", aspectRatio:"1 / 1", borderRadius:8, overflow:"hidden", background:"rgba(0,0,0,0.06)" }}><img src={k.foto} alt="" draggable={false} style={{ width:"100%", height:"100%", objectFit:"cover", display:"block" }}/>{ix===7 && fotoHepsi.length>8 && <div style={{ position:"absolute", inset:0, background:"rgba(0,0,0,0.5)", color:"#fff", fontSize:15, fontWeight:600, display:"flex", alignItems:"center", justifyContent:"center" }}>+{fotoHepsi.length-7}</div>}</div>)}</div>}
+                      {fotolar.length>0 && <div style={{ display:"grid", gridTemplateColumns:"repeat(4, minmax(0,1fr))", gap:5, marginTop:8 }}>{fotolar.map((k,ix)=><div key={k.id} title={(k.kod||"")+" "+(k.ad||"")} style={{ position:"relative", aspectRatio:"1 / 1", borderRadius:8, overflow:"hidden", background:"rgba(0,0,0,0.06)" }}><img loading="lazy" decoding="async" src={k.foto} alt="" draggable={false} style={{ width:"100%", height:"100%", objectFit:"cover", display:"block" }}/>{ix===7 && fotoHepsi.length>8 && <div style={{ position:"absolute", inset:0, background:"rgba(0,0,0,0.5)", color:"#fff", fontSize:15, fontWeight:600, display:"flex", alignItems:"center", justifyContent:"center" }}>+{fotoHepsi.length-7}</div>}</div>)}</div>}
                       <div onClick={e=>e.stopPropagation()} style={{ marginTop:"auto", paddingTop:7 }}>
                         <select value={key} disabled={bitti(s)} onChange={e=>aya_tasi(s,e.target.value)} title={bitti(s)?"Tamamlanan sipariş taşınamaz":"Başka aya taşı (planlanan ay)"} style={{ ...IS, width:"100%", padding:"4px 6px", fontSize:11 }}>
                           {sirKeys.map(k2=><option key={k2} value={k2}>{k2===key?"📅 ":"→ "}{ayAdi(k2)}</option>)}
@@ -11042,7 +11051,7 @@ function Atolye({ onSirketDegis }) {
                           <span style={{ fontSize:11, color:"#998a6e" }}>{items.length} model</span>
                           {so && so.durum===sipAsama && <span style={{ fontSize:11, color:"#998a6e", marginLeft:"auto" }}>{sureFmt(isGunuSure(so.tarih,Date.now()))} aşamada</span>}
                         </div>
-                        {fl.length>0 && <div style={{ display:"flex", gap:4, marginTop:6 }}>{fl.map(x=><img key={x.k.id} src={x.k.foto} alt="" style={{ width:34, height:34, objectFit:"cover", borderRadius:6 }}/>)}{items.length>5 && <span style={{ fontSize:11, color:"#998a6e", alignSelf:"center" }}>+{items.length-5}</span>}</div>}
+                        {fl.length>0 && <div style={{ display:"flex", gap:4, marginTop:6 }}>{fl.map(x=><img loading="lazy" decoding="async" key={x.k.id} src={x.k.foto} alt="" style={{ width:34, height:34, objectFit:"cover", borderRadius:6 }}/>)}{items.length>5 && <span style={{ fontSize:11, color:"#998a6e", alignSelf:"center" }}>+{items.length-5}</span>}</div>}
                       </div>
                     );
                   })}
@@ -11101,7 +11110,7 @@ function Atolye({ onSirketDegis }) {
                     </div>
                     <div style={{ display:"flex", gap:4, flexWrap:"wrap", alignItems:"center", marginTop:5 }}>{Object.entries(o.ayarlar).sort((a,b)=>b[1]-a[1]).map(([a,g])=><span key={a} style={{ fontSize:11, fontWeight:600, color:GOLD, background:"rgba(var(--vurgu-rgb),0.14)", borderRadius:6, padding:"1px 7px" }}>{a} · {fN(g,1)}</span>)}{s.teslimTarihi && <span style={{ fontSize:11, color:"#e8833a", fontWeight:600, marginLeft:"auto" }}>🚚 {new Date(s.teslimTarihi).toLocaleDateString("tr-TR",{day:"2-digit",month:"short"})}</span>}</div>
                     {s.durumGecmisi?.length>0 && <div style={{ height:4, background:"rgba(var(--vurgu-rgb),0.1)", borderRadius:2, overflow:"hidden", marginTop:7 }}><div style={{ height:"100%", width:o.pct+"%", background:o.pct===100?"#6abf69":"var(--vurgu)" }}/></div>}
-                    {fotolar.length>0 && <div style={{ display:"flex", gap:4, marginTop:7 }}>{fotolar.map(k=><img key={k.id} src={k.foto} alt="" style={{ width:34, height:34, objectFit:"cover", borderRadius:6 }}/>)}{(s.kalemler||[]).filter(k=>k.foto).length>4 && <span style={{ fontSize:11, color:"#7a6f5a", alignSelf:"center" }}>+{(s.kalemler||[]).filter(k=>k.foto).length-4}</span>}</div>}
+                    {fotolar.length>0 && <div style={{ display:"flex", gap:4, marginTop:7 }}>{fotolar.map(k=><img loading="lazy" decoding="async" key={k.id} src={k.foto} alt="" style={{ width:34, height:34, objectFit:"cover", borderRadius:6 }}/>)}{(s.kalemler||[]).filter(k=>k.foto).length>4 && <span style={{ fontSize:11, color:"#7a6f5a", alignSelf:"center" }}>+{(s.kalemler||[]).filter(k=>k.foto).length-4}</span>}</div>}
                   </div>
                 </Fragment>
               );
