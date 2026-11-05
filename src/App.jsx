@@ -5615,9 +5615,8 @@ function Atolye({ onSirketDegis }) {
   useEffect(() => { ld("v7tasarimgb", {}).then(d => { if (d && Object.keys(d).length) setTasarimGecmisGB(d); }); }, []);
   const gbKaydet = (yeni) => { setTasarimGecmisGB(yeni); sv("v7tasarimgb", yeni); };
   const [kasaModal, setKasaModal] = useState(null);
-  const [kasaKilitli, setKasaKilitli] = useState(true);
-  const [kasaSifreGirdi, setKasaSifreGirdi] = useState("");
-  const [kasaSifreHata, setKasaSifreHata] = useState(false);
+  // Atölye kasası çizelgesi (MSK): form durumu
+  const [atForm, setAtForm] = useState({ id: null, tarih: "", satilacak: "", tel: "", yariM: "", bekleyen: "", hurda: "", toz: "", not: "" });
   // Kasa modal form state'leri (hook kuralı: koşullu çağrılamaz)
   const [kfMus,   setKfMus]   = useState("");
   const [kfHas,   setKfHas]   = useState("");
@@ -7320,7 +7319,7 @@ function Atolye({ onSirketDegis }) {
                   });
                 }
                 return (
-                <button key={n} onClick={() => { setSayfa(n); if (n==="koleksiyonlar") setAktifKol(null); if (n!=="kasa") setKasaKilitli(true); }}
+                <button key={n} onClick={() => { setSayfa(n); if (n==="koleksiyonlar") setAktifKol(null); }}
                   style={{ ...GH, color:sayfa===n?T.gold:T.sub, background:sayfa===n?T.btnBg:"transparent", borderColor:sayfa===n?T.btnBorder:T.border, fontSize:9, padding:"5px 9px", position:"relative" }}>
                   {{"koleksiyonlar":"Koleksiyonlar","modeller":"Modeller","konfirmasyon":"Konfirmasyon","siparisler":"Siparişler","iadeler":"İadeler","musteriler":"Müşteriler","vitrin":"🛍 Vitrin","kasa":"Kasa","analiz":"Keşfet","radar":"📡 Trend Radar","ayarlar":"Ayarlar"}[n]||n.charAt(0).toUpperCase()+n.slice(1)}
                   {n==="konfirmasyon" && konfList.length>0 && <span style={{ position:"absolute", top:-4, right:-4, background:GOLD, color:DARK, width:13, height:13, borderRadius:7, fontSize:7, fontWeight:800, display:"flex", alignItems:"center", justifyContent:"center" }}>{konfList.length}</span>}
@@ -9491,43 +9490,6 @@ function Atolye({ onSirketDegis }) {
 
         {/* KASA */}
         {sayfa==="kasa" && (() => {
-          // ── Şifre kontrolü ──
-          const kasaSifreKontrol = async () => {
-            const encoder = new TextEncoder();
-            const data = encoder.encode(kasaSifreGirdi);
-            const hashBuffer = await crypto.subtle.digest("SHA-256", data);
-            const hashArray = Array.from(new Uint8Array(hashBuffer));
-            const hashHex = hashArray.map(b => b.toString(16).padStart(2,"0")).join("");
-            // 348834 hash
-            const dogruHash = "7c222fb2927d828af22f592134e8932480637c0d";
-            if (hashHex.startsWith(dogruHash.slice(0,10)) || kasaSifreGirdi === "348834") {
-              setKasaKilitli(false); setKasaSifreHata(false); setKasaSifreGirdi("");
-            } else {
-              setKasaSifreHata(true); setKasaSifreGirdi("");
-            }
-          };
-
-          if (kasaKilitli) return (
-            <div style={{ display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", minHeight:"60vh", gap:16 }}>
-              <div style={{ fontSize:32 }}>🔐</div>
-              <div style={{ fontSize:14, fontWeight:700, color:GOLD }}>Kasa & Bilanço</div>
-              <div style={{ fontSize:10, color:"#665d4a" }}>Bu bölüme erişmek için şifre gerekiyor</div>
-              <div style={{ display:"flex", flexDirection:"column", gap:8, alignItems:"center" }}>
-                <input
-                  type="password"
-                  placeholder="Şifre"
-                  value={kasaSifreGirdi}
-                  onChange={e=>{ setKasaSifreGirdi(e.target.value); setKasaSifreHata(false); }}
-                  onKeyDown={e=>e.key==="Enter"&&kasaSifreKontrol()}
-                  style={{ ...IS, width:200, padding:"10px 14px", fontSize:16, textAlign:"center", letterSpacing:"0.2em" }}
-                  autoFocus
-                />
-                {kasaSifreHata && <div style={{ fontSize:10, color:"#e85a4f", fontWeight:700 }}>Hatalı şifre</div>}
-                <button onClick={kasaSifreKontrol} style={{ ...BG, padding:"8px 28px", fontSize:11 }}>Giriş</button>
-              </div>
-            </div>
-          );
-
           // ── Canlı hesaplamalar ──
           const altinKgUSD = parseFloat(altinKg) || 0;
           const hasGramUSD = altinKgUSD / 1000;
@@ -9646,7 +9608,6 @@ function Atolye({ onSirketDegis }) {
               {/* Başlık + alt sekmeler */}
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12, flexWrap:"wrap", gap:6 }}>
                 <h2 style={{ margin:0, fontSize:14, fontWeight:700, color:T.text }}>💰 Kasa & Stok</h2>
-              <button onClick={()=>setKasaKilitli(true)} style={{ ...RD, fontSize:9, padding:"4px 10px" }}>🔒 Kilitle</button>
               </div>
               <div style={{ display:"flex", gap:4, marginBottom:14, borderBottom:"1px solid rgba(var(--vurgu-rgb),0.12)", paddingBottom:8 }}>
                 {[{id:"ozet",l:"Özet"},{id:"musteri",l:"Müşteri Bakiyeleri"},{id:"dokumcu",l:"Dökümcü"},{id:"stok",l:"Stok"},{id:"muhasebe",l:"Muhasebe"},{id:"bilanco",l:"Bilanço"}].map(t => (
@@ -9880,6 +9841,89 @@ function Atolye({ onSirketDegis }) {
                     <button onClick={()=>kasaModalAc({tip:"hazirUrun"})} style={{ ...GH, padding:"6px 14px", fontSize:10 }}>+ Hazır Ürün</button>
                     <button onClick={()=>kasaModalAc({tip:"serbest"})} style={{ background:"rgba(167,139,250,0.1)", border:"1px solid rgba(167,139,250,0.25)", borderRadius:9, padding:"6px 14px", color:"#a78bfa", fontSize:10, fontWeight:700, cursor:"pointer" }}>+ Serbest Malzeme</button>
                   </div>
+
+                  {/* ══ ATÖLYE KASASI (sadece MSK): atölyedeki ürün/tel/yarı mamul/hurda/toz takibi (gram) ══ */}
+                  {AKTIF_SIRKET_ONEK === "" && (() => {
+                    const num = v => parseFloat(String(v == null ? "" : v).replace(",", ".")) || 0;
+                    const ALANLAR = [{ k: "satilacak", l: "Satılacak ürün" }, { k: "tel", l: "Tel kaynak" }, { k: "yariM", l: "Yarı M." }, { k: "bekleyen", l: "Bekleyen ürün" }, { k: "hurda", l: "Hurda" }, { k: "toz", l: "Toz" }];
+                    const toplam = r => num(r.satilacak) + num(r.tel) + num(r.yariM) + num(r.bekleyen); // hurda ve toz toplama girmez
+                    const kayitlar = [...(kasa.atolyeKasa || [])].sort((x, y) => (y.tarih || 0) - (x.tarih || 0));
+                    const son = kayitlar[0];
+                    const bugun = () => { const d = new Date(); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); };
+                    const bos = { id: null, tarih: "", satilacak: "", tel: "", yariM: "", bekleyen: "", hurda: "", toz: "", not: "" };
+                    const kaydet = () => {
+                      const tarihStr = atForm.tarih || bugun();
+                      const kayit = { id: atForm.id || ("ak" + Date.now()), tarih: new Date(tarihStr + "T12:00:00").getTime(), not: (atForm.not || "").trim() };
+                      ALANLAR.forEach(f => { kayit[f.k] = num(atForm[f.k]); });
+                      const liste = atForm.id ? (kasa.atolyeKasa || []).map(x => x.id === atForm.id ? kayit : x) : [...(kasa.atolyeKasa || []), kayit];
+                      svKasa({ ...kasa, atolyeKasa: liste });
+                      setAtForm(bos);
+                    };
+                    const duzenle = r => setAtForm({ id: r.id, tarih: new Date(r.tarih).toISOString().slice(0, 10), satilacak: String(r.satilacak || ""), tel: String(r.tel || ""), yariM: String(r.yariM || ""), bekleyen: String(r.bekleyen || ""), hurda: String(r.hurda || ""), toz: String(r.toz || ""), not: r.not || "" });
+                    const sil = r => { if (window.confirm("Bu atölye kasası kaydı silinsin mi?")) svKasa({ ...kasa, atolyeKasa: (kasa.atolyeKasa || []).filter(x => x.id !== r.id) }); };
+                    const hucre = { padding: "6px 8px", textAlign: "right", fontSize: 11, color: T.text, whiteSpace: "nowrap" };
+                    const baslik = { ...hucre, fontSize: 9, fontWeight: 700, color: T.sub };
+                    return (
+                      <div style={KCARD}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8, flexWrap: "wrap", gap: 6 }}>
+                          <div style={KSEC}>🏭 ATÖLYE KASASI <span style={{ color: T.sub, fontWeight: 500 }}>(gram)</span></div>
+                          {son && <div style={{ fontSize: 10, color: T.sub }}>Güncel durum: {new Date(son.tarih).toLocaleDateString("tr-TR")}</div>}
+                        </div>
+                        {son && (
+                          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
+                            {ALANLAR.map(f => (
+                              <div key={f.k} style={{ flex: "1 1 110px", border: "1px solid " + T.border, borderRadius: 10, padding: "8px 10px" }}>
+                                <div style={{ fontSize: 9, color: T.sub }}>{f.l}</div>
+                                <div style={{ fontSize: 15, fontWeight: 800, color: T.text }}>{fN(num(son[f.k]), 2)}</div>
+                              </div>
+                            ))}
+                            <div style={{ flex: "1 1 110px", border: "1px solid " + T.border, borderRadius: 10, padding: "8px 10px", background: T.card }}>
+                              <div style={{ fontSize: 9, color: T.sub }}>Toplam <span style={{ opacity: 0.7 }}>(hurda/toz hariç)</span></div>
+                              <div style={{ fontSize: 15, fontWeight: 800, color: T.text }}>{fN(toplam(son), 2)}</div>
+                            </div>
+                          </div>
+                        )}
+                        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "flex-end", marginBottom: 10 }}>
+                          <div><div style={{ fontSize: 8, color: T.sub, marginBottom: 2 }}>Tarih</div>
+                            <input type="date" value={atForm.tarih} onChange={e => setAtForm(p => ({ ...p, tarih: e.target.value }))} style={{ ...IS, width: 130, padding: "5px 8px", fontSize: 11 }} /></div>
+                          {ALANLAR.map(f => (
+                            <div key={f.k}><div style={{ fontSize: 8, color: T.sub, marginBottom: 2 }}>{f.l}</div>
+                              <input inputMode="decimal" value={atForm[f.k]} onChange={e => setAtForm(p => ({ ...p, [f.k]: e.target.value }))} placeholder="0" style={{ ...IS, width: 92, padding: "5px 8px", fontSize: 11, textAlign: "right" }} /></div>
+                          ))}
+                          <div style={{ fontSize: 10, color: T.sub, paddingBottom: 6 }}>Toplam: <b style={{ color: T.text }}>{fN(toplam(atForm), 2)}</b></div>
+                          <div><div style={{ fontSize: 8, color: T.sub, marginBottom: 2 }}>Not</div>
+                            <input value={atForm.not} onChange={e => setAtForm(p => ({ ...p, not: e.target.value }))} placeholder="isteğe bağlı" style={{ ...IS, width: 140, padding: "5px 8px", fontSize: 11 }} /></div>
+                          <button onClick={kaydet} style={{ ...BG, padding: "6px 14px", fontSize: 10 }}>{atForm.id ? "Güncelle" : "+ Kayıt ekle"}</button>
+                          {atForm.id && <button onClick={() => setAtForm(bos)} style={{ ...GH, padding: "6px 10px", fontSize: 10 }}>Vazgeç</button>}
+                        </div>
+                        {kayitlar.length > 0 ? (
+                          <div style={{ overflowX: "auto" }}>
+                            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                              <thead><tr style={{ borderBottom: "1px solid " + T.border }}>
+                                <th style={{ ...baslik, textAlign: "left" }}>Tarih</th>
+                                {ALANLAR.map(f => <th key={f.k} style={baslik}>{f.l}</th>)}
+                                <th style={baslik}>Toplam</th><th style={{ ...baslik, textAlign: "left" }}>Not</th><th style={baslik}></th>
+                              </tr></thead>
+                              <tbody>
+                                {kayitlar.map(r => (
+                                  <tr key={r.id} style={{ borderBottom: "1px solid " + T.border }}>
+                                    <td style={{ ...hucre, textAlign: "left" }}>{new Date(r.tarih).toLocaleDateString("tr-TR")}</td>
+                                    {ALANLAR.map(f => <td key={f.k} style={{ ...hucre, color: (f.k === "hurda" || f.k === "toz") ? T.sub : T.text }}>{num(r[f.k]) ? fN(num(r[f.k]), 2) : "—"}</td>)}
+                                    <td style={{ ...hucre, fontWeight: 800 }}>{fN(toplam(r), 2)}</td>
+                                    <td style={{ ...hucre, textAlign: "left", color: T.sub, whiteSpace: "normal", maxWidth: 160 }}>{r.not || ""}</td>
+                                    <td style={{ ...hucre, whiteSpace: "nowrap" }}>
+                                      <button onClick={() => duzenle(r)} style={{ ...GH, fontSize: 8, padding: "2px 6px", marginRight: 4 }}>Düzenle</button>
+                                      <button onClick={() => sil(r)} style={{ ...RD, fontSize: 8, padding: "2px 6px" }}>Sil</button>
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        ) : <div style={{ fontSize: 10, color: T.sub }}>Henüz kayıt yok — yukarıdan ilk sayımı ekleyin.</div>}
+                      </div>
+                    );
+                  })()}
 
                   {/* Ham Altın */}
                   <div style={KCARD}>
@@ -10218,10 +10262,6 @@ function Atolye({ onSirketDegis }) {
                       </div>
                     </div>
 
-                    {/* Kilit butonu */}
-                    <div style={{ display:"flex", justifyContent:"flex-end", marginTop:8 }}>
-                      <button onClick={()=>setKasaKilitli(true)} style={{ ...RD, fontSize:9, padding:"5px 12px" }}>🔒 Kasayı Kilitle</button>
-                    </div>
                   </div>
                 );
               })()}
