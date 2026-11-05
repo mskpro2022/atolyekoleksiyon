@@ -2910,7 +2910,7 @@ function RpGelirTablosu({ T, hes, kayit }) {
   );
   return (
     <div style={kart}>
-      <div style={{ fontSize:12, fontWeight:800, color:T.gold, marginBottom:8 }}>GELİR TABLOSU (HAS) — {kayit.bas} – {kayit.bit}</div>
+      <div style={{ fontSize:12, fontWeight:800, color:T.gold, marginBottom:8 }}>GELİR TABLOSU (HAS) — {kayit.bas} – {kayit.bit} · son kapanıştan bu yana</div>
       <Satir ad="Atölye satışları (600)" v={gelir("600")} girinti/>
       <Satir ad="Diğer gelirler (602)" v={gelir("602")} girinti/>
       <Satir ad="Brüt satışlar" v={brutSatis}/>
@@ -3321,6 +3321,24 @@ function RaporKarlilik({ T, GH }) {
               {v.mizanlar.map(m=><option key={m.id} value={m.id}>{m.bas} – {m.bit}</option>)}
             </select>
           </div>
+          {hes && (() => {
+            const kapanis = -(hes["570"]?.has||0);
+            const acik = -Object.keys(hes).filter(k=>/^[67]\d\d$/.test(k)).reduce((t,k)=>t+(hes[k]?.has||0),0);
+            const top = kapanis + acik;
+            const satir = (ad, x, alt, kalin) => (
+              <div style={{ display:"flex", justifyContent:"space-between", gap:12, padding:"6px 8px", borderTop: kalin?"1px solid "+T.border:"none", marginTop: kalin?6:0 }}>
+                <span style={{ fontSize: kalin?13:12, fontWeight: kalin?800:500, color:T.text }}>{ad}{alt && <span style={{ display:"block", fontSize:11, fontWeight:400, color:T.sub }}>{alt}</span>}</span>
+                <span style={{ fontSize: kalin?16:13, fontWeight: kalin?800:600, color:renk(x), whiteSpace:"nowrap" }}>{rpF(x,2)} has</span>
+              </div>);
+            return (
+              <RpKart T={T} baslik={"YIL İÇİ KÂR — MİZAN ("+kayit.bas+" – "+kayit.bit+")"}>
+                {satir("Kapanışlarla aktarılan kâr", kapanis, "Hesap 570 · BU YIL SON DURUM (Rhino'daki yıl kârı)")}
+                {satir("Son kapanıştan bu yana açık gelir/gider", acik, "600–760 hesap bakiyeleri (aşağıdaki gelir tablosu yalnızca bu kısmı gösterir)")}
+                {satir("Toplam yıl içi kâr", top, null, true)}
+                <div style={{ fontSize:11, color:T.dim||T.sub, marginTop:8, lineHeight:1.5 }}>Rhino her hafta gelir/gider hesaplarını 570'e aktarır; bu yüzden yıl kârı iki parçadan oluşur. Gelir tablosundaki sonuç tek başına yıl kârı değildir.</div>
+              </RpKart>
+            );
+          })()}
           {hes && <RpGelirTablosu T={T} hes={hes} kayit={kayit}/>}
           {hes && aktifPasif!==null && (
             <RpKart T={T} baslik="BİLANÇO FARKI (AKTİF − PASİF)">
