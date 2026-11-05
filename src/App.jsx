@@ -1206,9 +1206,11 @@ function psTabloBaslikBilgi(sayfa) {
     genelNot: "",
   };
 }
-function psTabloSatirlar(sayfa, sayfaNo) {
+// basDis: başlığı olmayan devam sayfaları (2. sayfa vb.) için ilk sayfanın sütun konumları
+function psTabloSatirlar(sayfa, sayfaNo, basDis) {
   const { H, items, imgs } = sayfa;
-  const bs = psTabloBaslikBul(sayfa);
+  let bs = psTabloBaslikBul(sayfa);
+  if (!bs && basDis) bs = { ...basDis, y: -1e9 };
   if (!bs) return [];
   const col = (x) => bs.cols.find(c => x >= c.x0 && x < c.x1);
   const noCol = bs.cols.find(c => c.k === "no") || bs.cols.find(c => c.k === "kod");
@@ -1268,7 +1270,8 @@ async function psPdfAyristir(pdfjsLib, data) {
     sayfalar.forEach((s, i) => { kalemler.push(...psExcelSatirlar(s, i + 1, belge)); });
     if (kalemler.length) tip = "excel";
     else if (sayfalar.some(sf => psTabloBaslikBul(sf))) {
-      sayfalar.forEach((sf, i) => { kalemler.push(...psTabloSatirlar(sf, i + 1)); });
+      const basIlk = sayfalar.map(psTabloBaslikBul).find(Boolean);
+      sayfalar.forEach((sf, i) => { kalemler.push(...psTabloSatirlar(sf, i + 1, basIlk)); });
       if (kalemler.length) { tip = "excel"; baslik = psTabloBaslikBilgi(sayfalar[0]); }
     }
   }
