@@ -2683,6 +2683,49 @@ function DetayDigerIc({ T, s }) {
   return (<div><div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(130px,1fr))", gap:8, marginBottom:14 }}><DetayKpi T={T} l="Toplam (gr)" x={rpF(s[2],1)}/></div>
     <DetayTablo T={T} kolonlar={["Konum","Gram"]} satirlar={satir}/></div>);
 }
+// Elle girilen haftalık stok kayıtları: atölye sayımı geçmişi (MSK)
+const MANUEL_AK = [{ k:"satilacak", l:"Satılacak ürün" }, { k:"tel", l:"Tel kaynak" }, { k:"yariM", l:"Yarı mamul" }, { k:"bekleyen", l:"Bekleyen ürün" }, { k:"hurda", l:"Hurda" }, { k:"toz", l:"Toz" }];
+function DetayAtolyeGecmis({ T, tum }) {
+  const n = (x)=>Number(x)||0;
+  const net = (r)=>MANUEL_AK.filter(f=>f.k!=="hurda"&&f.k!=="toz").reduce((t,f)=>t+n(r[f.k]),0);
+  const sat = tum.map((r,i)=>{ const onc = tum[i+1]; const d = onc ? net(r)-net(onc) : null;
+    return { h:[new Date(r.tarih).toLocaleDateString("tr-TR")].concat(MANUEL_AK.map(f=>rpF(n(r[f.k]),1))).concat([rpF(net(r),1), d==null?"—":(d>0?"+":"")+rpF(d,1)]) }; });
+  return (<div><div style={{ fontSize:12, color:T.sub, marginBottom:10 }}>Toplam hurda ve toz hariçtir. Değişim, bir önceki haftalık sayıma göredir. Yeni sayım Stok → Stok kayıtları sekmesinden girilir.</div>
+    <DetayTablo T={T} kolonlar={["Tarih"].concat(MANUEL_AK.map(f=>f.l)).concat(["Toplam","Değişim"])} satirlar={sat}/></div>);
+}
+function ManuelStokKarti({ T, veri, onGit }) {
+  const n = (x)=>Number(x)||0;
+  const son = veri.tum[0], onc = veri.tum[1];
+  const net = (r)=>r ? MANUEL_AK.filter(f=>f.k!=="hurda"&&f.k!=="toz").reduce((t,f)=>t+n(r[f.k]),0) : 0;
+  const d = onc ? net(son)-net(onc) : null;
+  const kart = { background:(T.id==="beyaz"?"#ffffff":T.card), border:"1px solid "+T.border, borderRadius:14, padding:"18px 20px", marginBottom:14 };
+  const kutu = { flex:"1 1 180px", border:"1px solid "+T.border, borderRadius:10, padding:"10px 12px", cursor:"pointer" };
+  return (
+    <div style={kart}>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12, gap:10, flexWrap:"wrap" }}>
+        <div style={{ fontSize:12, fontWeight:700, color:T.text, letterSpacing:".02em" }}>ELLE GİRİLEN STOK <span style={{ fontWeight:500, color:T.sub }}>· haftalık güncellenir</span></div>
+        {onGit && <button onClick={onGit} style={{ background:"transparent", border:"none", color:T.gold, fontSize:12, fontWeight:700, cursor:"pointer" }}>Kayıt gir →</button>}
+      </div>
+      <div style={{ display:"flex", gap:10, flexWrap:"wrap" }}>
+        <div style={kutu} onClick={()=>son?rpDetayAc("Atölye kasası — haftalık geçmiş", ()=><DetayAtolyeGecmis T={T} tum={veri.tum}/>):onGit&&onGit()}>
+          <div style={{ fontSize:11, color:T.sub }}>Atölye kasası (gr){son?" · "+new Date(son.tarih).toLocaleDateString("tr-TR"):""}</div>
+          <div style={{ fontSize:20, fontWeight:700, fontVariantNumeric:"tabular-nums" }}>{son?rpF(net(son),1):"—"}</div>
+          <div style={{ fontSize:11, color:T.sub }}>{son ? (d==null?"ilk sayım":"önceki haftaya göre "+(d>0?"+":"")+rpF(d,1)+" gr") : "henüz kayıt yok"}</div>
+        </div>
+        <div style={kutu} onClick={()=>onGit&&onGit()}>
+          <div style={{ fontSize:11, color:T.sub }}>Ham altın stoğu (has)</div>
+          <div style={{ fontSize:20, fontWeight:700, fontVariantNumeric:"tabular-nums" }}>{rpF(veri.ham,3)}</div>
+          <div style={{ fontSize:11, color:T.sub }}>giriş − çıkış kayıtları</div>
+        </div>
+        <div style={kutu} onClick={()=>onGit&&onGit()}>
+          <div style={{ fontSize:11, color:T.sub }}>Hazır ürün + serbest (gr)</div>
+          <div style={{ fontSize:20, fontWeight:700, fontVariantNumeric:"tabular-nums" }}>{rpF(veri.hazir,1)}</div>
+          <div style={{ fontSize:11, color:T.sub }}>elle girilen kayıtlar</div>
+        </div>
+      </div>
+    </div>
+  );
+}
 function RpSutun({ T, veri, renk=RP_RENK[0], birim="", yuk=130, onSec }) {
   const mx = Math.max(1e-9, ...veri.map(x=>Math.abs(x.v)));
   return (
@@ -3625,6 +3668,7 @@ function KasaGenel({ T, GH, atolye, ic, onGit }) {
         </div>
       )}
 
+      {atolye && atolye.tum && <ManuelStokKarti T={T} veri={atolye} onGit={()=>onGit("stok")}/>}
       {son && (
         <div style={{ ...kart, marginBottom:14 }}>
           <h3 style={bas}>Atölyede bu hafta <span style={altBas}>gram · {new Date(son.tarih).toLocaleDateString("tr-TR")}</span></h3>
@@ -11941,6 +11985,7 @@ function Atolye({ onSirketDegis }) {
               })()}
 
               {/* ══ STOK ══ */}
+              {kasaSayfa==="g_stok" && <RpSeg T={T} aktif={stokSub} onSec={setStokSub} secenekler={AKTIF_SIRKET_ONEK==="" ? [{id:"altin",l:"Altın & Gümüş"},{id:"oz",l:"Öz sermaye"},{id:"kayit",l:"Stok kayıtları"}] : [{id:"oz",l:"Öz sermaye"},{id:"kayit",l:"Stok kayıtları"}]}/>}
               {(kasaSayfa==="stok" || (kasaSayfa==="g_stok" && stokSub==="kayit")) && (
                 <div>
                   <div style={{ display:"flex", gap:6, marginBottom:12, flexWrap:"wrap" }}>
@@ -12376,8 +12421,8 @@ function Atolye({ onSirketDegis }) {
               {/* ══ RAPORLAR / PANEL / KARLILIK ══ */}
               <DetayHost T={T}/>
               {kasaSayfa==="panel" && <RaporPanel T={T} GH={GH} onRapor={()=>setKasaSayfa("raporlar")}/>}
-              {kasaSayfa==="g_genel" && <KasaGenel T={T} GH={GH} atolye={AKTIF_SIRKET_ONEK==="" ? { son:[...(kasa.atolyeKasa||[])].sort((x,y)=>(y.tarih||0)-(x.tarih||0))[0]||null } : null} ic={{ alacak:Object.values(musBakiye).reduce((t,d)=>t+Math.max(0,d.borc-d.odenen),0), borc:Math.max(0,dokumBorc), stok:toplamHas, musteriler:Object.entries(musBakiye).map(([ad,d])=>({ad,bakiye:d.borc-d.odenen})).filter(x=>x.bakiye>0.001).sort((a,b)=>b.bakiye-a.bakiye) }} onGit={(h)=>setKasaSayfa(h==="ab"?"g_ab":h==="stok"?"g_stok":"raporlar")}/>}
-              {kasaSayfa==="g_stok" && <RpSeg T={T} aktif={stokSub} onSec={setStokSub} secenekler={AKTIF_SIRKET_ONEK==="" ? [{id:"altin",l:"Altın & Gümüş"},{id:"oz",l:"Öz sermaye"},{id:"kayit",l:"Stok kayıtları"}] : [{id:"oz",l:"Öz sermaye"},{id:"kayit",l:"Stok kayıtları"}]}/>}
+              {kasaSayfa==="g_genel" && <KasaGenel T={T} GH={GH} atolye={AKTIF_SIRKET_ONEK==="" ? (()=>{ const tum=[...(kasa.atolyeKasa||[])].sort((x,y)=>(y.tarih||0)-(x.tarih||0)); return { son:tum[0]||null, tum, ham:hamAltinGram, hazir:hazirUrunGram+serbestGram }; })() : null} ic={{ alacak:Object.values(musBakiye).reduce((t,d)=>t+Math.max(0,d.borc-d.odenen),0), borc:Math.max(0,dokumBorc), stok:toplamHas, musteriler:Object.entries(musBakiye).map(([ad,d])=>({ad,bakiye:d.borc-d.odenen})).filter(x=>x.bakiye>0.001).sort((a,b)=>b.bakiye-a.bakiye) }} onGit={(h)=>setKasaSayfa(h==="ab"?"g_ab":h==="stok"?"g_stok":"raporlar")}/>}
+              {kasaSayfa==="g_stok" && stokSub==="altin" && AKTIF_SIRKET_ONEK==="" && <ManuelStokKarti T={T} veri={{ tum:[...(kasa.atolyeKasa||[])].sort((x,y)=>(y.tarih||0)-(x.tarih||0)), ham:hamAltinGram, hazir:hazirUrunGram+serbestGram }} onGit={()=>setStokSub("kayit")}/>}
               {kasaSayfa==="g_stok" && stokSub==="altin" && AKTIF_SIRKET_ONEK==="" && <KasaStokAltin T={T} GH={GH}/>}
               {kasaSayfa==="g_ab" && <RpSeg T={T} aktif={abSub} onSec={setAbSub} secenekler={[{id:"musteri",l:"Müşteriler"},{id:"dokumcu",l:"Dökümcü"},{id:"muh",l:"Satıcılar & Muhasebe"}]}/>}
               {kasaSayfa==="g_ab" && abSub==="dokumcu" && <KasaDokumcu T={T} GH={GH} BG={BG} RD={RD} kasa={kasa} svKasa={svKasa} kasaModalAc={kasaModalAc} dokumGiden={dokumGiden} dokumOdenen={dokumOdenen} dokumBorc={dokumBorc} fN={fN} msk={AKTIF_SIRKET_ONEK===""}/>}
