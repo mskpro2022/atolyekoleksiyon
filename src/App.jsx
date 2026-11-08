@@ -2523,18 +2523,18 @@ const persBos = { ad:"", poz:"CAD/Tasarım", durum:"Aktif", maas:"", banka_maas:
 // Dış bileşenler (PersonelSayfa içinde tanımlansaydı her tuşta yeniden oluşur, yazı kutuları odağı kaybederdi)
 function PersKutu({ T, y, d, renk }) {
   return (
-    <div style={{ background:T.card, border:"1px solid "+T.border, borderRadius:12, padding:"12px 14px", flex:"1 1 150px" }}>
-      <div style={{ fontSize:11, color:T.sub, fontWeight:700 }}>{y}</div>
-      <div style={{ fontSize:20, fontWeight:800, color:renk || T.text, marginTop:2 }}>{d}</div>
+    <div style={{ background:T.card, border:"1px solid "+T.border, borderRadius:14, padding:"16px 20px", flex:"1 1 180px" }}>
+      <div style={{ fontSize:12, color:T.sub, fontWeight:600, letterSpacing:0.3 }}>{y}</div>
+      <div style={{ fontSize:26, fontWeight:700, color:T.text, marginTop:6, letterSpacing:-0.5, fontVariantNumeric:"tabular-nums" }}>{d}</div>
     </div>
   );
 }
 function PersModal({ T, GH, baslik, children, onKapat }) {
   return (
     <div onClick={onKapat} style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.55)", zIndex:9000, display:"flex", alignItems:"center", justifyContent:"center", padding:12 }}>
-      <div onClick={e => e.stopPropagation()} style={{ background:T.bg2, color:T.text, border:"1px solid "+T.border, borderRadius:14, padding:18, width:"min(560px,100%)", maxHeight:"90vh", overflowY:"auto" }}>
-        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>
-          <div style={{ fontSize:15, fontWeight:800, color:T.text }}>{baslik}</div>
+      <div onClick={e => e.stopPropagation()} style={{ background:T.bg2, color:T.text, border:"1px solid "+T.border, borderRadius:16, padding:24, width:"min(600px,100%)", boxShadow:"0 24px 60px rgba(0,0,0,0.35)", maxHeight:"90vh", overflowY:"auto" }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:18 }}>
+          <div style={{ fontSize:17, fontWeight:700, color:T.text }}>{baslik}</div>
           <button onClick={onKapat} style={{ ...GH, padding:"3px 10px" }}>✕</button>
         </div>
         {children}
@@ -2543,11 +2543,14 @@ function PersModal({ T, GH, baslik, children, onKapat }) {
   );
 }
 function PersAlan({ T, y, children, tam }) {
-  return <div style={{ gridColumn: tam ? "1 / -1" : "auto" }}><div style={{ fontSize:11, color:T.sub, fontWeight:700, marginBottom:3 }}>{y}</div>{children}</div>;
+  return <div style={{ gridColumn: tam ? "1 / -1" : "auto" }}><div style={{ fontSize:12, color:T.sub, fontWeight:600, marginBottom:5 }}>{y}</div>{children}</div>;
 }
-function PersIzgara({ children }) { return <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))", gap:10 }}>{children}</div>; }
+function PersIzgara({ children }) { return <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))", gap:14 }}>{children}</div>; }
 
-function PersonelSayfa({ T, GH, IS }) {
+function PersonelSayfa({ T, GH: GH0, IS }) {
+  // Bu sayfaya özel, sade ve kurumsal düğme stilleri (ana GH/IS tüm uygulamada aynı kalır)
+  const GH = { background:"transparent", border:"1px solid "+T.btnBorder, borderRadius:9, padding:"7px 14px", color:T.text, fontSize:12, fontWeight:600, cursor:"pointer" };
+  const GP = { ...GH, background:T.text, color:T.bg2, borderColor:T.text };
   const atl = AKTIF_SIRKET_ONEK === "bsp2_" ? "BSP" : "MSK";
   const bugun = new Date();
   const [sek, setSek] = useState("ozet");
@@ -2607,17 +2610,17 @@ function PersonelSayfa({ T, GH, IS }) {
   const ayDeg = (d) => { let a = ay + d, y = yil; if (a < 0) { a = 11; y--; } if (a > 11) { a = 0; y++; } setAy(a); setYil(y); };
 
   // ── stil yardımcıları (tema uyumlu) ──
-  const kart = { background:T.card, border:"1px solid "+T.border, borderRadius:12, padding:"12px 14px" };
-  const th = { textAlign:"left", fontSize:11, fontWeight:700, color:T.sub, padding:"8px 10px", borderBottom:"1px solid "+T.border, whiteSpace:"nowrap" };
-  const td = { fontSize:12, color:T.text, padding:"8px 10px", borderBottom:"1px solid "+T.border, whiteSpace:"nowrap" };
+  const kart = { background:T.card, border:"1px solid "+T.border, borderRadius:14, padding:"16px 20px" };
+  const th = { textAlign:"left", fontSize:12, fontWeight:600, color:T.sub, padding:"12px 16px", borderBottom:"1px solid "+T.border, whiteSpace:"nowrap", background:T.header || "transparent", letterSpacing:0.2 };
+  const td = { fontSize:13, color:T.text, padding:"14px 16px", borderBottom:"1px solid "+T.border, whiteSpace:"nowrap" };
   const sayi = { ...td, textAlign:"right", fontVariantNumeric:"tabular-nums" };
-  const girdi = { ...IS, padding:"7px 9px", fontSize:12 };
-  const pill = (renk, yazi) => <span style={{ background:renk+"22", color:renk, padding:"2px 10px", borderRadius:20, fontSize:11, fontWeight:700 }}>{yazi}</span>;
+  const girdi = { ...IS, padding:"8px 11px", fontSize:13, borderRadius:8 };
+  const pill = (renk, yazi) => <span style={{ display:"inline-flex", alignItems:"center", gap:7, background:T.btnBg, color:T.text, padding:"3px 11px 3px 9px", borderRadius:20, fontSize:12, fontWeight:600 }}><span style={{ width:7, height:7, borderRadius:"50%", background:renk, flexShrink:0 }} />{yazi}</span>;
   const ayBar = () => (
-    <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-      <button onClick={() => ayDeg(-1)} style={{ ...GH, padding:"4px 10px" }}>‹</button>
-      <span style={{ fontSize:13, fontWeight:700, color:T.text, minWidth:110, textAlign:"center" }}>{PERS_AY[ay]} {yil}</span>
-      <button onClick={() => ayDeg(1)} style={{ ...GH, padding:"4px 10px" }}>›</button>
+    <div style={{ display:"inline-flex", alignItems:"center", border:"1px solid "+T.border, borderRadius:10, background:T.card }}>
+      <button onClick={() => ayDeg(-1)} style={{ ...GH, border:"none", padding:"7px 12px", fontSize:14 }}>‹</button>
+      <span style={{ fontSize:13, fontWeight:600, color:T.text, minWidth:116, textAlign:"center" }}>{PERS_AY[ay]} {yil}</span>
+      <button onClick={() => ayDeg(1)} style={{ ...GH, border:"none", padding:"7px 12px", fontSize:14 }}>›</button>
     </div>
   );
 
@@ -2739,17 +2742,18 @@ function PersonelSayfa({ T, GH, IS }) {
 
   return (
     <div>
+      <style>{`.pers-t tbody tr:last-child td{border-bottom:none}.pers-t tbody tr:hover td{background:${T.btnBg}}.pers-t input:focus,.pers-t select:focus{border-color:${T.text}!important}`}</style>
       {bilgi && <div style={{ position:"fixed", top:14, right:14, zIndex:9500, background: bilgi.hata ? "#7f1d1d" : "#14532d", color:"#fff", padding:"9px 14px", borderRadius:10, fontSize:12, fontWeight:700, maxWidth:320 }}>{bilgi.m}</div>}
-      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:8, marginBottom:10 }}>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-end", flexWrap:"wrap", gap:12, marginBottom:18 }}>
         <div>
-          <div style={{ fontSize:16, fontWeight:800, color:T.text }}>Personel</div>
-          <div style={{ fontSize:12, color:T.sub }}>{atl} Atölye · {aktif.length} aktif personel</div>
+          <div style={{ fontSize:26, fontWeight:700, color:T.text, letterSpacing:-0.5 }}>Personel</div>
+          <div style={{ fontSize:13, color:T.sub, marginTop:3 }}>{atl} Atölye · {aktif.length} aktif personel</div>
         </div>
         {aySekmeler.includes(sek) && ayBar()}
       </div>
-      <div style={{ display:"flex", gap:4, flexWrap:"wrap", marginBottom:12 }}>
+      <div style={{ display:"flex", gap:2, flexWrap:"wrap", marginBottom:22, borderBottom:"1px solid "+T.border }}>
         {SEK.map(([k, y]) => (
-          <button key={k} onClick={() => setSek(k)} style={{ ...GH, fontSize:12, padding:"6px 12px", color: sek === k ? T.gold : T.sub, background: sek === k ? T.btnBg : "transparent", borderColor: sek === k ? T.btnBorder : T.border }}>{y}</button>
+          <button key={k} onClick={() => setSek(k)} style={{ background:"transparent", border:"none", borderBottom:"2px solid "+(sek === k ? T.text : "transparent"), marginBottom:-1, padding:"10px 16px", fontSize:13, fontWeight: sek === k ? 700 : 500, color: sek === k ? T.text : T.sub, cursor:"pointer" }}>{y}</button>
         ))}
       </div>
       {yuk && <div style={{ fontSize:12, color:T.sub, padding:20 }}>Yükleniyor…</div>}
@@ -2757,23 +2761,23 @@ function PersonelSayfa({ T, GH, IS }) {
       {/* ÖZET */}
       {!yuk && sek === "ozet" && (
         <div>
-          <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginBottom:12 }}>
+          <div style={{ display:"flex", gap:14, flexWrap:"wrap", marginBottom:20 }}>
             <PersKutu T={T} y="Aktif personel" d={aktif.length} />
             <PersKutu T={T} y={`Aylık toplam maliyet (${PERS_AY[ay]})`} d={persTL(topNet)} renk="#5b7fa6" />
             <PersKutu T={T} y="Bekleyen avans" d={persTL(bekAvans)} renk="#f59e0b" />
             <PersKutu T={T} y="Bugün devam kaydı" d={devam.filter(v => v.tarih === new Date().toISOString().slice(0, 10)).length} />
           </div>
-          <div style={{ ...kart, padding:0, overflowX:"auto" }}>
-            <div style={{ padding:"12px 14px", fontSize:13, fontWeight:800, color:T.text }}>Personel Özeti <span style={{ color:T.sub, fontWeight:500, fontSize:12 }}>· {atl} Atölye</span></div>
-            <table style={{ width:"100%", borderCollapse:"collapse" }}>
-              <thead><tr><th style={th}>AD SOYAD</th><th style={th}>GÖREV</th><th style={{ ...th, textAlign:"right" }}>MAAŞ</th><th style={{ ...th, textAlign:"right" }}>PUAN ({PERS_AY[ay]})</th><th style={th}>DURUM</th></tr></thead>
+          <div style={{ ...kart, padding:0, overflowX:"auto", overflowY:"hidden" }}>
+            <div style={{ padding:"16px 20px", fontSize:15, fontWeight:700, color:T.text }}>Personel Özeti <span style={{ color:T.sub, fontWeight:500, fontSize:12 }}>· {atl} Atölye</span></div>
+            <table className="pers-t" style={{ width:"100%", borderCollapse:"collapse" }}>
+              <thead><tr><th style={th}>Ad Soyad</th><th style={th}>Görev</th><th style={{ ...th, textAlign:"right" }}>Maaş</th><th style={{ ...th, textAlign:"right" }}>Puan ({PERS_AY[ay]})</th><th style={th}>Durum</th></tr></thead>
               <tbody>{per.length ? per.map(p => (
                 <tr key={p.id}>
                   <td style={{ ...td, fontWeight:700 }}>{p.ad}</td>
                   <td style={td}>{p.poz ? pill(PERS_POZ_RENK[p.poz] || "#9ca3af", p.poz) : "—"}</td>
                   <td style={sayi}>{persTL(p.maas)}</td>
                   <td style={sayi}>{puan[p.id]?.puan ?? "—"}</td>
-                  <td style={td}>{pill(p.durum === "Ayrıldı" ? "#9ca3af" : "#10b981", p.durum === "Ayrıldı" ? "Ayrıldı" : "● Aktif")}</td>
+                  <td style={td}>{pill(p.durum === "Ayrıldı" ? "#9ca3af" : "#10b981", p.durum === "Ayrıldı" ? "Ayrıldı" : "Aktif")}</td>
                 </tr>)) : <tr><td colSpan={5} style={{ ...td, textAlign:"center", color:T.sub }}>Personel yok</td></tr>}</tbody>
             </table>
           </div>
@@ -2785,13 +2789,13 @@ function PersonelSayfa({ T, GH, IS }) {
         <div>
           <div style={{ display:"flex", justifyContent:"space-between", gap:8, flexWrap:"wrap", marginBottom:10 }}>
             <div style={{ display:"flex", gap:4 }}>
-              <button onClick={() => setArsiv(false)} style={{ ...GH, color: !arsiv ? T.gold : T.sub, background: !arsiv ? T.btnBg : "transparent" }}>Aktif ({aktif.length})</button>
-              <button onClick={() => setArsiv(true)} style={{ ...GH, color: arsiv ? T.gold : T.sub, background: arsiv ? T.btnBg : "transparent" }}>Arşiv ({per.length - aktif.length})</button>
+              <button onClick={() => setArsiv(false)} style={{ ...GH, background: !arsiv ? T.btnBg : "transparent", fontWeight: !arsiv ? 700 : 500, color: !arsiv ? T.text : T.sub }}>Aktif ({aktif.length})</button>
+              <button onClick={() => setArsiv(true)} style={{ ...GH, background: arsiv ? T.btnBg : "transparent", fontWeight: arsiv ? 700 : 500, color: arsiv ? T.text : T.sub }}>Arşiv ({per.length - aktif.length})</button>
             </div>
-            <button onClick={() => setForm({ ...persBos })} style={GH}>+ Yeni personel</button>
+            <button onClick={() => setForm({ ...persBos })} style={GP}>+ Yeni personel</button>
           </div>
-          <div style={{ ...kart, padding:0, overflowX:"auto" }}>
-            <table style={{ width:"100%", borderCollapse:"collapse" }}>
+          <div style={{ ...kart, padding:0, overflowX:"auto", overflowY:"hidden" }}>
+            <table className="pers-t" style={{ width:"100%", borderCollapse:"collapse" }}>
               <thead><tr><th style={th}>Ad Soyad</th><th style={th}>Görev</th><th style={{ ...th, textAlign:"right" }}>Maaş</th><th style={{ ...th, textAlign:"right" }}>Banka</th><th style={{ ...th, textAlign:"right" }}>Yemek</th><th style={{ ...th, textAlign:"right" }}>Servis</th><th style={th}>Başlangıç</th><th style={th}>Telefon</th>{arsiv && <th style={th}>Çıkış</th>}<th style={th}></th></tr></thead>
               <tbody>{(arsiv ? per.filter(p => p.durum === "Ayrıldı") : aktif).map(p => {
                 const be = persBankaElden(p);
@@ -2805,7 +2809,7 @@ function PersonelSayfa({ T, GH, IS }) {
                     <td style={sayi}>{Number(p.servis) > 0 ? persTL(p.servis) : "—"}</td>
                     <td style={td}>{p.tarih || "—"}</td><td style={td}>{p.tel || "—"}</td>
                     {arsiv && <td style={td}>{p.cikis_tarihi || "—"}{p.cikis_nedeni ? " · " + p.cikis_nedeni : ""}</td>}
-                    <td style={td}><button onClick={() => duzenle(p)} style={{ ...GH, padding:"3px 9px" }}>Düzenle</button> <button onClick={() => personelSil(p)} style={{ ...GH, padding:"3px 9px", color:"#e85a4f" }}>Sil</button></td>
+                    <td style={td}><button onClick={() => duzenle(p)} style={{ ...GH, padding:"3px 9px" }}>Düzenle</button> <button onClick={() => personelSil(p)} style={{ ...GH, padding:"3px 9px", color:T.danger || "#e85a4f", borderColor:"transparent" }}>Sil</button></td>
                   </tr>);
               })}</tbody>
             </table>
@@ -2816,19 +2820,19 @@ function PersonelSayfa({ T, GH, IS }) {
       {/* BORDRO */}
       {!yuk && sek === "bordro" && (
         <div>
-          <div style={{ display:"flex", justifyContent:"flex-end", marginBottom:8 }}><button onClick={bordroKaydet} style={GH}>Kaydet</button></div>
-          <div style={{ ...kart, padding:0, overflowX:"auto" }}>
-            <table style={{ width:"100%", borderCollapse:"collapse" }}>
+          <div style={{ display:"flex", justifyContent:"flex-end", marginBottom:8 }}><button onClick={bordroKaydet} style={GP}>Kaydet</button></div>
+          <div style={{ ...kart, padding:0, overflowX:"auto", overflowY:"hidden" }}>
+            <table className="pers-t" style={{ width:"100%", borderCollapse:"collapse" }}>
               <thead><tr><th style={th}>Ad Soyad</th><th style={{ ...th, textAlign:"right" }}>Baz Maaş</th><th style={{ ...th, textAlign:"right" }}>Banka</th><th style={{ ...th, textAlign:"right" }}>Elden</th><th style={{ ...th, textAlign:"right" }}>Yemek</th><th style={th}>Mesai (sa)</th><th style={th}>Mesai Ücreti (₺)</th><th style={{ ...th, textAlign:"right" }}>Servis</th><th style={{ ...th, textAlign:"right" }}>Toplam Net</th></tr></thead>
               <tbody>{aktif.length ? aktif.map(p => { const s = satir(p); return (
                 <tr key={p.id}>
                   <td style={{ ...td, fontWeight:700 }}>{p.ad}</td>
                   <td style={sayi}>{persTL(p.maas)}</td>
-                  <td style={{ ...sayi, color:"#5b7fa6" }}>{s.be.banka === null ? "—" : persTL(s.be.banka)}</td>
+                  <td style={sayi}>{s.be.banka === null ? "—" : persTL(s.be.banka)}</td>
                   <td style={sayi}>{s.be.elden === null ? "—" : persTL(s.be.elden)}</td>
-                  <td style={{ ...sayi, color:"#10b981" }}>{s.ye > 0 ? persTL(s.ye) : "—"}</td>
+                  <td style={sayi}>{s.ye > 0 ? persTL(s.ye) : "—"}</td>
                   <td style={td}><input type="number" min="0" value={mesai[p.id] ?? brd[p.id]?.mesai_saat ?? 0} onChange={e => setMesai(m => ({ ...m, [p.id]: e.target.value }))} style={{ ...girdi, width:80 }} /></td>
-                  <td style={td}><input type="number" min="0" placeholder={String(s.hesap)} title={"Boşsa formül: " + persTL(s.hesap)} value={mucret[p.id] ?? brd[p.id]?.mesai_ucret ?? ""} onChange={e => setMucret(m => ({ ...m, [p.id]: e.target.value }))} style={{ ...girdi, width:100, color: s.elle ? "#f59e0b" : T.text }} /><span style={{ fontSize:11, color:T.sub, marginLeft:6 }}>{s.elle ? "elle" : "formül"}</span></td>
+                  <td style={td}><input type="number" min="0" placeholder={String(s.hesap)} title={"Boşsa formül: " + persTL(s.hesap)} value={mucret[p.id] ?? brd[p.id]?.mesai_ucret ?? ""} onChange={e => setMucret(m => ({ ...m, [p.id]: e.target.value }))} style={{ ...girdi, width:100, fontWeight: s.elle ? 700 : 500, borderColor: s.elle ? T.text : T.border }} /><span style={{ fontSize:11, color:T.sub, marginLeft:6 }}>{s.elle ? "elle" : "formül"}</span></td>
                   <td style={sayi}>{Number(p.servis) > 0 ? persTL(p.servis) : "—"}</td>
                   <td style={{ ...sayi, fontWeight:800 }}>{persTL(s.net)}</td>
                 </tr>); }) : <tr><td colSpan={9} style={{ ...td, textAlign:"center", color:T.sub }}>Personel eklenmemiş</td></tr>}
@@ -2843,19 +2847,19 @@ function PersonelSayfa({ T, GH, IS }) {
       {/* İZİN */}
       {!yuk && sek === "izin" && (
         <div>
-          <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginBottom:10 }}>
+          <div style={{ display:"flex", gap:14, flexWrap:"wrap", marginBottom:20 }}>
             <PersKutu T={T} y="Onaylı izin" d={izin.filter(i => i.durum === "Onaylı").length} renk="#10b981" />
             <PersKutu T={T} y="Beklemede" d={izin.filter(i => i.durum === "Beklemede").length} renk="#f59e0b" />
             <PersKutu T={T} y="Toplam gün (onaylı)" d={izin.filter(i => i.durum === "Onaylı").reduce((s, i) => s + Number(i.gun || 0), 0)} />
-            <div style={{ display:"flex", alignItems:"flex-end" }}><button onClick={() => yeniModal("izin")} style={GH}>+ İzin ekle</button></div>
+            <div style={{ display:"flex", alignItems:"flex-end" }}><button onClick={() => yeniModal("izin")} style={GP}>+ İzin ekle</button></div>
           </div>
-          <div style={{ ...kart, padding:0, overflowX:"auto" }}>
-            <table style={{ width:"100%", borderCollapse:"collapse" }}>
+          <div style={{ ...kart, padding:0, overflowX:"auto", overflowY:"hidden" }}>
+            <table className="pers-t" style={{ width:"100%", borderCollapse:"collapse" }}>
               <thead><tr><th style={th}>Personel</th><th style={th}>Tür</th><th style={th}>Başlangıç</th><th style={th}>Bitiş</th><th style={{ ...th, textAlign:"right" }}>Gün</th><th style={th}>Durum</th><th style={th}>Not</th><th style={th}></th></tr></thead>
               <tbody>{izin.length ? izin.map(i => (
                 <tr key={i.id}><td style={{ ...td, fontWeight:700 }}>{i.personel_ad}</td><td style={td}>{i.tur}</td><td style={td}>{i.bas || "—"}</td><td style={td}>{i.bit || "—"}</td><td style={sayi}>{i.gun}</td>
                   <td style={td}>{pill(i.durum === "Onaylı" ? "#10b981" : i.durum === "Reddedildi" ? "#e85a4f" : "#f59e0b", i.durum)}</td><td style={td}>{i.notlar || "—"}</td>
-                  <td style={td}><button onClick={() => kayitSil("izin", i.id)} style={{ ...GH, padding:"3px 9px", color:"#e85a4f" }}>Sil</button></td></tr>
+                  <td style={td}><button onClick={() => kayitSil("izin", i.id)} style={{ ...GH, padding:"3px 9px", color:T.danger || "#e85a4f", borderColor:"transparent" }}>Sil</button></td></tr>
               )) : <tr><td colSpan={8} style={{ ...td, textAlign:"center", color:T.sub }}>İzin kaydı yok</td></tr>}</tbody>
             </table>
           </div>
@@ -2865,18 +2869,18 @@ function PersonelSayfa({ T, GH, IS }) {
       {/* AVANS */}
       {!yuk && sek === "avans" && (
         <div>
-          <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginBottom:10 }}>
+          <div style={{ display:"flex", gap:14, flexWrap:"wrap", marginBottom:20 }}>
             <PersKutu T={T} y="Toplam avans" d={persTL(avans.reduce((s, a) => s + Number(a.tutar || 0), 0))} />
             <PersKutu T={T} y="Kalan (bekleyen)" d={persTL(bekAvans)} renk="#f59e0b" />
-            <div style={{ display:"flex", alignItems:"flex-end" }}><button onClick={() => yeniModal("avans")} style={GH}>+ Avans ekle</button></div>
+            <div style={{ display:"flex", alignItems:"flex-end" }}><button onClick={() => yeniModal("avans")} style={GP}>+ Avans ekle</button></div>
           </div>
-          <div style={{ ...kart, padding:0, overflowX:"auto" }}>
-            <table style={{ width:"100%", borderCollapse:"collapse" }}>
+          <div style={{ ...kart, padding:0, overflowX:"auto", overflowY:"hidden" }}>
+            <table className="pers-t" style={{ width:"100%", borderCollapse:"collapse" }}>
               <thead><tr><th style={th}>Personel</th><th style={th}>Tarih</th><th style={{ ...th, textAlign:"right" }}>Tutar</th><th style={{ ...th, textAlign:"right" }}>Ödenen</th><th style={{ ...th, textAlign:"right" }}>Kalan</th><th style={th}>Durum</th><th style={th}>Not</th><th style={th}></th></tr></thead>
               <tbody>{avans.length ? avans.map(a => { const k = Math.max(0, Number(a.tutar || 0) - Number(a.odenen || 0)); return (
-                <tr key={a.id}><td style={{ ...td, fontWeight:700 }}>{a.personel_ad}</td><td style={td}>{a.tarih || "—"}</td><td style={sayi}>{persTL(a.tutar)}</td><td style={sayi}>{persTL(a.odenen || 0)}</td><td style={{ ...sayi, color: k > 0 ? "#f59e0b" : "#10b981" }}>{persTL(k)}</td>
+                <tr key={a.id}><td style={{ ...td, fontWeight:700 }}>{a.personel_ad}</td><td style={td}>{a.tarih || "—"}</td><td style={sayi}>{persTL(a.tutar)}</td><td style={sayi}>{persTL(a.odenen || 0)}</td><td style={{ ...sayi, fontWeight: k > 0 ? 700 : 400, color: k > 0 ? T.text : T.sub }}>{persTL(k)}</td>
                   <td style={td}>{pill(k <= 0 ? "#10b981" : "#f59e0b", k <= 0 ? "Kapandı" : "Devam")}</td><td style={td}>{a.notlar || "—"}</td>
-                  <td style={td}>{k > 0 && <button onClick={() => setModal({ tur:"avodeme", avans_id:a.id, tutar:"" })} style={{ ...GH, padding:"3px 9px" }}>Ödeme</button>} <button onClick={() => kayitSil("avans", a.id)} style={{ ...GH, padding:"3px 9px", color:"#e85a4f" }}>Sil</button></td></tr>); }) : <tr><td colSpan={8} style={{ ...td, textAlign:"center", color:T.sub }}>Avans kaydı yok</td></tr>}</tbody>
+                  <td style={td}>{k > 0 && <button onClick={() => setModal({ tur:"avodeme", avans_id:a.id, tutar:"" })} style={{ ...GH, padding:"3px 9px" }}>Ödeme</button>} <button onClick={() => kayitSil("avans", a.id)} style={{ ...GH, padding:"3px 9px", color:T.danger || "#e85a4f", borderColor:"transparent" }}>Sil</button></td></tr>); }) : <tr><td colSpan={8} style={{ ...td, textAlign:"center", color:T.sub }}>Avans kaydı yok</td></tr>}</tbody>
             </table>
           </div>
         </div>
@@ -2887,10 +2891,10 @@ function PersonelSayfa({ T, GH, IS }) {
         <div>
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
             <div style={{ fontSize:11, color:T.sub }}>Her kriter 0–100. Puan = 5 kriterin ortalaması.</div>
-            <button onClick={puanKaydet} style={GH}>Kaydet</button>
+            <button onClick={puanKaydet} style={GP}>Kaydet</button>
           </div>
-          <div style={{ ...kart, padding:0, overflowX:"auto" }}>
-            <table style={{ width:"100%", borderCollapse:"collapse" }}>
+          <div style={{ ...kart, padding:0, overflowX:"auto", overflowY:"hidden" }}>
+            <table className="pers-t" style={{ width:"100%", borderCollapse:"collapse" }}>
               <thead><tr><th style={th}>Personel</th>{PERS_KRITER.map(([k, y]) => <th key={k} style={th}>{y}</th>)}<th style={{ ...th, textAlign:"right" }}>Puan</th></tr></thead>
               <tbody>{aktif.length ? aktif.map(p => { const f = pform[p.id]; const pu = puanHesap(f); const renk = pu === null ? T.sub : pu >= 85 ? "#10b981" : pu >= 70 ? "#f59e0b" : "#e85a4f"; return (
                 <tr key={p.id}><td style={{ ...td, fontWeight:700 }}>{p.ad}</td>
@@ -2904,18 +2908,18 @@ function PersonelSayfa({ T, GH, IS }) {
       {/* DEVAM */}
       {!yuk && sek === "devam" && (
         <div>
-          <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginBottom:10 }}>
+          <div style={{ display:"flex", gap:14, flexWrap:"wrap", marginBottom:20 }}>
             <PersKutu T={T} y="Kayıt" d={devam.length} />
             <PersKutu T={T} y="Toplam süre" d={Math.round(devam.reduce((s, v) => s + Number(v.sure_dk || 0), 0) / 60) + " sa"} />
             <PersKutu T={T} y="Fazla mesai (9 sa üstü)" d={Math.round(devam.reduce((s, v) => s + Math.max(0, Number(v.sure_dk || 0) / 60 - 9), 0)) + " sa"} renk="#f59e0b" />
-            <div style={{ display:"flex", alignItems:"flex-end" }}><button onClick={() => yeniModal("devam")} style={GH}>+ Devam ekle</button></div>
+            <div style={{ display:"flex", alignItems:"flex-end" }}><button onClick={() => yeniModal("devam")} style={GP}>+ Devam ekle</button></div>
           </div>
-          <div style={{ ...kart, padding:0, overflowX:"auto" }}>
-            <table style={{ width:"100%", borderCollapse:"collapse" }}>
+          <div style={{ ...kart, padding:0, overflowX:"auto", overflowY:"hidden" }}>
+            <table className="pers-t" style={{ width:"100%", borderCollapse:"collapse" }}>
               <thead><tr><th style={th}>Tarih</th><th style={th}>Personel</th><th style={th}>Giriş</th><th style={th}>Çıkış</th><th style={{ ...th, textAlign:"right" }}>Süre</th><th style={th}>Kaynak</th><th style={th}></th></tr></thead>
               <tbody>{devam.length ? devam.map(v => (
                 <tr key={v.id}><td style={td}>{v.tarih}</td><td style={{ ...td, fontWeight:700 }}>{v.personel_ad}</td><td style={td}>{v.giris || "—"}</td><td style={td}>{v.cikis || "—"}</td><td style={sayi}>{Math.floor((v.sure_dk || 0) / 60)}sa {(v.sure_dk || 0) % 60}dk</td><td style={td}>{v.kaynak || "—"}</td>
-                  <td style={td}><button onClick={() => kayitSil("devam", v.id)} style={{ ...GH, padding:"3px 9px", color:"#e85a4f" }}>Sil</button></td></tr>
+                  <td style={td}><button onClick={() => kayitSil("devam", v.id)} style={{ ...GH, padding:"3px 9px", color:T.danger || "#e85a4f", borderColor:"transparent" }}>Sil</button></td></tr>
               )) : <tr><td colSpan={7} style={{ ...td, textAlign:"center", color:T.sub }}>Bu ay devam kaydı yok</td></tr>}</tbody>
             </table>
           </div>
@@ -2925,16 +2929,16 @@ function PersonelSayfa({ T, GH, IS }) {
       {/* ÖDEMELER (Personel hesabı) */}
       {!yuk && sek === "odeme" && (
         <div>
-          <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginBottom:10 }}>
+          <div style={{ display:"flex", gap:14, flexWrap:"wrap", marginBottom:20 }}>
             <PersKutu T={T} y={`${PERS_AY[ay]} toplam ödeme`} d={persTL(odeme.reduce((s, o) => s + Number(o.tutar || 0), 0))} renk="#5b7fa6" />
-            <div style={{ display:"flex", alignItems:"flex-end" }}><button onClick={() => yeniModal("odeme")} style={GH}>+ Ödeme ekle</button></div>
+            <div style={{ display:"flex", alignItems:"flex-end" }}><button onClick={() => yeniModal("odeme")} style={GP}>+ Ödeme ekle</button></div>
           </div>
-          <div style={{ ...kart, padding:0, overflowX:"auto" }}>
-            <table style={{ width:"100%", borderCollapse:"collapse" }}>
+          <div style={{ ...kart, padding:0, overflowX:"auto", overflowY:"hidden" }}>
+            <table className="pers-t" style={{ width:"100%", borderCollapse:"collapse" }}>
               <thead><tr><th style={th}>Tarih</th><th style={th}>Personel</th><th style={th}>Tür</th><th style={{ ...th, textAlign:"right" }}>Tutar</th><th style={th}>Not</th><th style={th}></th></tr></thead>
               <tbody>{odeme.length ? odeme.map(o => (
                 <tr key={o.id}><td style={td}>{o.tarih}</td><td style={{ ...td, fontWeight:700 }}>{o.personel_ad}</td><td style={td}>{o.tur}</td><td style={sayi}>{persTL(o.tutar)}</td><td style={td}>{o.notlar || "—"}</td>
-                  <td style={td}><button onClick={() => kayitSil("odeme", o.id)} style={{ ...GH, padding:"3px 9px", color:"#e85a4f" }}>Sil</button></td></tr>
+                  <td style={td}><button onClick={() => kayitSil("odeme", o.id)} style={{ ...GH, padding:"3px 9px", color:T.danger || "#e85a4f", borderColor:"transparent" }}>Sil</button></td></tr>
               )) : <tr><td colSpan={6} style={{ ...td, textAlign:"center", color:T.sub }}>Bu ay ödeme kaydı yok</td></tr>}</tbody>
             </table>
           </div>
@@ -2948,14 +2952,14 @@ function PersonelSayfa({ T, GH, IS }) {
             <button onClick={csvIndir} style={GH}>Excel (CSV)</button>
             <button onClick={yazdir} style={GH}>Yazdır / PDF</button>
           </div>
-          <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginBottom:10 }}>
+          <div style={{ display:"flex", gap:14, flexWrap:"wrap", marginBottom:20 }}>
             <PersKutu T={T} y="Toplam maliyet" d={persTL(topNet)} renk="#5b7fa6" />
             <PersKutu T={T} y="Bankaya yatan" d={persTL(aktif.reduce((s, p) => s + (persBankaElden(p).banka || 0), 0))} />
             <PersKutu T={T} y="Elden" d={persTL(aktif.reduce((s, p) => s + (persBankaElden(p).elden || 0), 0))} />
             <PersKutu T={T} y="Yemek" d={persTL(aktif.reduce((s, p) => s + Number(p.yemek || 0), 0))} renk="#10b981" />
           </div>
-          <div style={{ ...kart, padding:0, overflowX:"auto" }}>
-            <table style={{ width:"100%", borderCollapse:"collapse" }}>
+          <div style={{ ...kart, padding:0, overflowX:"auto", overflowY:"hidden" }}>
+            <table className="pers-t" style={{ width:"100%", borderCollapse:"collapse" }}>
               <thead><tr><th style={th}>Ad Soyad</th><th style={{ ...th, textAlign:"right" }}>Maaş</th><th style={{ ...th, textAlign:"right" }}>Banka</th><th style={{ ...th, textAlign:"right" }}>Elden</th><th style={{ ...th, textAlign:"right" }}>Yemek</th><th style={{ ...th, textAlign:"right" }}>Mesai (sa)</th><th style={{ ...th, textAlign:"right" }}>Mesai Ücreti</th><th style={{ ...th, textAlign:"right" }}>Servis</th><th style={{ ...th, textAlign:"right" }}>Net</th></tr></thead>
               <tbody>{aktif.map(p => { const s = satir(p); return (
                 <tr key={p.id}><td style={{ ...td, fontWeight:700 }}>{p.ad}</td><td style={sayi}>{persTL(p.maas)}</td><td style={sayi}>{s.be.banka === null ? "—" : persTL(s.be.banka)}</td><td style={sayi}>{s.be.elden === null ? "—" : persTL(s.be.elden)}</td><td style={sayi}>{s.ye > 0 ? persTL(s.ye) : "—"}</td><td style={sayi}>{s.saat > 0 ? s.saat + " sa" : "—"}</td><td style={sayi}>{s.mu > 0 ? persTL(s.mu) : "—"}</td><td style={sayi}>{Number(p.servis) > 0 ? persTL(p.servis) : "—"}</td><td style={{ ...sayi, fontWeight:800 }}>{persTL(s.net)}</td></tr>); })}
@@ -2993,7 +2997,7 @@ function PersonelSayfa({ T, GH, IS }) {
           </PersIzgara>
           <div style={{ display:"flex", justifyContent:"flex-end", gap:6, marginTop:14 }}>
             <button onClick={() => setForm(null)} style={GH}>İptal</button>
-            <button onClick={personelKaydet} style={{ ...GH, color:T.gold }}>Kaydet</button>
+            <button onClick={personelKaydet} style={GP}>Kaydet</button>
           </div>
         </PersModal>
       )}
@@ -3020,7 +3024,7 @@ function PersonelSayfa({ T, GH, IS }) {
           </PersIzgara>
           <div style={{ display:"flex", justifyContent:"flex-end", gap:6, marginTop:14 }}>
             <button onClick={() => setModal(null)} style={GH}>İptal</button>
-            <button onClick={modalKaydet} style={{ ...GH, color:T.gold }}>Kaydet</button>
+            <button onClick={modalKaydet} style={GP}>Kaydet</button>
           </div>
         </PersModal>
       )}
