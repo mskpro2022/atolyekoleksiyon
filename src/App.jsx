@@ -2456,7 +2456,7 @@ async function rpHash(s){
   try { const b = await crypto.subtle.digest("SHA-256", new TextEncoder().encode("karlilik|"+s)); return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,"0")).join(""); }
   catch { return "x"+s; }
 }
-function KarlilikRaporuEkrani({ T, GH, siparisler, altinKgUSD, mc, onAc, onKapat, onPdf }) {
+function KarlilikRaporuEkrani({ T, GH, siparisler, altinKgUSD, mc, onAc, onModel, onKapat, onPdf }) {
   const [kayipTur, setKayipTur] = useState("");
   const [karGrup, setKarGrup] = useState("");
   const [musF, setMusF] = useState("");
@@ -2484,7 +2484,7 @@ function KarlilikRaporuEkrani({ T, GH, siparisler, altinKgUSD, mc, onAc, onKapat
     const top = satirlar.reduce((a,x)=>({ adet:a.adet+x.adet, gram:a.gram+x.gram, kar:a.kar+x.kar, usd:a.usd+x.usd, hurda:a.hurda+x.hurda, iade:a.iade+x.iade, tamir:a.tamir+x.tamir }), { adet:0, gram:0, kar:0, usd:0, hurda:0, iade:0, tamir:0 });
     const sayim = { iyi:0, orta:0, dusuk:0 }; satirlar.forEach(x=>{ sayim[x.grup]++; });
     const kayipMap = {};
-    satirlar.forEach(x => x.kalemler.forEach(({k,h,i,t}) => { if (h||i||t) { const key=k.kod||k.id; const m = kayipMap[key]||(kayipMap[key]={ kod:k.kod||"?", ad:k.ad||"", h:0, i:0, t:0 }); m.h+=h; m.i+=i; m.t+=t; } }));
+    satirlar.forEach(x => x.kalemler.forEach(({k,h,i,t}) => { if (h||i||t) { const key=k.kod||k.id; const m = kayipMap[key]||(kayipMap[key]={ id:k.id, kod:k.kod||"?", ad:k.ad||"", h:0, i:0, t:0 }); m.h+=h; m.i+=i; m.t+=t; } }));
     const kayipModeller = Object.values(kayipMap).sort((a,b)=>(b.h+b.i+b.t)-(a.h+a.i+a.t));
     return { satirlar, top, sayim, kayipModeller };
   }, [siparisler, altinKgUSD, mc]);
@@ -2552,7 +2552,7 @@ function KarlilikRaporuEkrani({ T, GH, siparisler, altinKgUSD, mc, onAc, onKapat
               {kayipModeller.length===0 ? <div style={{ fontSize:12, color:RN.iyi }}>✓ Bu listede hurda, iade veya tamir kaydı bulunmuyor.</div> :
                 kayipModeller.map(m=>(
                   <div key={m.kod} onClick={()=>setModelF(modelF===m.kod?"":m.kod)} style={{ display:"flex", alignItems:"center", gap:8, padding:"6px 0", borderBottom:"1px solid "+T.border, cursor:"pointer", opacity:modelF&&modelF!==m.kod?.4:1 }}>
-                    <span style={{ fontSize:13, fontWeight:600, width:84, flexShrink:0 }}>{m.kod}</span>
+                    <span onClick={e=>{ e.stopPropagation(); onModel&&onModel({ id:m.id, kod:m.kod }); }} title="Model kartını aç" style={{ fontSize:13, fontWeight:600, width:84, flexShrink:0, textDecoration:"underline dotted", textUnderlineOffset:3 }}>{m.kod}</span>
                     <span style={{ fontSize:12, color:T.sub, flex:1, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{m.ad}</span>
                     {m.h>0 && <span style={{ fontSize:11, color:RN.h }}>H {m.h}</span>}{m.i>0 && <span style={{ fontSize:11, color:RN.i }}>İ {m.i}</span>}{m.t>0 && <span style={{ fontSize:11, color:RN.t }}>T {m.t}</span>}
                   </div>
@@ -2588,7 +2588,7 @@ function KarlilikRaporuEkrani({ T, GH, siparisler, altinKgUSD, mc, onAc, onKapat
                         <td style={{ padding:"9px 10px", textAlign:"right", whiteSpace:"nowrap", fontSize:12 }}>{kayip ? <>{x.hurda>0 && <span style={{ color:RN.h, fontWeight:600 }}>H:{x.hurda} </span>}{x.iade>0 && <span style={{ color:RN.i, fontWeight:600 }}>İ:{x.iade} </span>}{x.tamir>0 && <span style={{ color:RN.t, fontWeight:600 }}>T:{x.tamir}</span>}</> : <span style={{ color:T.sub }}>—</span>}</td>
                       </tr>
                       {kayip>0 && <tr onClick={()=>onAc(x.s)} style={{ cursor:"pointer", borderBottom:"1px solid "+T.border }}><td colSpan={8} style={{ padding:"0 10px 9px 22px", fontSize:11, color:T.sub }}>
-                        {x.kalemler.filter(c=>c.h||c.i||c.t).map((c,ix)=><span key={ix} style={{ marginRight:12 }}><b style={{ color:T.text }}>{c.k.kod||c.k.ad||"?"}</b>{c.h>0 && <span style={{ color:RN.h }}> Hurda ×{c.h}{c.hn?" · "+c.hn:""}</span>}{c.i>0 && <span style={{ color:RN.i }}> İade ×{c.i}{c.in_?" · "+c.in_:""}</span>}{c.t>0 && <span style={{ color:RN.t }}> Tamir ×{c.t}{c.tn?" · "+c.tn:""}</span>}</span>)}
+                        {x.kalemler.filter(c=>c.h||c.i||c.t).map((c,ix)=><span key={ix} style={{ marginRight:12 }}><b onClick={e=>{ e.stopPropagation(); onModel&&onModel(c.k); }} title="Model kartını aç" style={{ color:T.text, textDecoration:"underline dotted", textUnderlineOffset:3 }}>{c.k.kod||c.k.ad||"?"}</b>{c.h>0 && <span style={{ color:RN.h }}> Hurda ×{c.h}{c.hn?" · "+c.hn:""}</span>}{c.i>0 && <span style={{ color:RN.i }}> İade ×{c.i}{c.in_?" · "+c.in_:""}</span>}{c.t>0 && <span style={{ color:RN.t }}> Tamir ×{c.t}{c.tn?" · "+c.tn:""}</span>}</span>)}
                       </td></tr>}
                     </Fragment>); })}
                   {gor.length===0 && <tr><td colSpan={8} style={{ padding:30, textAlign:"center", color:T.sub }}>Bu filtreyle sipariş yok.</td></tr>}
@@ -11412,7 +11412,7 @@ function Atolye({ onSirketDegis }) {
   });
   const sirali = liste.map((s,i)=>({s,i})).sort((a,b)=>grupNo(a.s)-grupNo(b.s)||a.i-b.i).map(x=>x.s);
   const aylarModu = sipGorunum==="aylar";
-  const sec = aylarModu ? (sipDrawer ? siparisler.find(x=>x.id===sipDrawer)||null : null) : (siparisler.find(x=>x.id===sipSecId && sirali.some(y=>y.id===x.id)) || sirali[0] || null);
+  const sec = (aylarModu||sipRapor) ? (sipDrawer ? siparisler.find(x=>x.id===sipDrawer)||null : null) : (siparisler.find(x=>x.id===sipSecId && sirali.some(y=>y.id===x.id)) || sirali[0] || null);
   const ayAnahtar = t => { const d=new Date(t); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0"); };
   const ayAdi = key => { const [y,m]=key.split("-").map(Number); const a=new Date(y,m-1,1).toLocaleDateString("tr-TR",{month:"long",year:"numeric"}); return a.charAt(0).toLocaleUpperCase("tr-TR")+a.slice(1); };
   const gTarihU = t => new Date(t).toLocaleDateString("tr-TR",{day:"2-digit",month:"long"});
@@ -11736,7 +11736,8 @@ function Atolye({ onSirketDegis }) {
           {sipRapor && AKTIF_SIRKET_ONEK==="" && <KarlilikRaporuEkrani T={T} GH={GH} siparisler={liste} altinKgUSD={altinKgUSD} mc={madenCarpan}
             onKapat={()=>setSipRapor(false)}
             onPdf={()=>downloadPDF(buildSipListeRaporuHTML(liste, altinKgUSD, madenCarpan), "siparis-listesi-raporu")}
-            onAc={(sp)=>{ setSipRapor(false); setSipGorunum("aylar"); try{localStorage.setItem("sipGorunum","aylar");}catch(e){} setSipMetal("tumu"); setSipAyAcik([sp.planAy||ayAnahtar(sp.tarih)]); setSipDrawer(sp.id); }} />}
+            onAc={(sp)=>setSipDrawer(sp.id)}
+            onModel={(k)=>{ const mm=modeller.find(x=>x.id===k.id)||modeller.find(x=>k.kod&&x.kod===k.kod); if (mm) openEM(mm); }} />}
           <div style={{ display:"flex", border:"1px solid rgba(var(--vurgu-rgb),0.3)", borderRadius:9, overflow:"hidden" }}>{[["aylar","📅 Aylar"],["liste","☰ Liste"]].map(([id,l])=><button key={id} onClick={()=>{ setSipGorunum(id); try{localStorage.setItem("sipGorunum",id);}catch(e){} }} style={{ background:sipGorunum===id?"rgba(var(--vurgu-rgb),0.25)":"transparent", border:"none", padding:"7px 12px", color:sipGorunum===id?GOLD:"#998a6e", fontSize:12, fontWeight:600, cursor:"pointer" }}>{l}</button>)}</div>
           <button onClick={()=>{ setSipYeni(false); try{localStorage.setItem("sipYeni","0");}catch(e){} }} style={{ ...GH, fontSize:11, padding:"7px 10px" }}>Eski görünüm</button>
         </div>
@@ -11841,8 +11842,8 @@ function Atolye({ onSirketDegis }) {
       })()}
       {siparisler.length===0 && <p style={{ color:"#665d4a", textAlign:"center", padding:"30px", fontSize:13 }}>Henüz sipariş kaydı yok</p>}
       {siparisler.length>0 && aylarModu && aylarGorunum}
-      {aylarModu && sec && (
-        <div className="sp-drawer" style={{ position:"fixed", inset:0, zIndex:60 }}>
+      {(aylarModu||sipRapor) && sec && (
+        <div className="sp-drawer" style={{ position:"fixed", inset:0, zIndex:sipRapor?950:60 }}>
           <div onClick={()=>setSipDrawer("")} style={{ position:"absolute", inset:0, background:"rgba(0,0,0,0.35)" }}/>
           <div style={{ position:"absolute", top:0, right:0, bottom:0, width:"min(max(640px,50vw),100vw)", overflowY:"auto", background:T.bg2||T.card, color:T.text, borderLeft:"1px solid "+T.border, boxShadow:"-12px 0 32px rgba(0,0,0,0.25)", padding:16 }}>
             <button onClick={()=>setSipDrawer("")} style={{ ...GH, fontSize:12, padding:"6px 12px", marginBottom:10 }}>✕ Kapat</button>
