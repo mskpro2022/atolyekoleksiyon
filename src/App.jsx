@@ -8540,6 +8540,8 @@ export default function Root() {
 
 function Atolye({ onSirketDegis }) {
   // Varsayılan: OTOMATİK (hiç seçim yapılmamışsa). Sadece elle sabit tema seçilmişse ("manuel") o kullanılır.
+  const [yaziTipi, setYaziTipiH] = useState(() => { try { return localStorage.getItem("atolye_yazi_tipi")==="segoe" ? "segoe" : "eski"; } catch { return "eski"; } });
+  const setYaziTipi = (k) => { setYaziTipiH(k); try { localStorage.setItem("atolye_yazi_tipi", k); } catch {} };
   const [temaModu, setTemaModu] = useState(() => {
     try { return localStorage.getItem("atolye_tema_modu") === "manuel" ? "manuel" : "oto"; } catch { return "oto"; }
   });
@@ -10348,6 +10350,7 @@ function Atolye({ onSirketDegis }) {
   return (
     <div style={{ minHeight:"100vh", background:T.bg, color:T.text, fontFamily:"sans-serif" }}>
       <style>{`*{box-sizing:border-box}html,body,#root{background:${T.bg};margin:0;padding:0;min-height:100vh;width:100%}body{overflow-x:hidden;overflow-y:auto}:root{--gold:${T.gold};--goldtext:${T.text};--bg2:${T.bg2}}`}</style>
+      {yaziTipi==="segoe" && <style>{"body *:not(code):not(pre):not(.yt-ornek){font-family:'Segoe UI',-apple-system,BlinkMacSystemFont,'Helvetica Neue',Arial,sans-serif !important}"}</style>}
       <style>{"@keyframes fadein{from{opacity:0}to{opacity:1}}@keyframes cardin{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}@keyframes toastin{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}*{box-sizing:border-box}::-webkit-scrollbar{width:4px;height:4px}::-webkit-scrollbar-thumb{background:rgba(255,255,255,.12);border-radius:2px}::-webkit-scrollbar-track{background:transparent}select option{background:#1c1a15;color:#e8dcc8}"}</style>
 
       {/* TOAST BİLDİRİMİ */}
@@ -14008,6 +14011,22 @@ function Atolye({ onSirketDegis }) {
             <div style={{ fontSize:13, color:T.sub, margin:"4px 0 8px" }}>Görünüm, üretim değerleri, hesap ve sistem seçenekleri.</div>
             <div style={{ fontSize:12, fontWeight:600, color:T.sub, letterSpacing:0.6, margin:"28px 0 10px" }}>GÖRÜNÜM</div>
             <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+
+            {/* YAZI TİPİ */}
+            <Akordiyon baslik="🔤 Yazı Tipi" T={T}>
+            <div style={{ background:T.card, border:"1px solid "+T.border, borderRadius:14, padding:"15px 16px" }}>
+              <div style={{ fontSize:10, fontWeight:700, color:T.sub, marginBottom:10, letterSpacing:"0.05em", textTransform:"uppercase" }}>Sistem yazı tipi</div>
+              <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+                {[["eski","Eski (Arial)","Atölye Koleksiyon — 14K · 396.4 gr", "Arial, sans-serif"],["segoe","Yeni (Segoe UI)","Atölye Koleksiyon — 14K · 396.4 gr", "'Segoe UI', sans-serif"]].map(([id,l,ornek,ff])=>(
+                  <button key={id} onClick={()=>setYaziTipi(id)} style={{ flex:"1 1 220px", textAlign:"left", background:"transparent", border:"1px solid "+(yaziTipi===id?T.text:T.border), borderRadius:12, padding:"12px 14px", cursor:"pointer", color:T.text }}>
+                    <div style={{ fontSize:12, color:T.sub, marginBottom:6, fontFamily:"inherit" }}>{l}{yaziTipi===id?" · seçili":""}</div>
+                    <div className="yt-ornek" style={{ fontSize:17, fontWeight:700, fontFamily:ff }}>{ornek}</div>
+                  </button>
+                ))}
+              </div>
+              <div style={{ fontSize:12, color:T.sub, marginTop:10 }}>İstediğin zaman geri dönebilirsin. Seçim bu tarayıcıda hatırlanır.</div>
+            </div>
+            </Akordiyon>
 
             {/* TEMA SEÇİCİ */}
             <Akordiyon baslik="🎨 Tema & Vurgu Rengi" T={T}>
