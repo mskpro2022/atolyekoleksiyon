@@ -11504,7 +11504,7 @@ function Atolye({ onSirketDegis }) {
                   </div>
                 );
               })()}
-              <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax("+(coklu?340:360)+"px, 1fr))", gridAutoRows:"1fr", gap:16, alignItems:"stretch" }}>
+              <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax("+(coklu?520:560)+"px, 1fr))", gridAutoRows:"1fr", gap:16, alignItems:"stretch" }}>
                 {sl.length===0 && <div style={{ gridColumn:"1 / -1", color:"#665d4a", fontSize:12, textAlign:"center", padding:"24px 0" }}>Buraya sürükleyip bırak</div>}
                 {sl.map((s,i) => {
                   const o = oz[i], c = chip(s);
@@ -11519,14 +11519,12 @@ function Atolye({ onSirketDegis }) {
                         <span style={{ display:"flex", gap:9, flexWrap:"nowrap", alignItems:"center", minWidth:0, overflow:"hidden" }}>
                           <span style={kutuS({ fontSize:14.5, fontWeight:600, borderColor:_acikTema?"#777":"#888", flexShrink:0 })}>{s.musKod||s.musteri||"İsimsiz"}</span>
                           {(poBul(s)||s.siparisNo) && <span style={kutuS({ minWidth:0, overflow:"hidden", textOverflow:"ellipsis", display:"block" })}>{poBul(s)?"PO "+poBul(s):s.siparisNo}</span>}
-                          {Object.keys(o.ayarlar).map(a=><span key={a} title={a+" · "+fN(o.ayarlar[a],1)+" gr"} style={kutuS({ fontWeight:700, color:ayarRenk(a), borderColor:ayarRenk(a) })}>{a==="925"?"925":a}</span>)}
+                          {Object.keys(o.ayarlar).map(a=><span key={a} title={a+" · "+fN(o.ayarlar[a],1)+" gr"} style={kutuS({ fontWeight:700, flexShrink:0, color:ayarRenk(a), borderColor:ayarRenk(a) })}>{a==="925"?"925":a}</span>)}
                           {s.musEtiket && <span style={kutuS({ flexShrink:0 })}>{s.musEtiket}</span>}
+                          {(o.altin>0.0001 || o.gumus<=0) && <span style={kutuS({ fontSize:15, fontWeight:600, padding:"2px 9px", flexShrink:0, borderColor:gramRenk(o.altin)+"66", color:"color-mix(in srgb, "+gramRenk(o.altin)+" 40%, "+_yazi+")" })}>{fN(o.altin,1)} gr</span>}{o.gumus>0 && <span style={kutuS({ fontSize:15, fontWeight:600, padding:"2px 9px", flexShrink:0, borderColor:ayarRenk("925"), color:ayarRenk("925") })}>{fN(o.gumus,1)} gr 925</span>}
+                          <span style={kutuS({ fontSize:13.2, flexShrink:0 })}>{o.adet} adet</span>
                         </span>
-                        {rozet(c.l, c.c)}
-                      </div>
-                      <div style={{ display:"flex", alignItems:"center", marginTop:9, gap:9, flexWrap:"nowrap" }}>
-                        {(o.altin>0.0001 || o.gumus<=0) && <span style={kutuS({ fontSize:15, fontWeight:600, padding:"3px 10px", borderColor:gramRenk(o.altin)+"66", color:"color-mix(in srgb, "+gramRenk(o.altin)+" 40%, "+_yazi+")" })}>{fN(o.altin,1)} gr</span>}{o.gumus>0 && <span style={kutuS({ fontSize:15, fontWeight:600, padding:"3px 10px", borderColor:ayarRenk("925"), color:ayarRenk("925") })}>{fN(o.gumus,1)} gr 925</span>}
-                        <span style={kutuS({ fontSize:13.2 })}>{o.adet} adet</span>
+                        <span style={{ flexShrink:0 }}>{rozet(c.l, c.c)}</span>
                       </div>
                       <div style={{ display:"flex", gap:9, flexWrap:"nowrap", marginTop:8 }}>
                         <span style={kutuS()}>Sip. {gTarihU(s.tarih)}</span>
