@@ -2523,7 +2523,7 @@ const persBos = { ad:"", poz:"CAD/Tasarım", durum:"Aktif", maas:"", banka_maas:
 // Dış bileşenler (PersonelSayfa içinde tanımlansaydı her tuşta yeniden oluşur, yazı kutuları odağı kaybederdi)
 function PersKutu({ T, y, d, renk }) {
   return (
-    <div style={{ background:T.card, border:"1px solid "+T.border, borderRadius:14, padding:"16px 20px", flex:"1 1 180px" }}>
+    <div style={{ background:T.card, border:"1px solid "+T.border, borderRadius:14, padding:"16px 20px", flex:"1 1 150px" }}>
       <div style={{ fontSize:12, color:T.sub, fontWeight:600, letterSpacing:0.3 }}>{y}</div>
       <div style={{ fontSize:26, fontWeight:700, color:T.text, marginTop:6, letterSpacing:-0.5, fontVariantNumeric:"tabular-nums" }}>{d}</div>
     </div>
@@ -2547,7 +2547,7 @@ function PersAlan({ T, y, children, tam }) {
 }
 function PersIzgara({ children }) { return <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))", gap:14 }}>{children}</div>; }
 
-function PersonelSayfa({ T, GH: GH0, IS }) {
+function PersonelSayfa({ T, GH: GH0, IS, usdTry }) {
   // Bu sayfaya özel, sade ve kurumsal düğme stilleri (ana GH/IS tüm uygulamada aynı kalır)
   const GH = { background:"transparent", border:"1px solid "+T.btnBorder, borderRadius:9, padding:"7px 14px", color:T.text, fontSize:12, fontWeight:600, cursor:"pointer" };
   const GP = { ...GH, background:T.text, color:T.bg2, borderColor:T.text };
@@ -2571,6 +2571,9 @@ function PersonelSayfa({ T, GH: GH0, IS }) {
   const [arsiv, setArsiv] = useState(false);
   const [form, setForm] = useState(null);   // personel modalı
   const [modal, setModal] = useState(null); // {tur:"izin"|"avans"|"avodeme"|"devam"|"odeme", ...}
+  const [sabit, setSabit] = useState([]);   // sabit giderler (şirkete göre)
+  const [sg, setSg] = useState(null);       // sabit gider modalı
+  const [kurEl, setKurEl] = useState(() => { try { return localStorage.getItem("pers_usd_kur") || ""; } catch { return ""; } }); // elle girilen USD/TL
 
   const haber = (m, hata) => { setBilgi({ m, hata }); setTimeout(() => setBilgi(null), 3500); };
   const aySon = new Date(yil, ay + 1, 0).getDate();
@@ -2579,12 +2582,13 @@ function PersonelSayfa({ T, GH: GH0, IS }) {
 
   const sabitYukle = useCallback(async () => {
     try {
-      const [p, iz, av] = await Promise.all([
+      const [p, iz, av, sgl] = await Promise.all([
         persQ(supabase.from("personel").select("*").eq("atolye", atl).order("ad", { ascending: true })),
         persQ(supabase.from("izin").select("*").eq("atolye", atl).order("created_at", { ascending: false })),
         persQ(supabase.from("avans").select("*").eq("atolye", atl).order("created_at", { ascending: false })),
+        persQ(supabase.from("sabit_gider").select("*").eq("atolye", atl).order("created_at", { ascending: true })),
       ]);
-      setPer(p || []); setIzin(iz || []); setAvans(av || []);
+      setPer(p || []); setIzin(iz || []); setAvans(av || []); setSabit(sgl || []);
     } catch (e) { haber("Yükleme hatası: " + e.message, true); }
     setYuk(false);
   }, [atl]);
@@ -2722,6 +2726,24 @@ function PersonelSayfa({ T, GH: GH0, IS }) {
     return { saat, mu, hesap, elle, be, ye, net: Number(p.maas || 0) + Number(p.servis || 0) + ye + mu };
   };
   const topNet = aktif.reduce((s, p) => s + satir(p).net, 0);
+  // Sabit giderler: seçili ayda geçerli ve aktif olanlar; USD kalemler kurla ₺'ye çevrilir
+  const kur = Number(kurEl) > 0 ? Number(kurEl) : (Number(usdTry) > 0 ? Number(usdTry) : 0);
+  const sgTL = (g) => { const t = Number(g.tutar || 0); return g.para_birimi === "USD" ? (kur ? t * kur : null) : t; };
+  const sgGecerli = (g) => g.aktif !== false && ((Number(g.baslangic_yil) || 0) * 12 + (Number(g.baslangic_ay) || 0)) <= (yil * 12 + ay);
+  const sgToplam = sabit.filter(sgGecerli).reduce((t, g) => t + (sgTL(g) || 0), 0);
+  const sgKurEksik = sabit.some(g => sgGecerli(g) && g.para_birimi === "USD") && !kur;
+  const sgKaydet = async () => {
+    const f = sg;
+    if (!String(f.kategori || "").trim()) { haber("Kategori giriniz", true); return; }
+    if (!(Number(f.tutar) > 0)) { haber("Tutar giriniz", true); return; }
+    const veri = { atolye: atl, kategori: f.kategori.trim(), aciklama: f.aciklama || "", tutar: Number(f.tutar), para_birimi: f.para_birimi, aktif: f.aktif !== false, notlar: f.notlar || "" };
+    try {
+      if (f.id) await persQ(supabase.from("sabit_gider").update(veri).eq("id", f.id).select());
+      else await persQ(supabase.from("sabit_gider").insert({ ...veri, baslangic_yil: yil, baslangic_ay: ay }).select());
+      setSg(null); await sabitYukle(); haber(f.id ? "Güncellendi ✓" : "Eklendi ✓");
+    } catch (e) { haber("Hata: " + e.message, true); }
+  };
+  const kurKaydet = (v) => { setKurEl(v); try { if (v) localStorage.setItem("pers_usd_kur", v); else localStorage.removeItem("pers_usd_kur"); } catch {} };
   const bekAvans = avans.reduce((s, a) => s + Math.max(0, Number(a.tutar || 0) - Number(a.odenen || 0)), 0);
 
   const csvIndir = () => {
@@ -2763,8 +2785,10 @@ function PersonelSayfa({ T, GH: GH0, IS }) {
         <div>
           <div style={{ display:"flex", gap:14, flexWrap:"wrap", marginBottom:20 }}>
             <PersKutu T={T} y="Aktif personel" d={aktif.length} />
-            <PersKutu T={T} y={`Aylık toplam maliyet (${PERS_AY[ay]})`} d={persTL(topNet)} renk="#5b7fa6" />
-            <PersKutu T={T} y="Bekleyen avans" d={persTL(bekAvans)} renk="#f59e0b" />
+            <PersKutu T={T} y={`Personel maliyeti (${PERS_AY[ay]})`} d={persTL(topNet)} />
+            <PersKutu T={T} y="Sabit giderler (aylık)" d={sgKurEksik ? "kur gerekli" : persTL(Math.round(sgToplam))} />
+            <PersKutu T={T} y="Toplam aylık maliyet" d={persTL(Math.round(topNet + sgToplam))} />
+            <PersKutu T={T} y="Bekleyen avans" d={persTL(bekAvans)} />
             <PersKutu T={T} y="Bugün devam kaydı" d={devam.filter(v => v.tarih === new Date().toISOString().slice(0, 10)).length} />
           </div>
           <div style={{ ...kart, padding:0, overflowX:"auto", overflowY:"hidden" }}>
@@ -2779,6 +2803,31 @@ function PersonelSayfa({ T, GH: GH0, IS }) {
                   <td style={sayi}>{puan[p.id]?.puan ?? "—"}</td>
                   <td style={td}>{pill(p.durum === "Ayrıldı" ? "#9ca3af" : "#10b981", p.durum === "Ayrıldı" ? "Ayrıldı" : "Aktif")}</td>
                 </tr>)) : <tr><td colSpan={5} style={{ ...td, textAlign:"center", color:T.sub }}>Personel yok</td></tr>}</tbody>
+            </table>
+          </div>
+          <div style={{ ...kart, padding:0, overflowX:"auto", overflowY:"hidden", marginTop:20 }}>
+            <div style={{ padding:"16px 20px", display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:10 }}>
+              <div style={{ fontSize:15, fontWeight:700, color:T.text }}>Sabit Giderler <span style={{ color:T.sub, fontWeight:500, fontSize:12 }}>· {atl} · aylık</span></div>
+              <div style={{ display:"flex", alignItems:"center", gap:10, flexWrap:"wrap" }}>
+                <label style={{ fontSize:12, color:T.sub, display:"flex", alignItems:"center", gap:6 }}>USD/TL
+                  <input type="number" step="0.01" min="0" value={kurEl} placeholder={usdTry ? String(Number(usdTry).toFixed(2)) : "kur"} onChange={e => kurKaydet(e.target.value)} style={{ ...girdi, width:90 }} />
+                </label>
+                <button onClick={() => setSg({ kategori:"", aciklama:"", tutar:"", para_birimi:"TRY", aktif:true, notlar:"" })} style={GP}>+ Sabit gider ekle</button>
+              </div>
+            </div>
+            <table className="pers-t" style={{ width:"100%", borderCollapse:"collapse" }}>
+              <thead><tr><th style={th}>Kategori</th><th style={th}>Açıklama</th><th style={{ ...th, textAlign:"right" }}>Tutar</th><th style={{ ...th, textAlign:"right" }}>₺ karşılığı</th><th style={th}>Durum</th><th style={th}></th></tr></thead>
+              <tbody>{sabit.length ? sabit.map(g => { const tl = sgTL(g); return (
+                <tr key={g.id} style={{ opacity: g.aktif === false ? 0.55 : 1 }}>
+                  <td style={{ ...td, fontWeight:700 }}>{g.kategori}</td>
+                  <td style={td}>{g.aciklama || "—"}</td>
+                  <td style={sayi}>{Number(g.tutar || 0).toLocaleString("tr-TR")} {g.para_birimi === "USD" ? "$" : "₺"}</td>
+                  <td style={sayi}>{tl === null ? "kur gerekli" : persTL(Math.round(tl))}</td>
+                  <td style={td}>{pill(g.aktif === false ? "#9ca3af" : "#10b981", g.aktif === false ? "Pasif" : "Aktif")}</td>
+                  <td style={td}><button onClick={() => setSg({ id:g.id, kategori:g.kategori || "", aciklama:g.aciklama || "", tutar:g.tutar, para_birimi:g.para_birimi || "TRY", aktif:g.aktif !== false, notlar:g.notlar || "" })} style={{ ...GH, padding:"3px 9px" }}>Düzenle</button> <button onClick={() => kayitSil("sabit_gider", g.id)} style={{ ...GH, padding:"3px 9px", color:T.danger || "#e85a4f", borderColor:"transparent" }}>Sil</button></td>
+                </tr>); }) : <tr><td colSpan={6} style={{ ...td, textAlign:"center", color:T.sub }}>Sabit gider yok</td></tr>}
+                {sabit.length > 0 && <tr><td style={{ ...td, fontWeight:800 }}>TOPLAM</td><td style={td} colSpan={2}></td><td style={{ ...sayi, fontWeight:800 }}>{sgKurEksik ? "kur gerekli" : persTL(Math.round(sgToplam))}</td><td style={td} colSpan={2}></td></tr>}
+              </tbody>
             </table>
           </div>
         </div>
@@ -2998,6 +3047,24 @@ function PersonelSayfa({ T, GH: GH0, IS }) {
           <div style={{ display:"flex", justifyContent:"flex-end", gap:6, marginTop:14 }}>
             <button onClick={() => setForm(null)} style={GH}>İptal</button>
             <button onClick={personelKaydet} style={GP}>Kaydet</button>
+          </div>
+        </PersModal>
+      )}
+
+      {/* SABİT GİDER MODALI */}
+      {sg && (
+        <PersModal T={T} GH={GH} baslik={sg.id ? "Sabit gider düzenle" : "Sabit gider ekle"} onKapat={() => setSg(null)}>
+          <PersIzgara>
+            <PersAlan T={T} y="Kategori"><input style={girdi} list="pers-sg-kat" value={sg.kategori} onChange={e => setSg({ ...sg, kategori:e.target.value })} /><datalist id="pers-sg-kat">{["Kira","Elektrik","Su","Doğalgaz","İnternet","Muhasebe","Aidat","Sigorta","Servis","Diğer"].map(k => <option key={k} value={k} />)}</datalist></PersAlan>
+            <PersAlan T={T} y="Açıklama"><input style={girdi} value={sg.aciklama} onChange={e => setSg({ ...sg, aciklama:e.target.value })} /></PersAlan>
+            <PersAlan T={T} y="Aylık tutar"><input type="number" style={girdi} value={sg.tutar} onChange={e => setSg({ ...sg, tutar:e.target.value })} /></PersAlan>
+            <PersAlan T={T} y="Para birimi"><select style={girdi} value={sg.para_birimi} onChange={e => setSg({ ...sg, para_birimi:e.target.value })}><option value="TRY">TL (₺)</option><option value="USD">Dolar ($)</option></select></PersAlan>
+            <PersAlan T={T} y="Durum"><select style={girdi} value={sg.aktif ? "1" : "0"} onChange={e => setSg({ ...sg, aktif:e.target.value === "1" })}><option value="1">Aktif</option><option value="0">Pasif</option></select></PersAlan>
+            <PersAlan T={T} y="Not" tam><input style={girdi} value={sg.notlar} onChange={e => setSg({ ...sg, notlar:e.target.value })} /></PersAlan>
+          </PersIzgara>
+          <div style={{ display:"flex", justifyContent:"flex-end", gap:6, marginTop:14 }}>
+            <button onClick={() => setSg(null)} style={GH}>İptal</button>
+            <button onClick={sgKaydet} style={GP}>Kaydet</button>
           </div>
         </PersModal>
       )}
@@ -12277,7 +12344,7 @@ function Atolye({ onSirketDegis }) {
 
         {/* KASA */}
         {sayfa==="personel" && (
-          <RpKapi T={T} GH={GH}><PersonelSayfa T={T} GH={GH} IS={IS} key={AKTIF_SIRKET_ONEK} /></RpKapi>
+          <RpKapi T={T} GH={GH}><PersonelSayfa T={T} GH={GH} IS={IS} usdTry={altinSon?.usdTry || null} key={AKTIF_SIRKET_ONEK} /></RpKapi>
         )}
 
         {sayfa==="kasa" && (() => {
