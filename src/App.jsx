@@ -6329,35 +6329,56 @@ function SecimEkrani({ onKatalog }) {
 function SirketSecimEkrani({ onSec }) {
   const [hover, setHover] = useState(null);
   const sec = (onek, ad) => { setSirketOnek(onek); onSec(); };
-  const kart = (id, ikon, baslik, aciklama, renk, onClick) => (
-    <div
-      onClick={onClick}
-      onMouseEnter={()=>setHover(id)}
-      onMouseLeave={()=>setHover(null)}
-      style={{
-        flex:1, minWidth:200, maxWidth:280, cursor:"pointer",
-        background: hover===id ? "rgba(var(--vurgu-rgb),0.10)" : "rgba(var(--vurgu-rgb),0.04)",
-        border:"1px solid "+(hover===id ? renk : "rgba(var(--vurgu-rgb),0.18)"),
-        borderRadius:18, padding:"38px 28px", textAlign:"center",
-        transform: hover===id ? "translateY(-4px)" : "none",
-        transition:"all .2s ease",
-        boxShadow: hover===id ? "0 12px 30px rgba(0,0,0,0.35)" : "none",
-      }}>
-      <div style={{ fontSize:52, marginBottom:14 }}>{ikon}</div>
-      <div style={{ fontSize:18, fontWeight:800, color:renk, marginBottom:6 }}>{baslik}</div>
-      <div style={{ fontSize:11, color:"#998a6e", lineHeight:1.5 }}>{aciklama}</div>
-    </div>
-  );
-  return (
-    <div style={{ minHeight:"100vh", width:"100vw", background:"#0a0a0a", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", fontFamily:"'Segoe UI',Arial,sans-serif", margin:0, padding:"20px", boxSizing:"border-box" }}>
-      <div style={{ fontSize:32, marginBottom:6 }}>🏢</div>
-      <div style={{ fontSize:22, fontWeight:800, color:"var(--vurgu)", marginBottom:4 }}>Şirket Seçin</div>
-      <div style={{ fontSize:12, color:"#665d4a", marginBottom:40 }}>Hangi şirketin kataloğunu açmak istersiniz?</div>
-      <div style={{ display:"flex", gap:20, flexWrap:"wrap", justifyContent:"center", width:"100%", maxWidth:620 }}>
-        {kart("msk", "💎", "MSK Jewelry", "Mevcut katalog, modeller, siparişler ve kasa", "var(--vurgu)", ()=>sec("", "MSK"))}
-        {kart("bsp", "✨", "BSP Jewelry Design", "Ayrı katalog — kendi modelleri ve siparişleri", "#a78bfa", ()=>sec("bsp2_", "BSP"))}
+  // Son kullanılan şirket (hiç seçilmediyse null): "" = MSK, "bsp2_" = BSP
+  const son = (() => { try { return localStorage.getItem("atolye_sirket_onek"); } catch { return null; } })();
+  // Klavye: M / ← / 1 → MSK, B / → / 2 → BSP, Enter → son kullanılan (yoksa MSK)
+  useEffect(() => {
+    const k = (e) => {
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      const t = (e.key || "").toLowerCase();
+      if (t === "m" || t === "arrowleft" || t === "1") sec("", "MSK");
+      else if (t === "b" || t === "arrowright" || t === "2") sec("bsp2_", "BSP");
+      else if (t === "enter") sec(son === "bsp2_" ? "bsp2_" : "", son === "bsp2_" ? "BSP" : "MSK");
+    };
+    window.addEventListener("keydown", k);
+    return () => window.removeEventListener("keydown", k);
+  }, []);
+  // Uygulamanın gündüz/gece temasını izler (elle seçilmişse o tema, değilse saate göre: 07-19 gündüz, gerisi gece)
+  const T = (() => {
+    try { if (localStorage.getItem("atolye_tema_modu") === "manuel") { const t = localStorage.getItem("atolye_tema"); return TEMALAR[t] || TEMALAR.altin; } } catch {}
+    return otoTemaHesapla();
+  })();
+  // Ekran ikiye bölünür: solda MSK, sağda BSP. Sağ yarı, tema zemininin üstüne hafif bir katman alır. Dar ekranda alt alta bölünür.
+  const yarim = (id, kisa, baslik, aciklama, katman, sonMu, onClick) => {
+    const kat = (n) => Array(n).fill("linear-gradient("+T.card+","+T.card+")").join(",");
+    const arka = [katman ? kat(katman + (hover===id ? 1 : 0)) : (hover===id ? kat(1) : ""), T.bg2].filter(Boolean).join(",");
+    return (
+      <div
+        onClick={onClick}
+        onMouseEnter={()=>setHover(id)}
+        onMouseLeave={()=>setHover(null)}
+        style={{
+          flex: hover===id ? "1.25 1 340px" : "1 1 340px", minHeight:"50vh", cursor:"pointer", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center",
+          textAlign:"center", padding:"32px 24px", boxSizing:"border-box", color:T.text,
+          background: arka,
+          border:"1px solid "+(hover===id ? T.btnBorder : T.border), borderRadius:22,
+          boxShadow: hover===id ? "0 10px 30px rgba(0,0,0,0.14)" : "0 2px 10px rgba(0,0,0,0.06)",
+          transition:"background .25s ease, flex .3s ease, box-shadow .25s ease, border-color .25s ease",
+        }}>
+        <div style={{ height:18, marginBottom:10, fontSize:11, fontWeight:700, letterSpacing:1.5, color:T.sub }}>{sonMu ? "● SON KULLANILAN" : ""}</div>
+        <div style={{ fontSize:"clamp(44px,7vw,84px)", fontWeight:800, letterSpacing:6, lineHeight:1, color:T.text }}>{kisa}</div>
+        <div style={{ width:48, height:2, background:T.gold, opacity:0.6, margin:"22px 0 18px" }} />
+        <div style={{ fontSize:"clamp(16px,2vw,22px)", fontWeight:600, color:T.text }}>{baslik}</div>
+        <div style={{ marginTop:26, fontSize:13, fontWeight:700, letterSpacing:1, color:T.text, border:"1px solid "+T.btnBorder, borderRadius:20, padding:"7px 20px", background: hover===id ? T.btnBg : "transparent", transition:"background .25s ease" }}>GİRİŞ →</div>
       </div>
-      <div style={{ fontSize:9, color:"#4a4336", marginTop:36 }}>İki şirketin verileri tamamen ayrıdır</div>
+    );
+  };
+  return (
+    <div style={{ position:"relative", height:"100vh", width:"100vw", background:T.bg2, display:"flex", flexWrap:"wrap", gap:16, alignContent:"stretch", fontFamily:"'Segoe UI',Arial,sans-serif", margin:0, padding:"46px 18px 38px", boxSizing:"border-box", overflow:"auto" }}>
+      {yarim("msk", "MSK", "MSK Jewelry", "", 0, son === "", ()=>sec("", "MSK"))}
+      {yarim("bsp", "BSP", "BSP Jewelry Design", "", 1, son === "bsp2_", ()=>sec("bsp2_", "BSP"))}
+      <div style={{ position:"absolute", top:16, left:0, right:0, textAlign:"center", fontSize:12, letterSpacing:1, color:T.sub, pointerEvents:"none" }}>ŞİRKET SEÇİN</div>
+      <div style={{ position:"absolute", bottom:14, left:0, right:0, textAlign:"center", fontSize:11, letterSpacing:1, color:T.sub, pointerEvents:"none" }}>M / ←  MSK    ·    B / →  BSP    ·    ENTER  son kullanılan</div>
     </div>
   );
 }
