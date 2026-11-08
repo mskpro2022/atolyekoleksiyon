@@ -11225,6 +11225,13 @@ function Atolye({ onSirketDegis }) {
   };
   const isik = () => ({});
   const _tk = String(T.card||"").replace("#",""); const _acikTema = _tk.length>=6 && (parseInt(_tk.slice(0,2),16)+parseInt(_tk.slice(2,4),16)+parseInt(_tk.slice(4,6),16))/3 > 150;
+  const _yazi = _acikTema ? T.text : "#fff";
+  const _kenar = _acikTema ? T.border : "#444";
+  const ayarRenk = (a) => { const k = String(a).toUpperCase().replace(/K$/,""); const kar = _acikTema
+      ? {"8":"#a88a00","9":"#a88a00","10":"#b8860b","14":"#c27803","18":"#c2410c","21":"#b93a1c","22":"#b91c1c","24":"#991b1b","925":"#64748b"}
+      : {"8":"#fff3b0","9":"#fde68a","10":"#fcd34d","14":"#f5a524","18":"#ea6a1f","21":"#e0502a","22":"#d9402b","24":"#c8322a","925":"#b8c2d0"};
+    return kar[k] || _yazi; };
+  const kutuS = (extra) => ({ display:"inline-flex", alignItems:"center", gap:4, border:"1px solid "+_kenar, borderRadius:7, padding:"2px 8px", fontSize:12.1, lineHeight:"17px", whiteSpace:"nowrap", color:_yazi, ...extra });
   const cizgi = (col) => (typeof col==="string" && col[0]==="#" && col.length===7) ? col+(_acikTema?"99":"88") : col;
   const tumuF = sipFiltre==="tumu" || sipFiltre==="tumü";
   const liste = [...siparisler].reverse().filter(s => {
@@ -11502,22 +11509,31 @@ function Atolye({ onSirketDegis }) {
                   return (
                     <div key={s.id} draggable={!bitti(s)} onDragStart={e=>{ setSipSurukle(s.id); e.dataTransfer.setData("text/plain", s.id); e.dataTransfer.effectAllowed="move"; }} onDragEnd={()=>{ setSipSurukle(""); setSipHedefAy(""); }}
                       onClick={()=>setSipDrawer(s.id)}
-                      style={{ display:"flex", flexDirection:"column", cursor:bitti(s)?"default":"grab", opacity:sipSurukle===s.id?0.4:1, padding:"10px 12px", borderRadius:12, background:T.card, ...isik(c.c), border:"1px solid "+T.border, borderLeft:"2px solid "+cizgi(c.c) }}>
+                      style={{ display:"flex", flexDirection:"column", cursor:bitti(s)?"default":"grab", opacity:sipSurukle===s.id?0.4:1, padding:"12px 14px", borderRadius:12, background:_acikTema?T.card:"#000", color:_yazi, ...isik(c.c), border:"1px solid "+(_acikTema?T.border:"#2c2c2c"), borderLeft:"3px solid "+c.c }}>
                       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:6 }}>
-                        <span style={{ minWidth:0, fontSize:12, color:T.sub }}><span style={{ fontSize:15, fontWeight:600, color:GOLD }}>{s.musKod||s.musteri||"İsimsiz"}</span>{[s.siparisNo, Object.keys(o.ayarlar).join("/"), s.musEtiket].filter(Boolean).map((x,xi)=><span key={xi}>{xi===0?"  ":" · "}{x}</span>)}</span>
+                        <span style={{ display:"flex", gap:5, flexWrap:"wrap", alignItems:"center", minWidth:0 }}>
+                          <span style={kutuS({ fontSize:14.5, fontWeight:600, borderColor:_acikTema?"#777":"#888" })}>{s.musKod||s.musteri||"İsimsiz"}</span>
+                          {s.siparisNo && <span style={kutuS()}>{s.siparisNo}</span>}
+                          {Object.keys(o.ayarlar).map(a=><span key={a} style={kutuS({ fontWeight:700, color:ayarRenk(a), borderColor:ayarRenk(a) })}>{a==="925"?"925":a}</span>)}
+                          {s.musEtiket && <span style={kutuS()}>{s.musEtiket}</span>}
+                        </span>
                         {rozet(c.l, c.c)}
                       </div>
-                      <div style={{ display:"flex", alignItems:"baseline", marginTop:8, gap:8, flexWrap:"wrap" }}>
-                        {(o.altin>0.0001 || o.gumus<=0) && <span style={{ fontSize:15, fontWeight:600, color:T.text }}>{fN(o.altin,1)} gr</span>}{o.gumus>0 && <span style={{ fontSize:o.altin>0.0001?13:15, fontWeight:600, color:"#9aa4b2" }}>{fN(o.gumus,1)} gr 925</span>}
-                        <span style={{ fontSize:12, color:T.sub }}>{o.adet} adet</span>
+                      <div style={{ display:"flex", alignItems:"center", marginTop:9, gap:6, flexWrap:"wrap" }}>
+                        {(o.altin>0.0001 || o.gumus<=0) && <span style={kutuS({ fontSize:15, fontWeight:600, padding:"3px 10px", borderColor:_acikTema?"#777":"#888" })}>{fN(o.altin,1)} gr</span>}{o.gumus>0 && <span style={kutuS({ fontSize:15, fontWeight:600, padding:"3px 10px", borderColor:ayarRenk("925"), color:ayarRenk("925") })}>{fN(o.gumus,1)} gr 925</span>}
+                        <span style={kutuS({ fontSize:13.2 })}>{o.adet} adet</span>
                       </div>
-                      <div style={{ marginTop:3, fontSize:11, color:T.sub }}>{gTarih(s.tarih)} sipariş · <span style={{ color:gecikti?"#e85a4f":T.sub, fontWeight:gecikti?600:400 }}>teslim {s.teslimTarihi?gTarih(teslimT):"—"}{gecikti && " ⚠"}</span>{poBul(s) && " · PO "+poBul(s)}</div>
+                      <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginTop:8 }}>
+                        <span style={kutuS()}>Sipariş {gTarih(s.tarih)}</span>
+                        <span style={kutuS({ color:gecikti?"#ff5a4d":_yazi, fontWeight:gecikti?600:400 })}>Teslim {s.teslimTarihi?gTarih(teslimT):"—"}{gecikti && " ⚠"}</span>
+                        {poBul(s) && <span style={kutuS()}>PO {poBul(s)}</span>}
+                      </div>
                       {Object.keys(o.ayarlar).length>1 && <div style={{ display:"flex", gap:4, flexWrap:"wrap", marginTop:4 }}>
                         {Object.entries(o.ayarlar).sort((a,b)=>b[1]-a[1]).map(([a,g])=><span key={a} style={{ fontSize:11, fontWeight:600, color:a==="925"?"#9aa4b2":GOLD, background:a==="925"?"rgba(154,164,178,0.2)":"rgba(var(--vurgu-rgb),0.14)", borderRadius:6, padding:"2px 7px" }}>{a} · {fN(g,1)} gr</span>)}
                       </div>}
                       {fotolar.length>0 && <div style={{ display:"grid", gridTemplateColumns:"repeat(4, minmax(0,1fr))", gap:5, marginTop:8 }}>{fotolar.map((k,ix)=><div key={k.id} title={(k.kod||"")+" "+(k.ad||"")} style={{ position:"relative", aspectRatio:"1 / 1", borderRadius:8, overflow:"hidden", background:"rgba(0,0,0,0.06)" }}><img loading="lazy" decoding="async" src={k.foto} alt="" draggable={false} style={{ width:"100%", height:"100%", objectFit:"cover", display:"block" }}/>{ix===7 && fotoHepsi.length>8 && <div style={{ position:"absolute", inset:0, background:"rgba(0,0,0,0.5)", color:"#fff", fontSize:15, fontWeight:600, display:"flex", alignItems:"center", justifyContent:"center" }}>+{fotoHepsi.length-7}</div>}</div>)}</div>}
                       <div onClick={e=>e.stopPropagation()} style={{ marginTop:"auto", paddingTop:7 }}>
-                        <select value={key} disabled={bitti(s)} onChange={e=>aya_tasi(s,e.target.value)} title={bitti(s)?"Tamamlanan sipariş taşınamaz":"Başka aya taşı (planlanan ay)"} style={{ ...IS, width:"auto", background:"transparent", border:"none", padding:"2px 0", fontSize:11, color:T.sub }}>
+                        <select value={key} disabled={bitti(s)} onChange={e=>aya_tasi(s,e.target.value)} title={bitti(s)?"Tamamlanan sipariş taşınamaz":"Başka aya taşı (planlanan ay)"} style={{ ...IS, width:"auto", background:"transparent", border:"none", padding:"2px 0", fontSize:12.1, color:_yazi, opacity:.7 }}>
                           {sirKeys.map(k2=><option key={k2} value={k2}>{ayAdi(k2)}</option>)}
                         </select>
                       </div>
