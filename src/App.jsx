@@ -6475,13 +6475,27 @@ function SirketSecimEkrani({ onSec }) {
 // Vitrin linkini açan cihaza kalıcı, rastgele bir kimlik verir (localStorage) —
 // aynı müşteri kodunun birden fazla FARKLI cihazdan girip girmediğini anlamak için.
 // Hiçbir kişisel veri değildir, sadece "bu tarayıcı daha önce de buradaydı" bilgisidir.
+// Vitrin içeriğini sunucudan cihaz kilidiyle alır: bir müşteri linki en fazla 2 cihaza tanımlanır (ilk açan 2 cihaz).
+// Dönen: { gecerli, kilitli, ... } — kilitli:true ise içerik GELMEZ.
+async function vitrinGetirCihazli(kod, onek, onizle) {
+  try {
+    const { data, error } = await supabase.rpc("vitrin_getir_cihazli", {
+      p_kod: kod, p_onek: onek, p_cihaz_id: vitrinCihazIdAl(), p_cihaz_bilgi: vitrinCihazEtiketiAl(), p_onizle: !!onizle,
+    });
+    if (error) { console.error("vitrinGetirCihazli:", error.message); return { gecerli:false, hata:true }; }
+    return data || { gecerli:false };
+  } catch (e) { console.error("vitrinGetirCihazli:", e.message); return { gecerli:false, hata:true }; }
+}
 function vitrinCihazIdAl() {
   try {
-    let id = localStorage.getItem("atolye_vitrin_cihaz_id");
-    if (!id) {
-      id = (window.crypto && window.crypto.randomUUID) ? window.crypto.randomUUID() : ("c-" + Date.now() + "-" + Math.random().toString(36).slice(2));
-      localStorage.setItem("atolye_vitrin_cihaz_id", id);
-    }
+    const cerezOku = () => { const m = (document.cookie || "").match(/(?:^|; )atolye_vitrin_cihaz_id=([^;]+)/); return m ? decodeURIComponent(m[1]) : null; };
+    const cerezYaz = (v) => { try { document.cookie = "atolye_vitrin_cihaz_id=" + encodeURIComponent(v) + "; max-age=" + (60*60*24*365) + "; path=/; SameSite=Lax"; } catch {} };
+    let id = null;
+    try { id = localStorage.getItem("atolye_vitrin_cihaz_id"); } catch {}
+    if (!id) id = cerezOku();
+    if (!id) id = (window.crypto && window.crypto.randomUUID) ? window.crypto.randomUUID() : ("c-" + Date.now() + "-" + Math.random().toString(36).slice(2));
+    try { localStorage.setItem("atolye_vitrin_cihaz_id", id); } catch {}
+    cerezYaz(id); // iki yerde birden saklanır
     return id;
   } catch { return null; }
 }
@@ -6656,6 +6670,8 @@ function VitrinModu({ kod, onizleme }) {
     katalog_yukleniyor: { tr:"Katalog yükleniyor...", en:"Loading catalog...", es:"Cargando catálogo..." },
     henuz_koleksiyon_yok: { tr:"Henüz size açılmış koleksiyon yok", en:"No collections have been shared with you yet", es:"Aún no se le ha compartido ninguna colección" },
     gecersiz_link_baslik: { tr:"Geçersiz veya Süresi Dolmuş Bağlantı", en:"Invalid or Expired Link", es:"Enlace inválido o expirado" },
+    kilitli_link_baslik: { tr:"Bu bağlantı başka bir cihaza tanımlı", en:"This link is registered to another device", es:"Este enlace está registrado en otro dispositivo" },
+    kilitli_link_mesaj: { tr:"Katalog bağlantısı yalnızca ilk açılan cihazlarda çalışır. Erişim için lütfen bizimle iletişime geçin.", en:"This catalog link only works on the devices it was first opened on. Please contact us for access.", es:"Este enlace solo funciona en los dispositivos donde se abrió por primera vez. Contáctenos para obtener acceso." },
     gecersiz_link_mesaj: { tr:"Bu katalog bağlantısı geçerli değil. Lütfen yetkiliyle iletişime geçin.", en:"This catalog link is not valid. Please contact the shop.", es:"Este enlace de catálogo no es válido. Por favor, comuníquese con la tienda." },
     once_koleksiyon_sec: { tr:"Önce koleksiyon seçin.", en:"Please select a collection first.", es:"Primero seleccione una colección." },
     once_model_sec: { tr:"Önce model seçin veya bir koleksiyon açın.", en:"Please select a model or open a collection first.", es:"Primero seleccione un modelo o abra una colección." },
@@ -6750,11 +6766,12 @@ function VitrinModu({ kod, onizleme }) {
       // Görünürlük/gizlilik/maliyet-alanı-çıkarma artık SUNUCU tarafında (vitrin_getir) yapılıyor.
       let musteriAd = null, musteriKod = kod, onek = "", oncekiZiyaret = 0, veri = null;
       for (const o of ["", "bsp2_"]) {
-        const r = await vitrinGetirGuvenli(kod, o);
+        const r = await vitrinGetirCihazli(kod, o, onizleme);
         if (r && r.gecerli) { veri = r; musteriAd = r.musteriAd; onek = o; break; }
       }
 
       if (!veri) { setDurum("gecersiz"); return; }
+      if (veri.kilitli) { setDurum("kilitli"); return; } // bu link başka cihaza tanımlı
 
       // Önceki ziyareti localStorage'dan al (yeni model tespiti için) — cihaz bazlı
       try {
@@ -6801,8 +6818,9 @@ function VitrinModu({ kod, onizleme }) {
     const tazele = async () => {
       if (document.hidden) return; // sekme arkadaysa boşuna sorgu atma
       try {
-        const veri = await vitrinGetirGuvenli(vitrinMusteri.kod, vitrinMusteri.onek);
+        const veri = await vitrinGetirCihazli(vitrinMusteri.kod, vitrinMusteri.onek, onizleme);
         if (!veri || !veri.gecerli) return;
+        if (veri.kilitli) { setDurum("kilitli"); return; }
         const aktifKollar = veri.koleksiyonlar || [];
         const aktifKolIdler = new Set(aktifKollar.map(kol => kol.id));
         const guvenli = (veri.modeller || []).map(mod => {
@@ -6872,6 +6890,13 @@ function VitrinModu({ kod, onizleme }) {
   const GOLD2 = "#d8d3cb"; // nötr açık ton (altın değil)
   if (durum === "yukleniyor") {
     return <div style={{ minHeight:"100vh", background:"#0d0b07", display:"flex", alignItems:"center", justifyContent:"center", color:GOLD2, fontFamily:"sans-serif", fontSize:14 }}>{ce("katalog_yukleniyor")}</div>;
+  }
+  if (durum === "kilitli") {
+    return <div style={{ minHeight:"100vh", background:"#0d0b07", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", color:"#e8dcc8", fontFamily:"sans-serif", textAlign:"center", padding:20 }}>
+      <div style={{ fontSize:20, fontWeight:700, color:GOLD2, marginBottom:10 }}>{ce("kilitli_link_baslik")}</div>
+      <div style={{ width:40, height:2, background:GOLD2, opacity:0.5, marginBottom:14 }} />
+      <div style={{ fontSize:13, color:"#998a6e", maxWidth:360, lineHeight:1.6 }}>{ce("kilitli_link_mesaj")}</div>
+    </div>;
   }
   if (durum === "gecersiz") {
     return <div style={{ minHeight:"100vh", background:"#0d0b07", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", color:"#e8dcc8", fontFamily:"sans-serif", textAlign:"center", padding:20 }}>
@@ -8618,6 +8643,8 @@ function Atolye({ onSirketDegis }) {
   const [vitrinGecmis, setVitrinGecmis] = useState(null); // { musteriAd, kod, kayitlar, encok } — müşteri vitrin geçmişi modalı
   const [vitrinOzet, setVitrinOzet] = useState({}); // { MUSKOD: {giris, model, son} } — vitrin sayfasi ozeti
   const [vitrinSupheli, setVitrinSupheli] = useState({}); // { MUSKOD: [{bilgi, ilk, son}, ...] } — birden fazla cihazdan giren müşteriler (link başkasına gitmiş olabilir)
+  const [vitrinCihazlar, setVitrinCihazlar] = useState({}); // { MUSKOD: [{id, cihaz_bilgi, ilk_zaman, son_zaman}] } — linke tanımlı (kilitli) cihazlar
+  const [vitrinEngeller, setVitrinEngeller] = useState({}); // { MUSKOD: [{cihaz_bilgi, zaman}] } — izin verilmeyen cihazdan yapılan girişler
   const [vitrinCevrimici, setVitrinCevrimici] = useState({}); // { MUSKOD: {dakika} } — şu an vitrinde olan (nabız sinyaliyle) müşteriler
   const [kolMusModal, setKolMusModal] = useState(null); // koleksiyon id → hangi musteriler gorsun
   const [musKolModal, setMusKolModal] = useState(null); // musteri kodu → hangi koleksiyonlari gorsun
@@ -9394,7 +9421,27 @@ function Atolye({ onSirketDegis }) {
     vitrinOzetGetir(AKTIF_SIRKET_ONEK).then(setVitrinOzet);
     vitrinSupheliCihazlar(AKTIF_SIRKET_ONEK).then(setVitrinSupheli);
     vitrinCevrimiciMusteriler(AKTIF_SIRKET_ONEK).then(setVitrinCevrimici);
+    cihazKilitYukle();
   }, []);
+  const cihazKilitYukle = async () => {
+    try {
+      const [c, e] = await Promise.all([
+        supabase.from("vitrin_cihaz").select("*").eq("onek", AKTIF_SIRKET_ONEK).order("ilk_zaman", { ascending: true }),
+        supabase.from("vitrin_engel").select("*").eq("onek", AKTIF_SIRKET_ONEK).order("zaman", { ascending: false }).limit(300),
+      ]);
+      const cm = {}; (c.data || []).forEach(r => { (cm[r.musteri_kod] = cm[r.musteri_kod] || []).push(r); });
+      const em = {}; (e.data || []).forEach(r => { (em[r.musteri_kod] = em[r.musteri_kod] || []).push(r); });
+      setVitrinCihazlar(cm); setVitrinEngeller(em);
+    } catch {}
+  };
+  const cihazSil = async (kod, id) => {
+    if (!window.confirm("Bu cihazın erişimi kaldırılsın mı? Aynı bağlantıyı bir sonraki açan cihaz yerine tanımlanır.")) return;
+    try { await supabase.from("vitrin_cihaz").delete().eq("id", id); await cihazKilitYukle(); toastGoster("ok","Cihaz kaldırıldı"); } catch { toastGoster("hata","Silinemedi"); }
+  };
+  const cihazlariSifirla = async (kod, ad) => {
+    if (!window.confirm(ad + " için tanımlı tüm cihazlar sıfırlansın mı? Linki ilk açan 2 cihaz yeniden tanımlanır.")) return;
+    try { await supabase.from("vitrin_cihaz").delete().eq("onek", AKTIF_SIRKET_ONEK).eq("musteri_kod", kod); await supabase.from("vitrin_engel").delete().eq("onek", AKTIF_SIRKET_ONEK).eq("musteri_kod", kod); await cihazKilitYukle(); toastGoster("ok","Cihazlar sıfırlandı"); } catch { toastGoster("hata","Sıfırlanamadı"); }
+  };
 
   // "Şu an sistemde" rozetinin güncel kalması için Müşterilerim ekranındayken periyodik tazele
   useEffect(() => {
@@ -12145,7 +12192,7 @@ function Atolye({ onSirketDegis }) {
           const kolAcik = (kod) => kollar.filter(k => Array.isArray(k.vitrinMus) && k.vitrinMus.includes(kod)).length;
           const acikKolSay = kollar.filter(k => Array.isArray(k.vitrinMus) && k.vitrinMus.length > 0).length;
           const topGiris = musListe.reduce((t,[,kod]) => t + ((vitrinOzet[kod] && vitrinOzet[kod].giris) || 0), 0);
-          const dikkat = musListe.filter(([,kod]) => kolAcik(kod) === 0 || vitrinSupheli[kod]).length;
+          const dikkat = musListe.filter(([,kod]) => kolAcik(kod) === 0 || (vitrinEngeller[kod] || []).length > 0).length;
           const SEKV = [["musteri","Müşteriler",musListe.length],["kol","Koleksiyon erişimi",kollar.length],["top","Toptancılar",toptancilar.length]];
           const aramaListe = liste;
           const secimeAnaliz = async (ad, kod, supheliCihazlar) => {
@@ -12218,9 +12265,14 @@ function Atolye({ onSirketDegis }) {
                                     : <span style={{ color:T.sub }}>Henüz vitrine girmedi</span>}
                                 </td>
                                 <td style={{ ...vTd, background: sec ? T.btnBg : undefined }}>
-                                  {supheliCihazlar
-                                    ? vPill("#f59e0b", supheliCihazlar.length + " farklı cihaz", { title: supheliCihazlar.map(c => c.bilgi + " — son giriş: " + new Date(c.son).toLocaleString("tr-TR",{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"})).join("\n"), style:{ cursor:"help" } })
-                                    : <span style={{ color:T.sub }}>—</span>}
+                                  {(() => {
+                                    const cl = vitrinCihazlar[kod] || [], en = vitrinEngeller[kod] || [];
+                                    if (cl.length === 0 && en.length === 0) return <span style={{ color:T.sub }}>Tanımsız</span>;
+                                    return (<div style={{ display:"flex", flexDirection:"column", gap:4, alignItems:"flex-start" }}>
+                                      {cl.length > 0 && vPill(cl.length >= 2 ? "#f59e0b" : "#10b981", cl.length + " / 2 cihaz", { title: cl.map(c => c.cihaz_bilgi + " — ilk giriş: " + new Date(c.ilk_zaman).toLocaleDateString("tr-TR")).join("\n"), style:{ cursor:"help" } })}
+                                      {en.length > 0 && vPill("#ef4444", en.length + " engellenen giriş", { title: en.slice(0,5).map(c => (c.cihaz_bilgi || "Bilinmeyen cihaz") + " — " + new Date(c.zaman).toLocaleString("tr-TR",{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"})).join("\n"), style:{ cursor:"help" } })}
+                                    </div>);
+                                  })()}
                                 </td>
                                 <td style={{ ...vTd, background: sec ? T.btnBg : undefined, textAlign:"right", whiteSpace:"nowrap" }}>
                                   <button onClick={e=>{ e.stopPropagation(); navigator.clipboard?.writeText(window.location.origin + "?vitrin=" + kod); toastGoster("ok","🛍 "+ad+" linki kopyalandı"); }} style={vBtn}>Linki kopyala</button>
@@ -12271,6 +12323,26 @@ function Atolye({ onSirketDegis }) {
                           <a href={window.location.origin + "?vitrin=" + secKod + "&onizle=1"} target="_blank" rel="noreferrer" title="Önizleme — analize kaydedilmez" style={dBtn}>Önizle</a>
                           <button onClick={()=>downloadPDF(buildMusteriDetayHTML(secAd,secKod,siparisler),secKod+"-detay")} style={dBtn}>PDF</button>
                         </div>
+                      </div>
+                      <div style={{ borderTop:"1px solid "+T.border, margin:"0 0 12px", paddingTop:14 }}>
+                        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
+                          <div style={{ fontSize:12, color:T.sub }}>Linke tanımlı cihazlar ({(vitrinCihazlar[secKod]||[]).length} / 2)</div>
+                          {((vitrinCihazlar[secKod]||[]).length>0 || (vitrinEngeller[secKod]||[]).length>0) && <button onClick={()=>cihazlariSifirla(secKod, secAd)} style={{ ...dBtn, padding:"4px 10px", fontSize:11 }}>Tümünü sıfırla</button>}
+                        </div>
+                        {(vitrinCihazlar[secKod]||[]).length===0 && <div style={{ fontSize:12, color:T.sub, lineHeight:1.5 }}>Henüz cihaz tanımlı değil. Linki ilk açan 2 cihaz tanımlanır; üçüncü cihaz giremez.</div>}
+                        {(vitrinCihazlar[secKod]||[]).map(c => (
+                          <div key={c.id} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:8, padding:"8px 0", borderTop:"1px solid "+T.border }}>
+                            <div style={{ minWidth:0 }}>
+                              <div style={{ fontSize:13, color:T.text, fontWeight:600 }}>{c.cihaz_bilgi || "Bilinmeyen cihaz"}</div>
+                              <div style={{ fontSize:11, color:T.sub }}>ilk: {new Date(c.ilk_zaman).toLocaleDateString("tr-TR")} · son: {new Date(c.son_zaman).toLocaleString("tr-TR",{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"})}</div>
+                            </div>
+                            <button onClick={()=>cihazSil(secKod, c.id)} style={{ ...dBtn, padding:"4px 10px", fontSize:11, color:T.danger||"#e85a4f", borderColor:"transparent" }}>Kaldır</button>
+                          </div>
+                        ))}
+                        {(vitrinEngeller[secKod]||[]).length>0 && <div style={{ marginTop:10, fontSize:12, color:T.sub }}>
+                          <div style={{ fontWeight:600, marginBottom:4 }}>Engellenen girişler ({(vitrinEngeller[secKod]||[]).length})</div>
+                          {(vitrinEngeller[secKod]||[]).slice(0,3).map(e => <div key={e.id} style={{ fontSize:11 }}>{e.cihaz_bilgi || "Bilinmeyen cihaz"} · {new Date(e.zaman).toLocaleString("tr-TR",{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"})}</div>)}
+                        </div>}
                       </div>
                       <div style={{ display:"flex", gap:8, marginTop:18 }}>
                         <button onClick={kaydetDuzenle} style={{ ...vBtnP, marginLeft:0, padding:"10px 18px", fontSize:13 }}>Kaydet</button>
