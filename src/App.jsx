@@ -11597,10 +11597,10 @@ function Atolye({ onSirketDegis }) {
     const gorKeys = sirKeys.filter(k=>gorunen.includes(k));
     const coklu = gorKeys.length>1;
     const ayGen = Math.max(300, (sipVw - 70 - 12*(gorKeys.length-1)) / gorKeys.length - 30);
-    const tahminSutun = Math.max(1, Math.min(4, Math.floor((ayGen+16)/((coklu?520:560)+16))));
+    const tahminSutun = Math.max(1, Math.min(4, Math.floor((ayGen+24)/((coklu?520:560)+24))));
     const nSut = sipSutun>0 ? sipSutun : tahminSutun;
-    const kartGen = (ayGen - 16*(nSut-1)) / nSut;
-    const kartZoom = sipSutun>0 ? Math.min(1, Math.max(0.4, kartGen/560)) : 1;
+    const kartGen = (ayGen - 24*(nSut-1)) / nSut;
+    const kartZoom = 0.95 * (sipSutun>0 ? Math.min(1, Math.max(0.4, kartGen/560)) : 1);
     const sekmeBirak = (e,key) => { e.preventDefault(); const sp=siparisler.find(x=>x.id===(sipSurukle||e.dataTransfer.getData("text/plain"))); setSipSurukle(""); setSipHedefAy(""); if (sp) aya_tasi(sp,key); };
     const sekmeKeys = sirKeys.filter(k => k===bk || gorunen.includes(k) || liste.some(s=>planAy(s)===k));
     return (
@@ -11672,7 +11672,7 @@ function Atolye({ onSirketDegis }) {
                   </div>
                 );
               })()}
-              <div style={{ display:"grid", gridTemplateColumns:sipSutun>0 ? "repeat("+sipSutun+", minmax(0, 1fr))" : "repeat(auto-fill, minmax(max("+(coklu?520:560)+"px, calc((100% - 48px) / 4)), 1fr))", gridAutoRows:"1fr", gap:16, alignItems:"stretch" }}>
+              <div style={{ display:"grid", gridTemplateColumns:sipSutun>0 ? "repeat("+sipSutun+", minmax(0, 1fr))" : "repeat(auto-fill, minmax(max("+(coklu?520:560)+"px, calc((100% - 72px) / 4)), 1fr))", gridAutoRows:"1fr", gap:24, alignItems:"stretch" }}>
                 {sl.length===0 && <div style={{ gridColumn:"1 / -1", color:"#665d4a", fontSize:12, textAlign:"center", padding:"24px 0" }}>Buraya sürükleyip bırak</div>}
                 {sl.map((s,i) => {
                   const o = oz[i], c = chip(s);
