@@ -8668,6 +8668,10 @@ function Atolye({ onSirketDegis }) {
   const [sipTarih2,setSipTarih2]= useState("");
   const [sipMetal,setSipMetal]= useState("altin");
   const [sipAyAcik,setSipAyAcik]= useState([]);
+  const [sipSutun,setSipSutunH]= useState(() => { try { const k=Number(localStorage.getItem("sip_sutun")); return k>=1&&k<=6?k:0; } catch { return 0; } });
+  const setSipSutun = (k) => { setSipSutunH(k); try { localStorage.setItem("sip_sutun", String(k)); } catch {} };
+  const [sipVw,setSipVw]= useState(() => (typeof window!=="undefined"?window.innerWidth:1400));
+  useEffect(() => { const f=()=>setSipVw(window.innerWidth); window.addEventListener("resize",f); return ()=>window.removeEventListener("resize",f); }, []);
   const [sipAsama,setSipAsama]= useState("");
   const [sipSecId, setSipSecId] = useState("");
   const [sipMenu, setSipMenu] = useState("");
@@ -11438,6 +11442,11 @@ function Atolye({ onSirketDegis }) {
     const gorunen = (() => { const f = sipAyAcik.filter(k=>sirKeys.includes(k)); return f.length ? f : [bk]; })();
     const gorKeys = sirKeys.filter(k=>gorunen.includes(k));
     const coklu = gorKeys.length>1;
+    const ayGen = Math.max(300, (sipVw - 70 - 12*(gorKeys.length-1)) / gorKeys.length - 30);
+    const tahminSutun = Math.max(1, Math.min(4, Math.floor((ayGen+16)/((coklu?520:560)+16))));
+    const nSut = sipSutun>0 ? sipSutun : tahminSutun;
+    const kartGen = (ayGen - 16*(nSut-1)) / nSut;
+    const kartZoom = sipSutun>0 ? Math.min(1, Math.max(0.4, kartGen/560)) : 1;
     const sekmeBirak = (e,key) => { e.preventDefault(); const sp=siparisler.find(x=>x.id===(sipSurukle||e.dataTransfer.getData("text/plain"))); setSipSurukle(""); setSipHedefAy(""); if (sp) aya_tasi(sp,key); };
     const sekmeKeys = sirKeys.filter(k => k===bk || gorunen.includes(k) || liste.some(s=>planAy(s)===k));
     return (
@@ -11459,6 +11468,11 @@ function Atolye({ onSirketDegis }) {
             </div>
           );
         })}
+        <div style={{ marginLeft:"auto", display:"flex", alignItems:"center", gap:4, border:"1px solid "+T.border, borderRadius:9, padding:"2px 4px" }}>
+          <button onClick={()=>setSipSutun(Math.min(6,(sipSutun||tahminSutun)+1))} title="Uzaklaş (daha çok kart)" style={{ background:"transparent", border:"none", cursor:"pointer", color:T.text, fontSize:18, fontWeight:600, width:28, height:26, lineHeight:"22px" }}>−</button>
+          <span onClick={()=>setSipSutun(0)} title={sipSutun?"Otomatiğe dön":"Otomatik"} style={{ fontSize:12, color:T.sub, minWidth:62, textAlign:"center", cursor:"pointer", whiteSpace:"nowrap" }}>{sipSutun?sipSutun+" sütun":"Otomatik"}</span>
+          <button onClick={()=>setSipSutun(Math.max(1,(sipSutun||tahminSutun)-1))} title="Yakınlaş (daha büyük kart)" style={{ background:"transparent", border:"none", cursor:"pointer", color:T.text, fontSize:18, fontWeight:600, width:28, height:26, lineHeight:"22px" }}>+</button>
+        </div>
       </div>
       <div style={{ display:"flex", gap:12, paddingBottom:10, alignItems:"stretch", minHeight:"calc(100vh - 340px)" }}>
         {gorKeys.map(key => {
@@ -11504,7 +11518,7 @@ function Atolye({ onSirketDegis }) {
                   </div>
                 );
               })()}
-              <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(max("+(coklu?520:560)+"px, calc((100% - 48px) / 4)), 1fr))", gridAutoRows:"1fr", gap:16, alignItems:"stretch" }}>
+              <div style={{ display:"grid", gridTemplateColumns:sipSutun>0 ? "repeat("+sipSutun+", minmax(0, 1fr))" : "repeat(auto-fill, minmax(max("+(coklu?520:560)+"px, calc((100% - 48px) / 4)), 1fr))", gridAutoRows:"1fr", gap:16, alignItems:"stretch" }}>
                 {sl.length===0 && <div style={{ gridColumn:"1 / -1", color:"#665d4a", fontSize:12, textAlign:"center", padding:"24px 0" }}>Buraya sürükleyip bırak</div>}
                 {sl.map((s,i) => {
                   const o = oz[i], c = chip(s);
@@ -11514,7 +11528,7 @@ function Atolye({ onSirketDegis }) {
                   return (
                     <div key={s.id} draggable={!bitti(s)} onDragStart={e=>{ setSipSurukle(s.id); e.dataTransfer.setData("text/plain", s.id); e.dataTransfer.effectAllowed="move"; }} onDragEnd={()=>{ setSipSurukle(""); setSipHedefAy(""); }}
                       onClick={()=>setSipDrawer(s.id)}
-                      style={{ display:"flex", flexDirection:"column", cursor:bitti(s)?"default":"grab", opacity:sipSurukle===s.id?0.4:1, padding:"12px 14px", borderRadius:12, background:_acikTema?T.card:"#000", color:_yazi, ...isik(c.c), border:"1px solid "+(_acikTema?T.border:"#2c2c2c"), borderLeft:"3px solid "+c.c }}>
+                      style={{ display:"flex", flexDirection:"column", cursor:bitti(s)?"default":"grab", opacity:sipSurukle===s.id?0.4:1, zoom:kartZoom, padding:"12px 14px", borderRadius:12, background:_acikTema?T.card:"#000", color:_yazi, ...isik(c.c), border:"1px solid "+(_acikTema?T.border:"#2c2c2c"), borderLeft:"3px solid "+c.c }}>
                       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:6 }}>
                         <span style={{ display:"flex", gap:9, flexWrap:"nowrap", alignItems:"center", minWidth:0, overflow:"hidden" }}>
                           <span style={kutuS({ fontSize:14.5, fontWeight:600, borderColor:_acikTema?"#777":"#888", flexShrink:0 })}>{s.musKod||s.musteri||"İsimsiz"}</span>
