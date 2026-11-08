@@ -11640,7 +11640,7 @@ function Atolye({ onSirketDegis }) {
               onDragOver={e=>{ e.preventDefault(); if (sipHedefAy!==key) setSipHedefAy(key); }}
               onDragLeave={e=>{ if (!e.currentTarget.contains(e.relatedTarget)) setSipHedefAy(""); }}
               onDrop={e=>{ e.preventDefault(); const sp=siparisler.find(x=>x.id===(sipSurukle||e.dataTransfer.getData("text/plain"))); setSipSurukle(""); setSipHedefAy(""); if (sp) aya_tasi(sp,key); }}
-              style={{ flex:"1 1 0", minWidth:0, background:hedef?"rgba(var(--vurgu-rgb),0.12)":"rgba(128,128,128,0.07)", backdropFilter:"blur(6px)", WebkitBackdropFilter:"blur(6px)", border:"1px "+(hedef?"dashed":"solid")+" "+(hedef?"var(--vurgu)":"rgba(128,128,128,0.2)"), boxShadow:"0 2px 18px rgba(0,0,0,0.05), inset 0 1px 0 rgba(255,255,255,0.25)", borderRadius:20, padding:14, minHeight:200 }}>
+              style={{ flex:"1 1 0", minWidth:0, background:hedef?"rgba(var(--vurgu-rgb),0.12)":(_acikTema?T.card:"#000"), backdropFilter:"blur(6px)", WebkitBackdropFilter:"blur(6px)", border:"1px "+(hedef?"dashed":"solid")+" "+(hedef?"var(--vurgu)":"rgba(128,128,128,0.2)"), boxShadow:"0 2px 18px rgba(0,0,0,0.05), inset 0 1px 0 rgba(255,255,255,0.25)", borderRadius:20, padding:14, minHeight:200 }}>
               {(() => {
                 const aktifSl = sl.map((s,ix)=>({s,o:oz[ix],g:grupNo(s)})).filter(x=>x.g!==4);
                 const topGr = aktifSl.reduce((a,x)=>a+x.o.gram,0);
