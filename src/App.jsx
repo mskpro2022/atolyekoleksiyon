@@ -11231,6 +11231,10 @@ function Atolye({ onSirketDegis }) {
       ? {"8":"#a88a00","9":"#a88a00","10":"#b8860b","14":"#c27803","18":"#c2410c","21":"#b93a1c","22":"#b91c1c","24":"#991b1b","925":"#64748b"}
       : {"8":"#fff3b0","9":"#fde68a","10":"#fcd34d","14":"#f5a524","18":"#ea6a1f","21":"#e0502a","22":"#d9402b","24":"#c8322a","925":"#b8c2d0"};
     return kar[k] || _yazi; };
+  const gramRenk = (g) => { const t = Math.max(0, Math.min(1, ((Number(g)||0)-50)/450));
+    const [A,B,C] = _acikTema ? [[190,60,50],[185,135,20],[40,140,75]] : [[232,72,60],[240,190,60],[80,200,110]];
+    const [x,y,u] = t<.5 ? [A,B,t/.5] : [B,C,(t-.5)/.5];
+    const h = x.map((v,i)=>Math.round(v+(y[i]-v)*u).toString(16).padStart(2,"0")).join(""); return "#"+h; };
   const kutuS = (extra) => ({ display:"inline-flex", alignItems:"center", gap:4, border:"1px solid "+_kenar, borderRadius:7, padding:"2px 8px", fontSize:12.1, lineHeight:"17px", whiteSpace:"nowrap", color:_yazi, ...extra });
   const cizgi = (col) => (typeof col==="string" && col[0]==="#" && col.length===7) ? col+(_acikTema?"99":"88") : col;
   const tumuF = sipFiltre==="tumu" || sipFiltre==="tumü";
@@ -11520,7 +11524,7 @@ function Atolye({ onSirketDegis }) {
                         {rozet(c.l, c.c)}
                       </div>
                       <div style={{ display:"flex", alignItems:"center", marginTop:9, gap:6, flexWrap:"wrap" }}>
-                        {(o.altin>0.0001 || o.gumus<=0) && <span style={kutuS({ fontSize:15, fontWeight:600, padding:"3px 10px", borderColor:_acikTema?"#777":"#888" })}>{fN(o.altin,1)} gr</span>}{o.gumus>0 && <span style={kutuS({ fontSize:15, fontWeight:600, padding:"3px 10px", borderColor:ayarRenk("925"), color:ayarRenk("925") })}>{fN(o.gumus,1)} gr 925</span>}
+                        {(o.altin>0.0001 || o.gumus<=0) && <span style={kutuS({ fontSize:15, fontWeight:600, padding:"3px 10px", borderColor:gramRenk(o.altin)+"66", color:"color-mix(in srgb, "+gramRenk(o.altin)+" 40%, "+_yazi+")" })}>{fN(o.altin,1)} gr</span>}{o.gumus>0 && <span style={kutuS({ fontSize:15, fontWeight:600, padding:"3px 10px", borderColor:ayarRenk("925"), color:ayarRenk("925") })}>{fN(o.gumus,1)} gr 925</span>}
                         <span style={kutuS({ fontSize:13.2 })}>{o.adet} adet</span>
                       </div>
                       <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginTop:8 }}>
