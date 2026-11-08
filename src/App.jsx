@@ -11258,6 +11258,7 @@ function Atolye({ onSirketDegis }) {
   const sec = aylarModu ? (sipDrawer ? siparisler.find(x=>x.id===sipDrawer)||null : null) : (siparisler.find(x=>x.id===sipSecId && sirali.some(y=>y.id===x.id)) || sirali[0] || null);
   const ayAnahtar = t => { const d=new Date(t); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0"); };
   const ayAdi = key => { const [y,m]=key.split("-").map(Number); const a=new Date(y,m-1,1).toLocaleDateString("tr-TR",{month:"long",year:"numeric"}); return a.charAt(0).toLocaleUpperCase("tr-TR")+a.slice(1); };
+  const gTarihU = t => new Date(t).toLocaleDateString("tr-TR",{day:"2-digit",month:"long"});
   const gTarih = t => new Date(t).toLocaleDateString("tr-TR",{day:"2-digit",month:"short"});
   const aya_tasi = (s, key) => {
     const g = grupNo(s);
@@ -11503,7 +11504,7 @@ function Atolye({ onSirketDegis }) {
                   </div>
                 );
               })()}
-              <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax("+(coklu?220:270)+"px, 1fr))", gridAutoRows:"1fr", gap:16, alignItems:"stretch" }}>
+              <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax("+(coklu?340:360)+"px, 1fr))", gridAutoRows:"1fr", gap:16, alignItems:"stretch" }}>
                 {sl.length===0 && <div style={{ gridColumn:"1 / -1", color:"#665d4a", fontSize:12, textAlign:"center", padding:"24px 0" }}>Buraya sürükleyip bırak</div>}
                 {sl.map((s,i) => {
                   const o = oz[i], c = chip(s);
@@ -11515,28 +11516,26 @@ function Atolye({ onSirketDegis }) {
                       onClick={()=>setSipDrawer(s.id)}
                       style={{ display:"flex", flexDirection:"column", cursor:bitti(s)?"default":"grab", opacity:sipSurukle===s.id?0.4:1, padding:"12px 14px", borderRadius:12, background:_acikTema?T.card:"#000", color:_yazi, ...isik(c.c), border:"1px solid "+(_acikTema?T.border:"#2c2c2c"), borderLeft:"3px solid "+c.c }}>
                       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:6 }}>
-                        <span style={{ display:"flex", gap:5, flexWrap:"wrap", alignItems:"center", minWidth:0 }}>
-                          <span style={kutuS({ fontSize:14.5, fontWeight:600, borderColor:_acikTema?"#777":"#888" })}>{s.musKod||s.musteri||"İsimsiz"}</span>
-                          {s.siparisNo && <span style={kutuS()}>{s.siparisNo}</span>}
+                        <span style={{ display:"flex", gap:9, flexWrap:"nowrap", alignItems:"center", minWidth:0, overflow:"hidden" }}>
+                          <span style={kutuS({ fontSize:14.5, fontWeight:600, borderColor:_acikTema?"#777":"#888", flexShrink:0 })}>{s.musKod||s.musteri||"İsimsiz"}</span>
+                          {(poBul(s)||s.siparisNo) && <span style={kutuS({ minWidth:0, overflow:"hidden", textOverflow:"ellipsis", display:"block" })}>{poBul(s)?"PO "+poBul(s):s.siparisNo}</span>}
                           {Object.keys(o.ayarlar).map(a=><span key={a} title={a+" · "+fN(o.ayarlar[a],1)+" gr"} style={kutuS({ fontWeight:700, color:ayarRenk(a), borderColor:ayarRenk(a) })}>{a==="925"?"925":a}</span>)}
-                          {s.musEtiket && <span style={kutuS()}>{s.musEtiket}</span>}
+                          {s.musEtiket && <span style={kutuS({ flexShrink:0 })}>{s.musEtiket}</span>}
                         </span>
                         {rozet(c.l, c.c)}
                       </div>
-                      <div style={{ display:"flex", alignItems:"center", marginTop:9, gap:6, flexWrap:"wrap" }}>
+                      <div style={{ display:"flex", alignItems:"center", marginTop:9, gap:9, flexWrap:"nowrap" }}>
                         {(o.altin>0.0001 || o.gumus<=0) && <span style={kutuS({ fontSize:15, fontWeight:600, padding:"3px 10px", borderColor:gramRenk(o.altin)+"66", color:"color-mix(in srgb, "+gramRenk(o.altin)+" 40%, "+_yazi+")" })}>{fN(o.altin,1)} gr</span>}{o.gumus>0 && <span style={kutuS({ fontSize:15, fontWeight:600, padding:"3px 10px", borderColor:ayarRenk("925"), color:ayarRenk("925") })}>{fN(o.gumus,1)} gr 925</span>}
                         <span style={kutuS({ fontSize:13.2 })}>{o.adet} adet</span>
                       </div>
-                      <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginTop:8 }}>
-                        <span style={kutuS()}>Sipariş {gTarih(s.tarih)}</span>
-                        <span style={kutuS({ color:gecikti?"#ff5a4d":_yazi, fontWeight:gecikti?600:400 })}>Teslim {s.teslimTarihi?gTarih(teslimT):"—"}{gecikti && " ⚠"}</span>
-                      </div>
-                      <div style={{ display:"flex", gap:6, marginTop:6 }}>
-                        <span style={kutuS(poBul(s)?{}:{ opacity:.45 })}>PO {poBul(s)||"—"}</span>
+                      <div style={{ display:"flex", gap:9, flexWrap:"nowrap", marginTop:8 }}>
+                        <span style={kutuS()}>Sip. {gTarihU(s.tarih)}</span>
+                        <span style={kutuS({ color:gecikti?"#ff5a4d":_yazi, fontWeight:gecikti?600:400 })}>Teslim {s.teslimTarihi?gTarihU(teslimT):"—"}{gecikti && " ⚠"}</span>
                       </div>
                       
                       {fotolar.length>0 && <div style={{ display:"grid", gridTemplateColumns:"repeat(4, minmax(0,1fr))", gap:5, marginTop:8 }}>{fotolar.map((k,ix)=><div key={k.id} title={(k.kod||"")+" "+(k.ad||"")} style={{ position:"relative", aspectRatio:"1 / 1", borderRadius:8, overflow:"hidden", background:"rgba(0,0,0,0.06)" }}><img loading="lazy" decoding="async" src={k.foto} alt="" draggable={false} style={{ width:"100%", height:"100%", objectFit:"cover", display:"block" }}/>{ix===7 && fotoHepsi.length>8 && <div style={{ position:"absolute", inset:0, background:"rgba(0,0,0,0.5)", color:"#fff", fontSize:15, fontWeight:600, display:"flex", alignItems:"center", justifyContent:"center" }}>+{fotoHepsi.length-7}</div>}</div>)}</div>}
-                      <div onClick={e=>e.stopPropagation()} style={{ marginTop:"auto", paddingTop:7 }}>
+                      <div onClick={e=>e.stopPropagation()} style={{ marginTop:"auto", paddingTop:7, display:"flex", justifyContent:"space-between", alignItems:"center", gap:8 }}>
+                        <span style={{ fontSize:12.1, color:_yazi, opacity:.7, whiteSpace:"nowrap" }}>{poBul(s)?(s.siparisNo||""):""}</span>
                         <select value={key} disabled={bitti(s)} onChange={e=>aya_tasi(s,e.target.value)} title={bitti(s)?"Tamamlanan sipariş taşınamaz":"Başka aya taşı (planlanan ay)"} style={{ ...IS, width:"auto", background:"transparent", border:"none", padding:"2px 0", fontSize:12.1, color:_yazi, opacity:.7 }}>
                           {sirKeys.map(k2=><option key={k2} value={k2}>{ayAdi(k2)}</option>)}
                         </select>
