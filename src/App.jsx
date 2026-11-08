@@ -11522,7 +11522,6 @@ function Atolye({ onSirketDegis }) {
         <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginBottom:12 }}>
           {stat("Kalem", o.aktif+" · "+o.adet+" adet")}
           {stat("Liste gramı", fN(o.gram,2)+" gr")}
-          {AKTIF_SIRKET_ONEK!=="bsp2_" && stat("Kâr (has)", fN(o.kar,2)+(topKarUSD>0?" ≈ "+fUSD(topKarUSD):""), o.kar>=0?"#6abf69":"#e85a4f")}
           {stat("Sipariş tarihi", new Date(s.tarih).toLocaleDateString("tr-TR"))}
           {stat("Teslim", s.teslimTarihi?new Date(s.teslimTarihi).toLocaleDateString("tr-TR"):"—","#e8833a")}
           {stat("İlerleme", "%"+o.pct+" ("+o.tam+"/"+o.aktif+")", o.pct===100?"#6abf69":GOLD)}
@@ -12004,11 +12003,6 @@ function Atolye({ onSirketDegis }) {
                             <span style={{ fontSize:9, color:"#7a6f5a" }}>{new Date(s.tarih).toLocaleDateString("tr-TR")}</span>
                             <span style={{ fontSize:9, color:"#998a6e" }}>{toplamKalem} kalem</span>
                             <span style={{ fontSize:9, color:"#5b9bd5", fontWeight:700 }}>{fN((s.kalemler||[]).reduce((acc,k)=>{const hc=hesapla(k,k.secilenAyar||k.refAyar,s.altinKgUSD,s.mc);const du=((s.kalemHurda)||{})[k.id]||0;const ia=((s.kalemIade)||{})[k.id]||0;const ta=((s.kalemTamir)||{})[k.id]||0;const net=Math.max(0,(k.adet||1)-du-ia-ta);return acc+hc.mamulGram*net;},0),2)} gr</span>
-                            {(() => {
-                              const topKar = (s.kalemler||[]).reduce((acc,k)=>{const hc=hesapla(k,k.secilenAyar||k.refAyar,s.altinKgUSD,s.mc);const du=((s.kalemHurda)||{})[k.id]||0;const ia=((s.kalemIade)||{})[k.id]||0;const ta=((s.kalemTamir)||{})[k.id]||0;const net=Math.max(0,(k.adet||1)-du-ia-ta);return acc+hc.karHas*net;},0);
-                              const topKarUSD = topKar * ((s.altinKgUSD||0)/1000);
-                              return <span style={{ fontSize:9, color:topKar>=0?"#6abf69":"#e85a4f", fontWeight:800 }}>{fN(topKar,2)} has {topKarUSD>0?"≈"+fUSD(topKarUSD):""}</span>;
-                            })()}
                             {s.teslimTarihi && <span style={{ fontSize:9, color:"#e8833a", fontWeight:700 }}>Teslim: {new Date(s.teslimTarihi).toLocaleDateString("tr-TR")}</span>}
                             {s.aciklama && <span style={{ fontSize:9, color:"#5b9bd5", fontStyle:"italic" }}>📝 {s.aciklama}</span>}
                           </div>
