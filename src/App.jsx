@@ -2456,7 +2456,7 @@ async function rpHash(s){
   try { const b = await crypto.subtle.digest("SHA-256", new TextEncoder().encode("karlilik|"+s)); return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,"0")).join(""); }
   catch { return "x"+s; }
 }
-function RpKapi({ T, GH, children }) {
+function RpKapi({ T, GH, children, baslik }) {
   const [durum, setDurum] = useState(RP_ACIK ? "acik" : "yukleniyor");
   const [kayitli, setKayitli] = useState(null);
   const [a, setA] = useState(""); const [b, setB] = useState(""); const [hata, setHata] = useState("");
@@ -2465,7 +2465,20 @@ function RpKapi({ T, GH, children }) {
     if (RP_ACIK) return;
     ld("v7karsifre", null).then(h => { setKayitli(h && h.hash ? h.hash : null); setDurum(h && h.hash ? "kilitli" : "kur"); });
   }, []);
-  const girdi = { background:T.card, border:"1px solid "+T.border, borderRadius:8, padding:"8px 12px", color:T.text, fontSize:13, outline:"none", width:200, boxSizing:"border-box" };
+  const girdi = { background:"transparent", border:"1px solid "+T.border, borderRadius:10, padding:"13px 16px", color:T.text, fontSize:15, outline:"none", width:"100%", boxSizing:"border-box", textAlign:"center", letterSpacing:2, marginBottom:8 };
+  const dugme = { width:"100%", background:T.text, border:"1px solid "+T.text, borderRadius:10, padding:"13px", color:T.bg2, fontSize:14, fontWeight:700, cursor:"pointer", marginTop:6 };
+  const ikinci = { ...dugme, background:"transparent", color:T.sub, border:"1px solid "+T.border, fontWeight:600 };
+  const ortala = (c) => (
+    <div style={{ minHeight:"68vh", display:"flex", alignItems:"center", justifyContent:"center" }}>
+      <style>{`.kapi-in:focus{border-color:${T.text}!important}.kapi-in::placeholder{color:${T.sub};letter-spacing:0}`}</style>
+      <div style={{ maxWidth:320, width:"86%", textAlign:"center" }}>{c}</div>
+    </div>
+  );
+  const baslikEl = (t, alt) => (<>
+    <div style={{ fontSize:24, fontWeight:700, letterSpacing:-0.4, color:T.text }}>{t}</div>
+    <div style={{ width:40, height:2, background:T.gold, opacity:0.6, margin:"14px auto 12px" }} />
+    <div style={{ fontSize:13, color:T.sub, marginBottom:26 }}>{alt}</div>
+  </>);
   const kur = async () => {
     if (a.length < 4) { setHata("En az 4 karakter"); return; }
     if (a !== b) { setHata("İki şifre aynı değil"); return; }
@@ -2474,31 +2487,25 @@ function RpKapi({ T, GH, children }) {
   };
   const ac = async () => { const h = await rpHash(a); if (h === kayitli) { RP_ACIK = true; setDurum("acik"); setA(""); setHata(""); } else setHata("Şifre yanlış"); };
   if (durum === "yukleniyor") return <div style={{ fontSize:12, color:T.sub }}>Yükleniyor…</div>;
-  if (durum === "kur" || (durum === "acik" && degistir)) return (
-    <div style={{ maxWidth:260, margin:"30px auto", textAlign:"center" }}>
-      <div style={{ fontSize:13, fontWeight:700, color:T.gold, marginBottom:6 }}>{degistir ? "Şifreyi değiştir" : "Karlılık şifresi belirle"}</div>
-      <div style={{ fontSize:12, color:T.sub, marginBottom:12 }}>Kâr/zarar bilgisini yalnızca bu şifreyi bilenler görür.</div>
-      <input type="password" placeholder="Yeni şifre" value={a} onChange={e=>setA(e.target.value)} style={girdi}/><br/>
-      <input type="password" placeholder="Şifre tekrar" value={b} onChange={e=>setB(e.target.value)} onKeyDown={e=>e.key==="Enter"&&kur()} style={{ ...girdi, marginTop:8 }}/><br/>
-      {hata && <div style={{ fontSize:12, color:T.danger||"#e85a4f", marginTop:6 }}>{hata}</div>}
-      <button onClick={kur} style={{ ...GH, marginTop:10 }}>Kaydet</button>
-      {degistir && <button onClick={()=>{setDegistir(false);setA("");setB("");setHata("");}} style={{ ...GH, marginTop:10, marginLeft:6 }}>Vazgeç</button>}
-    </div>
-  );
-  if (durum === "kilitli") return (
-    <div style={{ maxWidth:260, margin:"30px auto", textAlign:"center" }}>
-      <div style={{ fontSize:26, marginBottom:6 }}>🔒</div>
-      <div style={{ fontSize:13, fontWeight:700, color:T.gold, marginBottom:12 }}>Karlılık</div>
-      <input type="password" autoFocus placeholder="Şifre" value={a} onChange={e=>setA(e.target.value)} onKeyDown={e=>e.key==="Enter"&&ac()} style={girdi}/>
-      {hata && <div style={{ fontSize:12, color:T.danger||"#e85a4f", marginTop:6 }}>{hata}</div>}
-      <div><button onClick={ac} style={{ ...GH, marginTop:10 }}>Aç</button></div>
-    </div>
-  );
+  if (durum === "kur" || (durum === "acik" && degistir)) return ortala(<>
+    {baslikEl(degistir ? "Şifreyi değiştir" : "Şifre belirle", "Kâr/zarar ve personel bilgisini yalnızca bu şifreyi bilenler görür.")}
+    <input className="kapi-in" type="password" placeholder="Yeni şifre" value={a} onChange={e=>setA(e.target.value)} style={girdi}/>
+    <input className="kapi-in" type="password" placeholder="Şifre tekrar" value={b} onChange={e=>setB(e.target.value)} onKeyDown={e=>e.key==="Enter"&&kur()} style={girdi}/>
+    <div style={{ height:20, fontSize:12, color:T.danger||"#e85a4f" }}>{hata}</div>
+    <button onClick={kur} style={dugme}>Kaydet</button>
+    {degistir && <button onClick={()=>{setDegistir(false);setA("");setB("");setHata("");}} style={ikinci}>Vazgeç</button>}
+  </>);
+  if (durum === "kilitli") return ortala(<>
+    {baslikEl(baslik || "Karlılık", "Devam etmek için şifreyi girin")}
+    <input className="kapi-in" type="password" autoFocus placeholder="Şifre" value={a} onChange={e=>setA(e.target.value)} onKeyDown={e=>e.key==="Enter"&&ac()} style={girdi}/>
+    <div style={{ height:20, fontSize:12, color:T.danger||"#e85a4f" }}>{hata}</div>
+    <button onClick={ac} style={dugme}>Aç</button>
+  </>);
   return (
     <div>
       <div style={{ display:"flex", justifyContent:"flex-end", gap:6, marginBottom:6 }}>
         <button onClick={()=>{setA("");setB("");setDegistir(true);}} style={{ ...GH, fontSize:11, padding:"3px 9px" }}>Şifreyi değiştir</button>
-        <button onClick={()=>{ RP_ACIK=false; setDurum("kilitli"); }} style={{ ...GH, fontSize:11, padding:"3px 9px" }}>🔒 Kilitle</button>
+        <button onClick={()=>{ RP_ACIK=false; setDurum("kilitli"); }} style={{ ...GH, fontSize:11, padding:"3px 9px" }}>Kilitle</button>
       </div>
       {children}
     </div>
@@ -6411,14 +6418,16 @@ function SirketSecimEkrani({ onSec }) {
   // Klavye: M / ← / 1 → MSK, B / → / 2 → BSP, Enter → son kullanılan (yoksa MSK)
   useEffect(() => {
     const k = (e) => {
-      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      if (e.ctrlKey || e.metaKey || e.altKey || e.repeat) return;
       const t = (e.key || "").toLowerCase();
       if (t === "m" || t === "arrowleft" || t === "1") sec("", "MSK");
       else if (t === "b" || t === "arrowright" || t === "2") sec("bsp2_", "BSP");
       else if (t === "enter") sec(son === "bsp2_" ? "bsp2_" : "", son === "bsp2_" ? "BSP" : "MSK");
     };
-    window.addEventListener("keydown", k);
-    return () => window.removeEventListener("keydown", k);
+    // Giriş ekranındaki Enter vuruşu bu ekrana taşıp otomatik seçim yapmasın: dinleyici kısa bir gecikmeyle başlar
+    let kapat = () => {};
+    const zm = setTimeout(() => { window.addEventListener("keydown", k); kapat = () => window.removeEventListener("keydown", k); }, 400);
+    return () => { clearTimeout(zm); kapat(); };
   }, []);
   // Uygulamanın gündüz/gece temasını izler (elle seçilmişse o tema, değilse saate göre: 07-19 gündüz, gerisi gece)
   const T = (() => {
@@ -12344,7 +12353,7 @@ function Atolye({ onSirketDegis }) {
 
         {/* KASA */}
         {sayfa==="personel" && (
-          <RpKapi T={T} GH={GH}><PersonelSayfa T={T} GH={GH} IS={IS} usdTry={altinSon?.usdTry || null} key={AKTIF_SIRKET_ONEK} /></RpKapi>
+          <RpKapi T={T} GH={GH} baslik="Personel"><PersonelSayfa T={T} GH={GH} IS={IS} usdTry={altinSon?.usdTry || null} key={AKTIF_SIRKET_ONEK} /></RpKapi>
         )}
 
         {sayfa==="kasa" && (() => {
