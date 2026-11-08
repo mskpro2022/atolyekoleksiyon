@@ -11504,7 +11504,7 @@ function Atolye({ onSirketDegis }) {
                   </div>
                 );
               })()}
-              <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax("+(coklu?520:560)+"px, 1fr))", gridAutoRows:"1fr", gap:16, alignItems:"stretch" }}>
+              <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(max("+(coklu?520:560)+"px, calc((100% - 48px) / 4)), 1fr))", gridAutoRows:"1fr", gap:16, alignItems:"stretch" }}>
                 {sl.length===0 && <div style={{ gridColumn:"1 / -1", color:"#665d4a", fontSize:12, textAlign:"center", padding:"24px 0" }}>Buraya sürükleyip bırak</div>}
                 {sl.map((s,i) => {
                   const o = oz[i], c = chip(s);
