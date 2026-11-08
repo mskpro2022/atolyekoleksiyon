@@ -8667,6 +8667,7 @@ function Atolye({ onSirketDegis }) {
   const [sipTarih1,setSipTarih1]= useState("");
   const [sipTarih2,setSipTarih2]= useState("");
   const [sipMetal,setSipMetal]= useState("altin");
+  const [sipAyAcik,setSipAyAcik]= useState([]);
   const [sipAsama,setSipAsama]= useState("");
   const [sipSecId, setSipSecId] = useState("");
   const [sipMenu, setSipMenu] = useState("");
@@ -11422,22 +11423,44 @@ function Atolye({ onSirketDegis }) {
     for (let i=1;i<=2;i++) keys.add(ayAnahtar(new Date(bugun.getFullYear(),bugun.getMonth()+i,1).getTime()));
     const sirKeys = [...keys].sort();
     const bitti = s => { const g=grupNo(s); return g===3||g===4; };
+    const gorunen = (() => { const f = sipAyAcik.filter(k=>sirKeys.includes(k)); return f.length ? f : [bk]; })();
+    const gorKeys = sirKeys.filter(k=>gorunen.includes(k));
+    const coklu = gorKeys.length>1;
+    const sekmeBirak = (e,key) => { e.preventDefault(); const sp=siparisler.find(x=>x.id===(sipSurukle||e.dataTransfer.getData("text/plain"))); setSipSurukle(""); setSipHedefAy(""); if (sp) aya_tasi(sp,key); };
+    const sekmeKeys = sirKeys.filter(k => k===bk || gorunen.includes(k) || liste.some(s=>planAy(s)===k));
     return (
-      <div style={{ display:"flex", gap:12, overflowX:"auto", paddingBottom:10, alignItems:"stretch", minHeight:"calc(100vh - 290px)" }}>
-        {sirKeys.map(key => {
+      <div>
+      <div style={{ display:"flex", gap:6, flexWrap:"wrap", alignItems:"center", marginBottom:12 }}>
+        {sekmeKeys.map(k => {
+          const sk = liste.filter(s=>planAy(s)===k);
+          const gec = sk.some(s=>!bitti(s) && ozet(s).gecikti);
+          const on = gorunen.includes(k);
+          return (
+            <div key={k} onDragOver={e=>{ e.preventDefault(); if (sipHedefAy!==k) setSipHedefAy(k); }} onDragLeave={()=>setSipHedefAy("")} onDrop={e=>sekmeBirak(e,k)}
+              style={{ display:"flex", alignItems:"stretch", border:"1px solid "+(sipHedefAy===k?"var(--vurgu)":on?"rgba(var(--vurgu-rgb),0.5)":T.border), background:on?"rgba(var(--vurgu-rgb),0.14)":"transparent", borderRadius:9, overflow:"hidden" }}>
+              <button onClick={()=>setSipAyAcik([k])} style={{ background:"transparent", border:"none", padding:"6px 10px", cursor:"pointer", color:on?GOLD:T.sub, fontSize:12, fontWeight:600, display:"flex", alignItems:"center", gap:6 }}>
+                {ayAdi(k)}{k===bk && <span style={{ fontSize:10, color:"#6abf69" }}>●</span>}
+                <span style={{ fontSize:11, fontWeight:500, opacity:.75 }}>{sk.length}</span>
+                {gec && <span title="Teslimi geçen sipariş var" style={{ width:6, height:6, borderRadius:3, background:"#e85a4f", display:"inline-block" }}/>}
+              </button>
+              <button onClick={()=>setSipAyAcik(on ? (gorunen.length>1?gorunen.filter(x=>x!==k):gorunen) : [...gorunen,k])} title={on?(gorunen.length>1?"Yan yana görünümden çıkar":"Tek açık ay"):"Yan yana ekle"} style={{ background:"transparent", border:"none", borderLeft:"1px solid "+T.border, padding:"0 8px", cursor:"pointer", color:T.sub, fontSize:13, fontWeight:600 }}>{on?(gorunen.length>1?"×":"•"):"+"}</button>
+            </div>
+          );
+        })}
+      </div>
+      <div style={{ display:"flex", gap:12, paddingBottom:10, alignItems:"stretch", minHeight:"calc(100vh - 340px)" }}>
+        {gorKeys.map(key => {
           const sl = liste.filter(s=>planAy(s)===key).sort((a,b)=>b.tarih-a.tarih);
           const oz = sl.map(s=>ozet(s));
           const topGum = oz.reduce((a,o)=>a+o.gumus,0), topAlt = oz.reduce((a,o)=>a+o.altin,0);
           const ayTop = {}; oz.forEach(o=>Object.entries(o.ayarlar).forEach(([a,g])=>{ ayTop[a]=(ayTop[a]||0)+g; }));
           const hedef = sipHedefAy===key && sipSurukle;
-          const sutun = sl.length>=10 ? 3 : sl.length>=4 ? 2 : 1;
-          const genis = sutun*290 + (sutun-1)*16 + 22;
           return (
             <div key={key}
               onDragOver={e=>{ e.preventDefault(); if (sipHedefAy!==key) setSipHedefAy(key); }}
               onDragLeave={e=>{ if (!e.currentTarget.contains(e.relatedTarget)) setSipHedefAy(""); }}
               onDrop={e=>{ e.preventDefault(); const sp=siparisler.find(x=>x.id===(sipSurukle||e.dataTransfer.getData("text/plain"))); setSipSurukle(""); setSipHedefAy(""); if (sp) aya_tasi(sp,key); }}
-              style={{ flex:"0 0 "+(genis+8)+"px", background:hedef?"rgba(var(--vurgu-rgb),0.12)":"rgba(128,128,128,0.07)", backdropFilter:"blur(6px)", WebkitBackdropFilter:"blur(6px)", border:"1px "+(hedef?"dashed":"solid")+" "+(hedef?"var(--vurgu)":"rgba(128,128,128,0.2)"), boxShadow:"0 2px 18px rgba(0,0,0,0.05), inset 0 1px 0 rgba(255,255,255,0.25)", borderRadius:20, padding:14, minHeight:200 }}>
+              style={{ flex:"1 1 0", minWidth:0, background:hedef?"rgba(var(--vurgu-rgb),0.12)":"rgba(128,128,128,0.07)", backdropFilter:"blur(6px)", WebkitBackdropFilter:"blur(6px)", border:"1px "+(hedef?"dashed":"solid")+" "+(hedef?"var(--vurgu)":"rgba(128,128,128,0.2)"), boxShadow:"0 2px 18px rgba(0,0,0,0.05), inset 0 1px 0 rgba(255,255,255,0.25)", borderRadius:20, padding:14, minHeight:200 }}>
               {(() => {
                 const aktifSl = sl.map((s,ix)=>({s,o:oz[ix],g:grupNo(s)})).filter(x=>x.g!==4);
                 const topGr = aktifSl.reduce((a,x)=>a+x.o.gram,0);
@@ -11469,7 +11492,7 @@ function Atolye({ onSirketDegis }) {
                   </div>
                 );
               })()}
-              <div style={{ display:"grid", gridTemplateColumns:"repeat("+sutun+", minmax(0,1fr))", gridAutoRows:"1fr", gap:16, alignItems:"stretch" }}>
+              <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax("+(coklu?220:270)+"px, 1fr))", gridAutoRows:"1fr", gap:16, alignItems:"stretch" }}>
                 {sl.length===0 && <div style={{ gridColumn:"1 / -1", color:"#665d4a", fontSize:12, textAlign:"center", padding:"24px 0" }}>Buraya sürükleyip bırak</div>}
                 {sl.map((s,i) => {
                   const o = oz[i], c = chip(s);
@@ -11509,6 +11532,7 @@ function Atolye({ onSirketDegis }) {
             </div>
           );
         })}
+      </div>
       </div>
     );
   })();
