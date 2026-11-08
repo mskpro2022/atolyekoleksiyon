@@ -11556,11 +11556,12 @@ function Atolye({ onSirketDegis }) {
             const sec_ = durumSecenekleri();
             return (
               <div key={k.id} className="sp-kalem" style={{ display:"flex", gap:10, alignItems:"center", flexWrap:"wrap", padding:8, background:"rgba(var(--vurgu-rgb),0.02)", border:"1px solid rgba(var(--vurgu-rgb),0.08)", borderRadius:12, borderLeft:"4px solid "+dur.c }}>
-                <div onClick={()=>k.foto&&setSipBuyuk({src:k.foto,ad:(k.kod||"")+" "+(k.ad||"")})} style={{ width:84, height:84, borderRadius:10, overflow:"hidden", flexShrink:0, background:"rgba(0,0,0,0.08)", cursor:k.foto?"zoom-in":"default" }}>
+                <div onClick={()=>{ const mm=modeller.find(x=>x.id===k.id)||modeller.find(x=>k.kod&&x.kod===k.kod); if (mm) openEM(mm); else if (k.foto) setSipBuyuk({src:k.foto,ad:(k.kod||"")+" "+(k.ad||"")}); }} title="Model kartını aç" style={{ position:"relative", width:84, height:84, borderRadius:10, overflow:"hidden", flexShrink:0, background:"rgba(0,0,0,0.08)", cursor:"pointer" }}>
                   {k.foto ? <img loading="lazy" decoding="async" src={k.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"cover", display:"block" }}/> : <div style={{ width:"100%", height:"100%" }}/>}
+                  {k.foto && <span onClick={e=>{ e.stopPropagation(); setSipBuyuk({src:k.foto,ad:(k.kod||"")+" "+(k.ad||"")}); }} title="Fotoğrafı büyüt" style={{ position:"absolute", right:3, bottom:3, width:20, height:20, borderRadius:6, background:"rgba(0,0,0,0.55)", color:"#fff", fontSize:12, display:"flex", alignItems:"center", justifyContent:"center", cursor:"zoom-in" }}>⤢</span>}
                 </div>
                 <div style={{ flex:"1 1 120px", minWidth:0 }}>
-                  <div style={{ fontSize:13, fontWeight:600, color:"var(--goldtext)" }}><span style={{ color:GOLD, marginRight:6 }}>{k.kod||""}</span>{k.ad}{k.renk && <span style={{ color:"var(--gold)", marginLeft:8, fontSize:12 }}>{k.renk}</span>}</div>
+                  <div style={{ fontSize:13, fontWeight:600, color:"var(--goldtext)" }}><span onClick={()=>{ const mm=modeller.find(x=>x.id===k.id)||modeller.find(x=>k.kod&&x.kod===k.kod); if (mm) openEM(mm); }} title="Model kartını aç" style={{ color:GOLD, marginRight:6, cursor:"pointer", textDecoration:"underline dotted", textUnderlineOffset:3 }}>{k.kod||""}</span>{k.ad}{k.renk && <span style={{ color:"var(--gold)", marginLeft:8, fontSize:12 }}>{k.renk}</span>}</div>
                   <div style={{ fontSize:12, color:"#998a6e", marginTop:3 }}>{k.secilenAyar||k.refAyar} · {fN(k.gram||0)} gr · <b style={{ color:"var(--goldtext)" }}>{k.adet||1} adet</b></div>
                   {k.sipNot && <div style={{ fontSize:12, color:"#5b9bd5", marginTop:3 }}>{k.sipNot}</div>}
                   {(hA>0||iA>0||tA>0) && <div style={{ display:"flex", gap:5, marginTop:5, flexWrap:"wrap" }}>
