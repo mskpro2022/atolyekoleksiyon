@@ -6189,23 +6189,29 @@ function GirisEkrani({ onGiris }) {
     }
     else setHata(true);
   };
+  // Uygulamanın gündüz/gece temasını izler (şirket seçim ekranıyla aynı mantık)
+  const T = (() => {
+    try { if (localStorage.getItem("atolye_tema_modu") === "manuel") { const t = localStorage.getItem("atolye_tema"); return TEMALAR[t] || TEMALAR.altin; } } catch {}
+    return otoTemaHesapla();
+  })();
   return (
-    <div style={{ minHeight:"100vh", width:"100vw", background:"#0a0a0a", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"'Segoe UI',Arial,sans-serif", margin:0, padding:0, boxSizing:"border-box" }}>
-      <div style={{ background:"rgba(var(--vurgu-rgb),0.04)", border:"1px solid rgba(var(--vurgu-rgb),0.15)", borderRadius:16, padding:"40px 48px", textAlign:"center", maxWidth:360, width:"90%" }}>
-        <div style={{ fontSize:28, marginBottom:8 }}>💎</div>
-        <div style={{ fontSize:18, fontWeight:700, color:"var(--vurgu)", marginBottom:4 }}>Atölye Koleksiyon</div>
-        <div style={{ fontSize:11, color:"#665d4a", marginBottom:28 }}>Sisteme giriş yapın</div>
-        <input type="password" value={sifre} onChange={e=>{ setSifre(e.target.value); setHata(false); }}
+    <div style={{ minHeight:"100vh", width:"100vw", background:T.bg2, display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"'Segoe UI',Arial,sans-serif", margin:0, padding:0, boxSizing:"border-box", color:T.text }}>
+      <style>{`.giris-in:focus{border-color:${T.text}!important}.giris-in::placeholder{color:${T.sub}}`}</style>
+      <div style={{ textAlign:"center", maxWidth:320, width:"86%" }}>
+        <div style={{ fontSize:26, fontWeight:700, letterSpacing:-0.4, color:T.text }}>Atölye Koleksiyon</div>
+        <div style={{ width:40, height:2, background:T.gold, opacity:0.6, margin:"16px auto 14px" }} />
+        <div style={{ fontSize:13, color:T.sub, marginBottom:32 }}>Sisteme giriş yapın</div>
+        <input className="giris-in" type="password" value={sifre} onChange={e=>{ setSifre(e.target.value); setHata(false); }}
           onKeyDown={e=>e.key==="Enter"&&kontrol()}
           placeholder="Şifre" autoFocus
-          style={{ width:"100%", background:"rgba(0,0,0,0.3)", border:"1px solid "+(hata?"#e85a4f":"rgba(var(--vurgu-rgb),0.2)"), borderRadius:8, padding:"10px 14px", color:"#e8dcc8", fontSize:14, outline:"none", boxSizing:"border-box", marginBottom:8 }}/>
-        {hata && <div style={{ color:"#e85a4f", fontSize:11, marginBottom:8 }}>Şifre yanlış</div>}
-        <label style={{ display:"flex", alignItems:"center", gap:7, marginBottom:14, cursor:"pointer", userSelect:"none" }}>
+          style={{ width:"100%", background:"transparent", border:"1px solid "+(hata?(T.danger||"#e85a4f"):T.border), borderRadius:10, padding:"13px 16px", color:T.text, fontSize:15, outline:"none", boxSizing:"border-box", textAlign:"center", letterSpacing:2 }}/>
+        <div style={{ height:22, marginTop:8, color:T.danger||"#e85a4f", fontSize:12 }}>{hata ? "Şifre yanlış" : ""}</div>
+        <button onClick={kontrol} style={{ width:"100%", background:T.text, border:"1px solid "+T.text, borderRadius:10, padding:"13px", color:T.bg2, fontSize:14, fontWeight:700, cursor:"pointer" }}>Giriş Yap</button>
+        <label style={{ display:"inline-flex", alignItems:"center", gap:8, marginTop:18, cursor:"pointer", userSelect:"none" }}>
           <input type="checkbox" checked={hatirla} onChange={e=>setHatirla(e.target.checked)}
-            style={{ width:16, height:16, accentColor:"var(--vurgu)", cursor:"pointer" }}/>
-          <span style={{ fontSize:12, color:"#998a6e" }}>Beni hatırla (30 gün)</span>
+            style={{ width:15, height:15, accentColor:T.text, cursor:"pointer", margin:0 }}/>
+          <span style={{ fontSize:12, color:T.sub }}>Beni hatırla (30 gün)</span>
         </label>
-        <button onClick={kontrol} style={{ width:"100%", background:"rgba(var(--vurgu-rgb),0.15)", border:"1px solid rgba(var(--vurgu-rgb),0.3)", borderRadius:8, padding:"10px", color:"var(--vurgu)", fontSize:14, fontWeight:700, cursor:"pointer" }}>Giriş Yap</button>
       </div>
     </div>
   );
@@ -8265,7 +8271,8 @@ export default function Root() {
     } catch {}
     return false;
   });
-  const [secim, setSecim] = useState(false);     // katalog seçildi mi
+  // Eski "Katalog / Personel" ara ekranı kaldırıldı: Personel artık ERP içinde (Karlılık şifreli sekme). Giriş → doğrudan şirket seçimi.
+  const [secim, setSecim] = useState(true);
   const [sirket, setSirket] = useState(false);   // şirket seçildi mi
   const [sirketKey, setSirketKey] = useState(0); // şirket değişince Atolye'yi yeniden mount eder
   useEffect(() => { if (giris) atolyeAuthGiris(); }, [giris]);
