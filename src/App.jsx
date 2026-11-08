@@ -8592,6 +8592,7 @@ function Atolye({ onSirketDegis }) {
   const [saglikRapor, setSaglikRapor] = useState(null); // detaylı sağlık raporu
   const [kopyaRapor, setKopyaRapor] = useState(null); // kopya model tarama sonucu
   const [toptancilar, setToptancilar] = useState([]); // kayıtlı toptancılar
+  const [vitSek, setVitSek] = useState("musteri"); // Vitrin yönetimi sekmesi
   const [ayarYeniKategori, setAyarYeniKategori] = useState("");
   const [ayarVarsAltinKg, setAyarVarsAltinKg] = useState("");
   const [ayarVarsMc, setAyarVarsMc] = useState("");
@@ -10300,92 +10301,84 @@ function Atolye({ onSirketDegis }) {
       <div style={{ width:"100%", padding:"12px 12px 60px" }}>
 
         {/* MÜŞTERİ VİTRİNİ (ana menü) */}
-        {sayfa==="vitrin" && (
-          <div style={{ animation:"fadein .3s", maxWidth:1100, margin:"0 auto" }}>
-            <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:6 }}>
-              <h2 style={{ margin:0, fontSize:17, fontWeight:800, color:T.text }}>🛍 Müşteri Vitrini</h2>
+        {sayfa==="vitrin" && (() => {
+          // Yönetim ekranı: sade, sekmeli. (Müşterinin gördüğü katalog sayfası ayrı ve değişmedi.)
+          const vTh = { textAlign:"left", fontSize:12, fontWeight:600, color:T.sub, padding:"11px 20px", background:T.header||"transparent", borderBottom:"1px solid "+T.border, whiteSpace:"nowrap" };
+          const vTd = { fontSize:13, color:T.text, padding:"14px 20px", borderBottom:"1px solid "+T.border, verticalAlign:"middle" };
+          const vBtn = { background:"transparent", border:"1px solid "+T.btnBorder, borderRadius:9, padding:"6px 13px", color:T.text, fontSize:12, fontWeight:600, cursor:"pointer", textDecoration:"none", display:"inline-block", marginLeft:6 };
+          const vBtnP = { ...vBtn, background:T.text, color:T.bg2, borderColor:T.text };
+          const vPill = (renk, yazi, ek) => <span {...(ek||{})} style={{ display:"inline-flex", alignItems:"center", gap:7, background:T.btnBg, color:T.text, padding:"3px 11px 3px 9px", borderRadius:20, fontSize:12, fontWeight:600, ...((ek && ek.style) || {}) }}><span style={{ width:7, height:7, borderRadius:"50%", background:renk, flexShrink:0 }} />{yazi}</span>;
+          const vKutu = (y, d) => (
+            <div style={{ background:T.card, border:"1px solid "+T.border, borderRadius:14, padding:"16px 20px", flex:"1 1 150px" }}>
+              <div style={{ fontSize:12, color:T.sub, fontWeight:600 }}>{y}</div>
+              <div style={{ fontSize:26, fontWeight:700, color:T.text, marginTop:6, letterSpacing:-0.5 }}>{d}</div>
             </div>
-            <div style={{ fontSize:11, color:T.sub, marginBottom:18 }}>Toptancılara özel katalog linki oluşturun. Müşteri sadece foto, model adı, gram ve ayar görür — fiyat, taş, işçilik gizlidir.</div>
+          );
+          const musListe = Object.entries(musteriler).sort((a,b)=>a[0].localeCompare(b[0],"tr"));
+          const kolAcik = (kod) => kollar.filter(k => Array.isArray(k.vitrinMus) && k.vitrinMus.includes(kod)).length;
+          const acikKol = kollar.filter(k => Array.isArray(k.vitrinMus) && k.vitrinMus.length > 0).length;
+          const topGiris = musListe.reduce((t,[,kod]) => t + ((vitrinOzet[kod] && vitrinOzet[kod].giris) || 0), 0);
+          const dikkat = musListe.filter(([,kod]) => kolAcik(kod) === 0 || vitrinSupheli[kod]).length;
+          const SEKV = [["musteri","Müşteriler",musListe.length],["kol","Koleksiyon erişimi",kollar.length],["top","Toptancılar",toptancilar.length]];
+          return (
+          <div style={{ animation:"fadein .3s", maxWidth:1100, margin:"0 auto" }}>
+            <style>{`.vit-t tbody tr:last-child td{border-bottom:none}.vit-t tbody tr:hover td{background:${T.btnBg}}`}</style>
+            <div style={{ fontSize:26, fontWeight:700, color:T.text, letterSpacing:-0.5 }}>Vitrin</div>
+            <div style={{ fontSize:13, color:T.sub, margin:"4px 0 20px" }}>Toptancılara özel katalog linkleri. Müşteri yalnızca foto, model adı, gram ve ayar görür; fiyat, taş ve işçilik gizlidir.</div>
+            <div style={{ display:"flex", gap:2, flexWrap:"wrap", borderBottom:"1px solid "+T.border, marginBottom:22 }}>
+              {SEKV.map(([k,y,n]) => (
+                <button key={k} onClick={()=>setVitSek(k)} style={{ background:"transparent", border:"none", borderBottom:"2px solid "+(vitSek===k?T.text:"transparent"), marginBottom:-1, padding:"10px 16px", fontSize:13, fontWeight: vitSek===k?700:500, color: vitSek===k?T.text:T.sub, cursor:"pointer" }}>{y}<span style={{ color:T.sub, fontWeight:500, marginLeft:6, fontSize:12 }}>{n}</span></button>
+              ))}
+            </div>
 
-            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(340px, 1fr))", gap:14, alignItems:"start" }}>
-
-              {/* VİTRİN KOLEKSİYONLARI — her koleksiyon: hangi müşteriler görsün */}
-              <div style={{ background:T.card, border:"1px solid "+T.border, borderRadius:14, padding:"15px 16px" }}>
-                <div style={{ fontSize:10, fontWeight:700, color:T.sub, marginBottom:10, letterSpacing:"0.05em", textTransform:"uppercase" }}>Koleksiyon → Müşteri Erişimi</div>
-                <div style={{ fontSize:9, color:"#665d4a", marginBottom:12 }}>Her koleksiyona tıklayıp o koleksiyonu hangi müşterilerin göreceğini seçin. Kimse seçilmezse o koleksiyon kimseye görünmez.</div>
-                <div style={{ display:"flex", flexDirection:"column", gap:5 }}>
-                  {kollar.length===0 && <div style={{ fontSize:9, color:"#665d4a" }}>Henüz koleksiyon yok</div>}
-                  {kollar.map(k => {
-                    const izinli = Array.isArray(k.vitrinMus) ? k.vitrinMus : [];
-                    const sayi = izinli.length;
-                    return (
-                      <button key={k.id} onClick={()=>setKolMusModal(k.id)}
-                        style={{ background: sayi>0?"rgba(106,191,105,0.1)":"rgba(255,255,255,0.03)", border:"1px solid "+(sayi>0?"rgba(106,191,105,0.3)":"rgba(255,255,255,0.08)"), borderRadius:8, padding:"8px 12px", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"space-between", gap:8, textAlign:"left" }}>
-                        <span style={{ color: sayi>0?"#6abf69":"#7a6f5a", fontSize:11, fontWeight:700 }}>{k.ad}</span>
-                        <span style={{ fontSize:9, color: sayi>0?"#6abf69":"#665d4a", whiteSpace:"nowrap" }}>{sayi>0 ? sayi+" müşteri" : "kapalı"} ›</span>
-                      </button>
-                    );
-                  })}
+            {/* MÜŞTERİLER */}
+            {vitSek==="musteri" && (
+              <div>
+                <div style={{ display:"flex", gap:14, flexWrap:"wrap", marginBottom:20 }}>
+                  {vKutu("Müşteri", musListe.length)}
+                  {vKutu("Açık koleksiyon", acikKol + " / " + kollar.length)}
+                  {vKutu("Toplam giriş", topGiris)}
+                  {vKutu("Dikkat gerektiren", dikkat)}
                 </div>
-              </div>
-
-              {/* MÜŞTERİLER — kalıcı linkler + analiz */}
-              <div style={{ background:T.card, border:"1px solid "+T.border, borderRadius:14, padding:"15px 16px", gridColumn:"1/-1" }}>
-                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6 }}>
-                  <div style={{ fontSize:10, fontWeight:700, color:T.sub, letterSpacing:"0.05em", textTransform:"uppercase" }}>Müşterilerim ({Object.keys(musteriler).length})</div>
-                  <button onClick={()=>vitrinOzetYukle()} style={{ ...GH, fontSize:9, padding:"4px 10px" }}>↻ Analizi Yenile</button>
-                </div>
-                <div style={{ fontSize:9, color:"#665d4a", marginBottom:12 }}>Her müşterinin kalıcı vitrin linki var. Linki gönderin, girdiklerinde neye baktıklarını buradan izleyin.</div>
-
-                {Object.keys(musteriler).length === 0 && <div style={{ fontSize:10, color:"#665d4a", padding:"12px 0" }}>Henüz müşteri yok. Müşteriler sayfasından ekleyin.</div>}
-
-                {Object.keys(musteriler).length > 0 && (
-                  <div style={{ display:"flex", flexDirection:"column", gap:7 }}>
-                    {Object.entries(musteriler).sort((a,b)=>a[0].localeCompare(b[0],"tr")).map(([ad, kod]) => {
+                <div style={{ background:T.card, border:"1px solid "+T.border, borderRadius:14, overflow:"hidden" }}>
+                  <div style={{ padding:"14px 20px", display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:8 }}>
+                    <div style={{ fontSize:15, fontWeight:700, color:T.text }}>Müşteriler <span style={{ color:T.sub, fontWeight:500, fontSize:12, marginLeft:6 }}>kalıcı vitrin linkleri</span></div>
+                    <button onClick={()=>vitrinOzetYukle()} style={vBtn}>↻ Analizi yenile</button>
+                  </div>
+                  {musListe.length === 0 ? <div style={{ ...vTd, textAlign:"center", color:T.sub }}>Henüz müşteri yok. Müşteriler sayfasından ekleyin.</div> : (
+                  <div style={{ overflowX:"auto" }}>
+                  <table className="vit-t" style={{ width:"100%", borderCollapse:"collapse" }}>
+                    <thead><tr><th style={vTh}>Müşteri</th><th style={vTh}>Koleksiyon</th><th style={vTh}>Aktivite</th><th style={vTh}>Cihaz</th><th style={vTh}></th></tr></thead>
+                    <tbody>{musListe.map(([ad, kod]) => {
                       const url = window.location.origin + "?vitrin=" + kod;
                       const oz = vitrinOzet[kod] || null;
                       const supheliCihazlar = vitrinSupheli[kod] || null;
                       const cevrimici = vitrinCevrimici[kod] || null;
+                      const acikSayi = kolAcik(kod);
                       return (
-                        <div key={kod} style={{ background:"rgba(0,0,0,0.15)", border:"1px solid "+(cevrimici?"rgba(106,191,105,0.4)":supheliCihazlar?"rgba(232,162,58,0.35)":T.border), borderRadius:9, padding:"10px 12px", display:"flex", alignItems:"center", gap:10, flexWrap:"wrap" }}>
-                          {/* Kod + isim */}
-                          <div style={{ minWidth:150, flex:"1 1 180px" }}>
-                            <div style={{ display:"flex", alignItems:"center", gap:7, flexWrap:"wrap" }}>
-                              <span style={{ background:"rgba(255,255,255,0.06)", borderRadius:5, padding:"2px 7px", fontSize:9, fontWeight:800, color:T.sub }}>{kod}</span>
-                              <span style={{ fontSize:13, fontWeight:700, color:T.text }}>{ad}</span>
-                              {cevrimici && (
-                                <span title={"Son sinyal az önce"} style={{ background:"rgba(106,191,105,0.14)", border:"1px solid rgba(106,191,105,0.4)", borderRadius:5, padding:"2px 7px", fontSize:9, fontWeight:800, color:"#6abf69", display:"flex", alignItems:"center", gap:4 }}>
-                                  <span style={{ width:6, height:6, borderRadius:"50%", background:"#6abf69", display:"inline-block", boxShadow:"0 0 0 2px rgba(106,191,105,0.25)" }}/>
-                                  Şu an vitrinde · {cevrimici.dakika < 1 ? "yeni girdi" : cevrimici.dakika + " dk"}
-                                </span>
-                              )}
-                              {supheliCihazlar && (
-                                <span title={supheliCihazlar.map(c => c.bilgi + " — son giriş: " + new Date(c.son).toLocaleString("tr-TR",{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"})).join("\n")}
-                                  style={{ background:"rgba(232,162,58,0.14)", border:"1px solid rgba(232,162,58,0.35)", borderRadius:5, padding:"2px 7px", fontSize:9, fontWeight:800, color:"#e8a23a", cursor:"help" }}>
-                                  ⚠️ {supheliCihazlar.length} farklı cihaz
-                                </span>
-                              )}
-                            </div>
-                            {/* Aktivite özeti */}
-                            <div style={{ fontSize:9, color: oz && oz.giris>0 ? "#6abf69" : "#665d4a", marginTop:3 }}>
-                              {oz === null ? "—" : oz.giris > 0
-                                ? oz.giris + " kez girdi · " + oz.model + " modele baktı · son: " + (oz.son ? new Date(oz.son).toLocaleDateString("tr-TR") : "—")
-                                : "henüz vitrine girmedi"}
-                            </div>
-                          </div>
-                          {/* Butonlar */}
-                          <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
-                            {(() => {
-                              const acikSayi = kollar.filter(k => Array.isArray(k.vitrinMus) && k.vitrinMus.includes(kod)).length;
-                              return (
-                                <button onClick={()=>setMusKolModal(kod)}
-                                  style={{ background: acikSayi>0?"rgba(91,127,166,0.12)":"rgba(232,90,79,0.1)", border:"1px solid "+(acikSayi>0?"rgba(91,127,166,0.3)":"rgba(232,90,79,0.25)"), borderRadius:7, padding:"6px 12px", color: acikSayi>0?T.gold:"#e85a4f", fontSize:10, fontWeight:700, cursor:"pointer" }}>
-                                  📁 {acikSayi>0 ? acikSayi+" koleksiyon" : "Koleksiyon YOK"}
-                                </button>
-                              );
-                            })()}
-                            <button onClick={()=>{ navigator.clipboard?.writeText(url); toastGoster("ok","🛍 "+ad+" linki kopyalandı"); }}
-                              style={{ background:"rgba(106,191,105,0.1)", border:"1px solid rgba(106,191,105,0.25)", borderRadius:7, padding:"6px 12px", color:"#6abf69", fontSize:10, fontWeight:700, cursor:"pointer" }}>🛍 Linki Kopyala</button>
+                        <tr key={kod}>
+                          <td style={{ ...vTd, whiteSpace:"nowrap" }}>
+                            <span style={{ display:"inline-block", fontSize:11, fontWeight:700, color:T.sub, border:"1px solid "+T.border, borderRadius:6, padding:"2px 7px", marginRight:10, letterSpacing:0.5 }}>{kod}</span>
+                            <span style={{ fontWeight:700 }}>{ad}</span>
+                          </td>
+                          <td style={vTd}>
+                            <span onClick={()=>setMusKolModal(kod)} style={{ cursor:"pointer", display:"inline-block" }} title="Koleksiyonları düzenle">
+                              {acikSayi>0 ? <span style={{ fontWeight:600, borderBottom:"1px dashed "+T.sub }}>{acikSayi} koleksiyon</span> : vPill("#ef4444","Atanmamış")}
+                            </span>
+                          </td>
+                          <td style={vTd}>
+                            {cevrimici && <div style={{ marginBottom:3 }}>{vPill("#10b981", "Şu an vitrinde · " + (cevrimici.dakika < 1 ? "yeni girdi" : cevrimici.dakika + " dk"))}</div>}
+                            {oz === null ? <span style={{ color:T.sub }}>—</span> : oz.giris > 0
+                              ? <span>{oz.giris} giriş · {oz.model} model <span style={{ color:T.sub }}>· son {oz.son ? new Date(oz.son).toLocaleDateString("tr-TR") : "—"}</span></span>
+                              : <span style={{ color:T.sub }}>Henüz vitrine girmedi</span>}
+                          </td>
+                          <td style={vTd}>
+                            {supheliCihazlar
+                              ? vPill("#f59e0b", supheliCihazlar.length + " farklı cihaz", { title: supheliCihazlar.map(c => c.bilgi + " — son giriş: " + new Date(c.son).toLocaleString("tr-TR",{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"})).join("\n"), style:{ cursor:"help" } })
+                              : <span style={{ color:T.sub }}>—</span>}
+                          </td>
+                          <td style={{ ...vTd, textAlign:"right", whiteSpace:"nowrap" }}>
+                            <button onClick={()=>{ navigator.clipboard?.writeText(url); toastGoster("ok","🛍 "+ad+" linki kopyalandı"); }} style={vBtnP}>Linki kopyala</button>
                             <button onClick={async()=>{
                               setVitrinGecmis({ musteriAd:ad, kod, kayitlar:null, encok:null, cihazlar:supheliCihazlar });
                               const [kayitlar, encok] = await Promise.all([
@@ -10393,44 +10386,73 @@ function Atolye({ onSirketDegis }) {
                                 vitrinEnCokBakilan(AKTIF_SIRKET_ONEK, kod)
                               ]);
                               setVitrinGecmis({ musteriAd:ad, kod, kayitlar, encok, cihazlar:supheliCihazlar });
-                            }} style={{ background:"rgba(91,155,213,0.1)", border:"1px solid rgba(91,155,213,0.25)", borderRadius:7, padding:"6px 12px", color:"#5b9bd5", fontSize:10, fontWeight:700, cursor:"pointer" }}>📊 Analiz</button>
-                            <a href={url + "&onizle=1"} target="_blank" rel="noreferrer" title="Önizleme — analize kaydedilmez" style={{ background:"rgba(255,255,255,0.04)", border:"1px solid "+T.border, borderRadius:7, padding:"6px 12px", color:T.sub, fontSize:10, fontWeight:700, textDecoration:"none" }}>Önizle</a>
-                          </div>
-                        </div>
+                            }} style={vBtn}>Analiz</button>
+                            <a href={url + "&onizle=1"} target="_blank" rel="noreferrer" title="Önizleme — analize kaydedilmez" style={vBtn}>Önizle</a>
+                          </td>
+                        </tr>
                       );
-                    })}
-                  </div>
-                )}
-              </div>
-
-              {/* KAYITLI TOPTANCILAR */}
-              <div style={{ background:T.card, border:"1px solid "+T.border, borderRadius:14, padding:"15px 16px" }}>
-                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
-                  <div style={{ fontSize:10, fontWeight:700, color:T.sub, letterSpacing:"0.05em", textTransform:"uppercase" }}>Kayıtlı Toptancılar</div>
-                  <button onClick={()=>toptancilariGetir(AKTIF_SIRKET_ONEK).then(setToptancilar)} style={{ ...GH, fontSize:9, padding:"4px 10px" }}>↻ Yenile</button>
+                    })}</tbody>
+                  </table>
+                  </div>)}
                 </div>
-                <div style={{ fontSize:9, color:"#665d4a", marginBottom:12 }}>Vitrin bülteninden kaydolan toptancılar.</div>
-                {toptancilar.length === 0 && <div style={{ fontSize:9, color:"#665d4a" }}>Henüz kayıtlı toptancı yok.</div>}
-                {toptancilar.length > 0 && <>
-                  <div style={{ fontSize:9, color:"#998a6e", marginBottom:8 }}>Toplam {toptancilar.length} kayıt</div>
-                  <div style={{ display:"flex", flexDirection:"column", gap:6, maxHeight:320, overflowY:"auto" }}>
-                    {toptancilar.map(t => (
-                      <div key={t.id} style={{ display:"flex", alignItems:"center", gap:8, padding:"8px 10px", background:"rgba(0,0,0,0.15)", borderRadius:8 }}>
-                        <div style={{ flex:1, minWidth:0 }}>
-                          <div style={{ fontSize:12, fontWeight:700, color:"#e8dcc8", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{t.ad}</div>
-                          <div style={{ fontSize:10, color:"#998a6e" }}>{t.telefon} · {new Date(t.kayit_tarihi).toLocaleDateString("tr-TR")}</div>
-                        </div>
-                        <a href={"https://wa.me/9" + t.telefon} target="_blank" rel="noreferrer" style={{ fontSize:9, color:"#6abf69", textDecoration:"none", padding:"4px 8px", background:"rgba(106,191,105,0.1)", borderRadius:6, fontWeight:700 }}>WhatsApp</a>
-                        <button onClick={async()=>{ if(!window.confirm(t.ad+" silinsin mi?"))return; await toptanciSil(t.id); toptancilariGetir(AKTIF_SIRKET_ONEK).then(setToptancilar); }} style={{ background:"none", border:"none", color:"#e85a4f", cursor:"pointer", fontSize:13, padding:"0 4px" }}>🗑</button>
-                      </div>
-                    ))}
-                  </div>
-                </>}
               </div>
+            )}
 
-            </div>
+            {/* KOLEKSİYON ERİŞİMİ — her koleksiyon: hangi müşteriler görsün */}
+            {vitSek==="kol" && (
+              <div>
+                <div style={{ background:T.card, border:"1px solid "+T.border, borderRadius:14, overflow:"hidden" }}>
+                  <div style={{ padding:"14px 20px", fontSize:15, fontWeight:700, color:T.text }}>Koleksiyon erişimi <span style={{ color:T.sub, fontWeight:500, fontSize:12, marginLeft:6 }}>her koleksiyonu hangi müşteriler görür</span></div>
+                  {kollar.length===0 && <div style={{ ...vTd, color:T.sub, textAlign:"center" }}>Henüz koleksiyon yok</div>}
+                  {kollar.map(k => {
+                    const sayi = (Array.isArray(k.vitrinMus) ? k.vitrinMus : []).length;
+                    return (
+                      <div key={k.id} onClick={()=>setKolMusModal(k.id)} className="vit-satir"
+                        style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:12, padding:"16px 20px", borderTop:"1px solid "+T.border, cursor:"pointer" }}
+                        onMouseEnter={e=>e.currentTarget.style.background=T.btnBg} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+                        <div style={{ fontSize:13, fontWeight:700, color:T.text }}>{k.ad}</div>
+                        <div style={{ display:"flex", alignItems:"center", gap:20 }}>
+                          <span style={{ fontSize:13, color:T.sub }}>{sayi>0 ? sayi+" müşteri" : "—"}</span>
+                          {vPill(sayi>0 ? "#10b981" : "#9ca3af", sayi>0 ? "Açık" : "Kapalı")}
+                          <span style={{ color:T.sub }}>›</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div style={{ fontSize:12, color:T.sub, marginTop:10 }}>Satıra tıklayınca hangi müşterilerin göreceğini seçersiniz. Kimse seçilmezse koleksiyon kimseye görünmez.</div>
+              </div>
+            )}
+
+            {/* KAYITLI TOPTANCILAR */}
+            {vitSek==="top" && (
+              <div style={{ background:T.card, border:"1px solid "+T.border, borderRadius:14, overflow:"hidden" }}>
+                <div style={{ padding:"14px 20px", display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:8 }}>
+                  <div style={{ fontSize:15, fontWeight:700, color:T.text }}>Kayıtlı toptancılar <span style={{ color:T.sub, fontWeight:500, fontSize:12, marginLeft:6 }}>vitrin bülteninden kaydolanlar</span></div>
+                  <button onClick={()=>toptancilariGetir(AKTIF_SIRKET_ONEK).then(setToptancilar)} style={vBtn}>↻ Yenile</button>
+                </div>
+                {toptancilar.length === 0 ? <div style={{ ...vTd, textAlign:"center", color:T.sub }}>Henüz kayıtlı toptancı yok.</div> : (
+                <div style={{ overflowX:"auto" }}>
+                <table className="vit-t" style={{ width:"100%", borderCollapse:"collapse" }}>
+                  <thead><tr><th style={vTh}>Ad</th><th style={vTh}>Telefon</th><th style={vTh}>Kayıt tarihi</th><th style={vTh}></th></tr></thead>
+                  <tbody>{toptancilar.map(t => (
+                    <tr key={t.id}>
+                      <td style={{ ...vTd, fontWeight:700 }}>{t.ad}</td>
+                      <td style={vTd}>{t.telefon}</td>
+                      <td style={vTd}>{new Date(t.kayit_tarihi).toLocaleDateString("tr-TR")}</td>
+                      <td style={{ ...vTd, textAlign:"right", whiteSpace:"nowrap" }}>
+                        <a href={"https://wa.me/9" + t.telefon} target="_blank" rel="noreferrer" style={vBtn}>WhatsApp</a>
+                        <button onClick={async()=>{ if(!window.confirm(t.ad+" silinsin mi?"))return; await toptanciSil(t.id); toptancilariGetir(AKTIF_SIRKET_ONEK).then(setToptancilar); }} style={{ ...vBtn, color:T.danger||"#e85a4f", borderColor:"transparent" }}>Sil</button>
+                      </td>
+                    </tr>
+                  ))}</tbody>
+                </table>
+                </div>)}
+              </div>
+            )}
           </div>
-        )}
+          );
+        })()}
 
         {/* KOLEKSİYONLAR */}
         {sayfa==="koleksiyonlar" && (
