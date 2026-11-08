@@ -2558,6 +2558,7 @@ function PersonelSayfa({ T, GH, IS }) {
   const [avans, setAvans] = useState([]);
   const [brd, setBrd] = useState({});       // personel_id → bordro satırı
   const [mesai, setMesai] = useState({});   // personel_id → saat (düzenlenen)
+  const [mucret, setMucret] = useState({}); // personel_id → elle yazılan mesai ücreti (boşsa formül)
   const [devam, setDevam] = useState([]);
   const [puan, setPuan] = useState({});     // personel_id → puanlama satırı
   const [pform, setPform] = useState({});   // personel_id → {kalite,...}
@@ -2593,9 +2594,9 @@ function PersonelSayfa({ T, GH, IS }) {
         persQ(supabase.from("puanlama").select("*").eq("atolye", atl).eq("yil", yil).eq("ay", ay)),
         persQ(supabase.from("odeme").select("*").eq("atolye", atl).gte("tarih", ayBas).lte("tarih", ayBit).order("tarih", { ascending: false })),
       ]);
-      const bm = {}, mm = {}; (b || []).forEach(x => { bm[x.personel_id] = x; mm[x.personel_id] = x.mesai_saat || 0; });
+      const bm = {}, mm = {}, mu = {}; (b || []).forEach(x => { bm[x.personel_id] = x; mm[x.personel_id] = x.mesai_saat || 0; mu[x.personel_id] = (x.mesai_ucret === null || x.mesai_ucret === undefined) ? "" : x.mesai_ucret; });
       const pm = {}, pf = {}; (pu || []).forEach(x => { pm[x.personel_id] = x; pf[x.personel_id] = { kalite:x.kalite, hiz:x.hiz, devam:x.devam, uyum:x.uyum, usta:x.usta }; });
-      setBrd(bm); setMesai(mm); setDevam(d || []); setPuan(pm); setPform(pf); setOdeme(od || []);
+      setBrd(bm); setMesai(mm); setMucret(mu); setDevam(d || []); setPuan(pm); setPform(pf); setOdeme(od || []);
     } catch (e) { haber("Aylık veri hatası: " + e.message, true); }
   }, [atl, yil, ay, ayBas, ayBit]);
 
@@ -2654,8 +2655,9 @@ function PersonelSayfa({ T, GH, IS }) {
     try {
       for (const p of aktif) {
         const saat = Number(mesai[p.id] || 0), ex = brd[p.id];
-        if (ex?.id) await persQ(supabase.from("bordro").update({ mesai_saat: saat }).eq("id", ex.id).select());
-        else await persQ(supabase.from("bordro").insert({ atolye: atl, personel_id: p.id, yil, ay, mesai_saat: saat }).select());
+        const mu = (mucret[p.id] === "" || mucret[p.id] === null || mucret[p.id] === undefined) ? null : Number(mucret[p.id]);
+        if (ex?.id) await persQ(supabase.from("bordro").update({ mesai_saat: saat, mesai_ucret: mu }).eq("id", ex.id).select());
+        else await persQ(supabase.from("bordro").insert({ atolye: atl, personel_id: p.id, yil, ay, mesai_saat: saat, mesai_ucret: mu }).select());
       }
       await aylikYukle(); haber("Bordro kaydedildi ✓");
     } catch (e) { haber("Kayıt hatası: " + e.message, true); }
@@ -2710,22 +2712,25 @@ function PersonelSayfa({ T, GH, IS }) {
 
   // ── hesaplar ──
   const satir = (p) => {
-    const saat = Number(mesai[p.id] ?? brd[p.id]?.mesai_saat ?? 0), mu = persMesaiUcret(p, saat), be = persBankaElden(p), ye = Number(p.yemek || 0);
-    return { saat, mu, be, ye, net: Number(p.maas || 0) + Number(p.servis || 0) + ye + mu };
+    const saat = Number(mesai[p.id] ?? brd[p.id]?.mesai_saat ?? 0), hesap = persMesaiUcret(p, saat), be = persBankaElden(p), ye = Number(p.yemek || 0);
+    const ham = mucret[p.id] ?? brd[p.id]?.mesai_ucret ?? "";
+    const elle = !(ham === "" || ham === null || ham === undefined);
+    const mu = elle ? Number(ham) : hesap;
+    return { saat, mu, hesap, elle, be, ye, net: Number(p.maas || 0) + Number(p.servis || 0) + ye + mu };
   };
   const topNet = aktif.reduce((s, p) => s + satir(p).net, 0);
   const bekAvans = avans.reduce((s, a) => s + Math.max(0, Number(a.tutar || 0) - Number(a.odenen || 0)), 0);
 
   const csvIndir = () => {
-    let csv = "Ad Soyad,Maas,Banka,Elden,Yemek,Mesai,Servis,Net Toplam\n";
-    aktif.forEach(p => { const s = satir(p); csv += `"${p.ad}",${p.maas || 0},${s.be.banka === null ? "" : s.be.banka},${s.be.elden === null ? "" : s.be.elden},${s.ye},${s.mu},${p.servis || 0},${s.net}\n`; });
+    let csv = "Ad Soyad,Maas,Banka,Elden,Yemek,Mesai Saat,Mesai Ucreti,Servis,Net Toplam\n";
+    aktif.forEach(p => { const s = satir(p); csv += `"${p.ad}",${p.maas || 0},${s.be.banka === null ? "" : s.be.banka},${s.be.elden === null ? "" : s.be.elden},${s.ye},${s.saat},${s.mu},${p.servis || 0},${s.net}\n`; });
     const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob(["﻿" + csv], { type:"text/csv;charset=utf-8" }));
     a.download = `${atl}_${PERS_AY[ay]}_${yil}_Bordro.csv`; a.click();
   };
   const yazdir = () => {
     const w = window.open("", "_blank"); if (!w) { haber("Açılır pencere engellendi", true); return; }
-    const satirlar = aktif.map(p => { const s = satir(p); return `<tr><td>${p.ad}</td><td>${persTL(p.maas)}</td><td>${s.be.banka === null ? "—" : persTL(s.be.banka)}</td><td>${s.be.elden === null ? "—" : persTL(s.be.elden)}</td><td>${s.ye ? persTL(s.ye) : "—"}</td><td>${s.mu ? persTL(s.mu) : "—"}</td><td>${p.servis > 0 ? persTL(p.servis) : "—"}</td><td><b>${persTL(s.net)}</b></td></tr>`; }).join("");
-    w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${atl} Bordro</title><style>body{font-family:Arial,sans-serif;padding:30px}h1{font-size:20px}h2{font-size:14px;color:#555}table{width:100%;border-collapse:collapse}th{background:#f3f4f6;padding:8px;font-size:11px;text-align:left;border-bottom:2px solid #ddd}td{padding:8px;font-size:12px;border-bottom:1px solid #eee}@media print{button{display:none}}</style></head><body><h1>${atl} Atölye — Bordro</h1><h2>${PERS_AY[ay]} ${yil}</h2><table><thead><tr><th>Ad Soyad</th><th>Maaş</th><th>Banka</th><th>Elden</th><th>Yemek</th><th>Mesai</th><th>Servis</th><th>Net</th></tr></thead><tbody>${satirlar}<tr><td><b>TOPLAM</b></td><td colspan="6"></td><td><b>${persTL(topNet)}</b></td></tr></tbody></table><br><button onclick="window.print()">Yazdır / PDF Kaydet</button></body></html>`);
+    const satirlar = aktif.map(p => { const s = satir(p); return `<tr><td>${p.ad}</td><td>${persTL(p.maas)}</td><td>${s.be.banka === null ? "—" : persTL(s.be.banka)}</td><td>${s.be.elden === null ? "—" : persTL(s.be.elden)}</td><td>${s.ye ? persTL(s.ye) : "—"}</td><td>${s.saat ? s.saat + " sa" : "—"}</td><td>${s.mu ? persTL(s.mu) : "—"}</td><td>${p.servis > 0 ? persTL(p.servis) : "—"}</td><td><b>${persTL(s.net)}</b></td></tr>`; }).join("");
+    w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${atl} Bordro</title><style>body{font-family:Arial,sans-serif;padding:30px}h1{font-size:20px}h2{font-size:14px;color:#555}table{width:100%;border-collapse:collapse}th{background:#f3f4f6;padding:8px;font-size:11px;text-align:left;border-bottom:2px solid #ddd}td{padding:8px;font-size:12px;border-bottom:1px solid #eee}@media print{button{display:none}}</style></head><body><h1>${atl} Atölye — Bordro</h1><h2>${PERS_AY[ay]} ${yil}</h2><table><thead><tr><th>Ad Soyad</th><th>Maaş</th><th>Banka</th><th>Elden</th><th>Yemek</th><th>Mesai (sa)</th><th>Mesai Ücreti</th><th>Servis</th><th>Net</th></tr></thead><tbody>${satirlar}<tr><td><b>TOPLAM</b></td><td colspan="7"></td><td><b>${persTL(topNet)}</b></td></tr></tbody></table><br><button onclick="window.print()">Yazdır / PDF Kaydet</button></body></html>`);
     w.document.close();
   };
 
@@ -2814,7 +2819,7 @@ function PersonelSayfa({ T, GH, IS }) {
           <div style={{ display:"flex", justifyContent:"flex-end", marginBottom:8 }}><button onClick={bordroKaydet} style={GH}>Kaydet</button></div>
           <div style={{ ...kart, padding:0, overflowX:"auto" }}>
             <table style={{ width:"100%", borderCollapse:"collapse" }}>
-              <thead><tr><th style={th}>Ad Soyad</th><th style={{ ...th, textAlign:"right" }}>Baz Maaş</th><th style={{ ...th, textAlign:"right" }}>Banka</th><th style={{ ...th, textAlign:"right" }}>Elden</th><th style={{ ...th, textAlign:"right" }}>Yemek</th><th style={th}>Mesai (sa)</th><th style={{ ...th, textAlign:"right" }}>Mesai Ücreti</th><th style={{ ...th, textAlign:"right" }}>Servis</th><th style={{ ...th, textAlign:"right" }}>Toplam Net</th></tr></thead>
+              <thead><tr><th style={th}>Ad Soyad</th><th style={{ ...th, textAlign:"right" }}>Baz Maaş</th><th style={{ ...th, textAlign:"right" }}>Banka</th><th style={{ ...th, textAlign:"right" }}>Elden</th><th style={{ ...th, textAlign:"right" }}>Yemek</th><th style={th}>Mesai (sa)</th><th style={th}>Mesai Ücreti (₺)</th><th style={{ ...th, textAlign:"right" }}>Servis</th><th style={{ ...th, textAlign:"right" }}>Toplam Net</th></tr></thead>
               <tbody>{aktif.length ? aktif.map(p => { const s = satir(p); return (
                 <tr key={p.id}>
                   <td style={{ ...td, fontWeight:700 }}>{p.ad}</td>
@@ -2823,7 +2828,7 @@ function PersonelSayfa({ T, GH, IS }) {
                   <td style={sayi}>{s.be.elden === null ? "—" : persTL(s.be.elden)}</td>
                   <td style={{ ...sayi, color:"#10b981" }}>{s.ye > 0 ? persTL(s.ye) : "—"}</td>
                   <td style={td}><input type="number" min="0" value={mesai[p.id] ?? brd[p.id]?.mesai_saat ?? 0} onChange={e => setMesai(m => ({ ...m, [p.id]: e.target.value }))} style={{ ...girdi, width:80 }} /></td>
-                  <td style={{ ...sayi, color:"#f59e0b" }}>{s.mu > 0 ? persTL(s.mu) : "—"}</td>
+                  <td style={td}><input type="number" min="0" placeholder={String(s.hesap)} title={"Boşsa formül: " + persTL(s.hesap)} value={mucret[p.id] ?? brd[p.id]?.mesai_ucret ?? ""} onChange={e => setMucret(m => ({ ...m, [p.id]: e.target.value }))} style={{ ...girdi, width:100, color: s.elle ? "#f59e0b" : T.text }} /><span style={{ fontSize:11, color:T.sub, marginLeft:6 }}>{s.elle ? "elle" : "formül"}</span></td>
                   <td style={sayi}>{Number(p.servis) > 0 ? persTL(p.servis) : "—"}</td>
                   <td style={{ ...sayi, fontWeight:800 }}>{persTL(s.net)}</td>
                 </tr>); }) : <tr><td colSpan={9} style={{ ...td, textAlign:"center", color:T.sub }}>Personel eklenmemiş</td></tr>}
@@ -2831,7 +2836,7 @@ function PersonelSayfa({ T, GH, IS }) {
               </tbody>
             </table>
           </div>
-          <div style={{ fontSize:11, color:T.sub, marginTop:6 }}>Toplam net = baz maaş + yemek + servis + mesai ücreti. Elden = baz maaş − banka (banka girilmediyse boş).</div>
+          <div style={{ fontSize:11, color:T.sub, marginTop:6 }}>Toplam net = baz maaş + yemek + servis + mesai ücreti. Mesai ücreti kutusu boşsa formül kullanılır (baz maaş ÷ 225 × 1,5 × saat); tutar yazarsan o ay için o tutar geçerli olur. Elden = baz maaş − banka (banka girilmediyse boş).</div>
         </div>
       )}
 
@@ -2951,10 +2956,10 @@ function PersonelSayfa({ T, GH, IS }) {
           </div>
           <div style={{ ...kart, padding:0, overflowX:"auto" }}>
             <table style={{ width:"100%", borderCollapse:"collapse" }}>
-              <thead><tr><th style={th}>Ad Soyad</th><th style={{ ...th, textAlign:"right" }}>Maaş</th><th style={{ ...th, textAlign:"right" }}>Banka</th><th style={{ ...th, textAlign:"right" }}>Elden</th><th style={{ ...th, textAlign:"right" }}>Yemek</th><th style={{ ...th, textAlign:"right" }}>Mesai</th><th style={{ ...th, textAlign:"right" }}>Servis</th><th style={{ ...th, textAlign:"right" }}>Net</th></tr></thead>
+              <thead><tr><th style={th}>Ad Soyad</th><th style={{ ...th, textAlign:"right" }}>Maaş</th><th style={{ ...th, textAlign:"right" }}>Banka</th><th style={{ ...th, textAlign:"right" }}>Elden</th><th style={{ ...th, textAlign:"right" }}>Yemek</th><th style={{ ...th, textAlign:"right" }}>Mesai (sa)</th><th style={{ ...th, textAlign:"right" }}>Mesai Ücreti</th><th style={{ ...th, textAlign:"right" }}>Servis</th><th style={{ ...th, textAlign:"right" }}>Net</th></tr></thead>
               <tbody>{aktif.map(p => { const s = satir(p); return (
-                <tr key={p.id}><td style={{ ...td, fontWeight:700 }}>{p.ad}</td><td style={sayi}>{persTL(p.maas)}</td><td style={sayi}>{s.be.banka === null ? "—" : persTL(s.be.banka)}</td><td style={sayi}>{s.be.elden === null ? "—" : persTL(s.be.elden)}</td><td style={sayi}>{s.ye > 0 ? persTL(s.ye) : "—"}</td><td style={sayi}>{s.mu > 0 ? persTL(s.mu) : "—"}</td><td style={sayi}>{Number(p.servis) > 0 ? persTL(p.servis) : "—"}</td><td style={{ ...sayi, fontWeight:800 }}>{persTL(s.net)}</td></tr>); })}
-                <tr><td style={{ ...td, fontWeight:800 }}>TOPLAM</td><td style={td} colSpan={6}></td><td style={{ ...sayi, fontWeight:800 }}>{persTL(topNet)}</td></tr></tbody>
+                <tr key={p.id}><td style={{ ...td, fontWeight:700 }}>{p.ad}</td><td style={sayi}>{persTL(p.maas)}</td><td style={sayi}>{s.be.banka === null ? "—" : persTL(s.be.banka)}</td><td style={sayi}>{s.be.elden === null ? "—" : persTL(s.be.elden)}</td><td style={sayi}>{s.ye > 0 ? persTL(s.ye) : "—"}</td><td style={sayi}>{s.saat > 0 ? s.saat + " sa" : "—"}</td><td style={sayi}>{s.mu > 0 ? persTL(s.mu) : "—"}</td><td style={sayi}>{Number(p.servis) > 0 ? persTL(p.servis) : "—"}</td><td style={{ ...sayi, fontWeight:800 }}>{persTL(s.net)}</td></tr>); })}
+                <tr><td style={{ ...td, fontWeight:800 }}>TOPLAM</td><td style={td} colSpan={4}></td><td style={{ ...sayi, fontWeight:800 }}>{aktif.reduce((t, p) => t + satir(p).saat, 0)} sa</td><td style={{ ...sayi, fontWeight:800 }}>{persTL(aktif.reduce((t, p) => t + satir(p).mu, 0))}</td><td style={td}></td><td style={{ ...sayi, fontWeight:800 }}>{persTL(topNet)}</td></tr></tbody>
             </table>
           </div>
         </div>
