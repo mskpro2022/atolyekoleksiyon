@@ -8666,7 +8666,7 @@ function Atolye({ onSirketDegis }) {
   const [sipFiltre, setSipFiltre] = useState("tumü"); // tumu, aktif, baslanmadi, dokumde, geciken, tamamlanan
   const [sipTarih1,setSipTarih1]= useState("");
   const [sipTarih2,setSipTarih2]= useState("");
-  const [sipMetal,setSipMetal]= useState("tumu");
+  const [sipMetal,setSipMetal]= useState("altin");
   const [sipAsama,setSipAsama]= useState("");
   const [sipSecId, setSipSecId] = useState("");
   const [sipMenu, setSipMenu] = useState("");
@@ -11222,7 +11222,9 @@ function Atolye({ onSirketDegis }) {
     const o = DURUMLAR.find(d=>d.id===son.durum);
     return { l:o?durumEtiket(o):son.durum, c:o?.c||"#998a6e" };
   };
-  const isik = (col) => (typeof col==="string" && col[0]==="#" && col.length===7) ? { boxShadow:"0 0 0 1px "+col+"5f, 0 0 10px "+col+"3c, 0 0 18px "+col+"1b" } : {};
+  const isik = () => ({});
+  const _tk = String(T.card||"").replace("#",""); const _acikTema = _tk.length>=6 && (parseInt(_tk.slice(0,2),16)+parseInt(_tk.slice(2,4),16)+parseInt(_tk.slice(4,6),16))/3 > 150;
+  const cizgi = (col) => (typeof col==="string" && col[0]==="#" && col.length===7) ? col+(_acikTema?"99":"88") : col;
   const tumuF = sipFiltre==="tumu" || sipFiltre==="tumü";
   const liste = [...siparisler].reverse().filter(s => {
     if (sipMusF) { const q=sipMusF.toLowerCase(); if (!(s.musteri||"").toLowerCase().includes(q) && !(s.musKod||"").toLowerCase().includes(q)) return false; }
@@ -11429,7 +11431,7 @@ function Atolye({ onSirketDegis }) {
           const ayTop = {}; oz.forEach(o=>Object.entries(o.ayarlar).forEach(([a,g])=>{ ayTop[a]=(ayTop[a]||0)+g; }));
           const hedef = sipHedefAy===key && sipSurukle;
           const sutun = sl.length>=10 ? 3 : sl.length>=4 ? 2 : 1;
-          const genis = sutun*300 + (sutun-1)*8 + 22;
+          const genis = sutun*290 + (sutun-1)*16 + 22;
           return (
             <div key={key}
               onDragOver={e=>{ e.preventDefault(); if (sipHedefAy!==key) setSipHedefAy(key); }}
@@ -11467,7 +11469,7 @@ function Atolye({ onSirketDegis }) {
                   </div>
                 );
               })()}
-              <div style={{ display:"grid", gridTemplateColumns:"repeat("+sutun+", minmax(0,1fr))", gridAutoRows:"1fr", gap:8, alignItems:"stretch" }}>
+              <div style={{ display:"grid", gridTemplateColumns:"repeat("+sutun+", minmax(0,1fr))", gridAutoRows:"1fr", gap:16, alignItems:"stretch" }}>
                 {sl.length===0 && <div style={{ gridColumn:"1 / -1", color:"#665d4a", fontSize:12, textAlign:"center", padding:"24px 0" }}>Buraya sürükleyip bırak</div>}
                 {sl.map((s,i) => {
                   const o = oz[i], c = chip(s);
@@ -11477,7 +11479,7 @@ function Atolye({ onSirketDegis }) {
                   return (
                     <div key={s.id} draggable={!bitti(s)} onDragStart={e=>{ setSipSurukle(s.id); e.dataTransfer.setData("text/plain", s.id); e.dataTransfer.effectAllowed="move"; }} onDragEnd={()=>{ setSipSurukle(""); setSipHedefAy(""); }}
                       onClick={()=>setSipDrawer(s.id)}
-                      style={{ display:"flex", flexDirection:"column", cursor:bitti(s)?"default":"grab", opacity:sipSurukle===s.id?0.4:1, padding:"10px 12px", borderRadius:12, background:T.card, ...isik(c.c), border:"1px solid "+T.border, borderLeft:"4px solid "+c.c }}>
+                      style={{ display:"flex", flexDirection:"column", cursor:bitti(s)?"default":"grab", opacity:sipSurukle===s.id?0.4:1, padding:"10px 12px", borderRadius:12, background:T.card, ...isik(c.c), border:"1px solid "+T.border, borderLeft:"2px solid "+cizgi(c.c) }}>
                       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:6 }}>
                         <span style={{ display:"flex", alignItems:"center", gap:5, flexWrap:"wrap", minWidth:0 }}><span style={{ fontSize:14, fontWeight:600, color:GOLD }}>{s.musKod||s.musteri||"İsimsiz"}</span>{s.siparisNo && kodKutu(s.siparisNo, "#5b9bd5")}{Object.keys(o.ayarlar).map(a=>kodKutu(a, a==="925"?"#9aa4b2":GOLD))}{s.musEtiket && kodKutu(s.musEtiket, "#a78bfa")}{poBul(s) && kodKutu("PO "+poBul(s), "#998a6e")}</span>
                         {rozet(c.l, c.c)}
