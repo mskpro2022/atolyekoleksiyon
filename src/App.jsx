@@ -2605,6 +2605,229 @@ function mskRhinoOku(rows) {
   return { satirlar: out, ozet };
 }
 
+// ── MSK · Tek "İşlem" ekranı (transfer, fason giriş/çıkış, fire) ─────────────────────────────
+const MSK_KONUMLAR = ["ANAKASA MSK", "TEZGAH", "CİLA", "TAŞ DİZİM", "DÖKÜM", "MİNE", "FİRE TAŞ", "FİRE OCAK"];
+const MSK_TIPLER = [
+  { k: "IFG", l: "Fason giriş", acik: true }, { k: "IFC", l: "Fason çıkış", acik: true }, { k: "MDC", l: "Stok gönderme", acik: true }, { k: "FRE", l: "Fire", acik: true },
+  { l: "Stok satış" }, { l: "Satış iade" }, { l: "Stok alış" }, { l: "Alış iade" }, { l: "Gider / masraf" }, { l: "Gider iade" }, { l: "Ödeme" }, { l: "Tahsilat" }, { l: "Mahsup" },
+];
+function MskIslemEkrani({ T, rpc, st, oz, urunler, onKayit, YESIL, KIRMIZI, TURUNCU }) {
+  const bugunS = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); };
+  const sayi = (v) => Number(String(v == null ? "" : v).replace(",", ".")) || 0;
+  const fN = (n, k = 2) => (Number(n) || 0).toLocaleString("tr-TR", { minimumFractionDigits: k, maximumFractionDigits: k });
+  const bos = () => ({ tarih: bugunS(), teslim: "", nereden: "ANAKASA MSK", nereye: "TEZGAH", firma: "", brut: "", dara: "", kab: "", siparis: "", ilgili: "", aciklama: "", override: "" });
+  const [tip, setTip] = useState("IFG");
+  const [f, setF] = useState(() => ({ ...bos(), nereye: "ANAKASA MSK" }));
+  const [tg, setTg] = useState({});
+  const [sat, setSat] = useState([{ urun: "", gram: "", milyem: "", birim: "" }]);
+  const [firmalar, setFirmalar] = useState([]);
+  const [hata, setHata] = useState(""); const [ok, setOk] = useState(""); const [mesgul, setMesgul] = useState(false);
+  const [son, setSon] = useState(null); const [sonSek, setSonSek] = useState("hepsi");
+  const konumSon = tip === "IFG" ? f.nereye : f.nereden;
+  const bak = (oz && oz.bakiye) || [];
+  const mevcut = (k, u) => { const b = bak.find(x => x.sube === k && x.urun === u); return b ? Number(b.bakiye) : 0; };
+  const girdi = { ...st.girdiS, width: "100%" };
+  const tdK = { ...st.td, padding: "8px 5px" }, thK = { ...st.th, padding: "8px 5px" };
+  const etiket = { fontSize: 11, color: T.sub, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 };
+  const alan = (l, el, tam) => <div style={{ gridColumn: tam ? "1 / -1" : "auto", minWidth: 0 }}><div style={etiket}>{l}</div>{el}</div>;
+  const ad = (u) => String(u).replace(/^#/, "");
+
+  useEffect(() => { rpc("msk_tzg_firmalar").then(setFirmalar).catch(() => {}); }, []);
+  const sonYukle = async () => { try { setSon(await rpc("msk_tzg_liste", { p_sube: konumSon || null, p_limit: 40 })); } catch (e) { setSon({ satirlar: [], toplam: 0 }); } };
+  useEffect(() => { const t = setTimeout(sonYukle, 200); return () => clearTimeout(t); }, [konumSon, ok]);
+  const tipSec = (k) => { setTip(k); setHata(""); setOk(""); if (k === "IFG") setF({ ...f, nereye: "ANAKASA MSK" }); else if (k === "MDC") setF({ ...f, nereden: "ANAKASA MSK", nereye: "TEZGAH" }); else setF({ ...f, nereden: "ANAKASA MSK" }); };
+
+  // satırlar (fason/fire)
+  const satGuncelle = (i, p) => setSat(sat.map((s, j) => { if (j !== i) return s; const y = { ...s, ...p }; if (p.urun !== undefined && p.urun) { const m = mskMilyem(p.urun); y.milyem = m != null ? String(Math.round(m * 1000)) : ""; } return y; }));
+  const gecerli = sat.filter(s => s.urun && sayi(s.gram) > 0);
+  const hasS = (s) => sayi(s.gram) * sayi(s.milyem) / 1000;
+  const iscS = (s) => sayi(s.gram) * sayi(s.birim);
+  const topGram = gecerli.reduce((t, s) => t + sayi(s.gram), 0), topHas = gecerli.reduce((t, s) => t + hasS(s), 0), topIsc = gecerli.reduce((t, s) => t + iscS(s), 0);
+  // transfer
+  const trSatir = urunler.map(u => ({ urun: u, gram: sayi(tg[u]) })).filter(x => x.gram > 0);
+  const trNet = trSatir.reduce((t, x) => t + x.gram, 0);
+  const brut = sayi(f.brut), dara = sayi(f.dara), net = brut - dara;
+  // çıkış yapılan ürün bazında kalan
+  const cikisKonum = tip === "IFG" ? null : f.nereden;
+  const cikisSatir = tip === "MDC" ? trSatir : gecerli;
+  const cikisTop = {}; cikisSatir.forEach(s => { cikisTop[s.urun] = (cikisTop[s.urun] || 0) + sayi(s.gram); });
+  const negatifler = cikisKonum ? Object.entries(cikisTop).filter(([u, g]) => u !== "#995 HAS" && mevcut(cikisKonum, u) - g < -0.0005).map(([u, g]) => ({ urun: u, mevcut: mevcut(cikisKonum, u), istenen: g })) : [];
+
+  const kaydet = async () => {
+    setHata(""); setOk("");
+    if (tip === "MDC") {
+      if (!trSatir.length) return setHata("Gönderilecek miktar girin");
+      if (f.nereden === f.nereye) return setHata("Nereden ve nereye aynı olamaz");
+      if (brut > 0 && Math.abs(net - trNet) > 0.01) return setHata("Net ağırlık (" + fN(net) + ") ile ürün toplamı (" + fN(trNet) + ") aynı değil");
+    } else {
+      if (!gecerli.length) return setHata("En az bir satırda ayar ve gram girin");
+      if (gecerli.some(s => !(sayi(s.milyem) > 0 && sayi(s.milyem) <= 1000))) return setHata("Milyem 1–1000 arasında olmalı");
+      if ((tip === "IFG" || tip === "IFC") && !f.firma.trim()) return setHata("Firma seçin");
+    }
+    if (negatifler.length && !f.override.trim()) return setHata("Stok yetersiz — devam için gerekçe yazın (yönetici onayı)");
+    const gecmis = f.tarih < bugunS().slice(0, 8) + "01";
+    if (gecmis && !window.confirm("Bu evrak geçmiş bir aya (" + f.tarih.slice(0, 7) + ") ait ve o ayın bilançosunu değiştirir. Kaydedilsin mi?")) return;
+    const satirlar = tip === "MDC" ? trSatir.map(x => ({ urun: x.urun, gram: x.gram, milyem: Math.round((mskMilyem(x.urun) || 0) * 1000) || null }))
+      : gecerli.map(s => ({ urun: s.urun, gram: sayi(s.gram), milyem: sayi(s.milyem), isc_birim: sayi(s.birim) || null, isc_usd: iscS(s) || null }));
+    setMesgul(true);
+    try {
+      const r = await rpc("msk_tzg_islem_ekle", { p_tip: tip, p_tarih: f.tarih, p_nereden: tip === "IFG" ? null : f.nereden, p_nereye: tip === "MDC" || tip === "IFG" ? f.nereye : null, p_firma: f.firma || null, p_satirlar: satirlar,
+        p_brut: tip === "MDC" && brut > 0 ? brut : null, p_dara: tip === "MDC" && brut > 0 ? dara : null, p_kab: tip === "MDC" && f.kab ? Math.round(sayi(f.kab)) : null,
+        p_siparis: f.siparis || null, p_ilgili: f.ilgili || null, p_aciklama: f.aciklama || null, p_teslim: f.teslim || null, p_override: negatifler.length ? f.override : null });
+      setOk("Kaydedildi ✓  Evrak " + r.rhino_no);
+      setTg({}); setSat([{ urun: "", gram: "", milyem: "", birim: "" }]); setF({ ...bos(), nereden: f.nereden, nereye: f.nereye, firma: f.firma, tarih: f.tarih });
+      onKayit && onKayit();
+    } catch (e) {
+      const m = String(e.message || "");
+      setHata(m.startsWith("negatif_stok") ? "Stok yetersiz — gerekçe yazarak tekrar kaydedin" : m);
+    }
+    setMesgul(false);
+  };
+  const iptalEt = async (s) => {
+    const sebep = window.prompt("Evrak " + s.rhino_no + " iptal edilecek (tüm satırlarıyla). İptal sebebi:");
+    if (!sebep || !sebep.trim()) return;
+    try { const r = await rpc("msk_tzg_iptal", { p_rhino_no: s.rhino_no, p_sebep: sebep }); setOk("Evrak " + s.rhino_no + " iptal edildi" + (r.gecmis_ay ? " (geçmiş ay kaydı — değişiklik günlüğüne yazıldı)" : "")); onKayit && onKayit(); } catch (e) { setHata(e.message); }
+  };
+
+  const secim = (deger, set, liste, bosEtiket) => <select value={deger} onChange={e => set(e.target.value)} style={girdi}>{bosEtiket && <option value="">{bosEtiket}</option>}{liste.map(k => <option key={k} value={k}>{k}</option>)}</select>;
+  const tipAd = { IFG: "Fason giriş", IFC: "Fason çıkış", MDC: "Stok gönderme", FRE: "Fire" }[tip];
+  const sag = (
+    <div style={st.kart}>
+      <div style={st.baslik}>Bu evrak şunları yapar</div>
+      <div style={{ padding: "14px 16px", fontSize: 13, lineHeight: 1.9 }}>
+        {tip === "MDC" ? (<>
+          {trSatir.length === 0 && <span style={{ color: T.sub }}>Gönderilecek miktar girin</span>}
+          {trSatir.map(x => <div key={x.urun}><b>{f.nereden}</b> {ad(x.urun)} <span style={{ color: KIRMIZI }}>−{fN(x.gram)} gr</span> → <b>{f.nereye}</b> <span style={{ color: YESIL }}>+{fN(x.gram)} gr</span></div>)}
+          {trSatir.length > 0 && <div style={{ color: T.sub, fontSize: 12 }}>Toplam {fN(trNet)} gr{brut > 0 ? " · net ağırlık " + fN(net) + (Math.abs(net - trNet) <= 0.01 ? " ✓" : " ≠") : ""}</div>}
+        </>) : (<>
+          {gecerli.length === 0 && <span style={{ color: T.sub }}>Satır girin</span>}
+          {Object.entries(cikisKonum ? cikisTop : gecerli.reduce((a, s) => { a[s.urun] = (a[s.urun] || 0) + sayi(s.gram); return a; }, {})).map(([u, g]) => <div key={u}><b>{konumSon}</b> {ad(u)} <span style={{ color: tip === "IFG" ? YESIL : KIRMIZI }}>{tip === "IFG" ? "+" : "−"}{fN(g)} gr</span></div>)}
+          {gecerli.length > 0 && <>
+            <div><b>Has kontrolü:</b> {gecerli.map(s => fN(sayi(s.gram)) + " × " + fN(sayi(s.milyem) / 1000, 3)).join(" + ")} = {fN(topHas)} {gecerli.every(s => sayi(s.milyem) <= 1000) ? <span style={{ color: YESIL }}>✓</span> : <span style={{ color: KIRMIZI }}>≠</span>}</div>
+            {topIsc > 0 && <div><b>İşçilik:</b> {fN(topIsc)} $ <span style={{ color: T.sub }}>(gram × $/gr)</span></div>}
+            {(tip === "IFG" || tip === "IFC") && <div style={{ color: T.sub, fontSize: 12 }}>{f.firma || "Firma"} cari hareketi (has + USD) bir sonraki adımda eklenecek; şimdilik yalnızca stok hareketi kaydedilir.</div>}
+          </>}
+        </>)}
+        {cikisKonum && Object.entries(cikisTop).length > 0 && (
+          <div style={{ marginTop: 6, borderTop: "1px solid " + T.border, paddingTop: 6 }}>
+            {Object.entries(cikisTop).map(([u, g]) => { const k = mevcut(cikisKonum, u) - g; return <div key={u} style={{ fontSize: 12, color: k < -0.0005 && u !== "#995 HAS" ? KIRMIZI : T.sub }}>{cikisKonum} sonrası: {ad(u)} {fN(k)} gr{k < -0.0005 && u !== "#995 HAS" ? " (stok yetersiz)" : ""}</div>; })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  return (
+    <div>
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 14 }}>
+        {MSK_TIPLER.map(t => t.acik
+          ? <button key={t.k} onClick={() => tipSec(t.k)} style={{ ...st.dugme, borderRadius: 99, borderColor: tip === t.k ? T.gold : T.border, color: tip === t.k ? T.gold : T.text, background: tip === t.k ? "rgba(184,146,58,0.12)" : "transparent" }}>{t.l}</button>
+          : <span key={t.l} title="Cari/kasa hareketi gerektirir — sonraki adımda" style={{ ...st.dugme, borderRadius: 99, opacity: 0.4, cursor: "default", border: "1px solid " + T.border, color: T.sub }}>{t.l}</span>)}
+      </div>
+
+      {tip === "MDC" ? (<>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", gap: 12, marginBottom: 14 }}>
+          <div style={{ ...st.kart, padding: 12, marginBottom: 0 }}>{alan("Nereden", secim(f.nereden, v => setF({ ...f, nereden: v }), MSK_KONUMLAR))}</div>
+          <div style={{ ...st.kart, padding: 12, marginBottom: 0 }}>{alan("Nereye", secim(f.nereye, v => setF({ ...f, nereye: v }), MSK_KONUMLAR))}</div>
+        </div>
+        <div style={{ display: "flex", gap: 14, flexWrap: "wrap", alignItems: "flex-start" }}>
+          <div style={{ ...st.kart, flex: "3 1 340px", minWidth: 0 }}>
+            <div style={st.baslik}>[{f.nereden}] ürünleri — gönderilecek miktarı yazın</div>
+            <div style={{ overflowX: "auto" }}><table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead><tr><th style={{ ...st.th, textAlign: "left" }}>Ayar</th><th style={st.th}>Mevcut (gr)</th><th style={st.th}>Gönderilecek (gr)</th></tr></thead>
+              <tbody>{urunler.map(u => { const m = mevcut(f.nereden, u), dolu = sayi(tg[u]) > 0; return (
+                <tr key={u}><td style={{ ...st.td, textAlign: "left" }}>{ad(u)}</td><td style={{ ...st.td, color: m < 0.005 ? T.sub : T.text }}>{fN(m)}</td>
+                  <td style={st.td}><input inputMode="decimal" value={tg[u] || ""} placeholder="0,00" onChange={e => setTg({ ...tg, [u]: e.target.value })} style={{ ...st.girdiS, width: 110, textAlign: "right", borderColor: dolu ? T.gold : T.border }} /></td></tr>); })}</tbody>
+            </table></div>
+          </div>
+          <div style={{ ...st.kart, flex: "2 1 300px", minWidth: 0 }}>
+            <div style={st.baslik}>Evrak bilgileri</div>
+            <div style={{ padding: 16, display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(130px,1fr))", gap: 12 }}>
+              {alan("Brüt ağırlık (gr)", <input inputMode="decimal" value={f.brut} onChange={e => setF({ ...f, brut: e.target.value })} style={girdi} />)}
+              {alan("Dara (gr)", <input inputMode="decimal" value={f.dara} onChange={e => setF({ ...f, dara: e.target.value })} style={girdi} />)}
+              {alan("Net ağırlık (gr)", <div style={{ ...st.girdiS, color: brut > 0 ? (Math.abs(net - trNet) <= 0.01 && trNet > 0 ? YESIL : TURUNCU) : T.sub }}>{brut > 0 ? fN(net) + (Math.abs(net - trNet) <= 0.01 && trNet > 0 ? " ✓" : "") : "brüt − dara"}</div>)}
+              {alan("Kab sayısı (adet)", <input inputMode="numeric" value={f.kab} onChange={e => setF({ ...f, kab: e.target.value })} style={girdi} />)}
+              {alan("Tarih", <input type="date" value={f.tarih} onChange={e => setF({ ...f, tarih: e.target.value })} style={girdi} />)}
+              {alan("Sipariş no", <input value={f.siparis} onChange={e => setF({ ...f, siparis: e.target.value })} style={girdi} />)}
+              {alan("İlgili evrak", <input value={f.ilgili} onChange={e => setF({ ...f, ilgili: e.target.value })} style={girdi} />)}
+              {alan("Ek açıklama", <input value={f.aciklama} onChange={e => setF({ ...f, aciklama: e.target.value })} style={girdi} />, true)}
+            </div>
+          </div>
+        </div>
+        {sag}
+      </>) : (
+        <div style={{ display: "flex", gap: 14, flexWrap: "wrap", alignItems: "flex-start" }}>
+          <div style={{ flex: "3 1 420px", minWidth: 0 }}>
+            <div style={st.kart}>
+              <div style={st.baslik}>Evrak başlığı · {tipAd}</div>
+              <div style={{ padding: 16, display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 12 }}>
+                {(tip === "IFG" || tip === "IFC") && alan("Cari / firma", <><input list="msk-firmalar" value={f.firma} onChange={e => setF({ ...f, firma: e.target.value })} placeholder="Firma seçin veya yazın" style={girdi} /><datalist id="msk-firmalar">{firmalar.map(x => <option key={x.firma} value={x.firma} />)}</datalist></>, true)}
+                {alan(tip === "IFG" ? "Konum (giriş yapılan)" : "Konum (çıkış yapılan)", tip === "IFG" ? secim(f.nereye, v => setF({ ...f, nereye: v }), MSK_KONUMLAR) : secim(f.nereden, v => setF({ ...f, nereden: v }), MSK_KONUMLAR))}
+                {alan("Tarih", <input type="date" value={f.tarih} onChange={e => setF({ ...f, tarih: e.target.value })} style={girdi} />)}
+                {(tip === "IFG" || tip === "IFC") && alan("Teslim tarihi", <input type="date" value={f.teslim} onChange={e => setF({ ...f, teslim: e.target.value })} style={girdi} />)}
+                {alan("Sipariş / PO", <input value={f.siparis} onChange={e => setF({ ...f, siparis: e.target.value })} style={girdi} />)}
+                {alan("İlgili evrak", <input value={f.ilgili} onChange={e => setF({ ...f, ilgili: e.target.value })} style={girdi} />)}
+                {alan("Not", <input value={f.aciklama} onChange={e => setF({ ...f, aciklama: e.target.value })} style={girdi} />, true)}
+              </div>
+            </div>
+            <div style={st.kart}>
+              <div style={st.baslik}>Satırlar</div>
+              <div style={{ overflowX: "auto" }}><table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <thead><tr><th style={{ ...thK, textAlign: "left" }}>Ürün / ayar</th><th style={thK}>Gram</th><th style={thK}>Milyem</th><th style={thK}>Has</th><th style={thK}>İşçilik $/gr</th><th style={thK}>İşçilik $</th><th style={thK}></th></tr></thead>
+                <tbody>{sat.map((s, i) => (
+                  <tr key={i}>
+                    <td style={{ ...tdK, textAlign: "left" }}><select value={s.urun} onChange={e => satGuncelle(i, { urun: e.target.value })} style={{ ...st.girdiS, minWidth: 105 }}><option value="">Ayar seçin</option>{urunler.map(u => <option key={u} value={u}>{ad(u)}</option>)}</select></td>
+                    <td style={tdK}><input inputMode="decimal" value={s.gram} onChange={e => satGuncelle(i, { gram: e.target.value })} style={{ ...st.girdiS, width: 84, textAlign: "right" }} /></td>
+                    <td style={tdK}><input inputMode="numeric" value={s.milyem} onChange={e => satGuncelle(i, { milyem: e.target.value })} style={{ ...st.girdiS, width: 60, textAlign: "right" }} /></td>
+                    <td style={tdK}>{fN(hasS(s))}</td>
+                    <td style={tdK}><input inputMode="decimal" value={s.birim} onChange={e => satGuncelle(i, { birim: e.target.value })} style={{ ...st.girdiS, width: 70, textAlign: "right" }} /></td>
+                    <td style={tdK}>{iscS(s) ? fN(iscS(s)) : "–"}</td>
+                    <td style={tdK}>{sat.length > 1 && <button onClick={() => setSat(sat.filter((_, j) => j !== i))} style={{ ...st.dugme, padding: "2px 8px" }}>×</button>}</td>
+                  </tr>))}
+                  <tr><td colSpan={7} style={{ ...tdK, textAlign: "left" }}><button onClick={() => setSat([...sat, { urun: "", gram: "", milyem: "", birim: "" }])} style={st.dugme}>+ satır ekle</button></td></tr>
+                  {gecerli.length > 1 && <tr><td style={{ ...tdK, textAlign: "left", fontWeight: 700 }}>Toplam</td><td style={{ ...tdK, fontWeight: 700 }}>{fN(topGram)}</td><td style={tdK}></td><td style={{ ...tdK, fontWeight: 700 }}>{fN(topHas)}</td><td style={tdK}></td><td style={{ ...tdK, fontWeight: 700 }}>{topIsc ? fN(topIsc) : "–"}</td><td style={tdK}></td></tr>}
+                </tbody>
+              </table></div>
+            </div>
+          </div>
+          <div style={{ flex: "2 1 300px", minWidth: 0 }}>{sag}</div>
+        </div>
+      )}
+
+      {negatifler.length > 0 && (
+        <div style={{ ...st.kart, padding: 14, borderColor: KIRMIZI }}>
+          <div style={{ fontSize: 13, color: KIRMIZI, marginBottom: 8 }}>Stok yetersiz: {negatifler.map(n => ad(n.urun) + " (mevcut " + fN(n.mevcut) + ", istenen " + fN(n.istenen) + ")").join(" · ")}</div>
+          <div style={etiket}>Yönetici onayı — gerekçe</div>
+          <input value={f.override} onChange={e => setF({ ...f, override: e.target.value })} placeholder="Neden negatif stoğa izin veriliyor?" style={girdi} />
+        </div>
+      )}
+      <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", marginBottom: 14 }}>
+        <button onClick={kaydet} disabled={mesgul} style={st.dugmeAna}>{mesgul ? "Kaydediliyor…" : "Kaydet"}</button>
+        <button onClick={() => { setTg({}); setSat([{ urun: "", gram: "", milyem: "", birim: "" }]); setF({ ...bos(), nereden: f.nereden, nereye: f.nereye }); setHata(""); setOk(""); }} style={st.dugme}>Temizle</button>
+        {hata && <span style={{ fontSize: 13, color: KIRMIZI }}>{hata}</span>}
+        {ok && <span style={{ fontSize: 13, color: YESIL }}>{ok}</span>}
+      </div>
+
+      <div style={{ display: "flex", gap: 6, marginBottom: 8, flexWrap: "wrap", alignItems: "center" }}>
+        <span style={{ fontSize: 12, color: T.sub, marginRight: 6 }}>{konumSon} · son hareketler</span>
+        {[["hepsi", "Hepsi"], ["giren", "Girenler"], ["cikan", "Çıkanlar"], ["iptal", "İptaller"]].map(([k, l]) => <button key={k} onClick={() => setSonSek(k)} style={{ ...st.dugme, padding: "3px 10px", fontSize: 11, borderColor: sonSek === k ? T.gold : T.border, color: sonSek === k ? T.gold : T.sub }}>{l}</button>)}
+      </div>
+      <div style={st.kart}><div style={{ overflowX: "auto" }}><table style={{ width: "100%", borderCollapse: "collapse" }}>
+        <thead><tr><th style={{ ...st.th, textAlign: "left" }}>Tarih</th><th style={{ ...st.th, textAlign: "left" }}>İşlem</th><th style={{ ...st.th, textAlign: "left" }}>Evrak</th><th style={st.th}>Ayar</th><th style={{ ...st.th, textAlign: "left" }}>Karşı taraf</th><th style={st.th}>Giren</th><th style={st.th}>Çıkan</th><th style={st.th}></th></tr></thead>
+        <tbody>{!son ? <tr><td colSpan={8} style={{ ...st.td, textAlign: "left", color: T.sub }}>Yükleniyor…</td></tr> : son.satirlar.filter(s => sonSek === "hepsi" ? true : sonSek === "giren" ? Number(s.giren) > 0 : sonSek === "cikan" ? Number(s.cikan) > 0 : s.iptal).slice(0, 25).map(s => (
+          <tr key={s.id} style={{ opacity: s.iptal ? 0.5 : 1 }}>
+            <td style={{ ...st.td, textAlign: "left" }}>{s.tarih}</td><td style={{ ...st.td, textAlign: "left" }}>{MSK_ET_AD[s.etip] || s.etip}</td>
+            <td style={{ ...st.td, textAlign: "left", color: T.sub, textDecoration: s.iptal ? "line-through" : "none" }}>{s.rhino_no}</td><td style={st.td}>{ad(s.urun)}</td>
+            <td style={{ ...st.td, textAlign: "left" }}>{s.firma || "—"}{s.iptal && s.iptal_sebep ? <span style={{ color: T.sub }}> · iptal: {s.iptal_sebep}</span> : null}</td>
+            <td style={{ ...st.td, color: Number(s.giren) > 0 ? YESIL : T.sub }}>{Number(s.giren) > 0 ? fN(s.giren) : "–"}</td>
+            <td style={{ ...st.td, color: Number(s.cikan) > 0 ? KIRMIZI : T.sub }}>{Number(s.cikan) > 0 ? fN(s.cikan) : "–"}</td>
+            <td style={st.td}>{s.kaynak === "uygulama" && !s.iptal && <button onClick={() => iptalEt(s)} style={{ ...st.dugme, padding: "2px 8px", fontSize: 11 }}>İptal</button>}</td>
+          </tr>))}</tbody>
+      </table></div></div>
+    </div>
+  );
+}
+
 function MskMuhasebeSayfa({ T, GH }) {
   const KIRMIZI = "#d9675d", YESIL = "#6abf8f";
   const [sifre, setSifre] = useState(""); const [giris, setGiris] = useState(""); const [hata, setHata] = useState(""); const [kontrol, setKontrol] = useState(false);
@@ -2634,12 +2857,13 @@ function MskMuhasebeSayfa({ T, GH }) {
     setKontrol(false);
   };
   const ozetYukle = async () => { try { setOz(null); setOz(await rpc("msk_tzg_ozet", { p_tarih: tarih || null })); } catch (e) { setBilgi("Hata: " + e.message); setOz({ toplam: 0, bakiye: [], rhino_kalan: [] }); } };
+  const ozYenile = async () => { try { setOz(await rpc("msk_tzg_ozet", { p_tarih: null })); } catch (e) { /* bir sonraki açılışta yenilenir */ } };
   const listeYukle = async () => {
     try { setListe(await rpc("msk_tzg_liste", { p_urun: hf.urun || null, p_sube: hf.sube || null, p_bas: hf.bas || null, p_bit: hf.bit || null, p_ara: hf.ara || null, p_limit: BOY, p_offset: sayfaNo * BOY })); }
     catch (e) { setBilgi("Hata: " + e.message); setListe({ toplam: 0, satirlar: [] }); }
   };
   useEffect(() => { if (sifre && sek === "konum") { const t = setTimeout(ozetYukle, 150); return () => clearTimeout(t); } }, [sifre, sek, tarih]);
-  useEffect(() => { if (sifre && sek === "hareket" && !oz) ozetYukle(); }, [sifre, sek]);
+  useEffect(() => { if (sifre && (sek === "hareket" || sek === "islem") && !oz) ozetYukle(); }, [sifre, sek]);
   useEffect(() => { if (sifre && sek === "hareket") { const t = setTimeout(listeYukle, 250); return () => clearTimeout(t); } }, [sifre, sek, hf, sayfaNo]);
 
   const dosyaSec = async (f) => {
@@ -2702,7 +2926,7 @@ function MskMuhasebeSayfa({ T, GH }) {
       <nav style={{ flex: "1 1 188px", maxWidth: 230, background: T.card, border: "1px solid " + T.border, borderRadius: 14, overflow: "hidden" }}>
         {menu("konum", "Konum Bakiyeleri")}
         {menu("hareket", "Tezgah Hareketleri")}
-        {yakinda("İşlem (tek ekran)")}
+        {menu("islem", "İşlem")}
         {yakinda("Mutabakat")}
         {yakinda("Cariler")}
         {menu("aktar", "Rhino'dan Aktar")}
@@ -2759,6 +2983,8 @@ function MskMuhasebeSayfa({ T, GH }) {
             </div>
           </>)}
         </>)}
+
+        {sek === "islem" && (!oz ? <div style={{ fontSize: 13, color: T.sub }}>Yükleniyor…</div> : <MskIslemEkrani T={T} rpc={rpc} st={{ kart, baslik, dugme, dugmeAna, girdiS, th, td }} oz={oz} urunler={sirali} onKayit={ozYenile} YESIL={YESIL} KIRMIZI={KIRMIZI} TURUNCU="#e0954a" />)}
 
         {sek === "hareket" && (<>
           <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
