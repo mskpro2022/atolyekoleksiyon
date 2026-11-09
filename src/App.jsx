@@ -742,6 +742,18 @@ function downloadPDF(html, filename) {
 }
 
 // Sıralama: SADECE koddaki rakam (sayısal)
+// Sipariş arama — müşteri adı/kodu, sipariş no (SIP-…), PO, model kodu/adı, açıklama, not, tarih; birden çok kelime hepsi eşleşmeli
+function sipAramaUyar(s, qRaw) {
+  const q = String(qRaw || "").toLowerCase().trim(); if (!q) return true;
+  const tr = (x) => String(x == null ? "" : x).toLowerCase().replace(/İ/g, "i").replace(/ı/g, "i");
+  const t = s.tarih ? new Date(s.tarih) : null;
+  const po = (String(s.aciklama || "").match(/PO\s*(\d+)/i) || [])[1] || "";
+  const hay = tr([s.musteri, s.musKod, s.musEtiket, s.siparisNo, po ? "PO " + po : "", s.aciklama, s.not, s.notlar,
+    t ? "SIP-" + t.getFullYear() + "-" + String(s.tarih).slice(-5) : "", t ? t.toLocaleDateString("tr-TR") : "",
+    ...(s.kalemler || []).map(k => [k.kod, k.ad, k.model, k.not, k.aciklama].filter(Boolean).join(" "))].filter(Boolean).join(" "));
+  return tr(q).split(/\s+/).every(w => hay.includes(w));
+}
+
 // Konfirmasyon / Sipariş kalem sıralaması — ortak (ekran + PDF aynı fonksiyonu kullanır)
 // mod: "koleksiyon" (varsayılan: koleksiyonlar gruplu, grup içi ekleniş sırası) | "koleksiyonKod" (gruplu, grup içi en yeni koddan eskiye)
 //      | "kodTers" (en yeni kod üstte) | "kod" (eskiden yeniye) | "gramAzalan" | "gramArtan"
@@ -12540,7 +12552,7 @@ function Atolye({ onSirketDegis }) {
   const cizgi = (col) => (typeof col==="string" && col[0]==="#" && col.length===7) ? col+(_acikTema?"99":"88") : col;
   const tumuF = sipFiltre==="tumu" || sipFiltre==="tumü";
   const liste = [...siparisler].reverse().filter(s => {
-    if (sipMusF) { const q=sipMusF.toLowerCase(); if (!(s.musteri||"").toLowerCase().includes(q) && !(s.musKod||"").toLowerCase().includes(q)) return false; }
+    if (sipMusF && !sipAramaUyar(s, sipMusF)) return false;
     if (sipTarih1 && s.tarih < new Date(sipTarih1).getTime()) return false;
     if (sipTarih2 && s.tarih > new Date(sipTarih2).getTime()+86399999) return false;
     if (sipMetal!=="tumu") { const oo=ozet(s); if (sipMetal==="gumus" ? oo.gumus<=0 : oo.altin<=0.0001) return false; }
@@ -12866,7 +12878,7 @@ function Atolye({ onSirketDegis }) {
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10, flexWrap:"wrap", gap:8 }}>
         <h2 style={{ margin:0, fontSize:18, fontWeight:600, color:"var(--goldtext)" }}>Siparişler <span style={{ fontSize:13, color:"#7a6f5a", fontWeight:600 }}>({liste.length}/{siparisler.length})</span></h2>
         <div style={{ display:"flex", gap:6, alignItems:"center", flexWrap:"wrap" }}>
-          <input value={sipMusF} onChange={e=>setSipMusF(e.target.value)} placeholder="Müşteri ara..." style={{ ...IS, width:150, padding:"7px 10px", fontSize:12 }}/>
+          <input value={sipMusF} onChange={e=>setSipMusF(e.target.value)} placeholder="🔍 Sipariş no, PO, müşteri, model ara…" style={{ ...IS, width:250, padding:"7px 10px", fontSize:12 }}/>
           <input type="date" value={sipTarih1} onChange={e=>setSipTarih1(e.target.value)} style={{ ...IS, width:130, padding:"7px 8px", fontSize:12 }}/>
           <span style={{ color:"#665d4a" }}>—</span>
           <input type="date" value={sipTarih2} onChange={e=>setSipTarih2(e.target.value)} style={{ ...IS, width:130, padding:"7px 8px", fontSize:12 }}/>
@@ -12890,7 +12902,7 @@ function Atolye({ onSirketDegis }) {
         const acik = o => o.onayDurum!=="bekliyor" && o.onayDurum!=="red" && o.onayDurum!=="iptal";
         const kalemler = [];
         siparisler.filter(acik).forEach(sp => {
-          if (sipMusF) { const q=sipMusF.toLowerCase(); if (!(sp.musteri||"").toLowerCase().includes(q) && !(sp.musKod||"").toLowerCase().includes(q)) return; }
+          if (sipMusF && !sipAramaUyar(sp, sipMusF)) return;
           const kd = sp.kalemDurumlar||{};
           (sp.kalemler||[]).forEach(k => {
             const ay = k.secilenAyar||k.refAyar||"";
@@ -13039,7 +13051,7 @@ function Atolye({ onSirketDegis }) {
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8, flexWrap:"wrap", gap:6 }}>
               <h2 style={{ margin:0, fontSize:14, fontWeight:700, color:"var(--goldtext)" }}>Siparis Gecmisi ({siparisler.length}){<button onClick={()=>{setSipYeni(true);try{localStorage.setItem("sipYeni","1");}catch(e){}}} style={{ ...GH, fontSize:10, padding:"3px 9px", marginLeft:10 }}>Yeni görünüm</button>}</h2>
               <div style={{ display:"flex", gap:6, alignItems:"center", flexWrap:"wrap" }}>
-                <input value={sipMusF} onChange={e=>setSipMusF(e.target.value)} placeholder="Musteri ara..." style={{ ...IS, width:130, padding:"5px 8px", fontSize:10 }}/>
+                <input value={sipMusF} onChange={e=>setSipMusF(e.target.value)} placeholder="Sipariş no, PO, müşteri, model ara…" style={{ ...IS, width:200, padding:"5px 8px", fontSize:11 }}/>
                 <select value={sipSira} onChange={e=>setSipSira(e.target.value)} title="Kalem sıralaması (görünüm + PDF)" style={{ ...IS, width:"auto", padding:"5px 8px", fontSize:10 }}>
                   {KONF_SIRA_SECENEKLERI.map(o => <option key={o.id} value={o.id}>↕ {o.l}</option>)}
                 </select>
@@ -13050,7 +13062,7 @@ function Atolye({ onSirketDegis }) {
                 {siparisler.length > 0 && (
                   <button onClick={() => {
                     const goruntulenecek = [...siparisler].reverse().filter(s => {
-                      if (sipMusF) { const q = sipMusF.toLowerCase(); if (!(s.musteri||"").toLowerCase().includes(q) && !(s.musKod||"").toLowerCase().includes(q)) return false; }
+                      if (sipMusF && !sipAramaUyar(s, sipMusF)) return false;
                       if (sipTarih1 && s.tarih < new Date(sipTarih1).getTime()) return false;
                       if (sipTarih2 && s.tarih > new Date(sipTarih2).getTime()+86399999) return false;
                       return true;
@@ -13082,7 +13094,7 @@ function Atolye({ onSirketDegis }) {
             <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
               {[...siparisler].reverse()
                 .filter(s => {
-                  if (sipMusF) { const q = sipMusF.toLowerCase(); if (!(s.musteri||"").toLowerCase().includes(q) && !(s.musKod||"").toLowerCase().includes(q)) return false; }
+                  if (sipMusF && !sipAramaUyar(s, sipMusF)) return false;
                   if (sipTarih1 && s.tarih < new Date(sipTarih1).getTime()) return false;
                   if (sipTarih2 && s.tarih > new Date(sipTarih2).getTime()+86399999) return false;
                   if (sipFiltre === "aktif") { const son=(s.durumGecmisi||[]).slice(-1)[0]; if (!son||["tamam","teslim","hurda"].includes(son.durum)) return false; }
