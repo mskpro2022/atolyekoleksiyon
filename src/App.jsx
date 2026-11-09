@@ -2576,7 +2576,7 @@ function MuhHalka({ T, deger, oran, renk, boyut=104 }) {
     </svg>
   );
 }
-function MuhasebeSayfa({ T, GH, sirket="BSP" }) {
+function MuhasebeSayfa({ T, GH, sirket="BSP", usdTry=null }) {
   const KIRMIZI="#d9675d", YESIL="#6abf8f", TURUNCU="#e0954a";
   const [sifre, setSifre] = useState(""); const [giris, setGiris] = useState(""); const [hata, setHata] = useState(""); const [kontrol, setKontrol] = useState(false);
   const [sek, setSek] = useState("ozet");
@@ -2592,7 +2592,59 @@ function MuhasebeSayfa({ T, GH, sirket="BSP" }) {
   const sek2 = { fontSize:11, color:T.sub, textTransform:"uppercase", letterSpacing:0.5 };
   const dugme = { ...GH, fontSize:12, padding:"7px 14px" };
   const dugmeAna = { ...dugme, background:T.btnBg||"transparent", color:T.gold, borderColor:T.btnBorder||T.gold };
-  const girdiS = { background:"transparent", border:"1px solid "+T.border, borderRadius:8, padding:"9px 12px", color:T.text, fontSize:13, outline:"none", boxSizing:"border-box" };
+  const acikT = (() => { const h = String(T.bg2 || "").replace("#", ""); return h.length >= 6 && (parseInt(h.slice(0, 2), 16) + parseInt(h.slice(2, 4), 16) + parseInt(h.slice(4, 6), 16)) / 3 > 150; })();
+  const girdiS = { background:"transparent", border:"1px solid "+T.border, borderRadius:8, padding:"9px 12px", color:T.text, fontSize:13, outline:"none", boxSizing:"border-box", colorScheme:acikT ? "light" : "dark" };
+  const SARI = "#d4a73a";
+  const bugun = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); };
+  const gunEkle = (t, n) => { const d = new Date(t + "T12:00:00"); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
+  const sayiOku = (v) => Number(String(v == null ? "" : v).replace(",", ".")) || 0;
+  const [satisL, setSatisL] = useState(null); const [sFiltre, setSFiltre] = useState("hepsi"); const [sAra, setSAra] = useState("");
+  const [tahL, setTahL] = useState(null); const [hesaplar, setHesaplar] = useState([]);
+  const [sf, setSf] = useState(null); const [tf, setTf] = useState(null); const [kaydediyor, setKaydediyor] = useState(false); const [formHata, setFormHata] = useState("");
+  const [acikGrup, setAcikGrup] = useState({ satislar:true });
+  const satisYukle = async () => { try { setSatisL(await rpc("muh_satis_liste", { p_filtre:sFiltre, p_ara:sAra, p_limit:300 })); } catch (e) { setBilgi("Hata: " + e.message); setSatisL({ kayitlar:[], toplam:0 }); } };
+  const tahYukle = async () => { try { setTahL(await rpc("muh_tahsilat_liste", { p_limit:300 })); } catch (e) { setBilgi("Hata: " + e.message); setTahL([]); } };
+  const hesapYukle = async () => { try { setHesaplar(await rpc("muh_hesaplar")); } catch (e) { /* kasa listesi yüklenemezse sunucu varsayılan hesabı kullanır */ } };
+  useEffect(() => { if (!sifre || sek !== "satis") return; const t = setTimeout(satisYukle, 250); return () => clearTimeout(t); }, [sifre, sek, sFiltre, sAra]);
+  useEffect(() => { if (sifre) hesapYukle(); }, [sifre]);
+  const yenile = async () => { await satisYukle(); await ozetYukle(); await cariYukle(arsiv); };
+  const satisAc = () => { setFormHata(""); setSf({ cariId:null, cariAd:"", tarih:bugun(), vade:gunEkle(bugun(), 30), ad:"", kategori:"", pb:"USD", kur:usdTry ? Number(usdTry).toFixed(4) : "", tutar:"", pesin:false, hesap:"" }); };
+  const satisKaydet = async () => {
+    if (!sf) return; setFormHata("");
+    const tutar = sayiOku(sf.tutar), kur = sayiOku(sf.kur);
+    if (!(tutar > 0)) return setFormHata("Tutar girin");
+    if (!sf.cariId && !sf.cariAd.trim()) return setFormHata("Cari seçin veya yeni cari adı yazın");
+    if (sf.pb === "TRL" && !(kur > 0)) return setFormHata("TL için kur girin");
+    setKaydediyor(true);
+    try {
+      await rpc("muh_satis_ekle", { p_cari:sf.cariId, p_cari_ad:sf.cariAd, p_tarih:sf.tarih, p_vade:sf.vade || null, p_ad:sf.ad, p_kategori:sf.kategori, p_pb:sf.pb, p_kur:sf.pb === "TRL" ? kur : null, p_tutar:tutar, p_pesin:!!sf.pesin, p_hesap:sf.pesin && sf.hesap ? sf.hesap : null });
+      setSf(null); setBilgi("Satış kaydedildi ✓"); await yenile();
+    } catch (e) { setFormHata(e.message); }
+    setKaydediyor(false);
+  };
+  const tahAc = (s) => { setFormHata(""); setTf(s ? { satis:s, cariId:s.cari_id, cariAd:s.cari_ad, tutar:String(s.kalan), tarih:bugun(), hesap:"", aciklama:"" } : { satis:null, cariId:null, cariAd:"", tutar:"", tarih:bugun(), hesap:"", aciklama:"" }); };
+  const tahKaydet = async () => {
+    if (!tf) return; setFormHata("");
+    const tutar = sayiOku(tf.tutar);
+    let cid = tf.cariId;
+    if (!tf.satis && !cid) { const m = (cariler || []).find(c => prsAdNorm(c.ad) === prsAdNorm(tf.cariAd)); if (m) cid = m.id; }
+    if (!(tutar > 0)) return setFormHata("Tutar girin");
+    if (!tf.satis && !cid) return setFormHata("Listeden bir cari seçin");
+    setKaydediyor(true);
+    try {
+      await rpc("muh_tahsilat_ekle", { p_cari:cid, p_satis:tf.satis ? tf.satis.id : null, p_tutar_usd:tutar, p_tarih:tf.tarih, p_hesap:tf.hesap || null, p_aciklama:tf.aciklama || null });
+      setTf(null); setBilgi("Tahsilat kaydedildi ✓"); await yenile(); if (sek === "tahsilat") await tahYukle();
+    } catch (e) { setFormHata(e.message); }
+    setKaydediyor(false);
+  };
+  const tahSil = async (h) => {
+    if (!window.confirm((h.cari_ad || "") + " · " + para(h.giris_usd, 2) + " tahsilatı silinsin mi? Fatura tekrar açık duruma döner.")) return;
+    try { await rpc("muh_tahsilat_sil", { p_id:h.id }); setBilgi("Tahsilat silindi ✓"); await tahYukle(); await ozetYukle(); await cariYukle(arsiv); } catch (e) { setBilgi("Hata: " + e.message); }
+  };
+  const satisSil = async (s) => {
+    if (!window.confirm((s.cari_ad || "") + " · " + para(s.tutar_usd, 2) + " faturası (varsa bağlı tahsilatlarıyla) silinsin mi?")) return;
+    try { await rpc("muh_satis_sil", { p_id:s.id }); setBilgi("Fatura silindi ✓"); await yenile(); } catch (e) { setBilgi("Hata: " + e.message); }
+  };
 
   const ac = async () => {
     setKontrol(true); setHata("");
@@ -2652,7 +2704,56 @@ function MuhasebeSayfa({ T, GH, sirket="BSP" }) {
     </div>
   );
 
-  const Sekme = ({ k, l }) => <button onClick={() => { setSek(k); if (k === "cariler") cariYukle(arsiv); if (k === "ozet") ozetYukle(); }} style={{ ...dugme, color:sek===k?T.gold:T.sub, background:sek===k?(T.btnBg||"transparent"):"transparent", borderColor:sek===k?(T.btnBorder||T.gold):T.border }}>{l}</button>;
+  const git = (k) => { setSek(k); setBilgi(""); if (k === "cariler") cariYukle(arsiv); if (k === "ozet") ozetYukle(); if (k === "tahsilat") tahYukle(); };
+  const menuOge = (k, l, alt) => <button key={k} onClick={() => git(k)} style={{ display:"block", width:"100%", textAlign:"left", background:sek===k?(T.bg2||"transparent"):"transparent", border:"none", borderLeft:"2px solid "+(sek===k?T.gold:"transparent"), borderBottom:alt?"none":"1px solid "+T.border, color:sek===k?T.text:T.sub, padding:alt?"9px 14px 9px 26px":"13px 14px", fontSize:alt?12.5:12, fontWeight:alt?400:600, letterSpacing:alt?0:0.4, textTransform:alt?"none":"uppercase", cursor:"pointer" }}>{l}</button>;
+  const menuGrup = (g, l, altlar) => {
+    const acik = !!acikGrup[g];
+    return (
+      <div key={g} style={{ borderBottom:"1px solid "+T.border }}>
+        <button onClick={() => setAcikGrup({ ...acikGrup, [g]:!acik })} style={{ display:"flex", justifyContent:"space-between", width:"100%", background:"transparent", border:"none", color:altlar.some(a => a[0] === sek) ? T.text : T.sub, padding:"13px 14px", fontSize:12, fontWeight:600, letterSpacing:0.4, textTransform:"uppercase", cursor:"pointer" }}><span>{l}</span><span style={{ fontSize:10 }}>{acik ? "▴" : "▾"}</span></button>
+        {acik && altlar.map(([k, al, hazir]) => hazir ? menuOge(k, al, true) : <div key={k} style={{ padding:"9px 14px 9px 28px", fontSize:12.5, color:T.sub, opacity:0.5 }}>{al} · yakında</div>)}
+      </div>
+    );
+  };
+  const durumBul = (s) => {
+    if (s.kalan <= 0.5) return ["Ödendi", YESIL];
+    if (s.supheli) return ["Şüpheli alacak", TURUNCU];
+    if (s.vade && s.vade < bugun()) return [s.odenen_usd > 0.5 ? "Gecikti · kısmi" : "Gecikti", KIRMIZI];
+    return [s.odenen_usd > 0.5 ? "Kısmi" : "Bekliyor", SARI];
+  };
+  const pill = (t, r) => <span style={{ fontSize:11, color:r, border:"1px solid "+r+"66", borderRadius:99, padding:"1px 8px", whiteSpace:"nowrap" }}>{t}</span>;
+  const kucukD = { ...dugme, padding:"3px 9px", fontSize:11 };
+  const modal = (b, icerik, kapat) => (
+    <div style={{ position:"fixed", inset:0, zIndex:900, display:"flex", alignItems:"flex-start", justifyContent:"center", background:"rgba(0,0,0,0.5)", overflowY:"auto", padding:"5vh 12px" }} onClick={kapat}>
+      <div onClick={e => e.stopPropagation()} style={{ width:"min(620px,100%)", background:T.bg2||"#111", border:"1px solid "+T.border, borderRadius:14, padding:18, color:T.text }}>
+        <div style={{ fontSize:16, fontWeight:700, marginBottom:14 }}>{b}</div>
+        {icerik}
+      </div>
+    </div>
+  );
+  const alan = (l, el, tam) => <div style={{ gridColumn:tam ? "1 / -1" : "auto" }}><div style={{ ...sek2, marginBottom:4 }}>{l}</div>{el}</div>;
+  const cariSec = (ad, id, set, yeniIzin) => {
+    const q = prsAdNorm(ad), hepsi = cariler || [];
+    const liste = (!id && q) ? hepsi.filter(c => prsAdNorm(c.ad).includes(q)).slice(0, 7) : [];
+    const tam = hepsi.some(c => prsAdNorm(c.ad) === q);
+    const sc = id ? hepsi.find(c => c.id === id) : null;
+    return (
+      <div style={{ position:"relative" }}>
+        <input value={ad} placeholder="Cari ara veya yeni ad yaz…" onChange={e => set(e.target.value, null)} style={{ ...girdiS, width:"100%" }} />
+        {liste.length > 0 && (
+          <div style={{ position:"absolute", left:0, right:0, top:"100%", zIndex:5, background:T.bg2||"#111", border:"1px solid "+T.border, borderRadius:8, marginTop:2, overflow:"hidden" }}>
+            {liste.map(c => <div key={c.id} onClick={() => set(c.ad, c.id)} style={{ padding:"8px 12px", fontSize:13, cursor:"pointer", borderBottom:"1px solid "+T.border, display:"flex", justifyContent:"space-between", gap:8 }}><span>{c.ad}</span><span style={{ color:bakRenk(c.bakiye), fontSize:12 }}>{para(c.bakiye, 0)}</span></div>)}
+          </div>
+        )}
+        <div style={{ fontSize:12, marginTop:4, minHeight:16, color:T.sub }}>
+          {sc ? (sc.bakiye > 0.5 ? "bize " + para(sc.bakiye, 2) + " borçlu" : sc.bakiye < -0.5 ? "biz ona " + para(-sc.bakiye, 2) + " borçluyuz" : "bakiye yok") + (sc.rol_tedarikci && sc.rol_musteri ? " · aynı zamanda tedarikçi" : "")
+            : (q && !tam ? (yeniIzin ? <span style={{ color:TURUNCU }}>Yeni cari olarak eklenecek</span> : <span style={{ color:TURUNCU }}>Listeden bir cari seçin</span>) : "")}
+        </div>
+      </div>
+    );
+  };
+  const sfUsd = sf ? (sf.pb === "TRL" ? (sayiOku(sf.kur) > 0 ? sayiOku(sf.tutar) / sayiOku(sf.kur) : 0) : sayiOku(sf.tutar)) : 0;
+  const kategoriler = [...new Set(((satisL && satisL.kayitlar) || []).map(s => s.kategori).filter(Boolean))];
   const gor = (cariler || []).filter(c => {
     if (filtre === "bakiyeli" && Math.abs(c.bakiye) < 0.5) return false;
     if (filtre === "fark" && !c.fark) return false;
@@ -2664,10 +2765,18 @@ function MuhasebeSayfa({ T, GH, sirket="BSP" }) {
   const tarihTR = (t) => t ? new Date(t + "T12:00:00").toLocaleDateString("tr-TR", { day:"2-digit", month:"short", year:"numeric" }) : "—";
 
   return (
-    <div style={{ color:T.text }}>
+    <div style={{ color:T.text, display:"flex", gap:18, flexWrap:"wrap", alignItems:"flex-start" }}>
+      <nav style={{ flex:"1 1 188px", maxWidth:230, background:T.card, border:"1px solid "+T.border, borderRadius:14, overflow:"hidden" }}>
+        {menuOge("ozet", "Güncel Durum")}
+        {menuGrup("satislar", "Satışlar", [["satis", "Satış Faturaları", true], ["tahsilat", "Tahsilatlar", true]])}
+        {menuGrup("giderler", "Giderler", [["gider", "Gider Faturaları", false], ["odeme", "Ödemeler", false]])}
+        {menuGrup("nakit", "Nakit", [["kasa", "Kasa / Banka", false]])}
+        {menuOge("cariler", "Cariler")}
+        {menuOge("aktar", "Paraşüt'ten Aktar")}
+      </nav>
+      <div style={{ flex:"4 1 420px", minWidth:0 }}>
       <div style={{ display:"flex", gap:6, alignItems:"center", marginBottom:14, flexWrap:"wrap" }}>
         <div style={{ fontSize:16, fontWeight:700, marginRight:12 }}>{sirket} · Muhasebe</div>
-        <Sekme k="ozet" l="Özet" /><Sekme k="cariler" l="Cariler" /><Sekme k="aktar" l="Paraşüt'ten Aktar" />
         {bilgi && <span style={{ fontSize:12, color:bilgi.startsWith("Hata") ? KIRMIZI : YESIL, marginLeft:10 }}>{bilgi}</span>}
       </div>
 
@@ -2707,6 +2816,79 @@ function MuhasebeSayfa({ T, GH, sirket="BSP" }) {
           </div>
         </div>
       </>)))}
+
+      {sek === "satis" && (
+        <div>
+          <div style={{ display:"flex", gap:8, flexWrap:"wrap", alignItems:"center", marginBottom:12 }}>
+            <button onClick={satisAc} style={dugmeAna}>+ Yeni Satış</button>
+            <button onClick={() => tahAc(null)} style={dugme}>Tahsilat Gir</button>
+            <input placeholder="Cari veya fatura ara…" value={sAra} onChange={e => setSAra(e.target.value)} style={{ ...girdiS, flex:"1 1 180px", minWidth:150 }} />
+          </div>
+          <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:12 }}>
+            {[["hepsi","Tümü"],["odenmemis","Ödenmemiş"],["gecikmis","Gecikmiş"],["supheli","Şüpheli"],["buay","Bu ay"]].map(([k, l]) => <button key={k} onClick={() => setSFiltre(k)} style={{ ...dugme, color:sFiltre===k?T.text:T.sub, background:sFiltre===k?T.card:"transparent", borderColor:sFiltre===k?T.text:T.border }}>{l}</button>)}
+          </div>
+          {oz && (
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))", gap:10, marginBottom:12 }}>
+              {[["Açık alacak", oz.tahsil_toplam, T.text], ["Gecikmiş", oz.tahsil_gecikmis, KIRMIZI], ["Şüpheli (1 yıl+)", oz.supheli_alacak, TURUNCU], ["Bu ay satış", oz.ay_satis, T.text]].map(([l, v, r]) => <div key={l} style={{ background:T.card, border:"1px solid "+T.border, borderRadius:12, padding:"10px 14px" }}><div style={sek2}>{l}</div><div style={{ fontSize:20, fontWeight:700, color:r }}>{para(v)}</div></div>)}
+            </div>
+          )}
+          {!satisL ? <div style={{ fontSize:13, color:T.sub }}>Yükleniyor…</div> : (
+            <div style={{ ...kart, overflowX:"auto" }}>
+              <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13, minWidth:780 }}>
+                <thead><tr>{["Tarih","Cari","Açıklama","Vade","Tutar (USD)","Kalan","Durum",""].map((h, i) => <th key={i} style={{ ...sek2, textAlign:(i===4||i===5)?"right":"left", padding:"10px 12px", borderBottom:"1px solid "+T.border, fontWeight:600 }}>{h}</th>)}</tr></thead>
+                <tbody>
+                  {satisL.kayitlar.map(s => { const [dt, dr] = durumBul(s); return (
+                    <tr key={s.id} style={{ borderBottom:"1px solid "+T.border }}>
+                      <td style={{ padding:"9px 12px", color:T.sub, whiteSpace:"nowrap" }}>{tarihTR(s.tarih)}</td>
+                      <td style={{ padding:"9px 12px", fontWeight:600 }}>{s.cari_ad}{s.ic_sirket && <span style={{ marginLeft:6 }}>{pill("iç şirket", TURUNCU)}</span>}</td>
+                      <td style={{ padding:"9px 12px", color:T.sub }}>{s.ad || "—"}</td>
+                      <td style={{ padding:"9px 12px", color:T.sub, whiteSpace:"nowrap" }}>{tarihTR(s.vade)}</td>
+                      <td style={{ padding:"9px 12px", textAlign:"right", whiteSpace:"nowrap" }}>{para(s.tutar_usd, 2)}{s.para_birimi === "TRL" && <div style={{ fontSize:11, color:T.sub }}>₺{Number(s.tutar).toLocaleString("tr-TR")} · kur {Number(s.kur).toFixed(2)}</div>}</td>
+                      <td style={{ padding:"9px 12px", textAlign:"right", whiteSpace:"nowrap", fontWeight:600 }}>{s.kalan > 0.5 ? para(s.kalan, 2) : "—"}</td>
+                      <td style={{ padding:"9px 12px" }}>{pill(dt, dr)}</td>
+                      <td style={{ padding:"9px 12px", whiteSpace:"nowrap", textAlign:"right" }}>
+                        {s.kalan > 0.5 && <button onClick={() => tahAc(s)} style={kucukD}>Tahsilat</button>}
+                        {s.kaynak === "uygulama" && <button onClick={() => satisSil(s)} style={{ ...kucukD, marginLeft:6 }}>Sil</button>}
+                      </td>
+                    </tr>
+                  ); })}
+                  {satisL.kayitlar.length === 0 && <tr><td colSpan={8} style={{ padding:20, textAlign:"center", color:T.sub }}>Kayıt yok</td></tr>}
+                </tbody>
+              </table>
+              <div style={{ padding:"9px 14px", fontSize:12, color:T.sub }}>{satisL.toplam} fatura{satisL.toplam > 300 ? " · en yeni 300 gösteriliyor, aramayı daraltın" : ""} · tutarlar USD, KDV yok</div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {sek === "tahsilat" && (
+        <div>
+          <div style={{ display:"flex", gap:8, flexWrap:"wrap", alignItems:"center", marginBottom:12 }}>
+            <button onClick={() => tahAc(null)} style={dugmeAna}>+ Tahsilat Gir</button>
+          </div>
+          {!tahL ? <div style={{ fontSize:13, color:T.sub }}>Yükleniyor…</div> : (
+            <div style={{ ...kart, overflowX:"auto" }}>
+              <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13, minWidth:620 }}>
+                <thead><tr>{["Tarih","Cari","Açıklama","Hesap","Tutar (USD)",""].map((h, i) => <th key={i} style={{ ...sek2, textAlign:i===4?"right":"left", padding:"10px 12px", borderBottom:"1px solid "+T.border, fontWeight:600 }}>{h}</th>)}</tr></thead>
+                <tbody>
+                  {tahL.map(h => (
+                    <tr key={h.id} style={{ borderBottom:"1px solid "+T.border }}>
+                      <td style={{ padding:"9px 12px", color:T.sub, whiteSpace:"nowrap" }}>{tarihTR(h.tarih)}</td>
+                      <td style={{ padding:"9px 12px", fontWeight:600 }}>{h.cari_ad || "—"}</td>
+                      <td style={{ padding:"9px 12px", color:T.sub }}>{h.aciklama || h.fatura || "—"}</td>
+                      <td style={{ padding:"9px 12px", color:T.sub }}>{h.hesap || "—"}</td>
+                      <td style={{ padding:"9px 12px", textAlign:"right", fontWeight:600, color:YESIL, whiteSpace:"nowrap" }}>{para(h.giris_usd, 2)}</td>
+                      <td style={{ padding:"9px 12px", textAlign:"right" }}>{h.kaynak === "uygulama" && <button onClick={() => tahSil(h)} style={kucukD}>Sil</button>}</td>
+                    </tr>
+                  ))}
+                  {tahL.length === 0 && <tr><td colSpan={6} style={{ padding:20, textAlign:"center", color:T.sub }}>Kayıt yok</td></tr>}
+                </tbody>
+              </table>
+              <div style={{ padding:"9px 14px", fontSize:12, color:T.sub }}>Son {tahL.length} tahsilat · yalnızca bu ekrandan girilenler silinebilir</div>
+            </div>
+          )}
+        </div>
+      )}
 
       {sek === "cariler" && (
         <div>
@@ -2811,6 +2993,53 @@ function MuhasebeSayfa({ T, GH, sirket="BSP" }) {
           </>)}
         </div>
       )}
+
+      {sf && modal("Yeni satış faturası", (<>
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))", gap:12 }}>
+          {alan("Cari", cariSec(sf.cariAd, sf.cariId, (ad, id) => setSf({ ...sf, cariAd:ad, cariId:id }), true), true)}
+          {alan("Fatura tarihi", <input type="date" value={sf.tarih} onChange={e => setSf({ ...sf, tarih:e.target.value })} style={{ ...girdiS, width:"100%" }} />)}
+          {alan("Vade", <input type="date" value={sf.vade} onChange={e => setSf({ ...sf, vade:e.target.value })} style={{ ...girdiS, width:"100%" }} />)}
+          {alan("Açıklama", <input value={sf.ad} onChange={e => setSf({ ...sf, ad:e.target.value })} placeholder="örn. 3D baskı mum — 40 adet" style={{ ...girdiS, width:"100%" }} />, true)}
+          {alan("Kategori", <><input list="muh-kat" value={sf.kategori} onChange={e => setSf({ ...sf, kategori:e.target.value })} style={{ ...girdiS, width:"100%" }} /><datalist id="muh-kat">{kategoriler.map(k => <option key={k} value={k} />)}</datalist></>)}
+          {alan("Para birimi", <select value={sf.pb} onChange={e => setSf({ ...sf, pb:e.target.value })} style={{ ...girdiS, width:"100%" }}><option value="USD">USD</option><option value="TRL">TL (kur sistemden)</option></select>)}
+          {sf.pb === "TRL" && alan("Kur (USD/TL)", <input inputMode="decimal" value={sf.kur} onChange={e => setSf({ ...sf, kur:e.target.value })} style={{ ...girdiS, width:"100%" }} />)}
+          {alan("Tutar" + (sf.pb === "TRL" ? " (₺)" : " ($)"), <input inputMode="decimal" value={sf.tutar} onChange={e => setSf({ ...sf, tutar:e.target.value })} placeholder="0,00" style={{ ...girdiS, width:"100%" }} />)}
+          {alan("USD karşılığı", <div style={{ ...girdiS, width:"100%", opacity:0.8 }}>{para(sfUsd, 2)}</div>)}
+          {alan("Tahsilat", (
+            <div style={{ display:"flex", gap:14, flexWrap:"wrap", alignItems:"center", fontSize:13 }}>
+              <label style={{ cursor:"pointer" }}><input type="radio" checked={!sf.pesin} onChange={() => setSf({ ...sf, pesin:false })} /> Sonra tahsil edilecek</label>
+              <label style={{ cursor:"pointer" }}><input type="radio" checked={!!sf.pesin} onChange={() => setSf({ ...sf, pesin:true })} /> Peşin alındı</label>
+              {sf.pesin && (hesaplar.length > 1
+                ? <select value={sf.hesap} onChange={e => setSf({ ...sf, hesap:e.target.value })} style={girdiS}>{hesaplar.map(h => <option key={h.id} value={h.id}>{h.ad}</option>)}</select>
+                : <span style={{ color:T.sub }}>hesap: {hesaplar[0] ? hesaplar[0].ad : "varsayılan"}</span>)}
+            </div>
+          ), true)}
+        </div>
+        <div style={{ minHeight:22, fontSize:12.5, color:KIRMIZI, marginTop:10 }}>{formHata}</div>
+        <div style={{ display:"flex", gap:8, justifyContent:"flex-end" }}>
+          <button onClick={() => setSf(null)} style={dugme}>İptal</button>
+          <button onClick={satisKaydet} disabled={kaydediyor} style={dugmeAna}>{kaydediyor ? "Kaydediliyor…" : "Kaydet"}</button>
+        </div>
+      </>), () => setSf(null))}
+
+      {tf && modal("Tahsilat gir", (<>
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))", gap:12 }}>
+          {tf.satis
+            ? alan("Fatura", <div style={{ fontSize:13, lineHeight:1.6 }}><b>{tf.satis.cari_ad}</b> · {tf.satis.ad || "—"}<div style={{ color:T.sub, fontSize:12 }}>{tarihTR(tf.satis.tarih)} · tutar {para(tf.satis.tutar_usd, 2)} · kalan {para(tf.satis.kalan, 2)}</div></div>, true)
+            : alan("Cari", cariSec(tf.cariAd, tf.cariId, (ad, id) => setTf({ ...tf, cariAd:ad, cariId:id }), false), true)}
+          {alan("Tutar ($)", <input inputMode="decimal" value={tf.tutar} onChange={e => setTf({ ...tf, tutar:e.target.value })} style={{ ...girdiS, width:"100%" }} />)}
+          {alan("Tarih", <input type="date" value={tf.tarih} onChange={e => setTf({ ...tf, tarih:e.target.value })} style={{ ...girdiS, width:"100%" }} />)}
+          {hesaplar.length > 1 && alan("Hesap", <select value={tf.hesap} onChange={e => setTf({ ...tf, hesap:e.target.value })} style={{ ...girdiS, width:"100%" }}><option value="">{hesaplar[0].ad} (varsayılan)</option>{hesaplar.map(h => <option key={h.id} value={h.id}>{h.ad}</option>)}</select>)}
+          {alan("Not", <input value={tf.aciklama} onChange={e => setTf({ ...tf, aciklama:e.target.value })} placeholder="isteğe bağlı" style={{ ...girdiS, width:"100%" }} />, true)}
+        </div>
+        {!tf.satis && <div style={{ fontSize:12, color:T.sub, marginTop:8 }}>Tutar, carinin en eski açık faturasından başlayarak kapatılır (şüpheli alacaklar en sona kalır).</div>}
+        <div style={{ minHeight:22, fontSize:12.5, color:KIRMIZI, marginTop:10 }}>{formHata}</div>
+        <div style={{ display:"flex", gap:8, justifyContent:"flex-end" }}>
+          <button onClick={() => setTf(null)} style={dugme}>İptal</button>
+          <button onClick={tahKaydet} disabled={kaydediyor} style={dugmeAna}>{kaydediyor ? "Kaydediliyor…" : "Kaydet"}</button>
+        </div>
+      </>), () => setTf(null))}
+      </div>
     </div>
   );
 }
@@ -13062,7 +13291,7 @@ function Atolye({ onSirketDegis }) {
           <RpKapi T={T} GH={GH} baslik="Personel"><PersonelSayfa T={T} GH={GH} IS={IS} usdTry={altinSon?.usdTry || null} siparisler={siparisler} key={AKTIF_SIRKET_ONEK} /></RpKapi>
         )}
 
-        {sayfa==="muhasebe" && AKTIF_SIRKET_ONEK!=="" && <MuhasebeSayfa T={T} GH={GH} />}
+        {sayfa==="muhasebe" && AKTIF_SIRKET_ONEK!=="" && <MuhasebeSayfa T={T} GH={GH} usdTry={altinSon?.usdTry || null} />}
         {sayfa==="kasa" && (() => {
           // ── Canlı hesaplamalar ──
           const altinKgUSD = parseFloat(altinKg) || 0;
