@@ -6580,7 +6580,7 @@ function buildKonfHTML(siparis, altinKgUSD, mc, fiyatli, modeller, siraModu) {
   // Aktif şirkete göre marka (MSK / BSP) — PDF ayrı pencerede açıldığı için CSS değişkeni YOK, sabit renk
   const _sirketKisa = AKTIF_SIRKET_ONEK === "bsp2_" ? "BSP" : "MSK";
   const _sirketTam  = AKTIF_SIRKET_ONEK === "bsp2_" ? "BSP Jewelry Design" : "MSK Kuyumculuk";
-  const _logoRenk = "#1a1a1a";
+  const _logoRenk = "#ffffff";
 
   const logoSVG = '<svg viewBox="0 0 160 70" fill="none" xmlns="http://www.w3.org/2000/svg">'
     + '<text x="80" y="48" text-anchor="middle" font-family="Arial" font-size="44" font-weight="300" fill="' + _logoRenk + '" letter-spacing="14">' + _sirketKisa + '</text>'
