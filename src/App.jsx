@@ -11457,7 +11457,7 @@ function Atolye({ onSirketDegis }) {
     return { l:o?durumEtiket(o):son.durum, c:o?.c||"#998a6e" };
   };
   const isik = () => ({});
-  const _tk = String(T.card||"").replace("#",""); const _acikTema = _tk.length>=6 && (parseInt(_tk.slice(0,2),16)+parseInt(_tk.slice(2,4),16)+parseInt(_tk.slice(4,6),16))/3 > 150;
+  const _tk = String(T.bg2||"").replace("#",""); const _acikTema = _tk.length>=6 && (parseInt(_tk.slice(0,2),16)+parseInt(_tk.slice(2,4),16)+parseInt(_tk.slice(4,6),16))/3 > 150;
   const _yazi = _acikTema ? T.text : "#fff";
   const _kenar = _acikTema ? T.border : "#444";
   const ayarRenk = (a) => { const k = String(a).toUpperCase().replace(/K$/,""); const kar = _acikTema
@@ -11757,7 +11757,7 @@ function Atolye({ onSirketDegis }) {
                   return (
                     <div key={s.id} draggable={!bitti(s)} onDragStart={e=>{ setSipSurukle(s.id); e.dataTransfer.setData("text/plain", s.id); e.dataTransfer.effectAllowed="move"; }} onDragEnd={()=>{ setSipSurukle(""); setSipHedefAy(""); }}
                       onClick={()=>setSipDrawer(s.id)}
-                      style={{ display:"flex", flexDirection:"column", cursor:bitti(s)?"default":"grab", opacity:sipSurukle===s.id?0.4:1, zoom:kartZoom, padding:"12px 14px", borderRadius:12, background:_acikTema?T.card:"#0c0c0c", color:_yazi, ...isik(c.c), border:"1px solid "+(_acikTema?T.border:"#2c2c2c"), borderLeft:"3px solid "+c.c }}>
+                      style={{ display:"flex", flexDirection:"column", cursor:bitti(s)?"default":"grab", opacity:sipSurukle===s.id?0.4:1, zoom:kartZoom, padding:"12px 14px", borderRadius:12, background:_acikTema?"#fff":"#0c0c0c", color:_yazi, ...isik(c.c), border:"1px solid "+(_acikTema?T.border:"#2c2c2c"), borderLeft:"3px solid "+c.c }}>
                       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:6 }}>
                         <span style={{ display:"flex", gap:9, flexWrap:"nowrap", alignItems:"center", minWidth:0, overflow:"hidden" }}>
                           <span style={kutuS({ fontSize:14.5, fontWeight:600, borderColor:_acikTema?"#777":"#888", flexShrink:0 })}>{s.musKod||s.musteri||"İsimsiz"}</span>
