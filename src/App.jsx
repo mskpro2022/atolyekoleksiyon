@@ -2706,7 +2706,7 @@ function PersAlan({ T, y, children, tam }) {
 }
 function PersIzgara({ children }) { return <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))", gap:14 }}>{children}</div>; }
 
-function PersonelSayfa({ T, GH: GH0, IS, usdTry }) {
+function PersonelSayfa({ T, GH: GH0, IS, usdTry, siparisler }) {
   // Bu sayfaya özel, sade ve kurumsal düğme stilleri (ana GH/IS tüm uygulamada aynı kalır)
   const GH = { background:"transparent", border:"1px solid "+T.btnBorder, borderRadius:9, padding:"7px 14px", color:T.text, fontSize:12, fontWeight:600, cursor:"pointer" };
   const GP = { ...GH, background:T.text, color:T.bg2, borderColor:T.text };
@@ -2714,6 +2714,8 @@ function PersonelSayfa({ T, GH: GH0, IS, usdTry }) {
   const bugun = new Date();
   const [sek, setSek] = useState("ozet");
   const [ay, setAy] = useState(bugun.getMonth());
+  const [uretGorev, setUretGorev] = useState(() => { try { const v = JSON.parse(localStorage.getItem("pers_uretim_gorev")||"null"); return Array.isArray(v) ? v : null; } catch { return null; } });
+  const setUretGorevH = (v) => { setUretGorev(v); try { localStorage.setItem("pers_uretim_gorev", JSON.stringify(v)); } catch {} };
   const [yil, setYil] = useState(bugun.getFullYear());
   const [per, setPer] = useState([]);
   const [izin, setIzin] = useState([]);
@@ -2947,9 +2949,68 @@ function PersonelSayfa({ T, GH: GH0, IS, usdTry }) {
             <PersKutu T={T} y={`Personel maliyeti (${PERS_AY[ay]})`} d={persTL(topNet)} />
             <PersKutu T={T} y="Sabit giderler (aylık)" d={sgKurEksik ? "kur gerekli" : persTL(Math.round(sgToplam))} />
             <PersKutu T={T} y="Toplam aylık maliyet" d={persTL(Math.round(topNet + sgToplam))} />
-            <PersKutu T={T} y="Bekleyen avans" d={persTL(bekAvans)} />
-            <PersKutu T={T} y="Bugün devam kaydı" d={devam.filter(v => v.tarih === new Date().toISOString().slice(0, 10)).length} />
           </div>
+          {atl==="MSK" && (() => {
+            const _ak = yil + "-" + String(ay+1).padStart(2,"0");
+            const _tam = (x) => x==="tamam" || x==="teslim";
+            const ayAnah = (t) => { const d=new Date(t); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0"); };
+            const sipAy = (siparisler||[]).filter(sp => (sp.planAy || ayAnah(sp.tarih)) === _ak && sp.onayDurum!=="red" && sp.onayDurum!=="iptal" && sp.onayDurum!=="bekliyor");
+            let plAdet=0, plGram=0, bitAdet=0, bitGram=0, icBitAdet=0, icBitGram=0;
+            sipAy.forEach(sp => (sp.kalemler||[]).forEach(k => {
+              const durum = (sp.kalemDurumlar||{})[k.id] || k.durum || "baslanmadi"; if (durum==="hurda") return;
+              const hc = hesapla(k, k.secilenAyar||k.refAyar, sp.altinKgUSD, sp.mc);
+              const du=((sp.kalemHurda)||{})[k.id]||0, ia=((sp.kalemIade)||{})[k.id]||0, ta=((sp.kalemTamir)||{})[k.id]||0;
+              const net = Math.max(0,(k.adet||1)-du-ia-ta), g = hc.mamulGram*net;
+              plAdet+=net; plGram+=g; if (_tam(durum)) { bitAdet+=net; bitGram+=g; }
+            }));
+            // ay içinde bitirilen (tamamlanma tarihi kayıtlı olanlar; kayıt bu sürümden itibaren tutulur)
+            (siparisler||[]).forEach(sp => { const tt = sp.kalemTamamTarih||{}; (sp.kalemler||[]).forEach(k => {
+              if (!tt[k.id] || ayAnah(tt[k.id])!==_ak) return;
+              const hc = hesapla(k, k.secilenAyar||k.refAyar, sp.altinKgUSD, sp.mc);
+              const du=((sp.kalemHurda)||{})[k.id]||0, ia=((sp.kalemIade)||{})[k.id]||0, ta=((sp.kalemTamir)||{})[k.id]||0;
+              const net = Math.max(0,(k.adet||1)-du-ia-ta); icBitAdet+=net; icBitGram+=hc.mamulGram*net; }); });
+            const gorevler = [...new Set(aktif.map(p => p.poz).filter(Boolean))];
+            const secG = uretGorev;               // null = hepsi
+            const kisiler = aktif.filter(p => !secG || secG.includes(p.poz||"—"));
+            const n = kisiler.length;
+            const persMal = kisiler.reduce((t,p) => t + satir(p).net, 0);
+            const toplam = persMal + sgToplam;
+            const bol = (a,b) => b>0 ? a/b : 0;
+            const usdE = (t) => kur>0 ? " ($"+Math.round(t/kur).toLocaleString("tr-TR")+")" : "";
+            const f1 = (x) => Number(x).toLocaleString("tr-TR",{maximumFractionDigits:1});
+            const chip = (l,on,f) => <button key={l} onClick={f} style={{ background:on?T.text:"transparent", color:on?T.bg2:T.sub, border:"1px solid "+(on?T.text:T.border), borderRadius:20, padding:"3px 11px", fontSize:12, cursor:"pointer" }}>{l}</button>;
+            const gorevDeg = (g) => { const mevcut = secG || gorevler; const yeni = mevcut.includes(g) ? mevcut.filter(x=>x!==g) : [...mevcut, g]; setUretGorevH(yeni.length===gorevler.length ? null : yeni); };
+            return (
+              <div style={{ ...kart, marginBottom:20, padding:"16px 20px" }}>
+                <div style={{ display:"flex", alignItems:"baseline", gap:8, flexWrap:"wrap", marginBottom:4 }}>
+                  <span style={{ fontSize:15, fontWeight:700, color:T.text }}>Kapasite & Birim Maliyet</span>
+                  <span style={{ fontSize:12, color:T.sub }}>{PERS_AY[ay]} {yil} · planlanan aya göre · {sipAy.length} sipariş</span>
+                </div>
+                <div style={{ display:"flex", gap:6, flexWrap:"wrap", alignItems:"center", margin:"8px 0 14px" }}>
+                  <span style={{ fontSize:12, color:T.sub, marginRight:4 }}>Üretimde sayılan görevler:</span>
+                  {chip("Tümü", !secG, ()=>setUretGorevH(null))}
+                  {gorevler.map(g => chip(g, !secG || secG.includes(g), ()=>gorevDeg(g)))}
+                </div>
+                <div style={{ display:"flex", gap:14, flexWrap:"wrap" }}>
+                  <PersKutu T={T} y="Planlanan üretim" d={f1(plGram)+" gr"} />
+                  <PersKutu T={T} y="Planlanan adet" d={f1(plAdet)} />
+                  <PersKutu T={T} y={"Şu an biten ("+Math.round(bol(bitGram,plGram)*100)+"%)"} d={f1(bitGram)+" gr"} />
+                  <PersKutu T={T} y="Üretimdeki kişi" d={n} />
+                </div>
+                <div style={{ display:"flex", gap:14, flexWrap:"wrap", marginTop:14 }}>
+                  <PersKutu T={T} y="Toplam maliyet" d={persTL(Math.round(toplam))+usdE(toplam)} />
+                  <PersKutu T={T} y="Gram başı maliyet" d={plGram>0 ? persTL(Math.round(bol(toplam,plGram)))+usdE(bol(toplam,plGram)) : "—"} />
+                  <PersKutu T={T} y="Adet başı maliyet" d={plAdet>0 ? persTL(Math.round(bol(toplam,plAdet)))+usdE(bol(toplam,plAdet)) : "—"} />
+                  <PersKutu T={T} y="Kişi başı üretim" d={n>0 ? f1(bol(plGram,n))+" gr · "+f1(bol(plAdet,n))+" adet" : "—"} />
+                  <PersKutu T={T} y="Kişi başı maliyet" d={n>0 ? persTL(Math.round(bol(toplam,n)))+usdE(bol(toplam,n)) : "—"} />
+                </div>
+                <div style={{ fontSize:12, color:T.sub, marginTop:12, lineHeight:1.6 }}>
+                  Maliyet = {n} kişinin personel maliyeti ({persTL(Math.round(persMal))}) + sabit giderler ({persTL(Math.round(sgToplam))}).
+                  {icBitAdet>0 ? <> Ay içinde bitirilen (tarih kayıtlı): <b style={{ color:T.text }}>{f1(icBitGram)} gr · {f1(icBitAdet)} adet</b>, gram başı {persTL(Math.round(bol(toplam,icBitGram)))}.</> : <> Gerçek biten üretim için tamamlanma tarihi bu sürümden itibaren kaydediliyor; ilk veriler birikince burada "ay içinde bitirilen" görünür.</>}
+                </div>
+              </div>
+            );
+          })()}
           <div style={{ ...kart, padding:0, overflowX:"auto", overflowY:"hidden" }}>
             <div style={{ padding:"16px 20px", fontSize:15, fontWeight:700, color:T.text }}>Personel Özeti <span style={{ color:T.sub, fontWeight:500, fontSize:12 }}>· {atl} Atölye</span></div>
             <table className="pers-t" style={{ width:"100%", borderCollapse:"collapse" }}>
@@ -9422,6 +9483,18 @@ function Atolye({ onSirketDegis }) {
     // GÜVENLİ SİLME: tabloyu "listede olmayanı sil" diye senkronlamak yerine sadece upsert yap;
     // silinecek = bu ekranın BİLDİĞİ listeden bu işlemle çıkarılanlar (eski/eksik listeli ekran başkasının siparişini silemez)
     const onceki = siparislerRefGuvenli.current || [];
+    // Kalem "tamamlandı/teslime hazır" olduğu anın tarihini kaydet (kapasite ölçümü için); geri alınırsa kaydı sil
+    const _tam = (x) => x==="tamam" || x==="teslim";
+    d = d.map(sp => {
+      const ob = onceki.find(x => String(x.id)===String(sp.id)); if (!ob) return sp;
+      const kd = sp.kalemDurumlar||{}, od = ob.kalemDurumlar||{}; let tt = sp.kalemTamamTarih;
+      (sp.kalemler||[]).forEach(k => {
+        const yeni = kd[k.id]||k.durum||"baslanmadi", eski = od[k.id]||k.durum||"baslanmadi";
+        if (_tam(yeni) && !_tam(eski)) tt = { ...(tt||{}), [k.id]: Date.now() };
+        else if (!_tam(yeni) && tt && tt[k.id]) { const c = { ...tt }; delete c[k.id]; tt = c; }
+      });
+      return tt===sp.kalemTamamTarih ? sp : { ...sp, kalemTamamTarih: tt };
+    });
     const yeniIdler = new Set(d.map(x => String(x.id)));
     const silinen = onceki.filter(x => !yeniIdler.has(String(x.id))).map(x => String(x.id));
     if (silinen.length > 1 && !window.confirm("⚠ Bu işlem " + silinen.length + " siparişi SİLECEK. Emin misiniz?")) { toastGoster("hata","İptal edildi — siparişler korundu"); return; }
@@ -12627,7 +12700,7 @@ function Atolye({ onSirketDegis }) {
 
         {/* KASA */}
         {sayfa==="personel" && (
-          <RpKapi T={T} GH={GH} baslik="Personel"><PersonelSayfa T={T} GH={GH} IS={IS} usdTry={altinSon?.usdTry || null} key={AKTIF_SIRKET_ONEK} /></RpKapi>
+          <RpKapi T={T} GH={GH} baslik="Personel"><PersonelSayfa T={T} GH={GH} IS={IS} usdTry={altinSon?.usdTry || null} siparisler={siparisler} key={AKTIF_SIRKET_ONEK} /></RpKapi>
         )}
 
         {sayfa==="kasa" && (() => {
