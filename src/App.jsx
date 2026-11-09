@@ -2576,6 +2576,260 @@ function MuhHalka({ T, deger, oran, renk, boyut=104 }) {
     </svg>
   );
 }
+// ── MSK Muhasebe · Tezgah / Konum (Rhino ERP yerine geçen sistemin 1. adımı) ─────────────────
+const MSK_ET_AD = { MDC:"Stok gönderme", IFG:"Fason giriş", IFC:"Fason çıkış", FRE:"Fire", KER:"Eritme", MDT:"Mamul dönüşüm", FSS:"Stok satış", FSI:"Stok iade", FSA:"Stok alış", FSR:"Alış iade", OTD:"Ödeme", OTH:"Tahsilat", DSY:"Depo sayım", TMG:"Tamir giriş", TMC:"Tamir çıkış" };
+const mskMilyem = (urun) => { const m = String(urun || "").match(/#(\d{3})-(\d+)K/); return m ? Number(m[1]) / 1000 : null; };
+const mskSayi = (v) => (v == null || v === "" ? null : (Number(v) || 0));
+const mskTarih = (d) => { if (!(d instanceof Date) || isNaN(d)) return null; return new Date(d.getTime() + 12 * 3600 * 1000).toISOString().slice(0, 10); };
+// Rhino "Ürün Ekstresi" → hareket satırları. DSY (sayım) satırının etkisi = Rhino'nun sayım sonrası Kalan'ı − önceki Kalan.
+function mskRhinoOku(rows) {
+  const out = []; const sayac = {}; const prevKalan = {}; let urun = null; const ozet = {};
+  for (const r of rows) {
+    if (!r || r.length < 12) continue;
+    const a = r[0];
+    if (typeof a === "string" && a.trim().startsWith("Ürün Adı")) { urun = String(r[4] || "").trim(); continue; }
+    const tarih = mskTarih(r[3]);
+    if (!(typeof a === "number") || !tarih || !urun) continue;
+    const giren = mskSayi(r[9]), cikan = mskSayi(r[10]), kalan = mskSayi(r[11]);
+    const etip = String(r[4] || "").trim(), subeNo = r[15] == null || r[15] === "" ? null : Number(r[15]), sube = r[16] ? String(r[16]).trim() : null;
+    let etki = 0;
+    if (etip === "DSY") etki = sube ? (kalan || 0) - (prevKalan[urun] || 0) : 0; else etki = (giren || 0) - (cikan || 0);
+    if (kalan != null) prevKalan[urun] = kalan;
+    const rhino = r[6] == null ? null : String(r[6]).trim(), firmaNo = r[17] == null || r[17] === "" ? null : Number(r[17]);
+    const baz = [urun, tarih, etip, rhino, subeNo, firmaNo, giren, cikan].join("|");
+    sayac[baz] = (sayac[baz] || 0) + 1;
+    const s = (v) => (v == null || v === "" ? null : String(v).trim());
+    out.push({ anahtar: baz + "|" + sayac[baz], urun, sira: a, tarih, etip, evrak_tanim: s(r[5]), rhino_no: rhino, evrak_no: s(r[7]), miktar: mskSayi(r[8]), giren, cikan, etki: Math.round(etki * 1e6) / 1e6, kalan_rhino: kalan, birim: s(r[12]), svk_tip: s(r[13]), sevk_sekli: s(r[14]), sube_no: subeNo, sube, firma_no: firmaNo, firma: s(r[18]), lot_not: s(r[19]), raf_no: s(r[20]), a1: s(r[21]), a2: s(r[22]), a3: s(r[23]) });
+    const o = ozet[urun] || (ozet[urun] = { adet: 0, toplam: 0, kalan: 0 }); o.adet++; o.toplam += etki; if (kalan != null) o.kalan = kalan;
+  }
+  return { satirlar: out, ozet };
+}
+
+function MskMuhasebeSayfa({ T, GH }) {
+  const KIRMIZI = "#d9675d", YESIL = "#6abf8f";
+  const [sifre, setSifre] = useState(""); const [giris, setGiris] = useState(""); const [hata, setHata] = useState(""); const [kontrol, setKontrol] = useState(false);
+  const [sek, setSek] = useState("konum"); const [bilgi, setBilgi] = useState("");
+  const [oz, setOz] = useState(null); const [tarih, setTarih] = useState("");
+  const [hf, setHf] = useState({ urun: "", sube: "", bas: "", bit: "", ara: "" }); const [liste, setListe] = useState(null); const [sayfaNo, setSayfaNo] = useState(0);
+  const [hazir, setHazir] = useState(null); const [mesgul, setMesgul] = useState(""); const [yaz, setYaz] = useState("");
+  const BOY = 200;
+  const fN = (n, k = 2) => (Number(n) || 0).toLocaleString("tr-TR", { minimumFractionDigits: k, maximumFractionDigits: k });
+  const rpc = async (ad, args = {}) => { const { data, error } = await supabase.rpc(ad, { p_sifre: sifre, ...args }); if (error) throw new Error(error.message === "yetkisiz" ? "Şifre geçersiz" : error.message); return data; };
+  const kart = { background: T.card, border: "1px solid " + T.border, borderRadius: 14, marginBottom: 14, overflow: "hidden" };
+  const baslik = { padding: "11px 16px", fontSize: 12, letterSpacing: 0.6, textTransform: "uppercase", color: T.sub, borderBottom: "1px solid " + T.border, fontWeight: 600 };
+  const dugme = { ...GH, fontSize: 12, padding: "7px 14px" };
+  const dugmeAna = { ...dugme, background: T.btnBg || "transparent", color: T.gold, borderColor: T.btnBorder || T.gold };
+  const acikT = (() => { const h = String(T.bg2 || "").replace("#", ""); return h.length >= 6 && (parseInt(h.slice(0, 2), 16) + parseInt(h.slice(2, 4), 16) + parseInt(h.slice(4, 6), 16)) / 3 > 150; })();
+  const girdiS = { background: "transparent", border: "1px solid " + T.border, borderRadius: 8, padding: "8px 10px", color: T.text, fontSize: 13, outline: "none", boxSizing: "border-box", colorScheme: acikT ? "light" : "dark" };
+  const th = { padding: "8px 12px", fontSize: 11, color: T.sub, textTransform: "uppercase", letterSpacing: 0.5, fontWeight: 600, textAlign: "right", borderBottom: "1px solid " + T.border, whiteSpace: "nowrap" };
+  const td = { padding: "8px 12px", fontSize: 13, textAlign: "right", borderBottom: "1px solid " + T.border, whiteSpace: "nowrap" };
+
+  const ac = async () => {
+    setKontrol(true); setHata("");
+    try {
+      const { data, error } = await supabase.rpc("muh_dogrula", { p_sifre: giris, p_sirket: "MSK" });
+      if (error) throw new Error(error.message);
+      if (data === true) { setSifre(giris); setGiris(""); } else setHata("Şifre yanlış. Şifre henüz belirlenmediyse önce Karlılık sekmesinden belirleyin.");
+    } catch (e) { setHata("Bağlantı hatası: " + e.message); }
+    setKontrol(false);
+  };
+  const ozetYukle = async () => { try { setOz(null); setOz(await rpc("msk_tzg_ozet", { p_tarih: tarih || null })); } catch (e) { setBilgi("Hata: " + e.message); setOz({ toplam: 0, bakiye: [], rhino_kalan: [] }); } };
+  const listeYukle = async () => {
+    try { setListe(await rpc("msk_tzg_liste", { p_urun: hf.urun || null, p_sube: hf.sube || null, p_bas: hf.bas || null, p_bit: hf.bit || null, p_ara: hf.ara || null, p_limit: BOY, p_offset: sayfaNo * BOY })); }
+    catch (e) { setBilgi("Hata: " + e.message); setListe({ toplam: 0, satirlar: [] }); }
+  };
+  useEffect(() => { if (sifre && sek === "konum") { const t = setTimeout(ozetYukle, 150); return () => clearTimeout(t); } }, [sifre, sek, tarih]);
+  useEffect(() => { if (sifre && sek === "hareket" && !oz) ozetYukle(); }, [sifre, sek]);
+  useEffect(() => { if (sifre && sek === "hareket") { const t = setTimeout(listeYukle, 250); return () => clearTimeout(t); } }, [sifre, sek, hf, sayfaNo]);
+
+  const dosyaSec = async (f) => {
+    if (!f) return; setMesgul("Dosya okunuyor… (büyük dosyada birkaç saniye sürer)"); setHazir(null); setYaz("");
+    try {
+      const XLSX = await import("https://cdn.jsdelivr.net/npm/xlsx@0.18.5/+esm");
+      const wb = XLSX.read(await f.arrayBuffer(), { type: "array", cellDates: true });
+      const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, defval: null, raw: true });
+      const sonuc = mskRhinoOku(rows);
+      setHazir({ ad: f.name, ...sonuc });
+    } catch (e) { setBilgi("Hata: Dosya okunamadı: " + e.message); }
+    setMesgul("");
+  };
+  const aktarimYap = async () => {
+    if (!hazir || !hazir.satirlar.length) return;
+    const dizi = hazir.satirlar; let yeni = 0;
+    try {
+      setMesgul("Aktarılıyor…");
+      for (let i = 0; i < dizi.length; i += 1000) {
+        setYaz("Yazılıyor: " + Math.min(i + 1000, dizi.length).toLocaleString("tr-TR") + " / " + dizi.length.toLocaleString("tr-TR"));
+        yeni += Number(await rpc("msk_tzg_yukle", { p_rows: dizi.slice(i, i + 1000) })) || 0;
+      }
+      setYaz("Bitti ✓  " + yeni.toLocaleString("tr-TR") + " yeni hareket eklendi · " + (dizi.length - yeni).toLocaleString("tr-TR") + " tanesi zaten kayıtlıydı (atlandı)");
+      setOz(null);
+    } catch (e) { setYaz("HATA: " + e.message + " — aktarımı tekrar çalıştırabilirsiniz, kayıtlı olanlar atlanır."); }
+    setMesgul("");
+  };
+
+  if (!sifre) return (
+    <div style={{ minHeight: "60vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div style={{ maxWidth: 320, width: "86%", textAlign: "center" }}>
+        <div style={{ fontSize: 22, fontWeight: 700, color: T.text }}>MSK · Muhasebe</div>
+        <div style={{ width: 40, height: 2, background: T.gold, opacity: 0.6, margin: "14px auto 12px" }} />
+        <div style={{ fontSize: 13, color: T.sub, marginBottom: 20 }}>Devam etmek için Karlılık şifresini girin</div>
+        <input type="password" autoFocus placeholder="Şifre" value={giris} onChange={e => setGiris(e.target.value)} onKeyDown={e => e.key === "Enter" && ac()} style={{ ...girdiS, width: "100%", textAlign: "center", fontSize: 15, padding: "12px" }} />
+        <div style={{ minHeight: 34, fontSize: 12, color: KIRMIZI, marginTop: 8 }}>{hata}</div>
+        <button onClick={ac} disabled={kontrol} style={{ ...dugmeAna, width: "100%", padding: "11px" }}>{kontrol ? "Kontrol ediliyor…" : "Aç"}</button>
+      </div>
+    </div>
+  );
+
+  const menu = (k, l) => <button key={k} onClick={() => { setSek(k); setBilgi(""); }} style={{ display: "block", width: "100%", textAlign: "left", background: sek === k ? (T.bg2 || "transparent") : "transparent", border: "none", borderLeft: "2px solid " + (sek === k ? T.gold : "transparent"), borderBottom: "1px solid " + T.border, color: sek === k ? T.text : T.sub, padding: "13px 14px", fontSize: 12, fontWeight: 600, letterSpacing: 0.4, textTransform: "uppercase", cursor: "pointer" }}>{l}</button>;
+  const yakinda = (l) => <div key={l} style={{ padding: "11px 14px", fontSize: 12, color: T.sub, opacity: 0.5, borderBottom: "1px solid " + T.border }}>{l} · yakında</div>;
+
+  const bak = (oz && oz.bakiye) || [];
+  const urunler = [...new Set(bak.map(b => b.urun))];
+  const altinUrun = urunler.filter(u => mskMilyem(u) != null);
+  const digerUrun = urunler.filter(u => mskMilyem(u) == null);
+  const sirali = [...altinUrun.sort((a, b) => mskMilyem(a) - mskMilyem(b)), ...digerUrun.sort()];
+  const konumlar = [...new Set(bak.map(b => b.sube))];
+  const KONUM_SIRA = ["ANAKASA MSK", "TEZGAH", "CİLA", "TAŞ DİZİM", "DÖKÜM", "MİNE", "FİRE TAŞ", "FİRE OCAK"];
+  konumlar.sort((a, b) => { const x = KONUM_SIRA.indexOf(a), y = KONUM_SIRA.indexOf(b); return (x < 0 ? 99 : x) - (y < 0 ? 99 : y) || String(a).localeCompare(String(b), "tr"); });
+  const hucre = (k, u) => { const b = bak.find(x => x.sube === k && x.urun === u); return b ? Number(b.bakiye) : 0; };
+  const hasKonum = (k) => altinUrun.reduce((t, u) => t + hucre(k, u) * mskMilyem(u), 0);
+  const rk = {}; ((oz && oz.rhino_kalan) || []).forEach(x => { rk[x.urun] = Number(x.kalan); });
+  const ad = (u) => String(u).replace(/^#/, "");
+
+  return (
+    <div style={{ color: T.text, display: "flex", gap: 18, flexWrap: "wrap", alignItems: "flex-start" }}>
+      <nav style={{ flex: "1 1 188px", maxWidth: 230, background: T.card, border: "1px solid " + T.border, borderRadius: 14, overflow: "hidden" }}>
+        {menu("konum", "Konum Bakiyeleri")}
+        {menu("hareket", "Tezgah Hareketleri")}
+        {yakinda("İşlem (tek ekran)")}
+        {yakinda("Mutabakat")}
+        {yakinda("Cariler")}
+        {menu("aktar", "Rhino'dan Aktar")}
+      </nav>
+      <div style={{ flex: "4 1 420px", minWidth: 0 }}>
+        <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 14, flexWrap: "wrap" }}>
+          <div style={{ fontSize: 16, fontWeight: 700, marginRight: 12 }}>MSK · Muhasebe</div>
+          {bilgi && <span style={{ fontSize: 12, color: bilgi.startsWith("Hata") ? KIRMIZI : YESIL, marginLeft: 10 }}>{bilgi}</span>}
+        </div>
+
+        {sek === "konum" && (<>
+          <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 14, flexWrap: "wrap" }}>
+            <span style={{ fontSize: 12, color: T.sub }}>Bakiye tarihi</span>
+            <input type="date" value={tarih} onChange={e => setTarih(e.target.value)} style={girdiS} />
+            {tarih ? <button onClick={() => setTarih("")} style={dugme}>Bugüne dön</button> : <span style={{ fontSize: 12, color: T.sub }}>Bugün · ay sonu için ayın son gününü seçin</span>}
+          </div>
+          {!oz ? <div style={{ fontSize: 13, color: T.sub }}>Yükleniyor…</div> : !bak.length ? (
+            <div style={{ ...kart, padding: 24, textAlign: "center" }}>
+              <div style={{ fontSize: 14, marginBottom: 8 }}>Henüz tezgah verisi yok</div>
+              <div style={{ fontSize: 12, color: T.sub, marginBottom: 14 }}>Rhino "Ürün Ekstresi" dosyasını yükleyerek başlayın.</div>
+              <button onClick={() => setSek("aktar")} style={dugmeAna}>Rhino'dan Aktar</button>
+            </div>
+          ) : (<>
+            <div style={kart}>
+              <div style={baslik}>Konumlara göre stok (gram){tarih ? " · " + tarih + " itibarıyla" : ""}</div>
+              <div style={{ overflowX: "auto" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                  <thead><tr><th style={{ ...th, textAlign: "left" }}>Konum</th>{sirali.map(u => <th key={u} style={th}>{ad(u)}</th>)}<th style={th}>Has (altın)</th></tr></thead>
+                  <tbody>
+                    {konumlar.map(k => (
+                      <tr key={k}>
+                        <td style={{ ...td, textAlign: "left", fontWeight: 600 }}>{k}</td>
+                        {sirali.map(u => { const v = hucre(k, u); return <td key={u} style={{ ...td, color: Math.abs(v) < 0.005 ? T.sub : v < 0 ? KIRMIZI : T.text }}>{Math.abs(v) < 0.005 ? "–" : fN(v)}</td>; })}
+                        <td style={{ ...td, fontWeight: 600 }}>{fN(hasKonum(k))}</td>
+                      </tr>
+                    ))}
+                    <tr>
+                      <td style={{ ...td, textAlign: "left", fontWeight: 700 }}>Toplam</td>
+                      {sirali.map(u => { const v = konumlar.reduce((t, k) => t + hucre(k, u), 0); return <td key={u} style={{ ...td, fontWeight: 700 }}>{Math.abs(v) < 0.005 ? "–" : fN(v)}</td>; })}
+                      <td style={{ ...td, fontWeight: 700 }}>{fN(konumlar.reduce((t, k) => t + hasKonum(k), 0))}</td>
+                    </tr>
+                    <tr>
+                      <td style={{ ...td, textAlign: "left", color: T.sub }}>Rhino kalan</td>
+                      {sirali.map(u => { const v = konumlar.reduce((t, k) => t + hucre(k, u), 0), r = rk[u]; const tut = r == null || Math.abs(v - r) < 0.01; return <td key={u} style={{ ...td, color: tut ? YESIL : KIRMIZI }}>{r == null ? "–" : fN(r) + (tut ? " ✓" : " ≠")}</td>; })}
+                      <td style={td}></td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <div style={{ fontSize: 12, color: T.sub, lineHeight: 1.6 }}>
+              Has sütunu yalnızca altın ayarlarını (9K–22K) içerir: gram × milyem. "995 HAS" ve gümüş ayrı sütunlarda gram olarak durur.
+              "Rhino kalan" satırı, Rhino'nun o tarihteki ürün toplamıdır; yeşil tik bizim hesabın Rhino ile aynı olduğunu gösterir. Toplam {Number(oz.toplam).toLocaleString("tr-TR")} hareket · {oz.ilk} → {oz.son}.
+            </div>
+          </>)}
+        </>)}
+
+        {sek === "hareket" && (<>
+          <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
+            <select value={hf.urun} onChange={e => { setSayfaNo(0); setHf({ ...hf, urun: e.target.value }); }} style={girdiS}><option value="">Tüm ayarlar</option>{sirali.map(u => <option key={u} value={u}>{ad(u)}</option>)}</select>
+            <select value={hf.sube} onChange={e => { setSayfaNo(0); setHf({ ...hf, sube: e.target.value }); }} style={girdiS}><option value="">Tüm konumlar</option>{konumlar.map(k => <option key={k} value={k}>{k}</option>)}</select>
+            <input type="date" value={hf.bas} onChange={e => { setSayfaNo(0); setHf({ ...hf, bas: e.target.value }); }} style={girdiS} />
+            <input type="date" value={hf.bit} onChange={e => { setSayfaNo(0); setHf({ ...hf, bit: e.target.value }); }} style={girdiS} />
+            <input placeholder="Evrak no, firma, açıklama…" value={hf.ara} onChange={e => { setSayfaNo(0); setHf({ ...hf, ara: e.target.value }); }} style={{ ...girdiS, flex: "1 1 180px" }} />
+          </div>
+          <div style={kart}>
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <thead><tr><th style={{ ...th, textAlign: "left" }}>Tarih</th><th style={{ ...th, textAlign: "left" }}>İşlem</th><th style={{ ...th, textAlign: "left" }}>Evrak</th><th style={th}>Ayar</th><th style={{ ...th, textAlign: "left" }}>Konum</th><th style={{ ...th, textAlign: "left" }}>Karşı taraf</th><th style={th}>Giren</th><th style={th}>Çıkan</th><th style={{ ...th, textAlign: "left" }}>Açıklama</th></tr></thead>
+                <tbody>
+                  {!liste ? <tr><td colSpan={9} style={{ ...td, textAlign: "left", color: T.sub }}>Yükleniyor…</td></tr> : !liste.satirlar.length ? <tr><td colSpan={9} style={{ ...td, textAlign: "left", color: T.sub }}>Kayıt yok</td></tr> : liste.satirlar.map(s => (
+                    <tr key={s.id}>
+                      <td style={{ ...td, textAlign: "left" }}>{s.tarih}</td>
+                      <td style={{ ...td, textAlign: "left" }}>{MSK_ET_AD[s.etip] || s.etip}</td>
+                      <td style={{ ...td, textAlign: "left", color: T.sub }}>{s.rhino_no}</td>
+                      <td style={td}>{ad(s.urun)}</td>
+                      <td style={{ ...td, textAlign: "left" }}>{s.sube || "—"}</td>
+                      <td style={{ ...td, textAlign: "left" }}>{s.firma || "—"}</td>
+                      <td style={{ ...td, color: Number(s.giren) > 0 ? YESIL : T.sub }}>{Number(s.giren) > 0 ? fN(s.giren) : "–"}</td>
+                      <td style={{ ...td, color: Number(s.cikan) > 0 ? KIRMIZI : T.sub }}>{Number(s.cikan) > 0 ? fN(s.cikan) : "–"}</td>
+                      <td style={{ ...td, textAlign: "left", color: T.sub, maxWidth: 260, overflow: "hidden", textOverflow: "ellipsis" }}>{[s.a1, s.a2].filter(Boolean).join(" · ")}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+          {liste && liste.toplam > 0 && (
+            <div style={{ display: "flex", gap: 10, alignItems: "center", fontSize: 12, color: T.sub }}>
+              <button disabled={sayfaNo === 0} onClick={() => setSayfaNo(sayfaNo - 1)} style={dugme}>‹ Önceki</button>
+              <span>{(sayfaNo * BOY + 1).toLocaleString("tr-TR")}–{Math.min((sayfaNo + 1) * BOY, liste.toplam).toLocaleString("tr-TR")} / {Number(liste.toplam).toLocaleString("tr-TR")}</span>
+              <button disabled={(sayfaNo + 1) * BOY >= liste.toplam} onClick={() => setSayfaNo(sayfaNo + 1)} style={dugme}>Sonraki ›</button>
+            </div>
+          )}
+        </>)}
+
+        {sek === "aktar" && (
+          <div style={kart}>
+            <div style={baslik}>Rhino'dan aktar · Ürün Ekstresi</div>
+            <div style={{ padding: 16 }}>
+              <div style={{ fontSize: 13, color: T.sub, lineHeight: 1.6, marginBottom: 12 }}>
+                Rhino'dan aldığınız "Ürün Ekstresi" (tüm tezgah hareketleri) Excel dosyasını seçin. Dosya aynı veriyi tekrar içerse bile kayıtlı hareketler atlanır, yalnızca yeni olanlar eklenir. Paralel çalışma döneminde güncel dosyayı tekrar yükleyebilirsiniz.
+              </div>
+              <label style={{ ...dugmeAna, display: "inline-block", cursor: mesgul ? "default" : "pointer" }}>
+                {mesgul && !hazir ? "Okunuyor…" : "Dosya seç (.xlsx)"}
+                <input type="file" accept=".xlsx" disabled={!!mesgul} style={{ display: "none" }} onChange={e => { const f = e.target.files[0]; e.target.value = ""; dosyaSec(f); }} />
+              </label>
+              {mesgul && <div style={{ fontSize: 12, color: T.sub, marginTop: 10 }}>{mesgul}</div>}
+              {hazir && (<div style={{ marginTop: 16 }}>
+                <div style={{ fontSize: 13, marginBottom: 8 }}>{hazir.ad} · {hazir.satirlar.length.toLocaleString("tr-TR")} hareket · {Object.keys(hazir.ozet).length} ayar</div>
+                <div style={{ overflowX: "auto", marginBottom: 12 }}>
+                  <table style={{ borderCollapse: "collapse" }}>
+                    <thead><tr><th style={{ ...th, textAlign: "left" }}>Ayar</th><th style={th}>Hareket</th><th style={th}>Bizim toplam</th><th style={th}>Rhino son kalan</th><th style={th}></th></tr></thead>
+                    <tbody>{Object.entries(hazir.ozet).map(([u, o]) => { const tut = Math.abs(o.toplam - o.kalan) < 0.01; return <tr key={u}><td style={{ ...td, textAlign: "left" }}>{ad(u)}</td><td style={td}>{o.adet.toLocaleString("tr-TR")}</td><td style={td}>{fN(o.toplam)}</td><td style={td}>{fN(o.kalan)}</td><td style={{ ...td, color: tut ? YESIL : KIRMIZI }}>{tut ? "✓" : "≠ fark"}</td></tr>; })}</tbody>
+                  </table>
+                </div>
+                <button onClick={aktarimYap} disabled={!!mesgul} style={dugmeAna}>Veritabanına yaz</button>
+              </div>)}
+              {yaz && <div style={{ fontSize: 13, marginTop: 12, color: yaz.startsWith("HATA") ? KIRMIZI : yaz.startsWith("Bitti") ? YESIL : T.sub }}>{yaz}</div>}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function MuhasebeSayfa({ T, GH, sirket="BSP", usdTry=null }) {
   const KIRMIZI="#d9675d", YESIL="#6abf8f", TURUNCU="#e0954a";
   const [sifre, setSifre] = useState(""); const [giris, setGiris] = useState(""); const [hata, setHata] = useState(""); const [kontrol, setKontrol] = useState(false);
@@ -11047,7 +11301,7 @@ function Atolye({ onSirketDegis }) {
               <button onClick={()=>{ if (onSirketDegis) onSirketDegis(); }} title="Şirket değiştir" style={{ fontSize:9, fontWeight:800, padding:"3px 10px", borderRadius:20, background: AKTIF_SIRKET_ONEK==="bsp2_" ? "rgba(167,139,250,0.15)" : "rgba(var(--vurgu-rgb),0.15)", border:"1px solid "+(AKTIF_SIRKET_ONEK==="bsp2_" ? "rgba(167,139,250,0.4)" : "rgba(var(--vurgu-rgb),0.4)"), color: AKTIF_SIRKET_ONEK==="bsp2_" ? "#a78bfa" : GOLD, whiteSpace:"nowrap", cursor:"pointer", display:"inline-flex", alignItems:"center", gap:4 }}>{AKTIF_SIRKET_ONEK==="bsp2_" ? "✨ BSP" : "💎 MSK"} <span style={{ fontSize:8, opacity:0.7 }}>⇄</span></button>
             </h1>
             <div style={{ display:"flex", gap:3, flexWrap:"wrap" }}>
-              {["koleksiyonlar","modeller","konfirmasyon","siparisler","iadeler","musteriler","kasa",...(AKTIF_SIRKET_ONEK!==""?["muhasebe"]:[]),"personel","analiz","radar","ayarlar"].map(n => {
+              {["koleksiyonlar","modeller","konfirmasyon","siparisler","iadeler","musteriler","kasa","muhasebe","personel","analiz","radar","ayarlar"].map(n => {
                 let badgeSayi = 0;
                 if (n === "iadeler") {
                   siparisler.forEach(s => {
@@ -13292,6 +13546,7 @@ function Atolye({ onSirketDegis }) {
         )}
 
         {sayfa==="muhasebe" && AKTIF_SIRKET_ONEK!=="" && <MuhasebeSayfa T={T} GH={GH} usdTry={altinSon?.usdTry || null} />}
+        {sayfa==="muhasebe" && AKTIF_SIRKET_ONEK==="" && <MskMuhasebeSayfa T={T} GH={GH} />}
         {sayfa==="kasa" && (() => {
           // ── Canlı hesaplamalar ──
           const altinKgUSD = parseFloat(altinKg) || 0;
