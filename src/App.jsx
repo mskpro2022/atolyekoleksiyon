@@ -2456,6 +2456,365 @@ async function rpHash(s){
   try { const b = await crypto.subtle.digest("SHA-256", new TextEncoder().encode("karlilik|"+s)); return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,"0")).join(""); }
   catch { return "x"+s; }
 }
+// ── PARAŞÜT İÇE AKTARMA: dosya tanıma + normalize (saf fonksiyonlar) ──
+const PRS_SAHSI_VARSAYILAN = ["Araba","Ev","Kişisel","Cafe&Restuarant","Market","Giyim","Tatil","Nişan&Düğün","Seyahat","Hastane","Sinema","Ulaşım","mr.kumpir","Kredi"];
+const prsAdNorm = (s) => String(s == null ? "" : s).trim().replace(/\s+/g, " ").toUpperCase().replace(/İ/g, "I");
+const prsTarih = (v) => {
+  if (v == null || v === "") return null;
+  if (v instanceof Date) return isNaN(v) ? null : new Date(v.getTime() + 43200000).toISOString().slice(0, 10);
+  const m = String(v).match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? m[1] + "-" + m[2] + "-" + m[3] : null;
+};
+const prsSayi = (v) => { const n = Number(v); return isFinite(n) ? n : 0; };
+const prsMetin = (v) => (v == null || v === "") ? null : String(v).trim();
+function prsDosyaTuru(rows) {
+  const h = (rows[0] || []).map(x => String(x == null ? "" : x).trim());
+  const var_ = (a) => h.includes(a);
+  if (h[0] === "Müşteri/tedarikçi ismi") return "cari";
+  if (h[0] === "Fatura ismi" && var_("Tahsilat durumu")) return "satis";
+  if (h[0] === "Belge Türü" && var_("Toplam ödenen")) return "gider";
+  if (h[0] === "İşlem türü" && var_("Borç meblağ")) return "hareket";
+  if (h[0] === "Düzenleme tarihi" && var_("Fatura türü")) return "satis_kalem";
+  if (h[0] === "Belge Türü") return "gider_rapor";
+  if (h[0] === "Tahsilat Tarihi") return "tahsilat_plan";
+  if (h[0] === "Ödeme Tarihi") return "odeme_plan";
+  if (h[0] === "İşlem tipi") return "nakit_akis";
+  if (h[0] === "Çalışanın adı soyadı") return "calisan";
+  if (h[0] === "KATEGORİ ADI") return "gelir_gider";
+  return "bilinmiyor";
+}
+function prsObjeler(rows) {
+  const h = (rows[0] || []).map(x => String(x == null ? "" : x).trim());
+  const out = [];
+  for (let i = 1; i < rows.length; i++) {
+    const r = rows[i]; if (!r || r.every(c => c == null || c === "")) continue;
+    const o = {}; h.forEach((k, j) => { if (!(k in o)) o[k] = r[j]; }); out.push(o);
+  }
+  return out;
+}
+// dosyalar: [{ad, rows}]  →  { ozet, cariler, satislar, giderler, hareketler, kategoriler, tanindi }
+function parasutHazirla(dosyalar, sahsiKategoriler) {
+  const sahsi = new Set((sahsiKategoriler || PRS_SAHSI_VARSAYILAN).map(x => String(x).trim()));
+  const tanindi = {}, grup = { cari: [], satis: [], gider: [], hareket: [] };
+  for (const d of dosyalar) {
+    const t = prsDosyaTuru(d.rows); tanindi[d.ad] = t;
+    if (grup[t]) grup[t].push(...prsObjeler(d.rows));
+  }
+  // kur tablosu: USD kayıtlarından tarih → USD/TL
+  const kurM = new Map();
+  const kurTopla = (o, tk, kk, dk) => { if (String(o[dk]).trim() === "USD") { const t = prsTarih(o[tk]), k = prsSayi(o[kk]); if (t && k > 0) { const a = kurM.get(t) || []; a.push(k); kurM.set(t, a); } } };
+  grup.satis.forEach(o => kurTopla(o, "Düzenleme tarihi", "Döviz kuru", "Döviz tipi"));
+  grup.gider.forEach(o => kurTopla(o, "Düzenleme tarihi", "Döviz Kuru", "Döviz tipi"));
+  const kurT = [...kurM.entries()].map(([t, a]) => [t, a.reduce((x, y) => x + y, 0) / a.length]).sort((a, b) => a[0] < b[0] ? -1 : 1);
+  const kurAsof = (t) => { if (!kurT.length) return 1; let lo = 0, hi = kurT.length - 1, r = 0; while (lo <= hi) { const m = (lo + hi) >> 1; if (kurT[m][0] <= t) { r = m; lo = m + 1; } else hi = m - 1; } return kurT[r][1]; };
+  // cariler (aynı isim = tek cari)
+  const cm = new Map();
+  for (const o of grup.cari) {
+    const ad = prsMetin(o["Müşteri/tedarikçi ismi"]); if (!ad) continue; const n = prsAdNorm(ad);
+    const usd = prsSayi(o["USD Bakiye"]), tl = prsSayi(o["TL Bakiye"]);
+    const c = cm.get(n);
+    if (!c) cm.set(n, { ad, ad_norm: n, grup: prsMetin(o["Müşteri/tedarikçi grubu"]), eposta: prsMetin(o["E-posta"]), telefon: prsMetin(o["Telefon"]), adres: prsMetin(o["Adres"]), il: prsMetin(o["İl"]), ilce: prsMetin(o["İlçe"]), vergi_dairesi: prsMetin(o["Vergi dairesi"]), vergi_no: prsMetin(o["Vergi numarası/TC kimlik no"]), usd, tl });
+    else { c.grup = c.grup || prsMetin(o["Müşteri/tedarikçi grubu"]); c.eposta = c.eposta || prsMetin(o["E-posta"]); c.telefon = c.telefon || prsMetin(o["Telefon"]); if (Math.abs(usd) > Math.abs(c.usd)) c.usd = usd; if (Math.abs(tl) > Math.abs(c.tl)) c.tl = tl; }
+  }
+  // satışlar
+  const satislar = grup.satis.map(o => {
+    const t = prsTarih(o["Düzenleme tarihi"]); if (!t) return null;
+    const pb = String(o["Döviz tipi"]).trim() === "USD" ? "USD" : "TRL";
+    const tutar = prsSayi(pb === "USD" ? o["Genel Toplam"] : o["Genel Toplam (TL)"]);
+    const kur = pb === "USD" ? prsSayi(o["Döviz kuru"]) : 1;
+    const tusd = pb === "USD" ? tutar : tutar / kurAsof(t);
+    const durum = prsMetin(o["Tahsilat durumu"]) || "";
+    const n = prsAdNorm(o["Müşteri"]);
+    return { n: n || null, tarih: t, vade: prsTarih(o["Son tahsilat tarihi"]), ad: prsMetin(o["Fatura ismi"]), kategori: prsMetin(o["Kategori"]), pb, kur, tutar, tutar_usd: Math.round(tusd * 100) / 100, odenen_usd: durum === "Ödendi" ? Math.round(tusd * 100) / 100 : 0, durum };
+  }).filter(Boolean);
+  // giderler
+  const kat = {};
+  const giderler = grup.gider.map(o => {
+    const t = prsTarih(o["Düzenleme tarihi"]); if (!t) return null;
+    const pb = String(o["Döviz tipi"]).trim() === "USD" ? "USD" : "TRL";
+    const tutar = prsSayi(pb === "USD" ? o["Genel Toplam"] : o["Genel Toplam (TL)"]);
+    const odenenOrj = prsSayi(pb === "USD" ? o["Toplam ödenen"] : o["Toplam ödenen (TL)"]);
+    const kur = pb === "USD" ? prsSayi(o["Döviz Kuru"]) : 1;
+    const ka = kurAsof(t);
+    const tusd = pb === "USD" ? tutar : tutar / ka, ousd = pb === "USD" ? odenenOrj : odenenOrj / ka;
+    const kategori = prsMetin(o["Kategori"]) || "(kategorisiz)";
+    kat[kategori] = (kat[kategori] || 0) + 1;
+    const n = prsAdNorm(o["Tedarikçi / Çalışan"]);
+    const durum = ousd >= tusd - 0.5 ? "Ödendi" : (ousd > 0.5 ? "Kısmi" : "Ödenmedi");
+    return { n: n || null, tarih: t, vade: prsTarih(o["Vade tarihi"]), ad: prsMetin(o["Fatura ismi"]), kategori, pb, kur, tutar, tutar_usd: Math.round(tusd * 100) / 100, odenen_usd: Math.round(ousd * 100) / 100, durum, sahsi: sahsi.has(kategori.trim()) };
+  }).filter(Boolean);
+  // kasa hareketleri
+  const hareketler = grup.hareket.map(o => {
+    const t = prsTarih(o["Tarih"]); if (!t) return null;
+    const n = prsAdNorm(o["Müşteri/Tedarikçi/Çalışan"]);
+    return { n: n || null, tarih: t, tur: prsMetin(o["İşlem türü"]) || "", aciklama: prsMetin(o["Açıklama"]), giris: prsSayi(o["Borç meblağ"]), cikis: prsSayi(o["Alacak meblağ"]) };
+  }).filter(Boolean);
+  const cariler = [...cm.values()];
+  const ozet = {
+    cari: cariler.length, satis: satislar.length, gider: giderler.length, hareket: hareketler.length,
+    satisUsd: Math.round(satislar.reduce((a, x) => a + x.tutar_usd, 0)), giderUsd: Math.round(giderler.reduce((a, x) => a + x.tutar_usd, 0)),
+    tarihMin: [...satislar, ...giderler, ...hareketler].map(x => x.tarih).sort()[0] || null,
+    tarihMax: [...satislar, ...giderler, ...hareketler].map(x => x.tarih).sort().slice(-1)[0] || null,
+  };
+  // yerel fark önizlemesi (sunucudaki ile aynı formül)
+  const bak = {}; const topla = (n, v) => { if (n) bak[n] = (bak[n] || 0) + v; };
+  satislar.forEach(x => topla(x.n, x.tutar_usd - x.odenen_usd)); giderler.forEach(x => topla(x.n, -(x.tutar_usd - x.odenen_usd)));
+  let tutan = 0, farkli = [];
+  cariler.forEach(c => { const f = c.usd - (bak[c.ad_norm] || 0); if (Math.abs(f) < 1) tutan++; else farkli.push({ ad: c.ad, parasut: Math.round(c.usd * 100) / 100, bizim: Math.round((bak[c.ad_norm] || 0) * 100) / 100, fark: Math.round(f * 100) / 100 }); });
+  farkli.sort((a, b) => Math.abs(b.fark) - Math.abs(a.fark));
+  ozet.tutan = tutan; ozet.farkli = farkli.length;
+  return { ozet, cariler, satislar, giderler, hareketler, kategoriler: kat, tanindi, farkli };
+}
+
+// ═══ BSP MUHASEBE (Paraşüt tarzı) — veri sunucuda şifre ile korunur ═══
+function MuhHalka({ T, deger, oran, renk, boyut=104 }) {
+  const r = boyut/2 - 8, c = 2*Math.PI*r, o = Math.max(0, Math.min(1, oran||0));
+  return (
+    <svg width={boyut} height={boyut} viewBox={"0 0 "+boyut+" "+boyut} style={{ display:"block", margin:"0 auto" }}>
+      <circle cx={boyut/2} cy={boyut/2} r={r} fill="none" stroke={T.border} strokeWidth="8" />
+      <circle cx={boyut/2} cy={boyut/2} r={r} fill="none" stroke={renk} strokeWidth="8" strokeLinecap="round" strokeDasharray={(c*o)+" "+c} transform={"rotate(-90 "+boyut/2+" "+boyut/2+")"} />
+      <text x={boyut/2} y={boyut/2+5} textAnchor="middle" fill={T.text} fontSize="15" fontWeight="700">{deger}</text>
+    </svg>
+  );
+}
+function MuhasebeSayfa({ T, GH, sirket="BSP" }) {
+  const KIRMIZI="#d9675d", YESIL="#6abf8f", TURUNCU="#e0954a";
+  const [sifre, setSifre] = useState(""); const [giris, setGiris] = useState(""); const [hata, setHata] = useState(""); const [kontrol, setKontrol] = useState(false);
+  const [sek, setSek] = useState("ozet");
+  const [oz, setOz] = useState(null); const [cariler, setCariler] = useState(null); const [arsiv, setArsiv] = useState(false);
+  const [filtre, setFiltre] = useState("hepsi"); const [ara, setAra] = useState("");
+  const [secili, setSecili] = useState(null); const [ekstre, setEkstre] = useState(null);
+  const [mesgul, setMesgul] = useState(""); const [bilgi, setBilgi] = useState("");
+  const [dosyalar, setDosyalar] = useState([]); const [hazir, setHazir] = useState(null); const [sahsi, setSahsi] = useState(PRS_SAHSI_VARSAYILAN); const [yaz, setYaz] = useState("");
+  const para = (n, k=0) => (Number(n)||0).toLocaleString("tr-TR", { maximumFractionDigits:k, minimumFractionDigits:k }) + " $";
+  const rpc = async (ad, args={}) => { const { data, error } = await supabase.rpc(ad, { p_sifre:sifre, p_sirket:sirket, ...args }); if (error) throw new Error(error.message === "yetkisiz" ? "Şifre geçersiz" : error.message); return data; };
+  const kart = { background:T.card, border:"1px solid "+T.border, borderRadius:14, marginBottom:14, overflow:"hidden" };
+  const baslik = { padding:"11px 16px", fontSize:12, letterSpacing:0.6, textTransform:"uppercase", color:T.sub, borderBottom:"1px solid "+T.border, fontWeight:600 };
+  const sek2 = { fontSize:11, color:T.sub, textTransform:"uppercase", letterSpacing:0.5 };
+  const dugme = { ...GH, fontSize:12, padding:"7px 14px" };
+  const dugmeAna = { ...dugme, background:T.btnBg||"transparent", color:T.gold, borderColor:T.btnBorder||T.gold };
+  const girdiS = { background:"transparent", border:"1px solid "+T.border, borderRadius:8, padding:"9px 12px", color:T.text, fontSize:13, outline:"none", boxSizing:"border-box" };
+
+  const ac = async () => {
+    setKontrol(true); setHata("");
+    try {
+      const { data, error } = await supabase.rpc("muh_dogrula", { p_sifre:giris, p_sirket:sirket });
+      if (error) throw new Error(error.message);
+      if (data === true) { setSifre(giris); setGiris(""); } else setHata("Şifre yanlış. Şifre henüz belirlenmediyse önce Karlılık sekmesinden belirleyin.");
+    } catch (e) { setHata("Bağlantı hatası: " + e.message); }
+    setKontrol(false);
+  };
+  const ozetYukle = async () => { try { setOz(await rpc("muh_ozet")); } catch (e) { setBilgi("Hata: " + e.message); } };
+  const cariYukle = async (arsivMi) => { try { setCariler(null); setCariler(await rpc("muh_cariler", { p_arsiv:!!arsivMi })); } catch (e) { setBilgi("Hata: " + e.message); setCariler([]); } };
+  useEffect(() => { if (sifre) { ozetYukle(); cariYukle(false); } }, [sifre]);
+  useEffect(() => { if (sifre && sek === "cariler") cariYukle(arsiv); }, [arsiv]);
+  const ekstreAc = async (c) => { setSecili(c); setEkstre(null); try { setEkstre(await rpc("muh_cari_ekstre", { p_cari:c.id })); } catch (e) { setBilgi("Hata: " + e.message); setEkstre([]); } };
+  const farkKaldir = async (c) => {
+    if (!window.confirm(c.ad + " için Paraşüt aktarım farkı (" + para(c.fark, 2) + ") kaldırılsın mı? Bakiye, faturalardan hesaplanan değere döner.")) return;
+    try { await rpc("muh_fark_kaldir", { p_cari:c.id }); setSecili(null); await cariYukle(arsiv); await ozetYukle(); setBilgi("Fark kaldırıldı ✓"); } catch (e) { setBilgi("Hata: " + e.message); }
+  };
+  const dosyaSec = async (files) => {
+    setMesgul("Dosyalar okunuyor…"); setHazir(null); setYaz("");
+    try {
+      const XLSX = await import("https://cdn.jsdelivr.net/npm/xlsx@0.18.5/+esm");
+      const liste = [];
+      for (const f of files) { const wb = XLSX.read(await f.arrayBuffer(), { type:"array", cellDates:true }); liste.push({ ad:f.name, rows:XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header:1, defval:null, raw:true }) }); }
+      setDosyalar(liste); setHazir(parasutHazirla(liste, sahsi));
+    } catch (e) { setBilgi("Dosya okunamadı: " + e.message); }
+    setMesgul("");
+  };
+  const sahsiDegis = (k) => { const yeni = sahsi.includes(k) ? sahsi.filter(x => x !== k) : [...sahsi, k]; setSahsi(yeni); if (dosyalar.length) setHazir(parasutHazirla(dosyalar, yeni)); };
+  const aktarimYap = async () => {
+    if (!hazir) return;
+    if (!window.confirm("BSP muhasebe verisi (Paraşüt kaynaklı) silinip yeniden yazılacak. Devam edilsin mi?")) return;
+    const parca = async (tur, dizi, boy) => { for (let i = 0; i < dizi.length; i += boy) { setYaz("Yazılıyor: " + tur + " " + Math.min(i + boy, dizi.length) + "/" + dizi.length); await rpc("muh_ice_aktar_parca", { p_tur:tur, p_veri:dizi.slice(i, i + boy) }); } };
+    try {
+      setMesgul("Aktarılıyor…"); setYaz("Eski aktarım temizleniyor…"); await rpc("muh_ice_aktar_sifirla");
+      await parca("cari", hazir.cariler.map(c => ({ ...c, rol_musteri:false, rol_tedarikci:false })), 300);
+      await parca("satis", hazir.satislar, 400); await parca("gider", hazir.giderler, 400); await parca("hareket", hazir.hareketler, 500);
+      setYaz("Bağlantılar, arşiv ve fark kayıtları hesaplanıyor…");
+      const s = await rpc("muh_ice_aktar_bitir", { p_kesim:new Date().toISOString().slice(0, 10) });
+      setYaz("Bitti ✓  " + s.yeni_cari + " yeni cari · " + s.arsive_giden + " cari arşivde · " + s.fark_kaydi + " Paraşüt farkı · " + s.supheli_alacak + " şüpheli alacak");
+      await ozetYukle(); await cariYukle(false); setArsiv(false);
+    } catch (e) { setYaz("HATA: " + e.message + " — veri yarım kalmış olabilir, aktarımı tekrar çalıştırın (eski kayıtlar temizlenerek yeniden yazılır)."); }
+    setMesgul("");
+  };
+
+  if (!sifre) return (
+    <div style={{ minHeight:"60vh", display:"flex", alignItems:"center", justifyContent:"center" }}>
+      <div style={{ maxWidth:320, width:"86%", textAlign:"center" }}>
+        <div style={{ fontSize:22, fontWeight:700, color:T.text }}>{sirket} · Muhasebe</div>
+        <div style={{ width:40, height:2, background:T.gold, opacity:0.6, margin:"14px auto 12px" }} />
+        <div style={{ fontSize:13, color:T.sub, marginBottom:20 }}>Devam etmek için Karlılık şifresini girin</div>
+        <input type="password" autoFocus placeholder="Şifre" value={giris} onChange={e => setGiris(e.target.value)} onKeyDown={e => e.key === "Enter" && ac()} style={{ ...girdiS, width:"100%", textAlign:"center", fontSize:15, padding:"12px" }} />
+        <div style={{ minHeight:34, fontSize:12, color:KIRMIZI, marginTop:8 }}>{hata}</div>
+        <button onClick={ac} disabled={kontrol} style={{ ...dugmeAna, width:"100%", padding:"11px" }}>{kontrol ? "Kontrol ediliyor…" : "Aç"}</button>
+      </div>
+    </div>
+  );
+
+  const Sekme = ({ k, l }) => <button onClick={() => { setSek(k); if (k === "cariler") cariYukle(arsiv); if (k === "ozet") ozetYukle(); }} style={{ ...dugme, color:sek===k?T.gold:T.sub, background:sek===k?(T.btnBg||"transparent"):"transparent", borderColor:sek===k?(T.btnBorder||T.gold):T.border }}>{l}</button>;
+  const gor = (cariler || []).filter(c => {
+    if (filtre === "bakiyeli" && Math.abs(c.bakiye) < 0.5) return false;
+    if (filtre === "fark" && !c.fark) return false;
+    if (filtre === "supheli" && !(c.supheli > 0)) return false;
+    if (ara && !String(c.ad).toUpperCase().includes(ara.toUpperCase().replace(/İ/g, "I")) && !String(c.ad).toLowerCase().includes(ara.toLowerCase())) return false;
+    return true;
+  });
+  const bakRenk = (b) => b > 0.5 ? YESIL : b < -0.5 ? KIRMIZI : T.sub;
+  const tarihTR = (t) => t ? new Date(t + "T12:00:00").toLocaleDateString("tr-TR", { day:"2-digit", month:"short", year:"numeric" }) : "—";
+
+  return (
+    <div style={{ color:T.text }}>
+      <div style={{ display:"flex", gap:6, alignItems:"center", marginBottom:14, flexWrap:"wrap" }}>
+        <div style={{ fontSize:16, fontWeight:700, marginRight:12 }}>{sirket} · Muhasebe</div>
+        <Sekme k="ozet" l="Özet" /><Sekme k="cariler" l="Cariler" /><Sekme k="aktar" l="Paraşüt'ten Aktar" />
+        {bilgi && <span style={{ fontSize:12, color:bilgi.startsWith("Hata") ? KIRMIZI : YESIL, marginLeft:10 }}>{bilgi}</span>}
+      </div>
+
+      {sek === "ozet" && (!oz ? <div style={{ fontSize:13, color:T.sub }}>Yükleniyor…</div> : (oz.cari_aktif + oz.cari_arsiv === 0 ? (
+        <div style={{ ...kart, padding:24, textAlign:"center" }}><div style={{ fontSize:14, marginBottom:8 }}>Henüz veri yok</div><div style={{ fontSize:12, color:T.sub, marginBottom:14 }}>Paraşüt dosyalarını yükleyerek başlayın.</div><button onClick={() => setSek("aktar")} style={dugmeAna}>Paraşüt'ten Aktar</button></div>
+      ) : (<>
+        <div style={kart}>
+          <div style={baslik}>Tahsilatlar</div>
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))" }}>
+            <div style={{ padding:16, textAlign:"center", borderRight:"1px solid "+T.border }}><div style={sek2}>Toplam tahsil edilecek</div><div style={{ margin:"10px 0 6px" }}><MuhHalka T={T} deger={para(oz.tahsil_toplam)} oran={oz.tahsil_toplam>0?1:0} renk={TURUNCU} /></div></div>
+            <div style={{ padding:16, textAlign:"center", borderRight:"1px solid "+T.border }}><div style={sek2}>Gecikmiş</div><div style={{ margin:"10px 0 6px" }}><MuhHalka T={T} deger={para(oz.tahsil_gecikmis)} oran={oz.tahsil_toplam>0?oz.tahsil_gecikmis/oz.tahsil_toplam:0} renk={KIRMIZI} /></div><div style={{ fontSize:12, color:T.sub }}>{oz.tahsil_gecikmis_adet} fatura</div></div>
+            <div style={{ padding:16, textAlign:"center", borderRight:"1px solid "+T.border }}><div style={sek2}>Planlanmamış</div><div style={{ margin:"10px 0 6px" }}><MuhHalka T={T} deger={para(oz.tahsil_plansiz)} oran={oz.tahsil_toplam>0?oz.tahsil_plansiz/oz.tahsil_toplam:0} renk={T.sub} /></div><div style={{ fontSize:12, color:T.sub }}>vadesi girilmemiş</div></div>
+            <div style={{ padding:16, display:"flex", flexDirection:"column", justifyContent:"center", gap:14 }}>
+              <div><div style={{ fontSize:20, fontWeight:700 }}>{para(oz.ay_satis)}</div><div style={sek2}>Bu ay satış · {oz.ay_satis_adet} kayıt</div></div>
+              <div><div style={{ fontSize:20, fontWeight:700, color:TURUNCU }}>{para(oz.supheli_alacak)}</div><div style={sek2}>Şüpheli alacak · {oz.supheli_adet} fatura</div></div>
+            </div>
+          </div>
+        </div>
+        <div style={kart}>
+          <div style={baslik}>Ödemeler</div>
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))" }}>
+            <div style={{ padding:16, textAlign:"center", borderRight:"1px solid "+T.border }}><div style={sek2}>Toplam ödenecek</div><div style={{ margin:"10px 0 6px" }}><MuhHalka T={T} deger={para(oz.odeme_toplam)} oran={oz.odeme_toplam>0?1:0} renk={TURUNCU} /></div></div>
+            <div style={{ padding:16, textAlign:"center", borderRight:"1px solid "+T.border }}><div style={sek2}>Gecikmiş</div><div style={{ margin:"10px 0 6px" }}><MuhHalka T={T} deger={para(oz.odeme_gecikmis)} oran={oz.odeme_toplam>0?oz.odeme_gecikmis/oz.odeme_toplam:0} renk={KIRMIZI} /></div></div>
+            <div style={{ padding:16, textAlign:"center", borderRight:"1px solid "+T.border }}><div style={sek2}>Planlanmamış</div><div style={{ margin:"10px 0 6px" }}><MuhHalka T={T} deger={para(oz.odeme_plansiz)} oran={oz.odeme_toplam>0?oz.odeme_plansiz/oz.odeme_toplam:0} renk={T.sub} /></div></div>
+            <div style={{ padding:16, display:"flex", flexDirection:"column", justifyContent:"center", gap:14 }}>
+              <div><div style={{ fontSize:20, fontWeight:700 }}>{para(oz.ay_gider)}</div><div style={sek2}>Bu ay gider (şahsi hariç)</div></div>
+              <div><div style={{ fontSize:20, fontWeight:700 }}>{para(oz.ay_odeme)}</div><div style={sek2}>Bu ay ödenen</div></div>
+            </div>
+          </div>
+        </div>
+        <div style={kart}>
+          <div style={baslik}>Kasa ve cariler</div>
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(170px,1fr))" }}>
+            <div style={{ padding:"14px 16px", borderRight:"1px solid "+T.border }}><div style={sek2}>Yeni Kasa (USD)</div><div style={{ fontSize:20, fontWeight:700, marginTop:4 }}>{para(oz.kasa)}</div><div style={{ fontSize:12, color:T.sub }}>bu ay tahsilat {para(oz.ay_tahsilat)}</div></div>
+            <div style={{ padding:"14px 16px", borderRight:"1px solid "+T.border }}><div style={sek2}>Aktif cari</div><div style={{ fontSize:20, fontWeight:700, marginTop:4 }}>{oz.cari_aktif}</div><div style={{ fontSize:12, color:T.sub }}>{oz.cari_arsiv} cari arşivde</div></div>
+            <div style={{ padding:"14px 16px", cursor:oz.fark_adet>0?"pointer":"default" }} onClick={() => { if (oz.fark_adet > 0) { setSek("cariler"); setFiltre("fark"); cariYukle(false); } }}><div style={sek2}>Paraşüt aktarım farkı</div><div style={{ fontSize:20, fontWeight:700, marginTop:4, color:oz.fark_adet>0?TURUNCU:YESIL }}>{oz.fark_adet} cari</div><div style={{ fontSize:12, color:T.sub }}>{oz.fark_adet>0?"incelenmeyi bekliyor ›":"fark yok"}</div></div>
+          </div>
+        </div>
+      </>)))}
+
+      {sek === "cariler" && (
+        <div>
+          <div style={{ display:"flex", gap:6, flexWrap:"wrap", alignItems:"center", marginBottom:10 }}>
+            <button onClick={() => setArsiv(false)} style={{ ...dugme, color:!arsiv?T.gold:T.sub, borderColor:!arsiv?(T.btnBorder||T.gold):T.border }}>Aktif</button>
+            <button onClick={() => setArsiv(true)} style={{ ...dugme, color:arsiv?T.gold:T.sub, borderColor:arsiv?(T.btnBorder||T.gold):T.border }}>Arşiv</button>
+            <span style={{ width:10 }} />
+            {[["hepsi","Hepsi"],["bakiyeli","Bakiyeli"],["fark","Paraşüt farkı"],["supheli","Şüpheli alacak"]].map(([k, l]) => <button key={k} onClick={() => setFiltre(k)} style={{ ...dugme, color:filtre===k?T.text:T.sub, background:filtre===k?T.card:"transparent", borderColor:filtre===k?T.text:T.border }}>{l}</button>)}
+            <input placeholder="Cari ara…" value={ara} onChange={e => setAra(e.target.value)} style={{ ...girdiS, flex:"1 1 160px", minWidth:140 }} />
+          </div>
+          {!cariler ? <div style={{ fontSize:13, color:T.sub }}>Yükleniyor…</div> : (
+            <div style={{ ...kart, overflowX:"auto" }}>
+              <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13, minWidth:560 }}>
+                <thead><tr>{["Cari","Grup","Son hareket","Bakiye"].map((h, i) => <th key={h} style={{ ...sek2, textAlign:i===3?"right":"left", padding:"10px 14px", borderBottom:"1px solid "+T.border, fontWeight:600 }}>{h}</th>)}</tr></thead>
+                <tbody>
+                  {gor.slice(0, 300).map(c => (
+                    <tr key={c.id} onClick={() => ekstreAc(c)} style={{ cursor:"pointer", borderBottom:"1px solid "+T.border }}>
+                      <td style={{ padding:"10px 14px" }}>
+                        <span style={{ fontWeight:600 }}>{c.ad}</span>
+                        {c.rol_musteri && <span style={{ marginLeft:6, fontSize:11, color:T.sub }}>müşteri</span>}
+                        {c.rol_tedarikci && <span style={{ marginLeft:6, fontSize:11, color:T.sub }}>tedarikçi</span>}
+                        {c.ic_sirket && <span style={{ marginLeft:6, fontSize:11, color:TURUNCU, border:"1px solid "+TURUNCU+"66", borderRadius:99, padding:"0 7px" }}>iç şirket</span>}
+                        {c.fark !== 0 && <span style={{ marginLeft:6, fontSize:11, color:TURUNCU, border:"1px solid "+TURUNCU+"66", borderRadius:99, padding:"0 7px" }}>Paraşüt farkı</span>}
+                        {c.supheli > 0 && <span style={{ marginLeft:6, fontSize:11, color:KIRMIZI, border:"1px solid "+KIRMIZI+"66", borderRadius:99, padding:"0 7px" }}>şüpheli</span>}
+                      </td>
+                      <td style={{ padding:"10px 14px", color:T.sub, fontSize:12 }}>{c.grup || ""}</td>
+                      <td style={{ padding:"10px 14px", color:T.sub, fontSize:12, whiteSpace:"nowrap" }}>{tarihTR(c.son_hareket)}</td>
+                      <td style={{ padding:"10px 14px", textAlign:"right", fontWeight:700, color:bakRenk(c.bakiye), whiteSpace:"nowrap" }}>{para(c.bakiye, 2)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <div style={{ padding:"9px 14px", fontSize:12, color:T.sub }}>{gor.length} cari{gor.length > 300 ? " · ilk 300 gösteriliyor, aramayı daraltın" : ""} · + bakiye: bize borçlu, − bakiye: biz borçluyuz</div>
+            </div>
+          )}
+          {secili && (
+            <div style={{ position:"fixed", inset:0, zIndex:900, display:"flex", justifyContent:"flex-end", background:"rgba(0,0,0,0.45)" }} onClick={() => setSecili(null)}>
+              <div onClick={e => e.stopPropagation()} style={{ width:"min(560px,100%)", height:"100%", overflowY:"auto", background:T.bg2||"#111", borderLeft:"1px solid "+T.border, padding:18, color:T.text }}>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:10 }}>
+                  <div><div style={{ fontSize:17, fontWeight:700 }}>{secili.ad}</div><div style={{ fontSize:12, color:T.sub }}>{secili.grup || ""}</div></div>
+                  <button onClick={() => setSecili(null)} style={dugme}>Kapat</button>
+                </div>
+                <div style={{ fontSize:24, fontWeight:700, margin:"14px 0 4px", color:bakRenk(secili.bakiye) }}>{para(secili.bakiye, 2)}</div>
+                {secili.fark !== 0 && (
+                  <div style={{ border:"1px solid "+TURUNCU+"66", borderRadius:10, padding:"10px 12px", margin:"8px 0 12px", fontSize:12, color:T.text }}>
+                    Bu bakiyenin <b>{para(secili.fark, 2)}</b> kadarı faturalarda yok, Paraşüt'ten aktarım farkı olarak geldi. Hesabı kontrol edip yanlışsa kaldırabilirsiniz.
+                    <div style={{ marginTop:8 }}><button onClick={() => farkKaldir(secili)} style={dugme}>Paraşüt farkını kaldır</button></div>
+                  </div>
+                )}
+                {!ekstre ? <div style={{ fontSize:13, color:T.sub }}>Yükleniyor…</div> : (
+                  <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12.5 }}>
+                    <tbody>{ekstre.slice(0, 200).map((e, i) => {
+                      const acik = Number(e.tutar_usd) - Number(e.odenen_usd || 0);
+                      return (
+                        <tr key={i} style={{ borderBottom:"1px solid "+T.border }}>
+                          <td style={{ padding:"8px 6px", color:T.sub, whiteSpace:"nowrap" }}>{tarihTR(e.tarih)}</td>
+                          <td style={{ padding:"8px 6px" }}>{e.tur === "gider" ? "Gider" : e.tur === "fark" ? "Paraşüt farkı" : "Satış"} · {e.ad || "—"}{e.supheli && <span style={{ color:KIRMIZI }}> · şüpheli</span>}<div style={{ fontSize:11, color:T.sub }}>{e.durum}{e.vade ? " · vade " + tarihTR(e.vade) : ""}</div></td>
+                          <td style={{ padding:"8px 6px", textAlign:"right", whiteSpace:"nowrap" }}>{para(e.tutar_usd, 2)}<div style={{ fontSize:11, color:acik>0.5?TURUNCU:T.sub }}>{e.tur === "fark" ? "" : acik > 0.5 ? "açık " + para(acik, 2) : "kapalı"}</div></td>
+                        </tr>
+                      );
+                    })}</tbody>
+                  </table>
+                )}
+                {ekstre && ekstre.length > 200 && <div style={{ fontSize:12, color:T.sub, marginTop:8 }}>Son 200 kayıt gösteriliyor ({ekstre.length} kayıt var)</div>}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {sek === "aktar" && (
+        <div>
+          <div style={{ ...kart, padding:16 }}>
+            <div style={{ fontSize:14, fontWeight:600, marginBottom:6 }}>Paraşüt Excel dosyalarını seçin</div>
+            <div style={{ fontSize:12, color:T.sub, marginBottom:12, lineHeight:1.6 }}>Hepsini birlikte seçin (müşteri/tedarikçi listeleri, satışlar raporu, giderler, kasa hesap hareketleri). Dosyalar tarayıcıda okunur, yazmadan önce özet gösterilir. Gerekmeyen dosyalar (çalışan, nakit akışı vb.) otomatik atlanır.</div>
+            <input type="file" accept=".xlsx" multiple onChange={e => e.target.files.length && dosyaSec([...e.target.files])} style={{ fontSize:12, color:T.text }} />
+            {mesgul && <div style={{ fontSize:12, color:T.sub, marginTop:10 }}>{mesgul}</div>}
+          </div>
+          {hazir && (<>
+            <div style={kart}>
+              <div style={baslik}>Önizleme</div>
+              <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))" }}>
+                {[["Cari", hazir.ozet.cari], ["Satış faturası", hazir.ozet.satis], ["Gider kaydı", hazir.ozet.gider], ["Kasa hareketi", hazir.ozet.hareket]].map(([l, v]) => <div key={l} style={{ padding:"12px 16px", borderRight:"1px solid "+T.border }}><div style={sek2}>{l}</div><div style={{ fontSize:20, fontWeight:700 }}>{v.toLocaleString("tr-TR")}</div></div>)}
+              </div>
+              <div style={{ padding:"12px 16px", fontSize:12.5, color:T.sub, lineHeight:1.7, borderTop:"1px solid "+T.border }}>
+                Dönem: {hazir.ozet.tarihMin} → {hazir.ozet.tarihMax} · Satış {para(hazir.ozet.satisUsd)} · Gider {para(hazir.ozet.giderUsd)}<br />
+                <span style={{ color:hazir.ozet.farkli > 0 ? TURUNCU : YESIL }}>{hazir.ozet.tutan} cari Paraşüt bakiyesiyle birebir tutuyor, {hazir.ozet.farkli} cari farklı</span> (farklar silinmez, "Paraşüt farkı" olarak işaretlenir).
+              </div>
+              {hazir.farkli.length > 0 && <div style={{ padding:"0 16px 12px", fontSize:12, color:T.sub }}>En büyük farklar: {hazir.farkli.slice(0, 5).map(f => f.ad + " (" + para(f.fark) + ")").join(" · ")}</div>}
+            </div>
+            <div style={kart}>
+              <div style={baslik}>Şahsi gider kategorileri (kâr/zarara dahil olmaz)</div>
+              <div style={{ padding:14, display:"flex", flexWrap:"wrap", gap:6 }}>
+                {Object.entries(hazir.kategoriler).sort((a, b) => b[1] - a[1]).map(([k, n]) => { const s = sahsi.includes(k.trim()); return <button key={k} onClick={() => sahsiDegis(k)} style={{ ...dugme, fontSize:12, color:s?TURUNCU:T.sub, borderColor:s?TURUNCU:T.border }}>{s ? "✓ " : ""}{k} · {n}</button>; })}
+              </div>
+              <div style={{ padding:"0 16px 12px", fontSize:12, color:T.sub }}>İşaretliler şahsi sayılır ({hazir.giderler.filter(g => g.sahsi).length} kayıt). Kategoriye tıklayarak değiştirin.</div>
+            </div>
+            <div style={{ display:"flex", gap:10, alignItems:"center", flexWrap:"wrap" }}>
+              <button onClick={aktarimYap} disabled={!!mesgul} style={dugmeAna}>Veritabanına yaz</button>
+              <span style={{ fontSize:12, color:yaz.startsWith("HATA") ? KIRMIZI : T.sub }}>{yaz}</span>
+            </div>
+          </>)}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function KarlilikRaporuEkrani({ T, GH, siparisler, altinKgUSD, mc, onAc, onModel, onKapat, onPdf }) {
   const [kayipTur, setKayipTur] = useState("");
   const [karGrup, setKarGrup] = useState("");
@@ -10459,7 +10818,7 @@ function Atolye({ onSirketDegis }) {
               <button onClick={()=>{ if (onSirketDegis) onSirketDegis(); }} title="Şirket değiştir" style={{ fontSize:9, fontWeight:800, padding:"3px 10px", borderRadius:20, background: AKTIF_SIRKET_ONEK==="bsp2_" ? "rgba(167,139,250,0.15)" : "rgba(var(--vurgu-rgb),0.15)", border:"1px solid "+(AKTIF_SIRKET_ONEK==="bsp2_" ? "rgba(167,139,250,0.4)" : "rgba(var(--vurgu-rgb),0.4)"), color: AKTIF_SIRKET_ONEK==="bsp2_" ? "#a78bfa" : GOLD, whiteSpace:"nowrap", cursor:"pointer", display:"inline-flex", alignItems:"center", gap:4 }}>{AKTIF_SIRKET_ONEK==="bsp2_" ? "✨ BSP" : "💎 MSK"} <span style={{ fontSize:8, opacity:0.7 }}>⇄</span></button>
             </h1>
             <div style={{ display:"flex", gap:3, flexWrap:"wrap" }}>
-              {["koleksiyonlar","modeller","konfirmasyon","siparisler","iadeler","musteriler","kasa","personel","analiz","radar","ayarlar"].map(n => {
+              {["koleksiyonlar","modeller","konfirmasyon","siparisler","iadeler","musteriler","kasa",...(AKTIF_SIRKET_ONEK!==""?["muhasebe"]:[]),"personel","analiz","radar","ayarlar"].map(n => {
                 let badgeSayi = 0;
                 if (n === "iadeler") {
                   siparisler.forEach(s => {
@@ -10470,7 +10829,7 @@ function Atolye({ onSirketDegis }) {
                 return (
                 <button key={n} onClick={() => { setSayfa(n); if (n==="koleksiyonlar") setAktifKol(null); }}
                   style={{ ...GH, color:sayfa===n?T.gold:T.sub, background:sayfa===n?T.btnBg:"transparent", borderColor:sayfa===n?T.btnBorder:T.border, fontSize:9, padding:"5px 9px", position:"relative" }}>
-                  {{"koleksiyonlar":"Koleksiyonlar","modeller":"Modeller","konfirmasyon":"Konfirmasyon","siparisler":"Siparişler","iadeler":"İadeler","musteriler":"Müşteriler","vitrin":"🛍 Vitrin","kasa":"Kasa","personel":"Personel","analiz":"Keşfet","radar":"📡 Trend Radar","ayarlar":"Ayarlar"}[n]||n.charAt(0).toUpperCase()+n.slice(1)}
+                  {{"koleksiyonlar":"Koleksiyonlar","modeller":"Modeller","konfirmasyon":"Konfirmasyon","siparisler":"Siparişler","iadeler":"İadeler","musteriler":"Müşteriler","vitrin":"🛍 Vitrin","kasa":"Kasa","muhasebe":"Muhasebe","personel":"Personel","analiz":"Keşfet","radar":"📡 Trend Radar","ayarlar":"Ayarlar"}[n]||n.charAt(0).toUpperCase()+n.slice(1)}
                   {n==="konfirmasyon" && konfList.length>0 && <span style={{ position:"absolute", top:-4, right:-4, background:GOLD, color:DARK, width:13, height:13, borderRadius:7, fontSize:7, fontWeight:800, display:"flex", alignItems:"center", justifyContent:"center" }}>{konfList.length}</span>}
                   {n==="iadeler" && badgeSayi>0 && <span style={{ position:"absolute", top:-4, right:-4, background:"#a78bfa", color:"#fff", width:13, height:13, borderRadius:7, fontSize:7, fontWeight:800, display:"flex", alignItems:"center", justifyContent:"center" }}>{badgeSayi}</span>}
                 </button>
@@ -12703,6 +13062,7 @@ function Atolye({ onSirketDegis }) {
           <RpKapi T={T} GH={GH} baslik="Personel"><PersonelSayfa T={T} GH={GH} IS={IS} usdTry={altinSon?.usdTry || null} siparisler={siparisler} key={AKTIF_SIRKET_ONEK} /></RpKapi>
         )}
 
+        {sayfa==="muhasebe" && AKTIF_SIRKET_ONEK!=="" && <MuhasebeSayfa T={T} GH={GH} />}
         {sayfa==="kasa" && (() => {
           // ── Canlı hesaplamalar ──
           const altinKgUSD = parseFloat(altinKg) || 0;
