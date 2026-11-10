@@ -4225,6 +4225,22 @@ function PersonelSayfa({ T, GH: GH0, IS, usdTry, siparisler }) {
       await aylikYukle(); haber("Bordro kaydedildi ✓");
     } catch (e) { haber("Kayıt hatası: " + e.message, true); }
   };
+  // Otomatik kayıt: kutudan çıkınca o kişinin mesai değeri kaydedilir (aynı kişi için işlemler sıraya girer)
+  const bRef = useRef({}); bRef.current.mesai = mesai; bRef.current.mucret = mucret; bRef.current.brd = brd;
+  const bordroIs = async (p) => {
+    const R = bRef.current, ex = R.brd[p.id];
+    const saat = Number(R.mesai[p.id] ?? ex?.mesai_saat ?? 0) || 0;
+    const ham = R.mucret[p.id] ?? ex?.mesai_ucret ?? "";
+    const mu = (ham === "" || ham === null || ham === undefined) ? null : Number(ham);
+    if (ex ? (Number(ex.mesai_saat || 0) === saat && (ex.mesai_ucret ?? null) === mu) : (saat === 0 && mu === null)) return;
+    try {
+      const r = ex?.id ? await persQ(supabase.from("bordro").update({ mesai_saat: saat, mesai_ucret: mu }).eq("id", ex.id).select())
+        : await persQ(supabase.from("bordro").insert({ atolye: atl, personel_id: p.id, yil, ay, mesai_saat: saat, mesai_ucret: mu }).select());
+      if (r && r[0]) { bRef.current.brd = { ...bRef.current.brd, [p.id]: r[0] }; setBrd(b => ({ ...b, [p.id]: r[0] })); }
+      haber("Otomatik kaydedildi ✓");
+    } catch (e) { haber("Kayıt hatası: " + e.message, true); }
+  };
+  const bordroTek = (p) => { const k = bRef.current.kuyruk || (bRef.current.kuyruk = {}); k[p.id] = (k[p.id] || Promise.resolve()).then(() => bordroIs(p)); };
   const puanHesap = (f) => { const d = PERS_KRITER.map(([k]) => Number(f?.[k])).filter(v => !isNaN(v) && v !== null); return d.length === 5 ? Math.round(d.reduce((s, v) => s + v, 0) / 5) : null; };
   const puanKaydet = async () => {
     try {
@@ -4496,8 +4512,8 @@ function PersonelSayfa({ T, GH: GH0, IS, usdTry, siparisler }) {
                   <td style={sayi}>{s.be.banka === null ? "—" : persTL(s.be.banka)}</td>
                   <td style={sayi}>{s.be.elden === null ? "—" : persTL(s.be.elden)}</td>
                   <td style={sayi}>{s.ye > 0 ? persTL(s.ye) : "—"}</td>
-                  <td style={td}><input type="number" min="0" value={mesai[p.id] ?? brd[p.id]?.mesai_saat ?? 0} onChange={e => setMesai(m => ({ ...m, [p.id]: e.target.value }))} style={{ ...girdi, width:80 }} /></td>
-                  <td style={td}><input type="number" min="0" placeholder={String(s.hesap)} title={"Boşsa formül: " + persTL(s.hesap)} value={mucret[p.id] ?? brd[p.id]?.mesai_ucret ?? ""} onChange={e => setMucret(m => ({ ...m, [p.id]: e.target.value }))} style={{ ...girdi, width:100, fontWeight: s.elle ? 700 : 500, borderColor: s.elle ? T.text : T.border }} /><span style={{ fontSize:11, color:T.sub, marginLeft:6 }}>{s.elle ? "elle" : "formül"}</span></td>
+                  <td style={td}><input type="number" min="0" value={mesai[p.id] ?? brd[p.id]?.mesai_saat ?? 0} onChange={e => setMesai(m => ({ ...m, [p.id]: e.target.value }))} onBlur={() => bordroTek(p)} style={{ ...girdi, width:80 }} /></td>
+                  <td style={td}><input type="number" min="0" placeholder={String(s.hesap)} title={"Boşsa formül: " + persTL(s.hesap)} value={mucret[p.id] ?? brd[p.id]?.mesai_ucret ?? ""} onChange={e => setMucret(m => ({ ...m, [p.id]: e.target.value }))} onBlur={() => bordroTek(p)} style={{ ...girdi, width:100, fontWeight: s.elle ? 700 : 500, borderColor: s.elle ? T.text : T.border }} /><span style={{ fontSize:11, color:T.sub, marginLeft:6 }}>{s.elle ? "elle" : "formül"}</span></td>
                   <td style={sayi}>{Number(p.servis) > 0 ? persTL(p.servis) : "—"}</td>
                   <td style={{ ...sayi, fontWeight:800 }}>{persTL(s.net)}</td>
                 </tr>); }) : <tr><td colSpan={9} style={{ ...td, textAlign:"center", color:T.sub }}>Personel eklenmemiş</td></tr>}
@@ -4505,7 +4521,7 @@ function PersonelSayfa({ T, GH: GH0, IS, usdTry, siparisler }) {
               </tbody>
             </table>
           </div>
-          <div style={{ fontSize:11, color:T.sub, marginTop:6 }}>Toplam net = baz maaş + yemek + servis + mesai ücreti. Mesai ücreti kutusu boşsa formül kullanılır (baz maaş ÷ 225 × 1,5 × saat); tutar yazarsan o ay için o tutar geçerli olur. Elden = baz maaş − banka (banka girilmediyse boş).</div>
+          <div style={{ fontSize:11, color:T.sub, marginTop:6 }}>Toplam net = baz maaş + yemek + servis + mesai ücreti. Mesai ücreti kutusu boşsa formül kullanılır (baz maaş ÷ 225 × 1,5 × saat); tutar yazarsan o ay için o tutar geçerli olur. Elden = baz maaş − banka (banka girilmediyse boş). Mesai değerleri kutudan çıkınca otomatik kaydedilir.</div>
         </div>
       )}
 
