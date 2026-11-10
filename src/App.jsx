@@ -2617,11 +2617,254 @@ function mskRhinoOku(rows) {
   return { satirlar: out, ozet };
 }
 
+// ── MSK · Defter (cari / nakit / gider) — Rhino mizanından devir + kendi fişlerimiz ──────────
+const MSK_PB = ["TL", "USD", "EUR", "HAS", "SLV"];
+const MSK_PB_SFX = { TL: "01", USD: "02", EUR: "03", HAS: "10", SLV: "11" };
+const MSK_TUR_ON = { musteri: "120 001 ", satici: "320 001 ", personel: "135 001 " };
+const MSK_TUR_AD = { musteri: "Müşteri", satici: "Satıcı", personel: "Personel" };
+const MSK_FIS_TIP = ["TAH", "ODE", "GDR", "MHS"];
+const mskCariHesapKod = (c, pb) => MSK_TUR_ON[c.tur] + MSK_PB_SFX[pb] + "\\" + c.rhino_no;
+// Rhino "Mizan Tablosu" → hesap listesi. Yaprak = altında başka hesap olmayan satır.
+function mskMizanOku(rows) {
+  const sayi = (v) => { const n = Number(v); return v !== null && v !== "" && isFinite(n) ? n : 0; };
+  const h = []; let basla = false;
+  for (const r of rows) {
+    if (!r) continue;
+    if (String(r[0] || "").trim() === "HESAP KOD") { basla = true; continue; }
+    if (!basla) continue;
+    const kod = String(r[0] || "").trim(), ad = String(r[1] || "").trim();
+    if (!kod || !ad) continue;
+    h.push({ kod, ad, pb: String(r[2] || "").trim() || "TL", borc: sayi(r[5]), alacak: sayi(r[6]) });
+  }
+  const kodlar = h.map(x => x.kod);
+  h.forEach(x => { x.yaprak = !kodlar.some(k => k !== x.kod && k.startsWith(x.kod)); });
+  return h;
+}
+function mskMizanTarih(rows) {
+  for (const r of rows.slice(0, 6)) { const m = String((r && r[0]) || "").match(/(\d\d)\/(\d\d)\/(\d\d)\s*$/); if (m) return "20" + m[3] + "-" + m[2] + "-" + m[1]; }
+  return "";
+}
+
+function MskDefterEkranlari({ sek, T, rpc, st, YESIL, KIRMIZI, onIslem }) {
+  const fN = (n, k = 2) => (Number(n) || 0).toLocaleString("tr-TR", { minimumFractionDigits: k, maximumFractionDigits: k });
+  const [cariler, setCariler] = useState(null); const [ara, setAra] = useState(""); const [turF, setTurF] = useState("musteri");
+  const [secCari, setSecCari] = useState(null); const [ekstre, setEkstre] = useState(null);
+  const [hesaplar, setHesaplar] = useState(null); const [secHesap, setSecHesap] = useState(null); const [hareket, setHareket] = useState(null);
+  const [hata, setHata] = useState(""); const [yenile, setYenile] = useState(0); const [gAra, setGAra] = useState("");
+  const renkS = (v, ters) => Math.abs(v) < 0.005 ? T.sub : (v < 0 ? KIRMIZI : T.text);
+
+  useEffect(() => { if (sek !== "cariler") return; const t = setTimeout(async () => { try { setCariler(await rpc("msk_cari_liste", { p_ara: ara || null })); setHata(""); } catch (e) { setHata(e.message); setCariler([]); } }, 250); return () => clearTimeout(t); }, [sek, ara, yenile]);
+  useEffect(() => { if (sek !== "cariler" || !secCari) { setEkstre(null); return; } (async () => { try { setEkstre(await rpc("msk_defter_liste", { p_cari: secCari.id, p_limit: 500 })); } catch (e) { setHata(e.message); } })(); }, [sek, secCari, yenile]);
+  useEffect(() => { if (sek !== "nakit" && sek !== "giderler") return; (async () => { try { setHata(""); const tur = sek === "nakit" ? ["kasa", "banka"] : ["gider"]; const r = []; for (const t of tur) r.push(...(await rpc("msk_hesap_liste", { p_tur: t }))); setHesaplar(r); } catch (e) { setHata(e.message); setHesaplar([]); } })(); setSecHesap(null); }, [sek, yenile]);
+  useEffect(() => { if (!secHesap || (sek !== "nakit" && sek !== "giderler")) { setHareket(null); return; } (async () => { try { setHareket(await rpc("msk_defter_liste", { p_hesap: secHesap.kod, p_limit: 300 })); } catch (e) { setHata(e.message); } })(); }, [secHesap, yenile]);
+
+  const iptalEt = async (s) => {
+    const sebep = window.prompt("Fiş " + s.fis + " iptal edilecek (tüm satırlarıyla). İptal sebebi:");
+    if (!sebep || !sebep.trim()) return;
+    try { await rpc("msk_fis_iptal", { p_fis: s.fis, p_sebep: sebep }); setYenile(yenile + 1); } catch (e) { setHata(e.message); }
+  };
+  const satirTablo = (liste, hesapGoster) => (
+    <div style={{ overflowX: "auto" }}><table style={{ width: "100%", borderCollapse: "collapse" }}>
+      <thead><tr><th style={{ ...st.th, textAlign: "left" }}>Tarih</th><th style={{ ...st.th, textAlign: "left" }}>Fiş / evrak</th>{hesapGoster && <th style={{ ...st.th, textAlign: "left" }}>Hesap</th>}<th style={st.th}>Döviz</th><th style={st.th}>Borç</th><th style={st.th}>Alacak</th><th style={{ ...st.th, textAlign: "left" }}>Açıklama</th><th style={st.th}></th></tr></thead>
+      <tbody>{!liste ? <tr><td colSpan={8} style={{ ...st.td, textAlign: "left", color: T.sub }}>Yükleniyor…</td></tr> : !liste.satirlar.length ? <tr><td colSpan={8} style={{ ...st.td, textAlign: "left", color: T.sub }}>Kayıt yok</td></tr> : liste.satirlar.map(s => (
+        <tr key={s.id} style={{ opacity: s.iptal ? 0.45 : 1 }}>
+          <td style={{ ...st.td, textAlign: "left" }}>{s.tarih}</td>
+          <td style={{ ...st.td, textAlign: "left", color: T.sub, textDecoration: s.iptal ? "line-through" : "none" }}>{s.fis === "DEVIR" ? "Rhino devri" : s.fis}{s.evrak ? " · " + s.evrak : ""}</td>
+          {hesapGoster && <td style={{ ...st.td, textAlign: "left" }}>{s.hesap_ad || s.hesap_kod}</td>}
+          <td style={st.td}>{s.pb}</td>
+          <td style={st.td}>{Number(s.borc) > 0 ? fN(s.borc) : "–"}</td>
+          <td style={st.td}>{Number(s.alacak) > 0 ? fN(s.alacak) : "–"}</td>
+          <td style={{ ...st.td, textAlign: "left", color: T.sub }}>{s.aciklama || ""}{s.iptal && s.iptal_sebep ? " · iptal: " + s.iptal_sebep : ""}</td>
+          <td style={st.td}>{s.kaynak === "uygulama" && !s.iptal && <button onClick={() => iptalEt(s)} style={{ ...st.dugme, padding: "2px 8px", fontSize: 11 }}>İptal</button>}</td>
+        </tr>))}</tbody>
+    </table></div>
+  );
+  const hata_ = hata && <div style={{ fontSize: 13, color: KIRMIZI, marginBottom: 10 }}>{hata}</div>;
+
+  if (sek === "cariler") {
+    const liste = (cariler || []).filter(c => turF === "hepsi" || c.tur === turF);
+    const pbler = MSK_PB.filter(pb => liste.some(c => c.bakiye && Math.abs(Number(c.bakiye[pb] || 0)) > 0.004));
+    const topl = (pb) => liste.reduce((t, c) => t + Number((c.bakiye || {})[pb] || 0), 0);
+    return (<div>
+      {hata_}
+      <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap", alignItems: "center" }}>
+        {[["musteri", "Müşteriler"], ["satici", "Satıcılar"], ["personel", "Personel"], ["hepsi", "Hepsi"]].map(([k, l]) => <button key={k} onClick={() => { setTurF(k); setSecCari(null); }} style={{ ...st.dugme, borderRadius: 99, borderColor: turF === k ? T.gold : T.border, color: turF === k ? T.gold : T.text }}>{l}</button>)}
+        <input placeholder="Cari adı veya kodu ara…" value={ara} onChange={e => setAra(e.target.value)} style={{ ...st.girdiS, flex: "1 1 200px", maxWidth: 320 }} />
+        <button onClick={() => onIslem && onIslem()} style={st.dugmeAna}>+ İşlem</button>
+      </div>
+      <div style={st.kart}>
+        <div style={st.baslik}>{turF === "satici" ? "Satıcılar · bakiye = borcumuz" : turF === "musteri" ? "Müşteriler · bakiye = alacağımız" : turF === "personel" ? "Personel · bakiye = alacağımız" : "Cariler"} · kırmızı = ters bakiye</div>
+        <div style={{ overflowX: "auto" }}><table style={{ width: "100%", borderCollapse: "collapse" }}>
+          <thead><tr><th style={{ ...st.th, textAlign: "left" }}>Cari</th><th style={{ ...st.th, textAlign: "left" }}>Tür</th><th style={st.th}>Kod</th>{pbler.map(pb => <th key={pb} style={st.th}>{pb}</th>)}<th style={st.th}>Son hareket</th></tr></thead>
+          <tbody>{!cariler ? <tr><td colSpan={4 + pbler.length} style={{ ...st.td, textAlign: "left", color: T.sub }}>Yükleniyor…</td></tr> : !liste.length ? <tr><td colSpan={4 + pbler.length} style={{ ...st.td, textAlign: "left", color: T.sub }}>Cari yok — önce "Rhino'dan Aktar" ekranından mizanı yükleyin</td></tr> : liste.map(c => (
+            <tr key={c.id} onClick={() => setSecCari(secCari && secCari.id === c.id ? null : c)} style={{ cursor: "pointer", background: secCari && secCari.id === c.id ? "rgba(184,146,58,0.10)" : "transparent" }}>
+              <td style={{ ...st.td, textAlign: "left", fontWeight: 600 }}>{c.ad}</td><td style={{ ...st.td, textAlign: "left", color: T.sub }}>{MSK_TUR_AD[c.tur]}</td><td style={{ ...st.td, color: T.sub }}>{c.rhino_no}</td>
+              {pbler.map(pb => { const v = Number((c.bakiye || {})[pb] || 0); return <td key={pb} style={{ ...st.td, color: renkS(v) }}>{Math.abs(v) < 0.005 ? "–" : fN(v)}</td>; })}
+              <td style={{ ...st.td, color: T.sub }}>{c.son || "—"}</td>
+            </tr>))}
+            {liste.length > 0 && <tr><td style={{ ...st.td, textAlign: "left", fontWeight: 700 }}>Toplam</td><td style={st.td}></td><td style={st.td}></td>{pbler.map(pb => <td key={pb} style={{ ...st.td, fontWeight: 700 }}>{fN(topl(pb))}</td>)}<td style={st.td}></td></tr>}
+          </tbody>
+        </table></div>
+      </div>
+      {secCari && <div style={st.kart}>
+        <div style={st.baslik}>{secCari.ad} · hesap hareketleri</div>
+        {satirTablo(ekstre, true)}
+        {ekstre && ekstre.toplam > ekstre.satirlar.length && <div style={{ padding: "8px 14px", fontSize: 12, color: T.sub }}>Son {ekstre.satirlar.length} hareket gösteriliyor (toplam {ekstre.toplam}).</div>}
+      </div>}
+    </div>);
+  }
+
+  // nakit / giderler
+  const gf = (hesaplar || []).filter(h => !gAra.trim() || (h.kod + " " + h.ad).toLowerCase().includes(gAra.trim().toLowerCase()));
+  const nakit = sek === "nakit";
+  const gorunen = nakit ? gf : gf.filter(h => Math.abs(Number(h.bakiye)) > 0.004 || Number(h.adet) > 0);
+  const pbTop = {}; gorunen.forEach(h => { pbTop[h.pb] = (pbTop[h.pb] || 0) + Number(h.bakiye); });
+  return (<div>
+    {hata_}
+    {nakit ? (
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", gap: 12, marginBottom: 14 }}>
+        {!hesaplar ? <div style={{ fontSize: 13, color: T.sub }}>Yükleniyor…</div> : !gorunen.length ? <div style={{ fontSize: 13, color: T.sub }}>Kasa hesabı yok — önce "Rhino'dan Aktar" ekranından mizanı yükleyin</div> : gorunen.map(h => (
+          <div key={h.kod} onClick={() => setSecHesap(secHesap && secHesap.kod === h.kod ? null : h)} style={{ ...st.kart, marginBottom: 0, padding: 14, cursor: "pointer", borderColor: secHesap && secHesap.kod === h.kod ? T.gold : T.border }}>
+            <div style={{ fontSize: 11, color: T.sub, textTransform: "uppercase", letterSpacing: 0.5 }}>{h.ad} · {h.pb}</div>
+            <div style={{ fontSize: 22, fontWeight: 700, marginTop: 4, color: Number(h.bakiye) < 0 ? KIRMIZI : T.text }}>{fN(h.bakiye)} <span style={{ fontSize: 13, color: T.sub }}>{h.pb}</span></div>
+            <div style={{ fontSize: 11, color: T.sub, marginTop: 2 }}>{h.adet} hareket</div>
+          </div>))}
+      </div>
+    ) : (<>
+      <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap", alignItems: "center" }}>
+        <input placeholder="Gider kalemi ara…" value={gAra} onChange={e => setGAra(e.target.value)} style={{ ...st.girdiS, flex: "1 1 200px", maxWidth: 320 }} />
+        <button onClick={() => onIslem && onIslem()} style={st.dugmeAna}>+ Gider gir</button>
+      </div>
+      <div style={st.kart}>
+        <div style={st.baslik}>Gider kalemleri · dönem toplamı (Rhino devri + yeni fişler)</div>
+        <div style={{ overflowX: "auto" }}><table style={{ width: "100%", borderCollapse: "collapse" }}>
+          <thead><tr><th style={{ ...st.th, textAlign: "left" }}>Kod</th><th style={{ ...st.th, textAlign: "left" }}>Gider kalemi</th><th style={st.th}>Döviz</th><th style={st.th}>Tutar</th><th style={st.th}>Hareket</th></tr></thead>
+          <tbody>{!hesaplar ? <tr><td colSpan={5} style={{ ...st.td, textAlign: "left", color: T.sub }}>Yükleniyor…</td></tr> : !gorunen.length ? <tr><td colSpan={5} style={{ ...st.td, textAlign: "left", color: T.sub }}>Gider kaydı yok — önce "Rhino'dan Aktar" ekranından mizanı yükleyin</td></tr> : gorunen.map(h => (
+            <tr key={h.kod} onClick={() => setSecHesap(secHesap && secHesap.kod === h.kod ? null : h)} style={{ cursor: "pointer", background: secHesap && secHesap.kod === h.kod ? "rgba(184,146,58,0.10)" : "transparent" }}>
+              <td style={{ ...st.td, textAlign: "left", color: T.sub }}>{h.kod}</td><td style={{ ...st.td, textAlign: "left", fontWeight: 600 }}>{h.ad}</td><td style={st.td}>{h.pb}</td><td style={{ ...st.td, color: renkS(Number(h.bakiye)) }}>{fN(h.bakiye)}</td><td style={{ ...st.td, color: T.sub }}>{h.adet}</td>
+            </tr>))}
+            {gorunen.length > 0 && Object.entries(pbTop).map(([pb, v]) => <tr key={pb}><td style={st.td}></td><td style={{ ...st.td, textAlign: "left", fontWeight: 700 }}>Toplam ({pb})</td><td style={st.td}>{pb}</td><td style={{ ...st.td, fontWeight: 700 }}>{fN(v)}</td><td style={st.td}></td></tr>)}
+          </tbody>
+        </table></div>
+      </div>
+    </>)}
+    {secHesap && <div style={st.kart}>
+      <div style={st.baslik}>{secHesap.ad} · hareketler</div>
+      {satirTablo(hareket, false)}
+    </div>}
+  </div>);
+}
+
+// Tahsilat · Ödeme · Gider/masraf · Mahsup — defter fişi (borç = alacak, aynı para biriminde)
+function MskFisFormu({ tip, T, rpc, st, YESIL, KIRMIZI, onKayit }) {
+  const bugunS = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); };
+  const sayi = (v) => Number(String(v == null ? "" : v).replace(",", ".")) || 0;
+  const fN = (n, k = 2) => (Number(n) || 0).toLocaleString("tr-TR", { minimumFractionDigits: k, maximumFractionDigits: k });
+  const [cariler, setCariler] = useState([]); const [hesaplar, setHesaplar] = useState([]); const [yuklendi, setYuklendi] = useState(false);
+  const [f, setF] = useState({ tarih: bugunS(), cari1: "", cari2: "", pb: "USD", tutar: "", kasa: "", gider: "", sekil: "kasa", aciklama: "", evrak: "" });
+  const [hata, setHata] = useState(""); const [ok, setOk] = useState(""); const [mesgul, setMesgul] = useState(false);
+  useEffect(() => { (async () => { try { setCariler(await rpc("msk_cari_liste", {})); const h = []; for (const t of ["kasa", "banka", "gider"]) h.push(...(await rpc("msk_hesap_liste", { p_tur: t }))); setHesaplar(h); } catch (e) { setHata(e.message); } setYuklendi(true); })(); }, [ok]);
+  const girdi = { ...st.girdiS, width: "100%" };
+  const etiket = { fontSize: 11, color: T.sub, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 };
+  const alan = (l, el, tam) => <div style={{ gridColumn: tam ? "1 / -1" : "auto", minWidth: 0 }}><div style={etiket}>{l}</div>{el}</div>;
+  const etk = (c) => c.ad + " · " + MSK_TUR_AD[c.tur] + " " + c.rhino_no;
+  const cariBul = (s) => cariler.find(c => etk(c) === s.trim()) || null;
+  const c1 = cariBul(f.cari1), c2 = cariBul(f.cari2);
+  const kasalar = hesaplar.filter(h => (h.tur === "kasa" || h.tur === "banka") && h.pb === f.pb);
+  const giderler = hesaplar.filter(h => h.tur === "gider");
+  const kasaH = kasalar.find(h => h.kod === f.kasa) || null;
+  const giderH = giderler.find(h => h.kod === f.gider) || null;
+  const tutar = sayi(f.tutar);
+  const baslikAd = { TAH: "Tahsilat", ODE: "Ödeme", GDR: "Gider / masraf", MHS: "Mahsup" }[tip];
+  const nakitCikis = tip === "ODE" || (tip === "GDR" && f.sekil === "kasa");
+  const kasaYetersiz = nakitCikis && kasaH && Number(kasaH.bakiye) - tutar < -0.005;
+  const datalist = (id) => <datalist id={id}>{cariler.map(c => <option key={c.id} value={etk(c)} />)}</datalist>;
+
+  const satirlariKur = () => {
+    if (!(tutar > 0)) throw new Error("Tutar girin");
+    const cs = (c, pb) => ({ hesap_kod: mskCariHesapKod(c, pb), ad: c.ad, cari_id: c.id, pb });
+    if (tip === "TAH") {
+      if (!c1) throw new Error("Listeden bir cari seçin"); if (!kasaH) throw new Error("Kasa hesabı seçin");
+      return [{ hesap_kod: kasaH.kod, ad: kasaH.ad, pb: f.pb, borc: tutar }, { ...cs(c1, f.pb), alacak: tutar }];
+    }
+    if (tip === "ODE") {
+      if (!c1) throw new Error("Listeden bir cari seçin"); if (!kasaH) throw new Error("Kasa hesabı seçin");
+      return [{ ...cs(c1, f.pb), borc: tutar }, { hesap_kod: kasaH.kod, ad: kasaH.ad, pb: f.pb, alacak: tutar }];
+    }
+    if (tip === "GDR") {
+      if (!giderH) throw new Error("Gider kalemi seçin");
+      if (f.sekil === "kasa") { if (!kasaH) throw new Error("Kasa hesabı seçin"); return [{ hesap_kod: giderH.kod, ad: giderH.ad, pb: f.pb, borc: tutar }, { hesap_kod: kasaH.kod, ad: kasaH.ad, pb: f.pb, alacak: tutar }]; }
+      if (!c1) throw new Error("Borçlanılacak satıcıyı seçin");
+      return [{ hesap_kod: giderH.kod, ad: giderH.ad, pb: f.pb, borc: tutar }, { ...cs(c1, f.pb), alacak: tutar }];
+    }
+    if (!c1 || !c2) throw new Error("İki cariyi de listeden seçin"); if (c1.id === c2.id) throw new Error("Aynı cari seçilemez");
+    return [{ ...cs(c1, f.pb), alacak: tutar }, { ...cs(c2, f.pb), borc: tutar }];
+  };
+  const kaydet = async () => {
+    setHata(""); setOk("");
+    let satirlar; try { satirlar = satirlariKur(); } catch (e) { return setHata(e.message); }
+    if (f.tarih < bugunS().slice(0, 8) + "01" && !window.confirm("Bu fiş geçmiş bir aya (" + f.tarih.slice(0, 7) + ") ait ve o ayın bilançosunu değiştirir. Kaydedilsin mi?")) return;
+    setMesgul(true);
+    try {
+      const r = await rpc("msk_fis_ekle", { p_tarih: f.tarih, p_tur: tip, p_aciklama: f.aciklama || null, p_evrak: f.evrak || null, p_satirlar: satirlar });
+      setOk("Kaydedildi ✓  Fiş " + r.fis); setF({ ...f, tutar: "", aciklama: "", evrak: "" }); onKayit && onKayit();
+    } catch (e) { setHata(e.message); }
+    setMesgul(false);
+  };
+  const ozet = (() => {
+    if (!(tutar > 0)) return null;
+    const p = f.pb;
+    if (tip === "TAH" && c1 && kasaH) return [kasaH.ad + " kasası " + p + " +" + fN(tutar), c1.ad + " bakiyesi " + p + " −" + fN(tutar)];
+    if (tip === "ODE" && c1 && kasaH) return [kasaH.ad + " kasası " + p + " −" + fN(tutar), c1.ad + " " + (c1.tur === "satici" ? "borcumuz" : "bakiyesi") + " " + p + " −" + fN(tutar)];
+    if (tip === "GDR" && giderH) return [giderH.ad + " gideri " + p + " +" + fN(tutar), f.sekil === "kasa" ? (kasaH ? kasaH.ad + " kasası " + p + " −" + fN(tutar) : "Kasa seçin") : (c1 ? c1.ad + " borcumuz " + p + " +" + fN(tutar) : "Satıcı seçin")];
+    if (tip === "MHS" && c1 && c2) return [c1.ad + ": alacak kaydı " + p + " " + fN(tutar) + (c1.tur === "satici" ? " (borcumuz artar)" : " (bakiyesi azalır)"), c2.ad + ": borç kaydı " + p + " " + fN(tutar) + (c2.tur === "satici" ? " (borcumuz azalır)" : " (bakiyesi artar)")];
+    return null;
+  })();
+
+  return (<div>
+    <div style={{ display: "flex", gap: 14, flexWrap: "wrap", alignItems: "flex-start" }}>
+      <div style={{ ...st.kart, flex: "3 1 380px", minWidth: 0 }}>
+        <div style={st.baslik}>{baslikAd}</div>
+        <div style={{ padding: 16, display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))", gap: 12 }}>
+          {!yuklendi && <div style={{ gridColumn: "1 / -1", fontSize: 13, color: T.sub }}>Hesaplar yükleniyor…</div>}
+          {yuklendi && !cariler.length && <div style={{ gridColumn: "1 / -1", fontSize: 13, color: KIRMIZI }}>Cari/kasa hesabı yok — önce "Rhino'dan Aktar" ekranından mizanı yükleyin.</div>}
+          {alan("Tarih", <input type="date" value={f.tarih} onChange={e => setF({ ...f, tarih: e.target.value })} style={girdi} />)}
+          {alan("Para birimi", <select value={f.pb} onChange={e => setF({ ...f, pb: e.target.value, kasa: "" })} style={girdi}>{MSK_PB.map(p => <option key={p} value={p}>{p}</option>)}</select>)}
+          {alan("Tutar", <input inputMode="decimal" value={f.tutar} onChange={e => setF({ ...f, tutar: e.target.value })} placeholder="0,00" style={girdi} />)}
+          {(tip === "TAH" || tip === "ODE") && alan(tip === "TAH" ? "Cari (tahsil edilen)" : "Cari (ödeme yapılan)", <><input list="msk-c1" value={f.cari1} onChange={e => setF({ ...f, cari1: e.target.value })} placeholder="Cari adı yazın veya seçin" style={girdi} />{datalist("msk-c1")}</>, true)}
+          {tip === "GDR" && alan("Gider kalemi", <select value={f.gider} onChange={e => setF({ ...f, gider: e.target.value })} style={girdi}><option value="">Seçin</option>{giderler.map(h => <option key={h.kod} value={h.kod}>{h.ad} · {h.kod}</option>)}</select>, true)}
+          {tip === "GDR" && alan("Ödeme şekli", <select value={f.sekil} onChange={e => setF({ ...f, sekil: e.target.value })} style={girdi}><option value="kasa">Kasadan ödendi</option><option value="cari">Satıcıya borç yazılsın</option></select>)}
+          {((tip === "GDR" && f.sekil === "cari") || tip === "MHS") && alan(tip === "MHS" ? "A carisi (alacak kaydı)" : "Satıcı", <><input list="msk-c1" value={f.cari1} onChange={e => setF({ ...f, cari1: e.target.value })} placeholder="Cari adı yazın veya seçin" style={girdi} />{datalist("msk-c1")}</>, true)}
+          {tip === "MHS" && alan("B carisi (borç kaydı)", <><input list="msk-c1" value={f.cari2} onChange={e => setF({ ...f, cari2: e.target.value })} placeholder="Cari adı yazın veya seçin" style={girdi} />{datalist("msk-c1")}</>, true)}
+          {tip !== "MHS" && !(tip === "GDR" && f.sekil === "cari") && alan("Kasa / banka hesabı", <select value={f.kasa} onChange={e => setF({ ...f, kasa: e.target.value })} style={girdi}><option value="">{kasalar.length ? "Seçin" : f.pb + " için kasa hesabı yok"}</option>{kasalar.map(h => <option key={h.kod} value={h.kod}>{h.ad} · {fN(h.bakiye)} {h.pb}</option>)}</select>)}
+          {alan("Evrak no", <input value={f.evrak} onChange={e => setF({ ...f, evrak: e.target.value })} style={girdi} />)}
+          {alan("Açıklama", <input value={f.aciklama} onChange={e => setF({ ...f, aciklama: e.target.value })} style={girdi} />, true)}
+        </div>
+      </div>
+      <div style={{ ...st.kart, flex: "2 1 280px", minWidth: 0 }}>
+        <div style={st.baslik}>Bu fiş şunları yapar</div>
+        <div style={{ padding: "14px 16px", fontSize: 13, lineHeight: 1.9 }}>
+          {ozet ? ozet.map((s, i) => <div key={i}>{s}</div>) : <span style={{ color: T.sub }}>Cari, hesap ve tutar girin</span>}
+          {kasaYetersiz && <div style={{ color: KIRMIZI, fontSize: 12, marginTop: 6 }}>Dikkat: {kasaH.ad} kasasında bu tutar yok (bakiye {fN(kasaH.bakiye)} {f.pb}). Kayıt yine de yapılır, kasa eksiye düşer.</div>}
+          {tip === "MHS" && <div style={{ color: T.sub, fontSize: 12, marginTop: 6 }}>Mahsup, kasa hareketi yaratmaz; iki carinin bakiyesini aynı tutarda kapatır/kaydırır.</div>}
+          <div style={{ color: T.sub, fontSize: 12, marginTop: 6 }}>Her fiş borç = alacak olacak şekilde iki satır olarak kaydedilir. İptal edilirse silinmez, sebebiyle işaretlenir.</div>
+        </div>
+      </div>
+    </div>
+    <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", margin: "4px 0 14px" }}>
+      <button onClick={kaydet} disabled={mesgul} style={st.dugmeAna}>{mesgul ? "Kaydediliyor…" : "Kaydet"}</button>
+      {hata && <span style={{ fontSize: 13, color: KIRMIZI }}>{hata}</span>}
+      {ok && <span style={{ fontSize: 13, color: YESIL }}>{ok}</span>}
+    </div>
+  </div>);
+}
+
 // ── MSK · Tek "İşlem" ekranı (transfer, fason giriş/çıkış, fire) ─────────────────────────────
 const MSK_KONUMLAR = ["ANAKASA MSK", "TEZGAH", "CİLA", "TAŞ DİZİM", "DÖKÜM", "MİNE", "FİRE TAŞ", "FİRE OCAK"];
 const MSK_TIPLER = [
   { k: "IFG", l: "Fason giriş", acik: true }, { k: "IFC", l: "Fason çıkış", acik: true }, { k: "MDC", l: "Stok gönderme", acik: true }, { k: "FRE", l: "Fire", acik: true },
-  { l: "Stok satış" }, { l: "Satış iade" }, { l: "Stok alış" }, { l: "Alış iade" }, { l: "Gider / masraf" }, { l: "Gider iade" }, { l: "Ödeme" }, { l: "Tahsilat" }, { l: "Mahsup" },
+  { k: "TAH", l: "Tahsilat", acik: true }, { k: "ODE", l: "Ödeme", acik: true }, { k: "GDR", l: "Gider / masraf", acik: true }, { k: "MHS", l: "Mahsup", acik: true },
+  { l: "Stok satış" }, { l: "Satış iade" }, { l: "Stok alış" }, { l: "Alış iade" }, { l: "Gider iade" },
 ];
 function MskIslemEkrani({ T, rpc, st, oz, urunler, onKayit, YESIL, KIRMIZI, TURUNCU }) {
   const bugunS = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); };
@@ -2734,9 +2977,10 @@ function MskIslemEkrani({ T, rpc, st, oz, urunler, onKayit, YESIL, KIRMIZI, TURU
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 14 }}>
         {MSK_TIPLER.map(t => t.acik
           ? <button key={t.k} onClick={() => tipSec(t.k)} style={{ ...st.dugme, borderRadius: 99, borderColor: tip === t.k ? T.gold : T.border, color: tip === t.k ? T.gold : T.text, background: tip === t.k ? "rgba(184,146,58,0.12)" : "transparent" }}>{t.l}</button>
-          : <span key={t.l} title="Cari/kasa hareketi gerektirir — sonraki adımda" style={{ ...st.dugme, borderRadius: 99, opacity: 0.4, cursor: "default", border: "1px solid " + T.border, color: T.sub }}>{t.l}</span>)}
+          : <span key={t.l} title="Sonraki adımda açılacak" style={{ ...st.dugme, borderRadius: 99, opacity: 0.4, cursor: "default", border: "1px solid " + T.border, color: T.sub }}>{t.l}</span>)}
       </div>
 
+      {MSK_FIS_TIP.includes(tip) ? <MskFisFormu tip={tip} T={T} rpc={rpc} st={st} YESIL={YESIL} KIRMIZI={KIRMIZI} onKayit={onKayit} /> : (<>
       {tip === "MDC" ? (<>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", gap: 12, marginBottom: 14 }}>
           <div style={{ ...st.kart, padding: 12, marginBottom: 0 }}>{alan("Nereden", secim(f.nereden, v => setF({ ...f, nereden: v }), MSK_KONUMLAR))}</div>
@@ -2836,6 +3080,7 @@ function MskIslemEkrani({ T, rpc, st, oz, urunler, onKayit, YESIL, KIRMIZI, TURU
             <td style={st.td}>{s.kaynak === "uygulama" && !s.iptal && <button onClick={() => iptalEt(s)} style={{ ...st.dugme, padding: "2px 8px", fontSize: 11 }}>İptal</button>}</td>
           </tr>))}</tbody>
       </table></div></div>
+      </>)}
     </div>
   );
 }
@@ -2847,6 +3092,28 @@ function MskMuhasebeSayfa({ T, GH }) {
   const [oz, setOz] = useState(null); const [tarih, setTarih] = useState("");
   const [hf, setHf] = useState({ urun: "", sube: "", bas: "", bit: "", ara: "" }); const [liste, setListe] = useState(null); const [sayfaNo, setSayfaNo] = useState(0);
   const [hazir, setHazir] = useState(null); const [mesgul, setMesgul] = useState(""); const [yaz, setYaz] = useState("");
+  const [mz, setMz] = useState(null); const [mzTarih, setMzTarih] = useState(""); const [mzDegistir, setMzDegistir] = useState(false); const [mzYaz, setMzYaz] = useState(""); const [mzMesgul, setMzMesgul] = useState("");
+  const mizanSec = async (f) => {
+    if (!f) return; setMzMesgul("Mizan okunuyor…"); setMz(null); setMzYaz("");
+    try {
+      const XLSX = await import("https://cdn.jsdelivr.net/npm/xlsx@0.18.5/+esm");
+      const wb = XLSX.read(await f.arrayBuffer(), { type: "array" });
+      const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames.includes("Mizan") ? "Mizan" : wb.SheetNames[0]], { header: 1, defval: null, raw: true });
+      const hesaplar = mskMizanOku(rows);
+      if (!hesaplar.length) throw new Error("Mizan satırı bulunamadı (başlıkta 'HESAP KOD' aranıyor)");
+      setMz({ ad: f.name, hesaplar }); setMzTarih(mskMizanTarih(rows));
+    } catch (e) { setBilgi("Hata: Mizan okunamadı: " + e.message); }
+    setMzMesgul("");
+  };
+  const mizanYukle = async () => {
+    if (!mz || !mzTarih) return setMzYaz("HATA: devir tarihini girin");
+    setMzMesgul("Yazılıyor…");
+    try {
+      const r = await rpc("msk_mizan_yukle", { p_hesaplar: mz.hesaplar.map(({ kod, ad, pb, yaprak, borc, alacak }) => ({ kod, ad, pb, yaprak, borc, alacak })), p_tarih: mzTarih, p_degistir: mzDegistir });
+      setMzYaz("Bitti ✓  " + r.hesap + " hesap · " + r.cari + " cari · " + r.satir + " devir satırı yazıldı");
+    } catch (e) { setMzYaz("HATA: " + e.message); }
+    setMzMesgul("");
+  };
   const BOY = 200;
   const fN = (n, k = 2) => (Number(n) || 0).toLocaleString("tr-TR", { minimumFractionDigits: k, maximumFractionDigits: k });
   const rpc = async (ad, args = {}) => { const { data, error } = await supabase.rpc(ad, { p_sifre: sifre, ...args }); if (error) throw new Error(error.message === "yetkisiz" ? "Şifre geçersiz" : error.message); return data; };
@@ -2939,8 +3206,10 @@ function MskMuhasebeSayfa({ T, GH }) {
         {menu("konum", "Konum Bakiyeleri")}
         {menu("hareket", "Tezgah Hareketleri")}
         {menu("islem", "İşlem")}
+        {menu("cariler", "Cariler")}
+        {menu("nakit", "Nakit")}
+        {menu("giderler", "Giderler")}
         {yakinda("Mutabakat")}
-        {yakinda("Cariler")}
         {menu("aktar", "Rhino'dan Aktar")}
       </nav>
       <div style={{ flex: "4 1 420px", minWidth: 0 }}>
@@ -2996,6 +3265,7 @@ function MskMuhasebeSayfa({ T, GH }) {
           </>)}
         </>)}
 
+        {(sek === "cariler" || sek === "nakit" || sek === "giderler") && <MskDefterEkranlari sek={sek} T={T} rpc={rpc} st={{ kart, baslik, dugme, dugmeAna, girdiS, th, td }} YESIL={YESIL} KIRMIZI={KIRMIZI} onIslem={() => setSek("islem")} />}
         {sek === "islem" && (!oz ? <div style={{ fontSize: 13, color: T.sub }}>Yükleniyor…</div> : <MskIslemEkrani T={T} rpc={rpc} st={{ kart, baslik, dugme, dugmeAna, girdiS, th, td }} oz={oz} urunler={sirali} onKayit={ozYenile} YESIL={YESIL} KIRMIZI={KIRMIZI} TURUNCU="#e0954a" />)}
 
         {sek === "hareket" && (<>
@@ -3037,7 +3307,7 @@ function MskMuhasebeSayfa({ T, GH }) {
           )}
         </>)}
 
-        {sek === "aktar" && (
+        {sek === "aktar" && (<>
           <div style={kart}>
             <div style={baslik}>Rhino'dan aktar · Ürün Ekstresi</div>
             <div style={{ padding: 16 }}>
@@ -3062,7 +3332,38 @@ function MskMuhasebeSayfa({ T, GH }) {
               {yaz && <div style={{ fontSize: 13, marginTop: 12, color: yaz.startsWith("HATA") ? KIRMIZI : yaz.startsWith("Bitti") ? YESIL : T.sub }}>{yaz}</div>}
             </div>
           </div>
-        )}
+          <div style={kart}>
+            <div style={baslik}>Rhino'dan aktar · Mizan (cari + kasa devri)</div>
+            <div style={{ padding: 16 }}>
+              <div style={{ fontSize: 13, color: T.sub, lineHeight: 1.6, marginBottom: 12 }}>
+                Rhino "Mizan Tablosu" Excel dosyasını seçin. Kasa, müşteri, satıcı ve personel hesaplarının bakiyeleri devir olarak yazılır; cariler otomatik açılır. Bu yalnızca bir başlangıç devridir, sonraki işlemleri burada girersiniz.
+              </div>
+              <label style={{ ...dugmeAna, display: "inline-block", cursor: mzMesgul ? "default" : "pointer" }}>
+                {mzMesgul && !mz ? "Okunuyor…" : "Mizan seç (.xlsx)"}
+                <input type="file" accept=".xlsx" disabled={!!mzMesgul} style={{ display: "none" }} onChange={e => { const f = e.target.files[0]; e.target.value = ""; mizanSec(f); }} />
+              </label>
+              {mz && (() => {
+                const yap = mz.hesaplar.filter(h => h.yaprak);
+                const gruplar = [["100", "Kasa"], ["120", "Müşteriler"], ["135", "Personel"], ["320", "Satıcılar"]];
+                return (<div style={{ marginTop: 16 }}>
+                  <div style={{ fontSize: 13, marginBottom: 8 }}>{mz.ad} · {mz.hesaplar.length} hesap · {yap.length} yaprak hesap</div>
+                  <div style={{ overflowX: "auto", marginBottom: 12 }}><table style={{ borderCollapse: "collapse" }}>
+                    <thead><tr><th style={{ ...th, textAlign: "left" }}>Grup</th><th style={th}>Döviz</th><th style={th}>Hesap</th><th style={th}>Borç − alacak</th></tr></thead>
+                    <tbody>{gruplar.flatMap(([on, ad]) => { const pbs = [...new Set(yap.filter(h => h.kod.startsWith(on)).map(h => h.pb))]; return pbs.map(pb => { const l = yap.filter(h => h.kod.startsWith(on) && h.pb === pb); return <tr key={on + pb}><td style={{ ...td, textAlign: "left" }}>{ad}</td><td style={td}>{pb}</td><td style={td}>{l.length}</td><td style={td}>{fN(l.reduce((t, h) => t + h.borc - h.alacak, 0))}</td></tr>; }); })}</tbody>
+                  </table></div>
+                  <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", marginBottom: 12 }}>
+                    <span style={{ fontSize: 12, color: T.sub }}>Devir tarihi</span>
+                    <input type="date" value={mzTarih} onChange={e => setMzTarih(e.target.value)} style={girdiS} />
+                    <label style={{ fontSize: 12, color: T.sub, display: "flex", gap: 6, alignItems: "center" }}><input type="checkbox" checked={mzDegistir} onChange={e => setMzDegistir(e.target.checked)} /> Mevcut devri değiştir (daha önce yüklendiyse)</label>
+                  </div>
+                  <button onClick={mizanYukle} disabled={!!mzMesgul} style={dugmeAna}>Devir olarak yaz</button>
+                </div>);
+              })()}
+              {mzMesgul && mz && <div style={{ fontSize: 12, color: T.sub, marginTop: 10 }}>{mzMesgul}</div>}
+              {mzYaz && <div style={{ fontSize: 13, marginTop: 12, color: mzYaz.startsWith("HATA") ? KIRMIZI : YESIL }}>{mzYaz}</div>}
+            </div>
+          </div>
+        </>)}
       </div>
     </div>
   );
