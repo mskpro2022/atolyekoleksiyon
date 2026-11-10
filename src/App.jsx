@@ -4282,6 +4282,7 @@ function PersonelSayfa({ T, GH: GH0, IS, usdTry, siparisler }) {
     return { saat, mu, hesap, elle, be, ye, net: Number(p.maas || 0) + Number(p.servis || 0) + ye + mu };
   };
   const topNet = aktif.reduce((s, p) => s + satir(p).net, 0);
+  const topYemek = aktif.reduce((s, p) => s + satir(p).ye, 0), topSaat = aktif.reduce((s, p) => s + satir(p).saat, 0), topMesaiU = aktif.reduce((s, p) => s + satir(p).mu, 0);
   // Sabit giderler: seçili ayda geçerli ve aktif olanlar; USD kalemler kurla ₺'ye çevrilir
   const kur = Number(kurEl) > 0 ? Number(kurEl) : (Number(usdTry) > 0 ? Number(usdTry) : 0);
   const sgTL = (g) => { const t = Number(g.tutar || 0); return g.para_birimi === "USD" ? (kur ? t * kur : null) : t; };
@@ -4311,7 +4312,7 @@ function PersonelSayfa({ T, GH: GH0, IS, usdTry, siparisler }) {
   const yazdir = () => {
     const w = window.open("", "_blank"); if (!w) { haber("Açılır pencere engellendi", true); return; }
     const satirlar = aktif.map(p => { const s = satir(p); return `<tr><td>${p.ad}</td><td>${persTL(p.maas)}</td><td>${s.be.banka === null ? "—" : persTL(s.be.banka)}</td><td>${s.be.elden === null ? "—" : persTL(s.be.elden)}</td><td>${s.ye ? persTL(s.ye) : "—"}</td><td>${s.saat ? s.saat + " sa" : "—"}</td><td>${s.mu ? persTL(s.mu) : "—"}</td><td>${p.servis > 0 ? persTL(p.servis) : "—"}</td><td><b>${persTL(s.net)}</b></td></tr>`; }).join("");
-    w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${atl} Bordro</title><style>body{font-family:Arial,sans-serif;padding:30px}h1{font-size:20px}h2{font-size:14px;color:#555}table{width:100%;border-collapse:collapse}th{background:#f3f4f6;padding:8px;font-size:11px;text-align:left;border-bottom:2px solid #ddd}td{padding:8px;font-size:12px;border-bottom:1px solid #eee}@media print{button{display:none}}</style></head><body><h1>${atl} Atölye — Bordro</h1><h2>${PERS_AY[ay]} ${yil}</h2><table><thead><tr><th>Ad Soyad</th><th>Maaş</th><th>Banka</th><th>Elden</th><th>Yemek</th><th>Mesai (sa)</th><th>Mesai Ücreti</th><th>Servis</th><th>Net</th></tr></thead><tbody>${satirlar}<tr><td><b>TOPLAM</b></td><td colspan="7"></td><td><b>${persTL(topNet)}</b></td></tr></tbody></table><br><button onclick="window.print()">Yazdır / PDF Kaydet</button></body></html>`);
+    w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${atl} Bordro</title><style>body{font-family:Arial,sans-serif;padding:30px}h1{font-size:20px}h2{font-size:14px;color:#555}table{width:100%;border-collapse:collapse}th{background:#f3f4f6;padding:8px;font-size:11px;text-align:left;border-bottom:2px solid #ddd}td{padding:8px;font-size:12px;border-bottom:1px solid #eee}@media print{button{display:none}}</style></head><body><h1>${atl} Atölye — Bordro</h1><h2>${PERS_AY[ay]} ${yil}</h2><table><thead><tr><th>Ad Soyad</th><th>Maaş</th><th>Banka</th><th>Elden</th><th>Yemek</th><th>Mesai (sa)</th><th>Mesai Ücreti</th><th>Servis</th><th>Net</th></tr></thead><tbody>${satirlar}<tr><td><b>TOPLAM</b></td><td colspan="3"></td><td><b>${persTL(topYemek)}</b></td><td><b>${topSaat}</b></td><td><b>${persTL(topMesaiU)}</b></td><td></td><td><b>${persTL(topNet)}</b></td></tr></tbody></table><br><button onclick="window.print()">Yazdır / PDF Kaydet</button></body></html>`);
     w.document.close();
   };
 
@@ -4500,7 +4501,7 @@ function PersonelSayfa({ T, GH: GH0, IS, usdTry, siparisler }) {
                   <td style={sayi}>{Number(p.servis) > 0 ? persTL(p.servis) : "—"}</td>
                   <td style={{ ...sayi, fontWeight:800 }}>{persTL(s.net)}</td>
                 </tr>); }) : <tr><td colSpan={9} style={{ ...td, textAlign:"center", color:T.sub }}>Personel eklenmemiş</td></tr>}
-                {aktif.length > 0 && <tr><td style={{ ...td, fontWeight:800 }}>TOPLAM</td><td style={td} colSpan={7}></td><td style={{ ...sayi, fontWeight:800 }}>{persTL(topNet)}</td></tr>}
+                {aktif.length > 0 && <tr><td style={{ ...td, fontWeight:800 }}>TOPLAM</td><td style={td} colSpan={3}></td><td style={{ ...sayi, fontWeight:800 }}>{persTL(topYemek)}</td><td style={{ ...td, fontWeight:800 }}>{topSaat}</td><td style={{ ...td, fontWeight:800 }}>{persTL(topMesaiU)}</td><td style={td}></td><td style={{ ...sayi, fontWeight:800 }}>{persTL(topNet)}</td></tr>}
               </tbody>
             </table>
           </div>
