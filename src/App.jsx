@@ -2640,6 +2640,21 @@ function mskMizanOku(rows) {
   h.forEach(x => { x.yaprak = !kodlar.some(k => k !== x.kod && k.startsWith(x.kod)); });
   return h;
 }
+// Rhino "Stok Durum Raporu / Mevcut Analiz": satır = ürün, sütun = konum (gram)
+function mskMevcutOku(rows) {
+  const hi = rows.findIndex(r => r && r.some(c => String(c == null ? "" : c).trim() === "Genel Toplam"));
+  if (hi < 0) return [];
+  const gt = rows[hi].findIndex(c => String(c == null ? "" : c).trim() === "Genel Toplam");
+  const konumlar = rows[hi].map((c, i) => (i > gt && c != null && String(c).trim()) ? String(c).trim() : null);
+  const out = [];
+  for (let i = hi + 2; i < rows.length; i++) {
+    const r = rows[i]; if (!r || typeof r[0] !== "number") continue;
+    if (String(r[2] || "").trim().toUpperCase() !== "GR") continue;
+    const urun = "#" + String(r[1]).trim();
+    konumlar.forEach((k, j) => { if (!k) return; const v = Number(r[j]); if (isFinite(v) && Math.abs(v) > 1e-9) out.push({ urun, konum: k, miktar: v }); });
+  }
+  return out;
+}
 function mskMizanTarih(rows) {
   for (const r of rows.slice(0, 6)) { const m = String((r && r[0]) || "").match(/(\d\d)\/(\d\d)\/(\d\d)\s*$/); if (m) return "20" + m[3] + "-" + m[2] + "-" + m[1]; }
   return "";
@@ -3091,6 +3106,7 @@ function MskMuhasebeSayfa({ T, GH }) {
   const [oz, setOz] = useState(null); const [tarih, setTarih] = useState("");
   const [hf, setHf] = useState({ urun: "", sube: "", bas: "", bit: "", ara: "", etip: "", yon: "" }); const [liste, setListe] = useState(null); const [sayfaNo, setSayfaNo] = useState(0);
   const [hazir, setHazir] = useState(null); const [mesgul, setMesgul] = useState(""); const [yaz, setYaz] = useState("");
+  const [mv, setMv] = useState(null); const [mvTarih, setMvTarih] = useState(""); const [mvYaz, setMvYaz] = useState(""); const [mvMesgul, setMvMesgul] = useState(""); const [mvDb, setMvDb] = useState(null);
   const [mz, setMz] = useState(null); const [mzTarih, setMzTarih] = useState(""); const [mzDegistir, setMzDegistir] = useState(false); const [mzYaz, setMzYaz] = useState(""); const [mzMesgul, setMzMesgul] = useState("");
   const mizanSec = async (f) => {
     if (!f) return; setMzMesgul("Mizan okunuyor…"); setMz(null); setMzYaz("");
@@ -3113,6 +3129,28 @@ function MskMuhasebeSayfa({ T, GH }) {
     } catch (e) { setMzYaz("HATA: " + e.message); }
     setMzMesgul("");
   };
+  const mevcutSec = async (f) => {
+    if (!f) return; setMvMesgul("Okunuyor…"); setMv(null); setMvYaz("");
+    try {
+      const XLSX = await import("https://cdn.jsdelivr.net/npm/xlsx@0.18.5/+esm");
+      const wb = XLSX.read(await f.arrayBuffer(), { type: "array" });
+      const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames.includes("Mevcut Analiz") ? "Mevcut Analiz" : wb.SheetNames[0]], { header: 1, defval: null, raw: true });
+      const satirlar = mskMevcutOku(rows);
+      if (!satirlar.length) throw new Error("Mevcut Analiz satırı bulunamadı ('Genel Toplam' başlığı aranıyor)");
+      const m = f.name.match(/_(\d{2})(\d{2})(\d{2})_/);
+      setMv({ ad: f.name, satirlar }); setMvTarih(m ? "20" + m[1] + "-" + m[2] + "-" + m[3] : new Date().toISOString().slice(0, 10));
+    } catch (e) { setBilgi("Hata: Mevcut Analiz okunamadı: " + e.message); }
+    setMvMesgul("");
+  };
+  const mevcutDbYukle = async () => { try { setMvDb(await rpc("msk_mevcut_liste")); } catch (e) { setMvDb(null); } };
+  const mevcutYukle = async () => {
+    if (!mv || !mvTarih) return setMvYaz("HATA: tarihi girin");
+    setMvMesgul("Yazılıyor…");
+    try { const r = await rpc("msk_mevcut_yukle", { p_tarih: mvTarih, p_satirlar: mv.satirlar }); setMvYaz("Bitti ✓  " + r.satir + " hücre yazıldı (" + r.tarih + ")"); mevcutDbYukle(); }
+    catch (e) { setMvYaz("HATA: " + e.message); }
+    setMvMesgul("");
+  };
+  useEffect(() => { if (sifre && sek === "konum") mevcutDbYukle(); }, [sifre, sek]);
   const BOY = 200;
   const fN = (n, k = 2) => (Number(n) || 0).toLocaleString("tr-TR", { minimumFractionDigits: k, maximumFractionDigits: k });
   const rpc = async (ad, args = {}) => { const { data, error } = await supabase.rpc(ad, { p_sifre: sifre, ...args }); if (error) throw new Error(error.message === "yetkisiz" ? "Şifre geçersiz" : error.message); return data; };
@@ -3266,6 +3304,24 @@ function MskMuhasebeSayfa({ T, GH }) {
                 </table>
               </div>
             </div>
+            {mvDb && mvDb.satirlar.length > 0 && (() => {
+              const rm = (k, u) => mvDb.satirlar.filter(x => x.konum === k && x.urun === u).reduce((t, x) => t + Number(x.miktar), 0);
+              const ks = [...new Set([...konumlar, ...mvDb.satirlar.map(x => x.konum)])];
+              const fark = (k, u) => hucre(k, u) - rm(k, u);
+              const kHucre = (v) => <td style={{ ...td, color: Math.abs(v) < 0.01 ? T.sub : KIRMIZI }}>{Math.abs(v) < 0.01 ? "–" : fN(v)}</td>;
+              return (<div style={kart}>
+                <div style={baslik}>Rhino mevcut ile fark (bizim − Rhino) · Mevcut Analiz {mvDb.tarih}</div>
+                <div style={{ overflowX: "auto" }}><table style={{ width: "100%", borderCollapse: "collapse" }}>
+                  <thead><tr><th style={{ ...th, textAlign: "left" }}>Konum</th>{sirali.map(u => <th key={u} style={th}>{ad(u)}</th>)}</tr></thead>
+                  <tbody>
+                    {ks.map(k => <tr key={k}><td style={{ ...td, textAlign: "left", fontWeight: 600 }}>{k}</td>{sirali.map(u => <Fragment key={u}>{kHucre(fark(k, u))}</Fragment>)}</tr>)}
+                    <tr><td style={{ ...td, textAlign: "left", fontWeight: 700 }}>Toplam fark</td>{sirali.map(u => { const v = ks.reduce((t, k) => t + fark(k, u), 0); return <td key={u} style={{ ...td, fontWeight: 700, color: Math.abs(v) < 0.01 ? YESIL : KIRMIZI }}>{Math.abs(v) < 0.01 ? "✓" : fN(v)}</td>; })}</tr>
+                    <tr><td style={{ ...td, textAlign: "left", color: T.sub }}>Rhino mevcut toplam</td>{sirali.map(u => { const v = ks.reduce((t, k) => t + rm(k, u), 0); return <td key={u} style={{ ...td, color: T.sub }}>{Math.abs(v) < 0.005 ? "–" : fN(v)}</td>; })}</tr>
+                  </tbody>
+                </table></div>
+                <div style={{ padding: "10px 16px", fontSize: 12, color: T.sub, lineHeight: 1.6 }}>Fark "–" ise o konum ve ayarda Rhino ile bizim stok aynıdır. Ürün Ekstresi ve Mevcut Analiz'i aynı gün alıp yükleyin; ekstre daha eskiyse aradaki Rhino hareketleri fark olarak görünür.</div>
+              </div>);
+            })()}
             <div style={{ fontSize: 12, color: T.sub, lineHeight: 1.6 }}>
               Has sütunu yalnızca altın ayarlarını (9K–22K) içerir: gram × milyem. "995 HAS" ve gümüş ayrı sütunlarda gram olarak durur.
               "Ekstre kalan" satırı, yüklenen Ürün Ekstresi dosyasının kendi toplamıdır; yeşil tik yalnızca hareketlerin doğru okunduğunu gösterir, gerçek stok sayımıyla karşılaştırma değildir. Toplam {Number(oz.toplam).toLocaleString("tr-TR")} hareket · {oz.ilk} → {oz.son}.
@@ -3375,6 +3431,28 @@ function MskMuhasebeSayfa({ T, GH }) {
               })()}
               {mzMesgul && mz && <div style={{ fontSize: 12, color: T.sub, marginTop: 10 }}>{mzMesgul}</div>}
               {mzYaz && <div style={{ fontSize: 13, marginTop: 12, color: mzYaz.startsWith("HATA") ? KIRMIZI : YESIL }}>{mzYaz}</div>}
+            </div>
+          </div>
+          <div style={kart}>
+            <div style={baslik}>Rhino'dan aktar · Mevcut Analiz (stok sayımı karşılaştırması)</div>
+            <div style={{ padding: 16 }}>
+              <div style={{ fontSize: 13, color: T.sub, lineHeight: 1.6, marginBottom: 12 }}>
+                Rhino "Stok Durum Raporu / Mevcut Analiz" Excel dosyasını seçin. Her ayarın her konumdaki gerçek mevcut gramı kaydedilir ve Konum Bakiyeleri ekranında bizim bakiyemizle farkı gösterilir. Yeni yükleme eskisinin yerine geçer; stok hareketlerine dokunmaz.
+              </div>
+              <label style={{ ...dugmeAna, display: "inline-block", cursor: mvMesgul ? "default" : "pointer" }}>
+                {mvMesgul && !mv ? "Okunuyor…" : "Mevcut Analiz seç (.xlsx)"}
+                <input type="file" accept=".xlsx" disabled={!!mvMesgul} style={{ display: "none" }} onChange={e => { const f = e.target.files[0]; e.target.value = ""; mevcutSec(f); }} />
+              </label>
+              {mv && (<div style={{ marginTop: 16 }}>
+                <div style={{ fontSize: 13, marginBottom: 8 }}>{mv.ad} · {mv.satirlar.length} dolu hücre · {[...new Set(mv.satirlar.map(x => x.konum))].length} konum</div>
+                <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", marginBottom: 12 }}>
+                  <span style={{ fontSize: 12, color: T.sub }}>Rapor tarihi</span>
+                  <input type="date" value={mvTarih} onChange={e => setMvTarih(e.target.value)} style={girdiS} />
+                </div>
+                <button onClick={mevcutYukle} disabled={!!mvMesgul} style={dugmeAna}>Kaydet</button>
+              </div>)}
+              {mvMesgul && mv && <div style={{ fontSize: 12, color: T.sub, marginTop: 10 }}>{mvMesgul}</div>}
+              {mvYaz && <div style={{ fontSize: 13, marginTop: 12, color: mvYaz.startsWith("HATA") ? KIRMIZI : YESIL }}>{mvYaz}</div>}
             </div>
           </div>
         </>)}
@@ -4064,6 +4142,28 @@ const PERS_POZ = ["CAD/Tasarım","Tezgahçı","Mıhlamacı","Cilacı","Çırak",
 const PERS_POZ_RENK = { "CAD/Tasarım":"#8b5cf6", "Tezgahçı":"#3b82f6", "Mıhlamacı":"#ec4899", "Cilacı":"#06b6d4", "Çırak":"#9ca3af", "Ofis/Muhasebe":"#10b981", "Diğer":"#9ca3af" };
 const PERS_AY = ["Ocak","Şubat","Mart","Nisan","Mayıs","Haziran","Temmuz","Ağustos","Eylül","Ekim","Kasım","Aralık"];
 const PERS_KRITER = [["kalite","Kalite"],["hiz","Hız"],["devam","Devam"],["uyum","Uyum"],["usta","Usta"]];
+const persKidem = (bas, bit) => {
+  if (!bas) return "";
+  const a = new Date(bas), b = bit ? new Date(bit) : new Date();
+  if (isNaN(a) || isNaN(b) || b < a) return "";
+  let ay = (b.getFullYear() - a.getFullYear()) * 12 + (b.getMonth() - a.getMonth()); if (b.getDate() < a.getDate()) ay--;
+  if (ay < 1) return "1 aydan az";
+  const y = Math.floor(ay / 12), m = ay % 12;
+  return (y ? y + " yıl" : "") + (y && m ? " " : "") + (m ? m + " ay" : "");
+};
+// Personel ödemesi → MSK muhasebe fişi için şifreli RPC çağrısı (şifre oturum boyunca bellekte tutulur)
+let MSK_PERS_SIFRE = "";
+async function mskPersRpc(ad, args = {}) {
+  if (!MSK_PERS_SIFRE) {
+    const g = window.prompt("Muhasebe (Karlılık) şifresi:"); if (!g) throw new Error("Şifre girilmedi");
+    const { data } = await supabase.rpc("muh_dogrula", { p_sifre: g, p_sirket: "MSK" });
+    if (data !== true) throw new Error("Şifre yanlış"); MSK_PERS_SIFRE = g;
+  }
+  const { data, error } = await supabase.rpc(ad, { p_sifre: MSK_PERS_SIFRE, ...args });
+  if (error) { if (error.message === "yetkisiz") MSK_PERS_SIFRE = ""; throw new Error(error.message === "yetkisiz" ? "Şifre geçersiz" : error.message); }
+  return data;
+}
+const PERS_GIDER_VARSAYILAN = { "Maaş": "740 001 02\\1057", "Yemek": "740 001 02\\1034", "Mesai": "740 001 01\\1063" };
 const persTL = n => Number(n||0).toLocaleString("tr-TR") + "₺";
 const persMesaiUcret = (p, saat) => Math.round((Number(p.maas||0) / 225) * 1.5 * Number(saat||0));
 const persBankaElden = p => {
@@ -4126,6 +4226,7 @@ function PersonelSayfa({ T, GH: GH0, IS, usdTry, siparisler }) {
   const [bilgi, setBilgi] = useState(null);
   const [arsiv, setArsiv] = useState(false);
   const [form, setForm] = useState(null);   // personel modalı
+  const [muhVeri, setMuhVeri] = useState({ durum: "yok", hesaplar: [], giderler: [], hata: "" });
   const [modal, setModal] = useState(null); // {tur:"izin"|"avans"|"avodeme"|"devam"|"odeme", ...}
   const [sabit, setSabit] = useState([]);   // sabit giderler (şirkete göre)
   const [sg, setSg] = useState(null);       // sabit gider modalı
@@ -4245,7 +4346,7 @@ function PersonelSayfa({ T, GH: GH0, IS, usdTry, siparisler }) {
   const puanKaydet = async () => {
     try {
       for (const p of aktif) {
-        const f = pform[p.id]; if (!f) continue;
+        const f = pform[p.id]; if (!f || PERS_KRITER.some(([k]) => f[k] === undefined || f[k] === "")) continue;
         const veri = { atolye: atl, personel_id: p.id, personel_ad: p.ad, yil, ay, kalite: Number(f.kalite), hiz: Number(f.hiz), devam: Number(f.devam), uyum: Number(f.uyum), usta: Number(f.usta), puan: puanHesap(f) };
         const ex = puan[p.id];
         if (ex?.id) await persQ(supabase.from("puanlama").update(veri).eq("id", ex.id).select());
@@ -4253,6 +4354,25 @@ function PersonelSayfa({ T, GH: GH0, IS, usdTry, siparisler }) {
       }
       await aylikYukle(); haber("Puanlar kaydedildi ✓");
     } catch (e) { haber("Kayıt hatası: " + e.message, true); }
+  };
+
+  // Yıldızla puanlama: 1 yıldız = 20 puan; 5 kriter da dolunca o kişi otomatik kaydedilir
+  const pRef = useRef({}); pRef.current.puan = puan;
+  const puanTekIs = async (p, f) => {
+    const veri = { atolye: atl, personel_id: p.id, personel_ad: p.ad, yil, ay, kalite: Number(f.kalite), hiz: Number(f.hiz), devam: Number(f.devam), uyum: Number(f.uyum), usta: Number(f.usta), puan: puanHesap(f) };
+    const ex = pRef.current.puan[p.id];
+    try {
+      const r = ex?.id ? await persQ(supabase.from("puanlama").update(veri).eq("id", ex.id).select()) : await persQ(supabase.from("puanlama").insert(veri).select());
+      if (r && r[0]) { pRef.current.puan = { ...pRef.current.puan, [p.id]: r[0] }; setPuan(m => ({ ...m, [p.id]: r[0] })); }
+      haber("Otomatik kaydedildi ✓");
+    } catch (e) { haber("Kayıt hatası: " + e.message, true); }
+  };
+  const yildizTikla = (p, k, n) => {
+    const f = { ...(pform[p.id] || {}), [k]: n * 20 };
+    setPform(m => ({ ...m, [p.id]: f }));
+    if (PERS_KRITER.every(([kk]) => f[kk] !== undefined && f[kk] !== "" && f[kk] !== null)) {
+      const q = pRef.current.kuyruk || (pRef.current.kuyruk = {}); q[p.id] = (q[p.id] || Promise.resolve()).then(() => puanTekIs(p, f));
+    }
   };
 
   // ── modal kayıtları (izin, avans, devam, ödeme) ──
@@ -4276,16 +4396,54 @@ function PersonelSayfa({ T, GH: GH0, IS, usdTry, siparisler }) {
         await persQ(supabase.from("devam").insert({ atolye: atl, personel_id: pk.id, personel_ad: pk.ad, tarih: m.tarih, giris: m.giris, cikis: m.cikis, sure_dk: su, kaynak: "Manuel" }).select());
       } else if (m.tur === "odeme") {
         if (!Number(m.tutar)) { haber("Tutar giriniz", true); return; }
-        await persQ(supabase.from("odeme").insert({ atolye: atl, personel_id: pk.id, personel_ad: pk.ad, tarih: m.tarih, tur: m.odemeTur, tutar: Number(m.tutar), notlar: m.notlar || "" }).select());
+        let fis = null;
+        const muhAcik = atl === "MSK" && muhVeri.durum === "hazir" && m.odemeTur !== "Avans" && m.muhIsle !== false;
+        if (muhAcik) {
+          const kasa = muhVeri.hesaplar.find(h => h.kod === m.kasa), gKod = m.gider ?? PERS_GIDER_VARSAYILAN[m.odemeTur] ?? "", gider = muhVeri.giderler.find(h => h.kod === gKod);
+          if (!kasa) { haber("Kasa / banka hesabı seçiniz", true); return; }
+          if (!gider) { haber("Gider kalemi seçiniz", true); return; }
+          const kur = kasa.pb === "TL" ? 1 : Number(String(m.kur || "").replace(",", "."));
+          if (!(kur > 0)) { haber("Kur / fiyat giriniz (1 " + kasa.pb + " = ? ₺)", true); return; }
+          const hane = (kasa.pb === "HAS" || kasa.pb === "SLV") ? 10000 : 100;
+          const tut = Math.round(Number(m.tutar) / kur * hane) / hane;
+          if (!(tut > 0)) { haber("Tutar çok küçük", true); return; }
+          const acik = "Personel ödemesi · " + pk.ad + " · " + m.odemeTur + (kasa.pb !== "TL" ? " · " + Number(m.tutar).toLocaleString("tr-TR") + " ₺ @ " + kur + " ₺/" + kasa.pb : "") + (m.notlar ? " · " + m.notlar : "");
+          const r = await mskPersRpc("msk_fis_ekle", { p_tarih: m.tarih, p_tur: "GDR", p_aciklama: acik, p_evrak: "PERSONEL", p_satirlar: [{ hesap_kod: gider.kod, ad: gider.ad, pb: kasa.pb, borc: tut }, { hesap_kod: kasa.kod, ad: kasa.ad, pb: kasa.pb, alacak: tut }] });
+          fis = r.fis;
+        }
+        try {
+          await persQ(supabase.from("odeme").insert({ atolye: atl, personel_id: pk.id, personel_ad: pk.ad, tarih: m.tarih, tur: m.odemeTur, tutar: Number(m.tutar), notlar: m.notlar || "", ...(fis ? { muh_fis: fis } : {}) }).select());
+        } catch (e2) {
+          if (fis) { try { await mskPersRpc("msk_fis_iptal", { p_fis: fis, p_sebep: "Ödeme kaydı yazılamadı (otomatik iptal)" }); } catch {} }
+          throw e2;
+        }
       }
       setModal(null); await sabitYukle(); await aylikYukle(); haber("Kaydedildi ✓");
     } catch (e) { haber("Hata: " + e.message, true); }
   };
   const kayitSil = async (tablo, id) => {
     if (!window.confirm("Silinsin mi?")) return;
-    try { await persQ(supabase.from(tablo).delete().eq("id", id).select()); await sabitYukle(); await aylikYukle(); haber("Silindi"); }
+    try {
+      if (tablo === "odeme") {
+        const o = odeme.find(x => x.id === id);
+        if (o?.muh_fis) {
+          const sebep = window.prompt("Bu ödemeye bağlı muhasebe fişi (" + o.muh_fis + ") iptal edilecek. İptal sebebi:");
+          if (!sebep || !sebep.trim()) return;
+          await mskPersRpc("msk_fis_iptal", { p_fis: o.muh_fis, p_sebep: sebep });
+        }
+      } await persQ(supabase.from(tablo).delete().eq("id", id).select()); await sabitYukle(); await aylikYukle(); haber("Silindi"); }
     catch (e) { haber("Hata: " + e.message, true); }
   };
+  const muhYukle = async () => {
+    setMuhVeri({ durum: "yuk", hesaplar: [], giderler: [], hata: "" });
+    try {
+      const h = [], g = [];
+      for (const t of ["kasa", "banka"]) h.push(...(await mskPersRpc("msk_hesap_liste", { p_tur: t })));
+      g.push(...(await mskPersRpc("msk_hesap_liste", { p_tur: "gider" })));
+      setMuhVeri({ durum: "hazir", hesaplar: h, giderler: g, hata: "" });
+    } catch (e) { setMuhVeri({ durum: "hata", hesaplar: [], giderler: [], hata: e.message }); }
+  };
+  useEffect(() => { if (modal?.tur === "odeme" && atl === "MSK" && muhVeri.durum === "yok") muhYukle(); }, [modal?.tur]);
   const persSecenek = per.filter(p => p.durum !== "Ayrıldı");
   const yeniModal = (tur) => setModal({ tur, personel_id: persSecenek[0]?.id || "", tarih: new Date().toISOString().slice(0, 10), izinTur: "Yıllık İzin", durum: "Onaylı", bas: "", bit: "", notlar: "", tutar: "", giris: "08:00", cikis: "17:00", odemeTur: "Maaş" });
 
@@ -4488,7 +4646,7 @@ function PersonelSayfa({ T, GH: GH0, IS, usdTry, siparisler }) {
                     <td style={sayi}>{be.banka === null ? "—" : persTL(be.banka)}</td>
                     <td style={sayi}>{Number(p.yemek) > 0 ? persTL(p.yemek) : "—"}</td>
                     <td style={sayi}>{Number(p.servis) > 0 ? persTL(p.servis) : "—"}</td>
-                    <td style={td}>{p.tarih || "—"}</td><td style={td}>{p.tel || "—"}</td>
+                    <td style={td}>{p.tarih || "—"}{p.tarih && persKidem(p.tarih, arsiv ? p.cikis_tarihi : null) ? <span style={{ color:T.sub, fontSize:12 }}> · {persKidem(p.tarih, arsiv ? p.cikis_tarihi : null)}</span> : null}</td><td style={td}>{p.tel || "—"}</td>
                     {arsiv && <td style={td}>{p.cikis_tarihi || "—"}{p.cikis_nedeni ? " · " + p.cikis_nedeni : ""}</td>}
                     <td style={td}><button onClick={() => duzenle(p)} style={{ ...GH, padding:"3px 9px" }}>Düzenle</button> <button onClick={() => personelSil(p)} style={{ ...GH, padding:"3px 9px", color:T.danger || "#e85a4f", borderColor:"transparent" }}>Sil</button></td>
                   </tr>);
@@ -4571,7 +4729,7 @@ function PersonelSayfa({ T, GH: GH0, IS, usdTry, siparisler }) {
       {!yuk && sek === "puan" && (
         <div>
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
-            <div style={{ fontSize:11, color:T.sub }}>Her kriter 0–100. Puan = 5 kriterin ortalaması.</div>
+            <div style={{ fontSize:11, color:T.sub }}>Yıldıza dokun: 1 yıldız = 20 puan, 5 yıldız = 100. Puan = 5 kriterin ortalaması. Beş kriter dolunca otomatik kaydedilir.</div>
             <button onClick={puanKaydet} style={GP}>Kaydet</button>
           </div>
           <div style={{ ...kart, padding:0, overflowX:"auto", overflowY:"hidden" }}>
@@ -4579,7 +4737,7 @@ function PersonelSayfa({ T, GH: GH0, IS, usdTry, siparisler }) {
               <thead><tr><th style={th}>Personel</th>{PERS_KRITER.map(([k, y]) => <th key={k} style={th}>{y}</th>)}<th style={{ ...th, textAlign:"right" }}>Puan</th></tr></thead>
               <tbody>{aktif.length ? aktif.map(p => { const f = pform[p.id]; const pu = puanHesap(f); const renk = pu === null ? T.sub : pu >= 85 ? "#10b981" : pu >= 70 ? "#f59e0b" : "#e85a4f"; return (
                 <tr key={p.id}><td style={{ ...td, fontWeight:700 }}>{p.ad}</td>
-                  {PERS_KRITER.map(([k]) => <td key={k} style={td}><input type="number" min="0" max="100" step="5" placeholder="—" value={f?.[k] ?? ""} onChange={e => setPform(s => ({ ...s, [p.id]: { kalite:70, hiz:70, devam:70, uyum:70, usta:70, ...(s[p.id] || {}), [k]: e.target.value } }))} style={{ ...girdi, width:64 }} /></td>)}
+                  {PERS_KRITER.map(([k]) => { const v = f?.[k]; const n = (v === undefined || v === null || v === "") ? 0 : Math.max(0, Math.min(5, Math.round(Number(v) / 20))); return <td key={k} style={td}><span style={{ whiteSpace:"nowrap" }}>{[1, 2, 3, 4, 5].map(i => <span key={i} onClick={() => yildizTikla(p, k, i)} title={(i * 20) + " puan"} style={{ cursor:"pointer", fontSize:22, padding:"0 2px", color: i <= n ? "#e0a82e" : T.border }}>★</span>)}</span></td>; })}
                   <td style={{ ...sayi, fontWeight:800, color:renk }}>{pu === null ? "—" : pu}</td></tr>); }) : <tr><td colSpan={7} style={{ ...td, textAlign:"center", color:T.sub }}>Personel yok</td></tr>}</tbody>
             </table>
           </div>
@@ -4618,7 +4776,7 @@ function PersonelSayfa({ T, GH: GH0, IS, usdTry, siparisler }) {
             <table className="pers-t" style={{ width:"100%", borderCollapse:"collapse" }}>
               <thead><tr><th style={th}>Tarih</th><th style={th}>Personel</th><th style={th}>Tür</th><th style={{ ...th, textAlign:"right" }}>Tutar</th><th style={th}>Not</th><th style={th}></th></tr></thead>
               <tbody>{odeme.length ? odeme.map(o => (
-                <tr key={o.id}><td style={td}>{o.tarih}</td><td style={{ ...td, fontWeight:700 }}>{o.personel_ad}</td><td style={td}>{o.tur}</td><td style={sayi}>{persTL(o.tutar)}</td><td style={td}>{o.notlar || "—"}</td>
+                <tr key={o.id}><td style={td}>{o.tarih}</td><td style={{ ...td, fontWeight:700 }}>{o.personel_ad}</td><td style={td}>{o.tur}</td><td style={sayi}>{persTL(o.tutar)}</td><td style={td}>{o.notlar || "—"}{o.muh_fis ? <span style={{ color:T.sub, fontSize:12 }}> · muhasebe fişi {o.muh_fis}</span> : null}</td>
                   <td style={td}><button onClick={() => kayitSil("odeme", o.id)} style={{ ...GH, padding:"3px 9px", color:T.danger || "#e85a4f", borderColor:"transparent" }}>Sil</button></td></tr>
               )) : <tr><td colSpan={6} style={{ ...td, textAlign:"center", color:T.sub }}>Bu ay ödeme kaydı yok</td></tr>}</tbody>
             </table>
@@ -4714,7 +4872,22 @@ function PersonelSayfa({ T, GH: GH0, IS, usdTry, siparisler }) {
             </>}
             {(modal.tur === "avans" || modal.tur === "avodeme" || modal.tur === "odeme") && <PersAlan T={T} y="Tutar (₺)"><input type="number" style={girdi} value={modal.tutar} onChange={e => setModal({ ...modal, tutar:e.target.value })} /></PersAlan>}
             {(modal.tur === "avans" || modal.tur === "devam" || modal.tur === "odeme") && <PersAlan T={T} y="Tarih"><input type="date" style={girdi} value={modal.tarih} onChange={e => setModal({ ...modal, tarih:e.target.value })} /></PersAlan>}
-            {modal.tur === "odeme" && <PersAlan T={T} y="Tür"><select style={girdi} value={modal.odemeTur} onChange={e => setModal({ ...modal, odemeTur:e.target.value })}><option>Maaş</option><option>Avans</option><option>Prim</option><option>Yemek</option><option>Diğer</option></select></PersAlan>}
+            {modal.tur === "odeme" && <PersAlan T={T} y="Tür"><select style={girdi} value={modal.odemeTur} onChange={e => setModal({ ...modal, odemeTur:e.target.value })}><option>Maaş</option><option>Avans</option><option>Prim</option><option>Yemek</option><option>Mesai</option><option>Diğer</option></select></PersAlan>}
+            {modal.tur === "odeme" && atl === "MSK" && modal.odemeTur !== "Avans" && (() => {
+              if (muhVeri.durum === "yuk" || muhVeri.durum === "yok") return <PersAlan T={T} y="Muhasebe" tam><div style={{ fontSize:12, color:T.sub }}>Muhasebe hesapları yükleniyor…</div></PersAlan>;
+              if (muhVeri.durum === "hata") return <PersAlan T={T} y="Muhasebe" tam><div style={{ fontSize:12, color:T.danger || "#e85a4f" }}>Muhasebeye bağlanılamadı ({muhVeri.hata}); ödeme yalnızca personel kaydına yazılır. <span onClick={muhYukle} style={{ cursor:"pointer", textDecoration:"underline" }}>Yeniden dene</span></div></PersAlan>;
+              const acik = modal.muhIsle !== false, kasa = muhVeri.hesaplar.find(h => h.kod === modal.kasa), gKod = modal.gider ?? PERS_GIDER_VARSAYILAN[modal.odemeTur] ?? "";
+              return <>
+                <PersAlan T={T} y="Muhasebe" tam><label style={{ fontSize:13, cursor:"pointer" }}><input type="checkbox" checked={acik} onChange={e => setModal({ ...modal, muhIsle:e.target.checked })} /> Muhasebeye işle (kasadan / bankadan düş)</label></PersAlan>
+                {acik && <>
+                  <PersAlan T={T} y="Kasa / banka hesabı" tam><select style={girdi} value={modal.kasa || ""} onChange={e => setModal({ ...modal, kasa:e.target.value })}><option value="">Seçin</option>{muhVeri.hesaplar.map(h => <option key={h.kod} value={h.kod}>{h.ad} · {h.pb} · bakiye {Number(h.bakiye).toLocaleString("tr-TR", { maximumFractionDigits:2 })}</option>)}</select></PersAlan>
+                  {kasa && kasa.pb !== "TL" && <PersAlan T={T} y={"Kur / fiyat (1 " + kasa.pb + " = ? ₺)"}><input style={girdi} inputMode="decimal" value={modal.kur || ""} onChange={e => setModal({ ...modal, kur:e.target.value })} /></PersAlan>}
+                  {kasa && kasa.pb !== "TL" && Number(String(modal.kur || "").replace(",", ".")) > 0 && Number(modal.tutar) > 0 && <PersAlan T={T} y="Kasadan düşecek"><div style={{ ...girdi, color:T.sub }}>{(Number(modal.tutar) / Number(String(modal.kur).replace(",", "."))).toLocaleString("tr-TR", { maximumFractionDigits:4 })} {kasa.pb}</div></PersAlan>}
+                  <PersAlan T={T} y="Gider kalemi" tam><select style={girdi} value={gKod} onChange={e => setModal({ ...modal, gider:e.target.value })}><option value="">Seçin</option>{muhVeri.giderler.map(h => <option key={h.kod} value={h.kod}>{h.ad}</option>)}</select></PersAlan>
+                </>}
+              </>;
+            })()}
+            {modal.tur === "odeme" && atl === "MSK" && modal.odemeTur === "Avans" && <PersAlan T={T} y="Muhasebe" tam><div style={{ fontSize:12, color:T.sub }}>Avans bu aşamada muhasebeye işlenmez.</div></PersAlan>}
             {modal.tur === "devam" && <>
               <PersAlan T={T} y="Giriş"><input type="time" style={girdi} value={modal.giris} onChange={e => setModal({ ...modal, giris:e.target.value })} /></PersAlan>
               <PersAlan T={T} y="Çıkış"><input type="time" style={girdi} value={modal.cikis} onChange={e => setModal({ ...modal, cikis:e.target.value })} /></PersAlan>
