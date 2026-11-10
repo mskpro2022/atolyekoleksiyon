@@ -2876,7 +2876,7 @@ function MskIslemEkrani({ T, rpc, st, oz, urunler, onKayit, YESIL, KIRMIZI, TURU
   const [f, setF] = useState(() => ({ ...bos(), nereye: "ANAKASA MSK" }));
   const [tg, setTg] = useState({});
   const [sat, setSat] = useState([{ urun: "", gram: "", milyem: "", birim: "" }]);
-  const [firmalar, setFirmalar] = useState([]); const [ek, setEk] = useState(false); const [mAc, setMAc] = useState(-1);
+  const [firmalar, setFirmalar] = useState([]);
   const [hata, setHata] = useState(""); const [ok, setOk] = useState(""); const [mesgul, setMesgul] = useState(false);
   const [son, setSon] = useState(null); const [sonSek, setSonSek] = useState("hepsi");
   const konumSon = tip === "IFG" ? f.nereye : f.nereden;
@@ -2974,7 +2974,9 @@ function MskIslemEkrani({ T, rpc, st, oz, urunler, onKayit, YESIL, KIRMIZI, TURU
   return (
     <div>
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 14 }}>
-        {MSK_TIPLER.filter(t => t.acik).map(t => <button key={t.k} onClick={() => tipSec(t.k)} style={{ ...st.dugme, borderRadius: 99, borderColor: tip === t.k ? T.gold : T.border, color: tip === t.k ? T.gold : T.text, background: tip === t.k ? "rgba(184,146,58,0.12)" : "transparent" }}>{t.l}</button>)}
+        {MSK_TIPLER.map(t => t.acik
+          ? <button key={t.k} onClick={() => tipSec(t.k)} style={{ ...st.dugme, borderRadius: 99, borderColor: tip === t.k ? T.gold : T.border, color: tip === t.k ? T.gold : T.text, background: tip === t.k ? "rgba(184,146,58,0.12)" : "transparent" }}>{t.l}</button>
+          : <span key={t.l} title="Sonraki adımda açılacak" style={{ ...st.dugme, borderRadius: 99, opacity: 0.4, cursor: "default", border: "1px solid " + T.border, color: T.sub }}>{t.l}</span>)}
       </div>
 
       {MSK_FIS_TIP.includes(tip) ? <MskFisFormu tip={tip} T={T} rpc={rpc} st={st} YESIL={YESIL} KIRMIZI={KIRMIZI} onKayit={onKayit} /> : (<>
@@ -3009,41 +3011,41 @@ function MskIslemEkrani({ T, rpc, st, oz, urunler, onKayit, YESIL, KIRMIZI, TURU
         </div>
         {sag}
       </>) : (
-        <div style={st.kart}>
-          <div style={{ padding: 16 }}>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(170px,1fr))", gap: 12 }}>
-              {(tip === "IFG" || tip === "IFC") && alan("Firma / cari", <><input list="msk-firmalar" value={f.firma} onChange={e => setF({ ...f, firma: e.target.value })} placeholder="Firma seçin veya yazın" style={girdi} /><datalist id="msk-firmalar">{firmalar.map(x => <option key={x.firma} value={x.firma} />)}</datalist></>)}
-              {alan(tip === "IFG" ? "Konum (giriş yapılan)" : "Konum (çıkış yapılan)", tip === "IFG" ? secim(f.nereye, v => setF({ ...f, nereye: v }), MSK_KONUMLAR) : secim(f.nereden, v => setF({ ...f, nereden: v }), MSK_KONUMLAR))}
-              {(tip === "IFG" || tip === "IFC") && alan("Teslim tarihi (isteğe bağlı)", <input type="date" value={f.teslim} onChange={e => setF({ ...f, teslim: e.target.value })} style={girdi} />)}
+        <div style={{ display: "flex", gap: 14, flexWrap: "wrap", alignItems: "flex-start" }}>
+          <div style={{ flex: "3 1 420px", minWidth: 0 }}>
+            <div style={st.kart}>
+              <div style={st.baslik}>Evrak başlığı · {tipAd}</div>
+              <div style={{ padding: 16, display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 12 }}>
+                {(tip === "IFG" || tip === "IFC") && alan("Cari / firma", <><input list="msk-firmalar" value={f.firma} onChange={e => setF({ ...f, firma: e.target.value })} placeholder="Firma seçin veya yazın" style={girdi} /><datalist id="msk-firmalar">{firmalar.map(x => <option key={x.firma} value={x.firma} />)}</datalist></>, true)}
+                {alan(tip === "IFG" ? "Konum (giriş yapılan)" : "Konum (çıkış yapılan)", tip === "IFG" ? secim(f.nereye, v => setF({ ...f, nereye: v }), MSK_KONUMLAR) : secim(f.nereden, v => setF({ ...f, nereden: v }), MSK_KONUMLAR))}
+                {alan("Tarih · saat", <div style={{ ...girdi, color: T.sub }}>{mskSimdi()} · otomatik</div>)}
+                {(tip === "IFG" || tip === "IFC") && alan("Teslim tarihi", <input type="date" value={f.teslim} onChange={e => setF({ ...f, teslim: e.target.value })} style={girdi} />)}
+                {alan("Sipariş / PO", <input value={f.siparis} onChange={e => setF({ ...f, siparis: e.target.value })} style={girdi} />)}
+                {alan("İlgili evrak", <input value={f.ilgili} onChange={e => setF({ ...f, ilgili: e.target.value })} style={girdi} />)}
+                {alan("Not", <input value={f.aciklama} onChange={e => setF({ ...f, aciklama: e.target.value })} style={girdi} />, true)}
+              </div>
             </div>
-            <div style={{ marginTop: 10, fontSize: 12, color: T.sub, display: "flex", gap: 16, flexWrap: "wrap", alignItems: "center" }}>
-              <span onClick={() => setEk(!ek)} style={{ cursor: "pointer" }}>{ek ? "－" : "＋"} Ek bilgi (Sipariş/PO, İlgili evrak, Not)</span>
-              <span>Tarih ve saat otomatik: {mskSimdi()}</span>
+            <div style={st.kart}>
+              <div style={st.baslik}>Satırlar</div>
+              <div style={{ overflowX: "auto" }}><table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <thead><tr><th style={{ ...thK, textAlign: "left" }}>Ürün / ayar</th><th style={thK}>Gram</th><th style={thK}>Milyem</th><th style={thK}>Has</th><th style={thK}>İşçilik $/gr</th><th style={thK}>İşçilik $</th><th style={thK}></th></tr></thead>
+                <tbody>{sat.map((s, i) => (
+                  <tr key={i}>
+                    <td style={{ ...tdK, textAlign: "left" }}><select value={s.urun} onChange={e => satGuncelle(i, { urun: e.target.value })} style={{ ...st.girdiS, minWidth: 105 }}><option value="">Ayar seçin</option>{urunler.map(u => <option key={u} value={u}>{ad(u)}</option>)}</select></td>
+                    <td style={tdK}><input inputMode="decimal" value={s.gram} onChange={e => satGuncelle(i, { gram: e.target.value })} style={{ ...st.girdiS, width: 84, textAlign: "right" }} /></td>
+                    <td style={tdK}><input inputMode="numeric" value={s.milyem} onChange={e => satGuncelle(i, { milyem: e.target.value })} style={{ ...st.girdiS, width: 60, textAlign: "right" }} /></td>
+                    <td style={tdK}>{fN(hasS(s))}</td>
+                    <td style={tdK}><input inputMode="decimal" value={s.birim} onChange={e => satGuncelle(i, { birim: e.target.value })} style={{ ...st.girdiS, width: 70, textAlign: "right" }} /></td>
+                    <td style={tdK}>{iscS(s) ? fN(iscS(s)) : "–"}</td>
+                    <td style={tdK}>{sat.length > 1 && <button onClick={() => setSat(sat.filter((_, j) => j !== i))} style={{ ...st.dugme, padding: "2px 8px" }}>×</button>}</td>
+                  </tr>))}
+                  <tr><td colSpan={7} style={{ ...tdK, textAlign: "left" }}><button onClick={() => setSat([...sat, { urun: "", gram: "", milyem: "", birim: "" }])} style={st.dugme}>+ satır ekle</button></td></tr>
+                  {gecerli.length > 1 && <tr><td style={{ ...tdK, textAlign: "left", fontWeight: 700 }}>Toplam</td><td style={{ ...tdK, fontWeight: 700 }}>{fN(topGram)}</td><td style={tdK}></td><td style={{ ...tdK, fontWeight: 700 }}>{fN(topHas)}</td><td style={tdK}></td><td style={{ ...tdK, fontWeight: 700 }}>{topIsc ? fN(topIsc) : "–"}</td><td style={tdK}></td></tr>}
+                </tbody>
+              </table></div>
             </div>
-            {ek && <div style={{ marginTop: 10, display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(170px,1fr))", gap: 12 }}>
-              {alan("Sipariş / PO", <input value={f.siparis} onChange={e => setF({ ...f, siparis: e.target.value })} style={girdi} />)}
-              {alan("İlgili evrak", <input value={f.ilgili} onChange={e => setF({ ...f, ilgili: e.target.value })} style={girdi} />)}
-              {alan("Not", <input value={f.aciklama} onChange={e => setF({ ...f, aciklama: e.target.value })} style={girdi} />, true)}
-            </div>}
           </div>
-          <div style={{ overflowX: "auto", borderTop: "1px solid " + T.border }}><table style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead><tr><th style={{ ...thK, textAlign: "left" }}>Ürün / ayar</th><th style={thK}>Gram</th><th style={thK}>İşçilik $/gr</th><th style={thK}>Milyem</th><th style={thK}>Has</th><th style={thK}>İşçilik $</th><th style={thK}></th></tr></thead>
-            <tbody>{sat.map((s, i) => (
-              <tr key={i}>
-                <td style={{ ...tdK, textAlign: "left" }}><select value={s.urun} onChange={e => satGuncelle(i, { urun: e.target.value })} style={{ ...st.girdiS, minWidth: 105 }}><option value="">Ayar seçin</option>{urunler.map(u => <option key={u} value={u}>{ad(u)}</option>)}</select></td>
-                <td style={tdK}><input inputMode="decimal" value={s.gram} onChange={e => satGuncelle(i, { gram: e.target.value })} style={{ ...st.girdiS, width: 84, textAlign: "right" }} /></td>
-                <td style={tdK}><input inputMode="decimal" value={s.birim} onChange={e => satGuncelle(i, { birim: e.target.value })} style={{ ...st.girdiS, width: 70, textAlign: "right" }} /></td>
-                <td style={{ ...tdK, fontSize: 12, color: T.sub }}>{mAc === i
-                  ? <input autoFocus inputMode="numeric" value={s.milyem} onChange={e => satGuncelle(i, { milyem: e.target.value })} onBlur={() => setMAc(-1)} style={{ ...st.girdiS, width: 60, textAlign: "right" }} />
-                  : <span onClick={() => setMAc(i)} title="Değiştirmek için tıklayın" style={{ cursor: "pointer", borderBottom: "1px dotted " + T.sub }}>{s.milyem || "–"}</span>}</td>
-                <td style={{ ...tdK, fontSize: 12, color: T.sub }}>{fN(hasS(s))}</td>
-                <td style={{ ...tdK, fontSize: 12, color: T.sub }}>{iscS(s) ? fN(iscS(s)) : "–"}</td>
-                <td style={tdK}>{sat.length > 1 && <button onClick={() => setSat(sat.filter((_, j) => j !== i))} style={{ ...st.dugme, padding: "2px 8px" }}>×</button>}</td>
-              </tr>))}
-              <tr><td colSpan={7} style={{ ...tdK, textAlign: "left" }}><button onClick={() => setSat([...sat, { urun: "", gram: "", milyem: "", birim: "" }])} style={st.dugme}>+ satır ekle</button></td></tr>
-              {gecerli.length > 1 && <tr><td style={{ ...tdK, textAlign: "left", fontWeight: 700 }}>Toplam</td><td style={{ ...tdK, fontWeight: 700 }}>{fN(topGram)}</td><td style={tdK}></td><td style={tdK}></td><td style={{ ...tdK, fontWeight: 700 }}>{fN(topHas)}</td><td style={{ ...tdK, fontWeight: 700 }}>{topIsc ? fN(topIsc) : "–"}</td><td style={tdK}></td></tr>}
-            </tbody>
-          </table></div>
+          <div style={{ flex: "2 1 300px", minWidth: 0 }}>{sag}</div>
         </div>
       )}
 
@@ -3059,7 +3061,6 @@ function MskIslemEkrani({ T, rpc, st, oz, urunler, onKayit, YESIL, KIRMIZI, TURU
         <button onClick={() => { setTg({}); setSat([{ urun: "", gram: "", milyem: "", birim: "" }]); setF({ ...bos(), nereden: f.nereden, nereye: f.nereye }); setHata(""); setOk(""); }} style={st.dugme}>Temizle</button>
         {hata && <span style={{ fontSize: 13, color: KIRMIZI }}>{hata}</span>}
         {ok && <span style={{ fontSize: 13, color: YESIL }}>{ok}</span>}
-        {tip !== "MDC" && gecerli.length > 0 && !hata && !ok && <span style={{ fontSize: 12, color: T.sub }}>{fN(topGram)} gr · {fN(topHas)} HAS{topIsc > 0 ? " · işçilik " + fN(topIsc) + " $" : ""} — {konumSon} konumu{tip === "IFG" ? "na girer" : "ndan çıkar"}{cikisKonum ? " (kalan: " + Object.entries(cikisTop).map(([u, g]) => ad(u) + " " + fN(mevcut(cikisKonum, u) - g)).join(", ") + " gr)" : ""}. {(tip === "IFG" || tip === "IFC") ? "Cari etkisi sonraki adımda eklenecek." : ""}</span>}
       </div>
 
       <div style={{ display: "flex", gap: 6, marginBottom: 8, flexWrap: "wrap", alignItems: "center" }}>
@@ -3088,7 +3089,7 @@ function MskMuhasebeSayfa({ T, GH }) {
   const [sifre, setSifre] = useState(""); const [giris, setGiris] = useState(""); const [hata, setHata] = useState(""); const [kontrol, setKontrol] = useState(false);
   const [sek, setSek] = useState("konum"); const [bilgi, setBilgi] = useState("");
   const [oz, setOz] = useState(null); const [tarih, setTarih] = useState("");
-  const [hf, setHf] = useState({ urun: "", sube: "", bas: "", bit: "", ara: "" }); const [liste, setListe] = useState(null); const [sayfaNo, setSayfaNo] = useState(0);
+  const [hf, setHf] = useState({ urun: "", sube: "", bas: "", bit: "", ara: "", etip: "", yon: "" }); const [liste, setListe] = useState(null); const [sayfaNo, setSayfaNo] = useState(0);
   const [hazir, setHazir] = useState(null); const [mesgul, setMesgul] = useState(""); const [yaz, setYaz] = useState("");
   const [mz, setMz] = useState(null); const [mzTarih, setMzTarih] = useState(""); const [mzDegistir, setMzDegistir] = useState(false); const [mzYaz, setMzYaz] = useState(""); const [mzMesgul, setMzMesgul] = useState("");
   const mizanSec = async (f) => {
@@ -3135,8 +3136,17 @@ function MskMuhasebeSayfa({ T, GH }) {
   };
   const ozetYukle = async () => { try { setOz(null); setOz(await rpc("msk_tzg_ozet", { p_tarih: tarih || null })); } catch (e) { setBilgi("Hata: " + e.message); setOz({ toplam: 0, bakiye: [], rhino_kalan: [] }); } };
   const ozYenile = async () => { try { setOz(await rpc("msk_tzg_ozet", { p_tarih: null })); } catch (e) { /* bir sonraki açılışta yenilenir */ } };
+  const chipS = (on) => ({ fontSize: 12, padding: "5px 11px", borderRadius: 99, border: "1px solid " + (on ? T.text : T.border), background: on ? T.text : "transparent", color: on ? T.card : T.text, cursor: "pointer", whiteSpace: "nowrap", fontFamily: "inherit" });
+  const serit = (et, deger, anahtar, secenekler) => (
+    <div style={{ display: "flex", alignItems: "center", gap: 6, margin: "6px 0" }}>
+      <span style={{ fontSize: 11, color: T.sub, letterSpacing: 0.5, width: 96, flex: "none", fontWeight: 600 }}>{et}</span>
+      <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 2 }}>
+        {[["", "Tümü"], ...secenekler].map(([k, l]) => <button key={k || "t"} onClick={() => { setSayfaNo(0); setHf({ ...hf, [anahtar]: k }); }} style={chipS(deger === k)}>{l}</button>)}
+      </div>
+    </div>);
+  const filtreVar = !!(hf.urun || hf.sube || hf.etip || hf.yon || hf.bas || hf.bit || hf.ara);
   const listeYukle = async () => {
-    try { setListe(await rpc("msk_tzg_liste", { p_urun: hf.urun || null, p_sube: hf.sube || null, p_bas: hf.bas || null, p_bit: hf.bit || null, p_ara: hf.ara || null, p_limit: BOY, p_offset: sayfaNo * BOY })); }
+    try { setListe(await rpc("msk_tzg_liste", { p_urun: hf.urun || null, p_sube: hf.sube || null, p_bas: hf.bas || null, p_bit: hf.bit || null, p_ara: hf.ara || null, p_etip: hf.etip || null, p_yon: hf.yon || null, p_limit: BOY, p_offset: sayfaNo * BOY })); }
     catch (e) { setBilgi("Hata: " + e.message); setListe({ toplam: 0, satirlar: [] }); }
   };
   useEffect(() => { if (sifre && sek === "konum") { const t = setTimeout(ozetYukle, 150); return () => clearTimeout(t); } }, [sifre, sek, tarih]);
@@ -3267,13 +3277,19 @@ function MskMuhasebeSayfa({ T, GH }) {
         {sek === "islem" && (!oz ? <div style={{ fontSize: 13, color: T.sub }}>Yükleniyor…</div> : <MskIslemEkrani T={T} rpc={rpc} st={{ kart, baslik, dugme, dugmeAna, girdiS, th, td }} oz={oz} urunler={sirali} onKayit={ozYenile} YESIL={YESIL} KIRMIZI={KIRMIZI} TURUNCU="#e0954a" />)}
 
         {sek === "hareket" && (<>
-          <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
-            <select value={hf.urun} onChange={e => { setSayfaNo(0); setHf({ ...hf, urun: e.target.value }); }} style={girdiS}><option value="">Tüm ayarlar</option>{sirali.map(u => <option key={u} value={u}>{ad(u)}</option>)}</select>
-            <select value={hf.sube} onChange={e => { setSayfaNo(0); setHf({ ...hf, sube: e.target.value }); }} style={girdiS}><option value="">Tüm konumlar</option>{konumlar.map(k => <option key={k} value={k}>{k}</option>)}</select>
+          <div style={{ marginBottom: 10 }}>
+            {serit("AYAR", hf.urun, "urun", sirali.map(u => [u, ad(u)]))}
+            {serit("İŞLEM", hf.etip, "etip", Object.entries(MSK_ET_AD))}
+            {serit("KONUM BAKIŞI", hf.sube, "sube", konumlar.map(k => [k, k]))}
+            {serit("YÖN", hf.yon, "yon", [["giren", "Giren"], ["cikan", "Çıkan"]])}
+          </div>
+          <div style={{ display: "flex", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
             <input type="date" value={hf.bas} onChange={e => { setSayfaNo(0); setHf({ ...hf, bas: e.target.value }); }} style={girdiS} />
             <input type="date" value={hf.bit} onChange={e => { setSayfaNo(0); setHf({ ...hf, bit: e.target.value }); }} style={girdiS} />
             <input placeholder="Evrak no, firma, açıklama…" value={hf.ara} onChange={e => { setSayfaNo(0); setHf({ ...hf, ara: e.target.value }); }} style={{ ...girdiS, flex: "1 1 180px" }} />
+            {filtreVar && <button onClick={() => { setSayfaNo(0); setHf({ urun: "", sube: "", bas: "", bit: "", ara: "", etip: "", yon: "" }); }} style={dugme}>✕ Temizle</button>}
           </div>
+          {liste && filtreVar && <div style={{ fontSize: 12, color: T.sub, marginBottom: 8 }}>Gösterilen: {[hf.sube && <b key="k">{hf.sube}</b>, hf.yon && (hf.yon === "giren" ? "giren" : "çıkan"), hf.etip && (MSK_ET_AD[hf.etip] || hf.etip), hf.urun && ad(hf.urun)].filter(Boolean).reduce((a, x, i) => a.concat(i ? [" · ", x] : [x]), [])} — {Number(liste.toplam).toLocaleString("tr-TR")} hareket · toplam giren {fN(liste.top_giren)} · toplam çıkan {fN(liste.top_cikan)}</div>}
           <div style={kart}>
             <div style={{ overflowX: "auto" }}>
               <table style={{ width: "100%", borderCollapse: "collapse" }}>
