@@ -12608,6 +12608,24 @@ function Atolye({ onSirketDegis }) {
     setKonfAdet(yA); setKonfNot(yN); setKonfRenkler(yR);
     delSip(s.id); setSayfa("konfirmasyon");
   };
+  // Siparişi KOPYALA → konfirmasyona (orijinal sipariş silinmez; kod/ayar/adet düzenlenip yeni sipariş olarak gönderilir)
+  const konfKopyala = s => {
+    if (konfList.length > 0 && !window.confirm("Konfirmasyonda yarım kalmış bir liste var; kopya onun yerine geçecek. Devam edilsin mi?")) return;
+    const bm = [], gor = new Set();
+    (s.kalemler||[]).forEach(k => { if (!gor.has(k.id)) { gor.add(k.id); bm.push((modeller||[]).find(x => x.id === k.id) || k); } });
+    setKonfList(siraliKonfListe(bm)); setKonfMus(s.musteri||""); setKonfTeslim(s.teslimTarihi||""); setKonfSipAciklama(s.aciklama||"");
+    setKonfAyar(s.kalemler?.[0]?.secilenAyar||"14K");
+    const yA={}, yN={}, yR={}, yB={};
+    (s.kalemler||[]).forEach(k=>{
+      yN[k.id]=k.sipNot||""; yR[k.id]=k.renk||"Sari";
+      if (k.boyListesi && k.boyListesi.length) { yB[k.id]=k.boyListesi.map(b=>({ ...b })); }
+      else if (k.boy && k._boyIdx !== undefined) { (yB[k.id] = yB[k.id] || []).push({ ...k.boy }); }
+      else yA[k.id]=k.adet||1;
+    });
+    setKonfAdet(yA); setKonfNot(yN); setKonfRenkler(yR); setKonfBoylar(yB); setKonfFiyatlar({});
+    setSayfa("konfirmasyon");
+    toastGoster("ok","Sipariş konfirmasyona kopyalandı — kodu / ayarı düzenleyip gönderebilirsiniz");
+  };
   const menu = (id, items) => (
     <div style={{ position:"relative" }} onClick={e=>e.stopPropagation()}>
       <button onClick={()=>setSipMenu(sipMenu===id?"":id)} title="Daha fazla" style={{ background:"rgba(var(--vurgu-rgb),0.06)", border:"1px solid rgba(var(--vurgu-rgb),0.18)", borderRadius:8, width:30, height:30, color:T.text, fontSize:16, fontWeight:600, cursor:"pointer", lineHeight:1 }}>⋯</button>
@@ -12665,6 +12683,7 @@ function Atolye({ onSirketDegis }) {
               { l:"📄 Fiyatsız PDF", f:()=>downloadPDF(buildKonfHTML(s,s.altinKgUSD||altinKgUSD,s.mc||madenCarpan,false,modeller,sipSira),(s.musteri||"siparis")+"-fiyatsiz") },
               AKTIF_SIRKET_ONEK!=="bsp2_" && s.durumGecmisi?.length>0 && { l:"📊 Zaman çizelgesi", f:()=>setCizelgeModal(s.id) },
               { l:"🏷 Müşteri alt kodu (PSEV…)", f:()=>{ const n = window.prompt("Müşteri alt kodu (örn. PSEV, PSM). Boş bırakırsan silinir:", s.musEtiket||""); if (n===null) return; svS(siparisler.map(sp=>sp.id===s.id?{...sp,musEtiket:n.trim().toUpperCase()}:sp)); } },
+              { l:"⧉ Kopyala → konfirmasyona", f:()=>konfKopyala(s) },
               { l:"↩ Konfirmasyona geri al / düzenle", f:()=>konfDuzenle(s), c:"#e8833a" },
               { l:"🗑 Siparişi sil", f:()=>setDelOnay({ type:"siparis", id:s.id }), c:"#e85a4f" },
             ])}
@@ -13210,6 +13229,7 @@ function Atolye({ onSirketDegis }) {
                               delSip(s.id);
                               setSayfa("konfirmasyon");
                             }} style={{ background:"rgba(232,131,58,0.1)", border:"1px solid rgba(232,131,58,0.2)", borderRadius:9, padding:"3px 7px", color:"#e8833a", fontSize:8, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap" }}>↩ Düzenle</button>
+                            <button onClick={()=>konfKopyala(s)} title="Siparişi konfirmasyona kopyala (orijinal silinmez)" style={{ ...GH, fontSize:8, padding:"3px 7px" }}>⧉ Kopyala</button>
                             <button onClick={()=>setDelOnay({ type:"siparis", id:s.id })} style={{ ...RD, fontSize:8, padding:"3px 7px" }}>Sil</button>
                             <span style={{ fontSize:10, color:"#665d4a", marginLeft:4 }}>{acik?"▲":"▼"}</span>
                           </div>
