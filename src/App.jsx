@@ -2668,7 +2668,7 @@ function MskDefterEkranlari({ sek, T, rpc, st, YESIL, KIRMIZI, onIslem }) {
       <thead><tr><th style={{ ...st.th, textAlign: "left" }}>Tarih</th><th style={{ ...st.th, textAlign: "left" }}>Fiş / evrak</th>{hesapGoster && <th style={{ ...st.th, textAlign: "left" }}>Hesap</th>}<th style={st.th}>Döviz</th><th style={st.th}>Borç</th><th style={st.th}>Alacak</th><th style={{ ...st.th, textAlign: "left" }}>Açıklama</th><th style={st.th}></th></tr></thead>
       <tbody>{!liste ? <tr><td colSpan={8} style={{ ...st.td, textAlign: "left", color: T.sub }}>Yükleniyor…</td></tr> : !liste.satirlar.length ? <tr><td colSpan={8} style={{ ...st.td, textAlign: "left", color: T.sub }}>Kayıt yok</td></tr> : liste.satirlar.map(s => (
         <tr key={s.id} style={{ opacity: s.iptal ? 0.45 : 1 }}>
-          <td style={{ ...st.td, textAlign: "left" }}>{s.tarih}</td>
+          <td style={{ ...st.td, textAlign: "left", whiteSpace: "nowrap" }}>{mskSaat(s)}</td>
           <td style={{ ...st.td, textAlign: "left", color: T.sub, textDecoration: s.iptal ? "line-through" : "none" }}>{s.fis === "DEVIR" ? "Rhino devri" : s.fis}{s.evrak ? " · " + s.evrak : ""}</td>
           {hesapGoster && <td style={{ ...st.td, textAlign: "left" }}>{s.hesap_ad || s.hesap_kod}</td>}
           <td style={st.td}>{s.pb}</td>
@@ -2803,10 +2803,9 @@ function MskFisFormu({ tip, T, rpc, st, YESIL, KIRMIZI, onKayit }) {
   const kaydet = async () => {
     setHata(""); setOk("");
     let satirlar; try { satirlar = satirlariKur(); } catch (e) { return setHata(e.message); }
-    if (f.tarih < bugunS().slice(0, 8) + "01" && !window.confirm("Bu fiş geçmiş bir aya (" + f.tarih.slice(0, 7) + ") ait ve o ayın bilançosunu değiştirir. Kaydedilsin mi?")) return;
     setMesgul(true);
     try {
-      const r = await rpc("msk_fis_ekle", { p_tarih: f.tarih, p_tur: tip, p_aciklama: f.aciklama || null, p_evrak: f.evrak || null, p_satirlar: satirlar });
+      const r = await rpc("msk_fis_ekle", { p_tarih: bugunS(), p_tur: tip, p_aciklama: f.aciklama || null, p_evrak: f.evrak || null, p_satirlar: satirlar });
       setOk("Kaydedildi ✓  Fiş " + r.fis); setF({ ...f, tutar: "", aciklama: "", evrak: "" }); onKayit && onKayit();
     } catch (e) { setHata(e.message); }
     setMesgul(false);
@@ -2828,7 +2827,7 @@ function MskFisFormu({ tip, T, rpc, st, YESIL, KIRMIZI, onKayit }) {
         <div style={{ padding: 16, display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))", gap: 12 }}>
           {!yuklendi && <div style={{ gridColumn: "1 / -1", fontSize: 13, color: T.sub }}>Hesaplar yükleniyor…</div>}
           {yuklendi && !cariler.length && <div style={{ gridColumn: "1 / -1", fontSize: 13, color: KIRMIZI }}>Cari/kasa hesabı yok — önce "Rhino'dan Aktar" ekranından mizanı yükleyin.</div>}
-          {alan("Tarih", <input type="date" value={f.tarih} onChange={e => setF({ ...f, tarih: e.target.value })} style={girdi} />)}
+          {alan("Tarih · saat", <div style={{ ...girdi, color: T.sub }}>{mskSimdi()} · otomatik</div>)}
           {alan("Para birimi", <select value={f.pb} onChange={e => setF({ ...f, pb: e.target.value, kasa: "" })} style={girdi}>{MSK_PB.map(p => <option key={p} value={p}>{p}</option>)}</select>)}
           {alan("Tutar", <input inputMode="decimal" value={f.tutar} onChange={e => setF({ ...f, tutar: e.target.value })} placeholder="0,00" style={girdi} />)}
           {(tip === "TAH" || tip === "ODE") && alan(tip === "TAH" ? "Cari (tahsil edilen)" : "Cari (ödeme yapılan)", <><input list="msk-c1" value={f.cari1} onChange={e => setF({ ...f, cari1: e.target.value })} placeholder="Cari adı yazın veya seçin" style={girdi} />{datalist("msk-c1")}</>, true)}
@@ -2860,6 +2859,8 @@ function MskFisFormu({ tip, T, rpc, st, YESIL, KIRMIZI, onKayit }) {
 }
 
 // ── MSK · Tek "İşlem" ekranı (transfer, fason giriş/çıkış, fire) ─────────────────────────────
+const mskSimdi = () => { const d = new Date(); return d.toLocaleDateString("tr-TR", { day: "2-digit", month: "2-digit", year: "numeric" }) + " " + d.toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" }); };
+const mskSaat = (s) => (s.kaynak !== "uygulama" || !s.olusturma) ? s.tarih : s.tarih + " · " + new Date(s.olusturma).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" });
 const MSK_KONUMLAR = ["ANAKASA MSK", "TEZGAH", "CİLA", "TAŞ DİZİM", "DÖKÜM", "MİNE", "FİRE TAŞ", "FİRE OCAK"];
 const MSK_TIPLER = [
   { k: "IFG", l: "Fason giriş", acik: true }, { k: "IFC", l: "Fason çıkış", acik: true }, { k: "MDC", l: "Stok gönderme", acik: true }, { k: "FRE", l: "Fire", acik: true },
@@ -2875,7 +2876,7 @@ function MskIslemEkrani({ T, rpc, st, oz, urunler, onKayit, YESIL, KIRMIZI, TURU
   const [f, setF] = useState(() => ({ ...bos(), nereye: "ANAKASA MSK" }));
   const [tg, setTg] = useState({});
   const [sat, setSat] = useState([{ urun: "", gram: "", milyem: "", birim: "" }]);
-  const [firmalar, setFirmalar] = useState([]);
+  const [firmalar, setFirmalar] = useState([]); const [ek, setEk] = useState(false); const [mAc, setMAc] = useState(-1);
   const [hata, setHata] = useState(""); const [ok, setOk] = useState(""); const [mesgul, setMesgul] = useState(false);
   const [son, setSon] = useState(null); const [sonSek, setSonSek] = useState("hepsi");
   const konumSon = tip === "IFG" ? f.nereye : f.nereden;
@@ -2920,13 +2921,11 @@ function MskIslemEkrani({ T, rpc, st, oz, urunler, onKayit, YESIL, KIRMIZI, TURU
       if ((tip === "IFG" || tip === "IFC") && !f.firma.trim()) return setHata("Firma seçin");
     }
     if (negatifler.length && !f.override.trim()) return setHata("Stok yetersiz — devam için gerekçe yazın (yönetici onayı)");
-    const gecmis = f.tarih < bugunS().slice(0, 8) + "01";
-    if (gecmis && !window.confirm("Bu evrak geçmiş bir aya (" + f.tarih.slice(0, 7) + ") ait ve o ayın bilançosunu değiştirir. Kaydedilsin mi?")) return;
     const satirlar = tip === "MDC" ? trSatir.map(x => ({ urun: x.urun, gram: x.gram, milyem: Math.round((mskMilyem(x.urun) || 0) * 1000) || null }))
       : gecerli.map(s => ({ urun: s.urun, gram: sayi(s.gram), milyem: sayi(s.milyem), isc_birim: sayi(s.birim) || null, isc_usd: iscS(s) || null }));
     setMesgul(true);
     try {
-      const r = await rpc("msk_tzg_islem_ekle", { p_tip: tip, p_tarih: f.tarih, p_nereden: tip === "IFG" ? null : f.nereden, p_nereye: tip === "MDC" || tip === "IFG" ? f.nereye : null, p_firma: f.firma || null, p_satirlar: satirlar,
+      const r = await rpc("msk_tzg_islem_ekle", { p_tip: tip, p_tarih: bugunS(), p_nereden: tip === "IFG" ? null : f.nereden, p_nereye: tip === "MDC" || tip === "IFG" ? f.nereye : null, p_firma: f.firma || null, p_satirlar: satirlar,
         p_brut: tip === "MDC" && brut > 0 ? brut : null, p_dara: tip === "MDC" && brut > 0 ? dara : null, p_kab: tip === "MDC" && f.kab ? Math.round(sayi(f.kab)) : null,
         p_siparis: f.siparis || null, p_ilgili: f.ilgili || null, p_aciklama: f.aciklama || null, p_teslim: f.teslim || null, p_override: negatifler.length ? f.override : null });
       setOk("Kaydedildi ✓  Evrak " + r.rhino_no);
@@ -2975,9 +2974,7 @@ function MskIslemEkrani({ T, rpc, st, oz, urunler, onKayit, YESIL, KIRMIZI, TURU
   return (
     <div>
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 14 }}>
-        {MSK_TIPLER.map(t => t.acik
-          ? <button key={t.k} onClick={() => tipSec(t.k)} style={{ ...st.dugme, borderRadius: 99, borderColor: tip === t.k ? T.gold : T.border, color: tip === t.k ? T.gold : T.text, background: tip === t.k ? "rgba(184,146,58,0.12)" : "transparent" }}>{t.l}</button>
-          : <span key={t.l} title="Sonraki adımda açılacak" style={{ ...st.dugme, borderRadius: 99, opacity: 0.4, cursor: "default", border: "1px solid " + T.border, color: T.sub }}>{t.l}</span>)}
+        {MSK_TIPLER.filter(t => t.acik).map(t => <button key={t.k} onClick={() => tipSec(t.k)} style={{ ...st.dugme, borderRadius: 99, borderColor: tip === t.k ? T.gold : T.border, color: tip === t.k ? T.gold : T.text, background: tip === t.k ? "rgba(184,146,58,0.12)" : "transparent" }}>{t.l}</button>)}
       </div>
 
       {MSK_FIS_TIP.includes(tip) ? <MskFisFormu tip={tip} T={T} rpc={rpc} st={st} YESIL={YESIL} KIRMIZI={KIRMIZI} onKayit={onKayit} /> : (<>
@@ -3003,7 +3000,7 @@ function MskIslemEkrani({ T, rpc, st, oz, urunler, onKayit, YESIL, KIRMIZI, TURU
               {alan("Dara (gr)", <input inputMode="decimal" value={f.dara} onChange={e => setF({ ...f, dara: e.target.value })} style={girdi} />)}
               {alan("Net ağırlık (gr)", <div style={{ ...st.girdiS, color: brut > 0 ? (Math.abs(net - trNet) <= 0.01 && trNet > 0 ? YESIL : TURUNCU) : T.sub }}>{brut > 0 ? fN(net) + (Math.abs(net - trNet) <= 0.01 && trNet > 0 ? " ✓" : "") : "brüt − dara"}</div>)}
               {alan("Kab sayısı (adet)", <input inputMode="numeric" value={f.kab} onChange={e => setF({ ...f, kab: e.target.value })} style={girdi} />)}
-              {alan("Tarih", <input type="date" value={f.tarih} onChange={e => setF({ ...f, tarih: e.target.value })} style={girdi} />)}
+              {alan("Tarih · saat", <div style={{ ...girdi, color: T.sub }}>{mskSimdi()} · otomatik</div>)}
               {alan("Sipariş no", <input value={f.siparis} onChange={e => setF({ ...f, siparis: e.target.value })} style={girdi} />)}
               {alan("İlgili evrak", <input value={f.ilgili} onChange={e => setF({ ...f, ilgili: e.target.value })} style={girdi} />)}
               {alan("Ek açıklama", <input value={f.aciklama} onChange={e => setF({ ...f, aciklama: e.target.value })} style={girdi} />, true)}
@@ -3012,41 +3009,41 @@ function MskIslemEkrani({ T, rpc, st, oz, urunler, onKayit, YESIL, KIRMIZI, TURU
         </div>
         {sag}
       </>) : (
-        <div style={{ display: "flex", gap: 14, flexWrap: "wrap", alignItems: "flex-start" }}>
-          <div style={{ flex: "3 1 420px", minWidth: 0 }}>
-            <div style={st.kart}>
-              <div style={st.baslik}>Evrak başlığı · {tipAd}</div>
-              <div style={{ padding: 16, display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 12 }}>
-                {(tip === "IFG" || tip === "IFC") && alan("Cari / firma", <><input list="msk-firmalar" value={f.firma} onChange={e => setF({ ...f, firma: e.target.value })} placeholder="Firma seçin veya yazın" style={girdi} /><datalist id="msk-firmalar">{firmalar.map(x => <option key={x.firma} value={x.firma} />)}</datalist></>, true)}
-                {alan(tip === "IFG" ? "Konum (giriş yapılan)" : "Konum (çıkış yapılan)", tip === "IFG" ? secim(f.nereye, v => setF({ ...f, nereye: v }), MSK_KONUMLAR) : secim(f.nereden, v => setF({ ...f, nereden: v }), MSK_KONUMLAR))}
-                {alan("Tarih", <input type="date" value={f.tarih} onChange={e => setF({ ...f, tarih: e.target.value })} style={girdi} />)}
-                {(tip === "IFG" || tip === "IFC") && alan("Teslim tarihi", <input type="date" value={f.teslim} onChange={e => setF({ ...f, teslim: e.target.value })} style={girdi} />)}
-                {alan("Sipariş / PO", <input value={f.siparis} onChange={e => setF({ ...f, siparis: e.target.value })} style={girdi} />)}
-                {alan("İlgili evrak", <input value={f.ilgili} onChange={e => setF({ ...f, ilgili: e.target.value })} style={girdi} />)}
-                {alan("Not", <input value={f.aciklama} onChange={e => setF({ ...f, aciklama: e.target.value })} style={girdi} />, true)}
-              </div>
+        <div style={st.kart}>
+          <div style={{ padding: 16 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(170px,1fr))", gap: 12 }}>
+              {(tip === "IFG" || tip === "IFC") && alan("Firma / cari", <><input list="msk-firmalar" value={f.firma} onChange={e => setF({ ...f, firma: e.target.value })} placeholder="Firma seçin veya yazın" style={girdi} /><datalist id="msk-firmalar">{firmalar.map(x => <option key={x.firma} value={x.firma} />)}</datalist></>)}
+              {alan(tip === "IFG" ? "Konum (giriş yapılan)" : "Konum (çıkış yapılan)", tip === "IFG" ? secim(f.nereye, v => setF({ ...f, nereye: v }), MSK_KONUMLAR) : secim(f.nereden, v => setF({ ...f, nereden: v }), MSK_KONUMLAR))}
+              {(tip === "IFG" || tip === "IFC") && alan("Teslim tarihi (isteğe bağlı)", <input type="date" value={f.teslim} onChange={e => setF({ ...f, teslim: e.target.value })} style={girdi} />)}
             </div>
-            <div style={st.kart}>
-              <div style={st.baslik}>Satırlar</div>
-              <div style={{ overflowX: "auto" }}><table style={{ width: "100%", borderCollapse: "collapse" }}>
-                <thead><tr><th style={{ ...thK, textAlign: "left" }}>Ürün / ayar</th><th style={thK}>Gram</th><th style={thK}>Milyem</th><th style={thK}>Has</th><th style={thK}>İşçilik $/gr</th><th style={thK}>İşçilik $</th><th style={thK}></th></tr></thead>
-                <tbody>{sat.map((s, i) => (
-                  <tr key={i}>
-                    <td style={{ ...tdK, textAlign: "left" }}><select value={s.urun} onChange={e => satGuncelle(i, { urun: e.target.value })} style={{ ...st.girdiS, minWidth: 105 }}><option value="">Ayar seçin</option>{urunler.map(u => <option key={u} value={u}>{ad(u)}</option>)}</select></td>
-                    <td style={tdK}><input inputMode="decimal" value={s.gram} onChange={e => satGuncelle(i, { gram: e.target.value })} style={{ ...st.girdiS, width: 84, textAlign: "right" }} /></td>
-                    <td style={tdK}><input inputMode="numeric" value={s.milyem} onChange={e => satGuncelle(i, { milyem: e.target.value })} style={{ ...st.girdiS, width: 60, textAlign: "right" }} /></td>
-                    <td style={tdK}>{fN(hasS(s))}</td>
-                    <td style={tdK}><input inputMode="decimal" value={s.birim} onChange={e => satGuncelle(i, { birim: e.target.value })} style={{ ...st.girdiS, width: 70, textAlign: "right" }} /></td>
-                    <td style={tdK}>{iscS(s) ? fN(iscS(s)) : "–"}</td>
-                    <td style={tdK}>{sat.length > 1 && <button onClick={() => setSat(sat.filter((_, j) => j !== i))} style={{ ...st.dugme, padding: "2px 8px" }}>×</button>}</td>
-                  </tr>))}
-                  <tr><td colSpan={7} style={{ ...tdK, textAlign: "left" }}><button onClick={() => setSat([...sat, { urun: "", gram: "", milyem: "", birim: "" }])} style={st.dugme}>+ satır ekle</button></td></tr>
-                  {gecerli.length > 1 && <tr><td style={{ ...tdK, textAlign: "left", fontWeight: 700 }}>Toplam</td><td style={{ ...tdK, fontWeight: 700 }}>{fN(topGram)}</td><td style={tdK}></td><td style={{ ...tdK, fontWeight: 700 }}>{fN(topHas)}</td><td style={tdK}></td><td style={{ ...tdK, fontWeight: 700 }}>{topIsc ? fN(topIsc) : "–"}</td><td style={tdK}></td></tr>}
-                </tbody>
-              </table></div>
+            <div style={{ marginTop: 10, fontSize: 12, color: T.sub, display: "flex", gap: 16, flexWrap: "wrap", alignItems: "center" }}>
+              <span onClick={() => setEk(!ek)} style={{ cursor: "pointer" }}>{ek ? "－" : "＋"} Ek bilgi (Sipariş/PO, İlgili evrak, Not)</span>
+              <span>Tarih ve saat otomatik: {mskSimdi()}</span>
             </div>
+            {ek && <div style={{ marginTop: 10, display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(170px,1fr))", gap: 12 }}>
+              {alan("Sipariş / PO", <input value={f.siparis} onChange={e => setF({ ...f, siparis: e.target.value })} style={girdi} />)}
+              {alan("İlgili evrak", <input value={f.ilgili} onChange={e => setF({ ...f, ilgili: e.target.value })} style={girdi} />)}
+              {alan("Not", <input value={f.aciklama} onChange={e => setF({ ...f, aciklama: e.target.value })} style={girdi} />, true)}
+            </div>}
           </div>
-          <div style={{ flex: "2 1 300px", minWidth: 0 }}>{sag}</div>
+          <div style={{ overflowX: "auto", borderTop: "1px solid " + T.border }}><table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <thead><tr><th style={{ ...thK, textAlign: "left" }}>Ürün / ayar</th><th style={thK}>Gram</th><th style={thK}>İşçilik $/gr</th><th style={thK}>Milyem</th><th style={thK}>Has</th><th style={thK}>İşçilik $</th><th style={thK}></th></tr></thead>
+            <tbody>{sat.map((s, i) => (
+              <tr key={i}>
+                <td style={{ ...tdK, textAlign: "left" }}><select value={s.urun} onChange={e => satGuncelle(i, { urun: e.target.value })} style={{ ...st.girdiS, minWidth: 105 }}><option value="">Ayar seçin</option>{urunler.map(u => <option key={u} value={u}>{ad(u)}</option>)}</select></td>
+                <td style={tdK}><input inputMode="decimal" value={s.gram} onChange={e => satGuncelle(i, { gram: e.target.value })} style={{ ...st.girdiS, width: 84, textAlign: "right" }} /></td>
+                <td style={tdK}><input inputMode="decimal" value={s.birim} onChange={e => satGuncelle(i, { birim: e.target.value })} style={{ ...st.girdiS, width: 70, textAlign: "right" }} /></td>
+                <td style={{ ...tdK, fontSize: 12, color: T.sub }}>{mAc === i
+                  ? <input autoFocus inputMode="numeric" value={s.milyem} onChange={e => satGuncelle(i, { milyem: e.target.value })} onBlur={() => setMAc(-1)} style={{ ...st.girdiS, width: 60, textAlign: "right" }} />
+                  : <span onClick={() => setMAc(i)} title="Değiştirmek için tıklayın" style={{ cursor: "pointer", borderBottom: "1px dotted " + T.sub }}>{s.milyem || "–"}</span>}</td>
+                <td style={{ ...tdK, fontSize: 12, color: T.sub }}>{fN(hasS(s))}</td>
+                <td style={{ ...tdK, fontSize: 12, color: T.sub }}>{iscS(s) ? fN(iscS(s)) : "–"}</td>
+                <td style={tdK}>{sat.length > 1 && <button onClick={() => setSat(sat.filter((_, j) => j !== i))} style={{ ...st.dugme, padding: "2px 8px" }}>×</button>}</td>
+              </tr>))}
+              <tr><td colSpan={7} style={{ ...tdK, textAlign: "left" }}><button onClick={() => setSat([...sat, { urun: "", gram: "", milyem: "", birim: "" }])} style={st.dugme}>+ satır ekle</button></td></tr>
+              {gecerli.length > 1 && <tr><td style={{ ...tdK, textAlign: "left", fontWeight: 700 }}>Toplam</td><td style={{ ...tdK, fontWeight: 700 }}>{fN(topGram)}</td><td style={tdK}></td><td style={tdK}></td><td style={{ ...tdK, fontWeight: 700 }}>{fN(topHas)}</td><td style={{ ...tdK, fontWeight: 700 }}>{topIsc ? fN(topIsc) : "–"}</td><td style={tdK}></td></tr>}
+            </tbody>
+          </table></div>
         </div>
       )}
 
@@ -3062,6 +3059,7 @@ function MskIslemEkrani({ T, rpc, st, oz, urunler, onKayit, YESIL, KIRMIZI, TURU
         <button onClick={() => { setTg({}); setSat([{ urun: "", gram: "", milyem: "", birim: "" }]); setF({ ...bos(), nereden: f.nereden, nereye: f.nereye }); setHata(""); setOk(""); }} style={st.dugme}>Temizle</button>
         {hata && <span style={{ fontSize: 13, color: KIRMIZI }}>{hata}</span>}
         {ok && <span style={{ fontSize: 13, color: YESIL }}>{ok}</span>}
+        {tip !== "MDC" && gecerli.length > 0 && !hata && !ok && <span style={{ fontSize: 12, color: T.sub }}>{fN(topGram)} gr · {fN(topHas)} HAS{topIsc > 0 ? " · işçilik " + fN(topIsc) + " $" : ""} — {konumSon} konumu{tip === "IFG" ? "na girer" : "ndan çıkar"}{cikisKonum ? " (kalan: " + Object.entries(cikisTop).map(([u, g]) => ad(u) + " " + fN(mevcut(cikisKonum, u) - g)).join(", ") + " gr)" : ""}. {(tip === "IFG" || tip === "IFC") ? "Cari etkisi sonraki adımda eklenecek." : ""}</span>}
       </div>
 
       <div style={{ display: "flex", gap: 6, marginBottom: 8, flexWrap: "wrap", alignItems: "center" }}>
@@ -3072,7 +3070,7 @@ function MskIslemEkrani({ T, rpc, st, oz, urunler, onKayit, YESIL, KIRMIZI, TURU
         <thead><tr><th style={{ ...st.th, textAlign: "left" }}>Tarih</th><th style={{ ...st.th, textAlign: "left" }}>İşlem</th><th style={{ ...st.th, textAlign: "left" }}>Evrak</th><th style={st.th}>Ayar</th><th style={{ ...st.th, textAlign: "left" }}>Karşı taraf</th><th style={st.th}>Giren</th><th style={st.th}>Çıkan</th><th style={st.th}></th></tr></thead>
         <tbody>{!son ? <tr><td colSpan={8} style={{ ...st.td, textAlign: "left", color: T.sub }}>Yükleniyor…</td></tr> : son.satirlar.filter(s => sonSek === "hepsi" ? true : sonSek === "giren" ? Number(s.giren) > 0 : sonSek === "cikan" ? Number(s.cikan) > 0 : s.iptal).slice(0, 25).map(s => (
           <tr key={s.id} style={{ opacity: s.iptal ? 0.5 : 1 }}>
-            <td style={{ ...st.td, textAlign: "left" }}>{s.tarih}</td><td style={{ ...st.td, textAlign: "left" }}>{MSK_ET_AD[s.etip] || s.etip}</td>
+            <td style={{ ...st.td, textAlign: "left", whiteSpace: "nowrap" }}>{mskSaat(s)}</td><td style={{ ...st.td, textAlign: "left" }}>{MSK_ET_AD[s.etip] || s.etip}</td>
             <td style={{ ...st.td, textAlign: "left", color: T.sub, textDecoration: s.iptal ? "line-through" : "none" }}>{s.rhino_no}</td><td style={st.td}>{ad(s.urun)}</td>
             <td style={{ ...st.td, textAlign: "left" }}>{s.firma || "—"}{s.iptal && s.iptal_sebep ? <span style={{ color: T.sub }}> · iptal: {s.iptal_sebep}</span> : null}</td>
             <td style={{ ...st.td, color: Number(s.giren) > 0 ? YESIL : T.sub }}>{Number(s.giren) > 0 ? fN(s.giren) : "–"}</td>
@@ -3250,7 +3248,7 @@ function MskMuhasebeSayfa({ T, GH }) {
                       <td style={{ ...td, fontWeight: 700 }}>{fN(konumlar.reduce((t, k) => t + hasKonum(k), 0))}</td>
                     </tr>
                     <tr>
-                      <td style={{ ...td, textAlign: "left", color: T.sub }}>Rhino kalan</td>
+                      <td style={{ ...td, textAlign: "left", color: T.sub }}>Ekstre kalan</td>
                       {sirali.map(u => { const v = konumlar.reduce((t, k) => t + hucre(k, u), 0), r = rk[u]; const tut = r == null || Math.abs(v - r) < 0.01; return <td key={u} style={{ ...td, color: tut ? YESIL : KIRMIZI }}>{r == null ? "–" : fN(r) + (tut ? " ✓" : " ≠")}</td>; })}
                       <td style={td}></td>
                     </tr>
@@ -3260,7 +3258,7 @@ function MskMuhasebeSayfa({ T, GH }) {
             </div>
             <div style={{ fontSize: 12, color: T.sub, lineHeight: 1.6 }}>
               Has sütunu yalnızca altın ayarlarını (9K–22K) içerir: gram × milyem. "995 HAS" ve gümüş ayrı sütunlarda gram olarak durur.
-              "Rhino kalan" satırı, Rhino'nun o tarihteki ürün toplamıdır; yeşil tik bizim hesabın Rhino ile aynı olduğunu gösterir. Toplam {Number(oz.toplam).toLocaleString("tr-TR")} hareket · {oz.ilk} → {oz.son}.
+              "Ekstre kalan" satırı, yüklenen Ürün Ekstresi dosyasının kendi toplamıdır; yeşil tik yalnızca hareketlerin doğru okunduğunu gösterir, gerçek stok sayımıyla karşılaştırma değildir. Toplam {Number(oz.toplam).toLocaleString("tr-TR")} hareket · {oz.ilk} → {oz.son}.
             </div>
           </>)}
         </>)}
@@ -3283,7 +3281,7 @@ function MskMuhasebeSayfa({ T, GH }) {
                 <tbody>
                   {!liste ? <tr><td colSpan={9} style={{ ...td, textAlign: "left", color: T.sub }}>Yükleniyor…</td></tr> : !liste.satirlar.length ? <tr><td colSpan={9} style={{ ...td, textAlign: "left", color: T.sub }}>Kayıt yok</td></tr> : liste.satirlar.map(s => (
                     <tr key={s.id}>
-                      <td style={{ ...td, textAlign: "left" }}>{s.tarih}</td>
+                      <td style={{ ...td, textAlign: "left", whiteSpace: "nowrap" }}>{mskSaat(s)}</td>
                       <td style={{ ...td, textAlign: "left" }}>{MSK_ET_AD[s.etip] || s.etip}</td>
                       <td style={{ ...td, textAlign: "left", color: T.sub }}>{s.rhino_no}</td>
                       <td style={td}>{ad(s.urun)}</td>
