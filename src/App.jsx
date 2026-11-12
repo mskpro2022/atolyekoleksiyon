@@ -3929,7 +3929,7 @@ function MuhasebeSayfa({ T, GH, sirket="BSP", usdTry=null }) {
   );
 }
 
-function KarlilikRaporuEkrani({ T, GH, siparisler, altinKgUSD, mc, onAc, onModel, onKapat, onPdf }) {
+function KarlilikRaporuEkrani({ T, GH, siparisler, tumSip, usdTry, altinKgUSD, mc, onAc, onModel, onKapat, onPdf }) {
   const [kayipTur, setKayipTur] = useState("");
   const [karGrup, setKarGrup] = useState("");
   const [musF, setMusF] = useState("");
@@ -3980,7 +3980,68 @@ function KarlilikRaporuEkrani({ T, GH, siparisler, altinKgUSD, mc, onAc, onModel
   const TAMAM_ID = ["tamam","teslim"];
   const musDeger = { ad:m=>m.ad, sip:m=>m.sip, gram:m=>m.gram, adet:m=>m.adet, kar:m=>m.kar, mly:m=>m.gram>0?m.kar/m.gram:0,
     tam:m=>m.adet>0 ? TAMAM_ID.reduce((a,id)=>a+(m.asamaA[id]||0),0)/m.adet : 0 };
-  const musListe = [...musteriler].sort((a,b)=>{ const f=musDeger[musSira.k], A=f(a), B=f(b); return (A<B?-1:A>B?1:0)*musSira.d; });
+  // ── Sabit gider payı (Personel sayfasındaki personel maliyeti + sabit giderler; planlanan aya göre, gram başına dağıtılır) ──
+  const [gd, setGd] = useState({ durum:"yuk", ay:{}, hata:"" });
+  const ayAnahR = (t) => { const d = new Date(t); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0"); };
+  const kurR = (() => { if (Number(usdTry) > 0) return Number(usdTry); try { return Number(localStorage.getItem("pers_usd_kur")) || 0; } catch { return 0; } })();
+  const aylarKey = useMemo(() => [...new Set((siparisler||[]).map(s => s.planAy || ayAnahR(s.tarih)))].sort().join(","), [siparisler]);
+  useEffect(() => {
+    let iptal = false;
+    (async () => {
+      try {
+        const aylar = aylarKey ? aylarKey.split(",") : [];
+        const yillar = [...new Set(aylar.map(a => Number(a.slice(0,4))))];
+        const [per, sgl, brd] = await Promise.all([
+          persQ(supabase.from("personel").select("*").eq("atolye","MSK")),
+          persQ(supabase.from("sabit_gider").select("*").eq("atolye","MSK")),
+          yillar.length ? persQ(supabase.from("bordro").select("*").eq("atolye","MSK").in("yil", yillar)) : Promise.resolve([]),
+        ]);
+        const aktifP = (per||[]).filter(p => p.durum !== "Ayrıldı");
+        const out = {};
+        aylar.forEach(a => {
+          const y = Number(a.slice(0,4)), ay0 = Number(a.slice(5,7)) - 1;
+          const bm = {}; (brd||[]).forEach(b => { if (Number(b.yil)===y && Number(b.ay)===ay0) bm[b.personel_id] = b; });
+          let persMal = 0;
+          aktifP.forEach(p => {
+            const b = bm[p.id]; const saat = Number(b?.mesai_saat || 0); const ham = b?.mesai_ucret;
+            const elle = !(ham === "" || ham === null || ham === undefined);
+            const mu = elle ? Number(ham) : persMesaiUcret(p, saat);
+            persMal += Number(p.maas||0) + Number(p.servis||0) + Number(p.yemek||0) + mu;
+          });
+          let sg = 0, sgEksik = false;
+          (sgl||[]).forEach(g => {
+            if (!(g.aktif !== false && ((Number(g.baslangic_yil)||0)*12 + (Number(g.baslangic_ay)||0)) <= (y*12 + ay0))) return;
+            const t = Number(g.tutar||0);
+            if (g.para_birimi === "USD") { if (kurR) sg += t*kurR; else sgEksik = true; } else sg += t;
+          });
+          let plGram = 0;
+          (tumSip || siparisler || []).filter(sp => (sp.planAy || ayAnahR(sp.tarih)) === a && sp.onayDurum!=="red" && sp.onayDurum!=="iptal" && sp.onayDurum!=="bekliyor").forEach(sp => (sp.kalemler||[]).forEach(k => {
+            const durum = (sp.kalemDurumlar||{})[k.id] || k.durum || "baslanmadi"; if (durum === "hurda") return;
+            const hc = hesapla(k, k.secilenAyar||k.refAyar, sp.altinKgUSD, sp.mc);
+            const du=((sp.kalemHurda)||{})[k.id]||0, ia=((sp.kalemIade)||{})[k.id]||0, ta=((sp.kalemTamir)||{})[k.id]||0;
+            plGram += hc.mamulGram * Math.max(0, (k.adet||1)-du-ia-ta);
+          }));
+          out[a] = { persMal, sg, sgEksik, bordroVar: Object.keys(bm).length > 0, plGram, tlGram: plGram > 0 ? (persMal + sg) / plGram : 0 };
+        });
+        if (!iptal) setGd({ durum:"hazir", ay:out, hata:"" });
+      } catch (e) { if (!iptal) setGd({ durum:"hata", ay:{}, hata:e.message }); }
+    })();
+    return () => { iptal = true; };
+  }, [aylarKey, kurR]);
+  // sipariş → gider payı (has gr); hesaplanamazsa null
+  const giderBul = (x) => {
+    if (gd.durum !== "hazir" || !(kurR > 0)) return null;
+    const m = gd.ay[x.s.planAy || ayAnahR(x.s.tarih)]; if (!m || !(m.plGram > 0)) return null;
+    const hg = (x.s.altinKgUSD || altinKgUSD || 0) / 1000; if (!(hg > 0)) return null;
+    return x.gram * m.tlGram / kurR / hg;
+  };
+  const gSip = new Map(satirlar.map(x => [x.s.id, giderBul(x)]));
+  const gSipEksik = [...gSip.values()].filter(v => v === null).length;
+  const musG = {};
+  satirlar.forEach(x => { const ad = x.s.musKod || x.s.musteri || "İsimsiz"; const m = musG[ad] || (musG[ad] = { gider:0, eksik:0 }); const g = gSip.get(x.s.id); if (g === null) m.eksik++; else m.gider += g; });
+  const aylarEksik = Object.entries(gd.ay).filter(([,m]) => !m.bordroVar || m.sgEksik || !(m.plGram > 0)).map(([a]) => a);
+  const musDeger2 = { net:m=>m.kar-(musG[m.ad]?musG[m.ad].gider:0), gider:m=>(musG[m.ad]?musG[m.ad].gider:0) };
+  const musListe = [...musteriler].sort((a,b)=>{ const f=musDeger[musSira.k]||musDeger2[musSira.k], A=f(a), B=f(b); return (A<B?-1:A>B?1:0)*musSira.d; });
   const topMly = top.gram>0 ? top.kar/top.gram : 0;
   const tarihK = (t) => new Date(t).toLocaleDateString("tr-TR",{day:"2-digit",month:"2-digit",year:"2-digit"});
   const q = ara.trim().toLowerCase();
@@ -3992,7 +4053,7 @@ function KarlilikRaporuEkrani({ T, GH, siparisler, altinKgUSD, mc, onAc, onModel
     if (q) { const hay = [x.s.musKod,x.s.musteri,x.s.siparisNo,x.po,x.s.musEtiket,x.s.aciklama,...x.kalemler.map(c=>c.k.kod)].filter(Boolean).join(" ").toLowerCase(); if (!hay.includes(q)) return false; }
     return true;
   });
-  const deger = { tarih:x=>x.s.tarih||0, musteri:x=>String(x.s.musKod||x.s.musteri||""), adet:x=>x.adet, gram:x=>x.gram, kar:x=>x.kar, mly:x=>x.mly };
+  const deger = { tarih:x=>x.s.tarih||0, musteri:x=>String(x.s.musKod||x.s.musteri||""), adet:x=>x.adet, gram:x=>x.gram, kar:x=>x.kar, mly:x=>x.mly, gider:x=>gSip.get(x.s.id)||0, net:x=>x.kar-(gSip.get(x.s.id)||0) };
   gor = [...gor].sort((a,b)=>{ const f=deger[sirala.k], A=f(a), B=f(b); return (A<B?-1:A>B?1:0)*sirala.d; });
   const filtreVar = kayipTur||karGrup||musF||modelF||q;
   const temizle = () => { setKayipTur(""); setKarGrup(""); setMusF(""); setModelF(""); setAra(""); };
@@ -4030,7 +4091,7 @@ function KarlilikRaporuEkrani({ T, GH, siparisler, altinKgUSD, mc, onAc, onModel
               </div>
               <div style={{ overflow:"auto" }}>
                 <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13, color:T.text }}>
-                  <thead><tr>{th("ad","Müşteri")}{th("sip","Sipariş",1)}{th("gram","Kg",1)}{th("adet","Parça",1)}{th("kar","Kâr (has)",1)}{th("mly","mly/gr",1)}<th style={{ padding:"9px 10px", fontSize:11, fontWeight:600, color:T.sub, textAlign:"left", borderBottom:"1px solid "+T.border, minWidth:220 }}>İlerleme (aşamalar)</th>{th("tam","Tamamlanan",1)}</tr></thead>
+                  <thead><tr>{th("ad","Müşteri")}{th("sip","Sipariş",1)}{th("gram","Kg",1)}{th("adet","Parça",1)}{th("kar","Kâr (has)",1)}{th("mly","mly/gr",1)}{th("gider","Sabit gider payı",1)}{th("net","Net kâr (has)",1)}<th style={{ padding:"9px 10px", fontSize:11, fontWeight:600, color:T.sub, textAlign:"left", borderBottom:"1px solid "+T.border, minWidth:220 }}>İlerleme (aşamalar)</th>{th("tam","Tamamlanan",1)}</tr></thead>
                   <tbody>
                     {musListe.map(m => { const mly = m.gram>0 ? m.kar/m.gram : 0; const rc = RN[grupBul(mly)]; const tam = m.adet>0 ? TAMAM_ID.reduce((a,id)=>a+(m.asamaA[id]||0),0)/m.adet*100 : 0; const ac = musAcik===m.ad;
                       return (<Fragment key={m.ad}>
@@ -4041,10 +4102,13 @@ function KarlilikRaporuEkrani({ T, GH, siparisler, altinKgUSD, mc, onAc, onModel
                           <td style={{ padding:"9px 10px", textAlign:"right" }}>{m.adet}</td>
                           <td style={{ padding:"9px 10px", textAlign:"right", color:rc, fontWeight:600, whiteSpace:"nowrap" }}>{fN(m.kar,3)}{m.usd>0 && <div style={{ fontSize:11, color:T.sub, fontWeight:400 }}>≈ ${m.usd.toFixed(0)}</div>}</td>
                           <td style={{ padding:"9px 10px", textAlign:"right", color:rc, fontWeight:600 }}>{fN(mly,3)}</td>
+                          {(() => { const mg = musG[m.ad] || { gider:0, eksik:0 }; const tamG = mg.eksik === 0; const net = m.kar - mg.gider; const hu = hasUSD; return (<>
+                            <td style={{ padding:"9px 10px", textAlign:"right", whiteSpace:"nowrap", color:T.sub }}>{gd.durum!=="hazir" || !(kurR>0) || mg.eksik===m.sip ? "—" : <>{fN(mg.gider,3)}<div style={{ fontSize:11 }}>{m.gram>0?fN(mg.gider/m.gram,3):"0,000"} mly/gr{!tamG && " · eksik"}</div></>}</td>
+                            <td style={{ padding:"9px 10px", textAlign:"right", whiteSpace:"nowrap", fontWeight:600, color:(gd.durum!=="hazir"||!(kurR>0)||mg.eksik===m.sip)?T.sub:(net<0?RN.dusuk:RN[grupBul(m.gram>0?net/m.gram:0)]) }}>{gd.durum!=="hazir" || !(kurR>0) || mg.eksik===m.sip ? "—" : <>{fN(net,3)}{hu>0 && <div style={{ fontSize:11, color:T.sub, fontWeight:400 }}>≈ ${(net*hu).toFixed(0)}</div>}</>}</td></>); })()}
                           <td style={{ padding:"9px 10px" }}><div style={{ display:"flex", height:12, borderRadius:6, overflow:"hidden", background:T.border }}>{asamalar.map(d => { const y = yuzde(m,d.id); return y>0 ? <div key={d.id} title={d.l+" %"+Math.round(y)} style={{ width:y+"%", background:d.c }}/> : null; })}</div></td>
                           <td style={{ padding:"9px 10px", textAlign:"right", fontWeight:600, color:tam>=100?RN.iyi:T.text }}>%{Math.round(tam)}</td>
                         </tr>
-                        {ac && <tr style={{ borderBottom:"1px solid "+T.border }}><td colSpan={8} style={{ padding:"4px 10px 12px 26px" }}>
+                        {ac && <tr style={{ borderBottom:"1px solid "+T.border }}><td colSpan={10} style={{ padding:"4px 10px 12px 26px" }}>
                           <div style={{ display:"flex", flexWrap:"wrap", gap:8 }}>
                             {asamalar.filter(d => (m.asamaA[d.id]||0)>0).map(d => (
                               <div key={d.id} style={{ border:"1px solid "+T.border, borderTop:"3px solid "+d.c, borderRadius:8, padding:"6px 10px", minWidth:110 }}>
@@ -4056,7 +4120,7 @@ function KarlilikRaporuEkrani({ T, GH, siparisler, altinKgUSD, mc, onAc, onModel
                           </div>
                         </td></tr>}
                       </Fragment>); })}
-                    {musListe.length===0 && <tr><td colSpan={8} style={{ padding:30, textAlign:"center", color:T.sub }}>Sipariş yok.</td></tr>}
+                    {musListe.length===0 && <tr><td colSpan={10} style={{ padding:30, textAlign:"center", color:T.sub }}>Sipariş yok.</td></tr>}
                     {musListe.length>0 && <tr style={{ fontWeight:600 }}>
                       <td style={{ padding:"10px", fontSize:11, color:T.sub }}>TOPLAM</td>
                       <td style={{ padding:"10px", textAlign:"right" }}>{topS}</td>
@@ -4064,6 +4128,8 @@ function KarlilikRaporuEkrani({ T, GH, siparisler, altinKgUSD, mc, onAc, onModel
                       <td style={{ padding:"10px", textAlign:"right" }}>{topA}</td>
                       <td style={{ padding:"10px", textAlign:"right" }}>{fN(topK,3)}</td>
                       <td style={{ padding:"10px", textAlign:"right" }}>{fN(topG>0?topK/topG:0,3)}</td>
+                      <td style={{ padding:"10px", textAlign:"right", color:T.sub, whiteSpace:"nowrap" }}>{gd.durum==="hazir"&&kurR>0 ? fN(Object.values(musG).reduce((a,x)=>a+x.gider,0),3) : "—"}</td>
+                      <td style={{ padding:"10px", textAlign:"right", whiteSpace:"nowrap" }}>{gd.durum==="hazir"&&kurR>0 ? fN(topK-Object.values(musG).reduce((a,x)=>a+x.gider,0),3) : "—"}</td>
                       <td/>
                       <td style={{ padding:"10px", textAlign:"right" }}>%{topA>0?Math.round(topTam/topA*100):0}</td></tr>}
                   </tbody>
@@ -4080,6 +4146,26 @@ function KarlilikRaporuEkrani({ T, GH, siparisler, altinKgUSD, mc, onAc, onModel
               <div style={kart}><div style={etiket}>Toplam kâr</div><div style={{ fontSize:20, fontWeight:600, color:RN.iyi }}>{fN(top.kar,3)} has</div>{top.usd>0 && <div style={{ fontSize:12, color:T.sub }}>≈ ${top.usd.toFixed(0)}</div>}</div>
               <div style={kart}><div style={etiket}>Ort. karlılık</div><div style={{ fontSize:20, fontWeight:600, color:RN[grupBul(topMly)] }}>{fN(topMly,3)} mly</div></div>
             </div>
+            {(() => {
+              const topG = satirlar.reduce((a,x)=>a+(gSip.get(x.s.id)||0),0), topNet = top.kar - topG;
+              const hu = hasUSD;
+              return (
+                <div style={kart}>
+                  <div style={{ fontSize:12, fontWeight:600, color:T.sub, marginBottom:8 }}>Sabit gider dahil net kâr</div>
+                  {gd.durum==="yuk" && <div style={{ fontSize:12, color:T.sub }}>Gider verisi yükleniyor…</div>}
+                  {gd.durum==="hata" && <div style={{ fontSize:12, color:RN.dusuk }}>Gider verisi alınamadı: {gd.hata}</div>}
+                  {gd.durum==="hazir" && !(kurR>0) && <div style={{ fontSize:12, color:RN.orta }}>USD/TL kuru yok — Siparişler'de altın/kur güncellenince veya Personel sayfasında kur girilince gider hesaplanır.</div>}
+                  {gd.durum==="hazir" && kurR>0 && <>
+                    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+                      <div><div style={etiket}>Sabit gider payı</div><div style={{ fontSize:18, fontWeight:600 }}>{fN(topG,3)} has</div>{hu>0 && <div style={{ fontSize:12, color:T.sub }}>≈ ${(topG*hu).toFixed(0)}</div>}</div>
+                      <div><div style={etiket}>Net kâr</div><div style={{ fontSize:18, fontWeight:600, color:topNet<0?RN.dusuk:RN.iyi }}>{fN(topNet,3)} has</div>{hu>0 && <div style={{ fontSize:12, color:T.sub }}>≈ ${(topNet*hu).toFixed(0)}</div>}</div>
+                    </div>
+                    <div style={{ fontSize:11, color:T.sub, marginTop:8, lineHeight:1.5 }}>Gider = o ayın personel maliyeti (maaş+servis+yemek+mesai) + Sabit giderler, o ay planlanan gram sayısına bölünüp siparişin gramıyla çarpılır. Kur: ₺{fN(kurR,2)}. "Kâr (has)" varsayılan maliyet milyemini zaten düşer; gider payı ayrıca düşülür.</div>
+                    {(aylarEksik.length>0 || gSipEksik>0) && <div style={{ fontSize:11, color:RN.orta, marginTop:6, lineHeight:1.5 }}>⚠ Eksik veri:{aylarEksik.length>0 && <> {aylarEksik.join(", ")} ayında bordro/sabit gider/planlı gram eksik olabilir.</>}{gSipEksik>0 && <> {gSipEksik} siparişin gideri hesaplanamadı (net kâr = brüt kâr sayıldı).</>}</div>}
+                  </>}
+                </div>
+              );
+            })()}
             <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:10 }}>
               {[["h","Hurda",top.hurda],["i","İade",top.iade],["t","Tamir",top.tamir]].map(([id,l,n])=>(
                 <button key={id} onClick={()=>setKayipTur(kayipTur===id?"":id)} style={{ ...kart, textAlign:"center", cursor:"pointer", borderColor:kayipTur===id?RN[id]:T.border, color:T.text }}>
@@ -4124,7 +4210,7 @@ function KarlilikRaporuEkrani({ T, GH, siparisler, altinKgUSD, mc, onAc, onModel
             </div>}
             <div style={{ overflow:"auto", maxHeight:"calc(100vh - 210px)" }}>
               <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13, color:T.text }}>
-                <thead><tr>{sb("musteri","Müşteri")}<th style={{ padding:"9px 10px", fontSize:11, fontWeight:600, color:T.sub, textAlign:"left", borderBottom:"1px solid "+T.border, position:"sticky", top:0, background:T.card }}>Kodlar</th>{sb("tarih","Tarih")}{sb("adet","Net adet",1)}{sb("gram","Gram",1)}{sb("kar","Kâr (has)",1)}{sb("mly","mly/gr",1)}<th style={{ padding:"9px 10px", fontSize:11, fontWeight:600, color:T.sub, textAlign:"right", borderBottom:"1px solid "+T.border, position:"sticky", top:0, background:T.card }}>H / İ / T</th></tr></thead>
+                <thead><tr>{sb("musteri","Müşteri")}<th style={{ padding:"9px 10px", fontSize:11, fontWeight:600, color:T.sub, textAlign:"left", borderBottom:"1px solid "+T.border, position:"sticky", top:0, background:T.card }}>Kodlar</th>{sb("tarih","Tarih")}{sb("adet","Net adet",1)}{sb("gram","Gram",1)}{sb("kar","Kâr (has)",1)}{sb("mly","mly/gr",1)}{sb("gider","Sabit gider payı",1)}{sb("net","Net kâr (has)",1)}<th style={{ padding:"9px 10px", fontSize:11, fontWeight:600, color:T.sub, textAlign:"right", borderBottom:"1px solid "+T.border, position:"sticky", top:0, background:T.card }}>H / İ / T</th></tr></thead>
                 <tbody>
                   {gor.map(x=>{ const rc=RN[x.grup]; const kayip=x.hurda||x.iade||x.tamir; const ad=x.s.musKod||x.s.musteri||"İsimsiz";
                     return (<Fragment key={x.s.id}>
@@ -4136,18 +4222,24 @@ function KarlilikRaporuEkrani({ T, GH, siparisler, altinKgUSD, mc, onAc, onModel
                         <td style={{ padding:"9px 10px", textAlign:"right", whiteSpace:"nowrap" }}>{fN(x.gram,2)} gr</td>
                         <td style={{ padding:"9px 10px", textAlign:"right", color:rc, fontWeight:600, whiteSpace:"nowrap" }}>{fN(x.kar,3)}{x.usd>0 && <div style={{ fontSize:11, color:T.sub, fontWeight:400 }}>≈ ${x.usd.toFixed(0)}</div>}</td>
                         <td style={{ padding:"9px 10px", textAlign:"right", color:rc, fontWeight:600 }}>{fN(x.mly,3)}</td>
+                        {(() => { const g = gSip.get(x.s.id); const hu = (x.s.altinKgUSD||altinKgUSD||0)/1000; const net = g===null ? null : x.kar-g; return (<>
+                          <td style={{ padding:"9px 10px", textAlign:"right", whiteSpace:"nowrap", color:T.sub }}>{g===null ? "—" : <>{fN(g,3)}<div style={{ fontSize:11 }}>{x.gram>0?fN(g/x.gram,3):"0,000"} mly/gr</div></>}</td>
+                          <td style={{ padding:"9px 10px", textAlign:"right", whiteSpace:"nowrap", fontWeight:600, color:net===null?T.sub:(net<0?RN.dusuk:RN[grupBul(x.gram>0?net/x.gram:0)]) }}>{net===null ? "—" : <>{fN(net,3)}{hu>0 && <div style={{ fontSize:11, color:T.sub, fontWeight:400 }}>≈ ${(net*hu).toFixed(0)}</div>}</>}</td></>); })()}
                         <td style={{ padding:"9px 10px", textAlign:"right", whiteSpace:"nowrap", fontSize:12 }}>{kayip ? <>{x.hurda>0 && <span style={{ color:RN.h, fontWeight:600 }}>H:{x.hurda} </span>}{x.iade>0 && <span style={{ color:RN.i, fontWeight:600 }}>İ:{x.iade} </span>}{x.tamir>0 && <span style={{ color:RN.t, fontWeight:600 }}>T:{x.tamir}</span>}</> : <span style={{ color:T.sub }}>—</span>}</td>
                       </tr>
-                      {kayip>0 && <tr onClick={()=>onAc(x.s)} style={{ cursor:"pointer", borderBottom:"1px solid "+T.border }}><td colSpan={8} style={{ padding:"0 10px 9px 22px", fontSize:11, color:T.sub }}>
+                      {kayip>0 && <tr onClick={()=>onAc(x.s)} style={{ cursor:"pointer", borderBottom:"1px solid "+T.border }}><td colSpan={10} style={{ padding:"0 10px 9px 22px", fontSize:11, color:T.sub }}>
                         {x.kalemler.filter(c=>c.h||c.i||c.t).map((c,ix)=><span key={ix} style={{ marginRight:12 }}><b onClick={e=>{ e.stopPropagation(); onModel&&onModel(c.k); }} title="Model kartını aç" style={{ color:T.text, textDecoration:"underline dotted", textUnderlineOffset:3 }}>{c.k.kod||c.k.ad||"?"}</b>{c.h>0 && <span style={{ color:RN.h }}> Hurda ×{c.h}{c.hn?" · "+c.hn:""}</span>}{c.i>0 && <span style={{ color:RN.i }}> İade ×{c.i}{c.in_?" · "+c.in_:""}</span>}{c.t>0 && <span style={{ color:RN.t }}> Tamir ×{c.t}{c.tn?" · "+c.tn:""}</span>}</span>)}
                       </td></tr>}
                     </Fragment>); })}
-                  {gor.length===0 && <tr><td colSpan={8} style={{ padding:30, textAlign:"center", color:T.sub }}>Bu filtreyle sipariş yok.</td></tr>}
+                  {gor.length===0 && <tr><td colSpan={10} style={{ padding:30, textAlign:"center", color:T.sub }}>Bu filtreyle sipariş yok.</td></tr>}
                   {gor.length>0 && <tr style={{ position:"sticky", bottom:0 }}><td colSpan={3} style={{ padding:"10px", textAlign:"right", fontSize:11, color:T.sub, background:T.card, borderTop:"1px solid "+T.border }}>Seçili toplam</td>
                     <td style={{ padding:"10px", textAlign:"right", fontWeight:600, background:T.card, borderTop:"1px solid "+T.border }}>{gor.reduce((a,x)=>a+x.adet,0)}</td>
                     <td style={{ padding:"10px", textAlign:"right", fontWeight:600, background:T.card, borderTop:"1px solid "+T.border, whiteSpace:"nowrap" }}>{fN(gor.reduce((a,x)=>a+x.gram,0),1)} gr</td>
                     <td style={{ padding:"10px", textAlign:"right", fontWeight:600, background:T.card, borderTop:"1px solid "+T.border }}>{fN(gor.reduce((a,x)=>a+x.kar,0),3)}</td>
-                    <td colSpan={2} style={{ background:T.card, borderTop:"1px solid "+T.border }}/></tr>}
+                    <td style={{ background:T.card, borderTop:"1px solid "+T.border }}/>
+                    <td style={{ padding:"10px", textAlign:"right", fontWeight:600, background:T.card, borderTop:"1px solid "+T.border, color:T.sub, whiteSpace:"nowrap" }}>{fN(gor.reduce((a,x)=>a+(gSip.get(x.s.id)||0),0),3)}</td>
+                    <td style={{ padding:"10px", textAlign:"right", fontWeight:600, background:T.card, borderTop:"1px solid "+T.border, whiteSpace:"nowrap" }}>{fN(gor.reduce((a,x)=>a+x.kar-(gSip.get(x.s.id)||0),0),3)}</td>
+                    <td style={{ background:T.card, borderTop:"1px solid "+T.border }}/></tr>}
                 </tbody>
               </table>
             </div>
@@ -13491,7 +13583,7 @@ function Atolye({ onSirketDegis }) {
           {(sipMusF||sipTarih1||sipTarih2||!tumuF) && <button onClick={()=>{setSipMusF("");setSipTarih1("");setSipTarih2("");setSipFiltre("tumu");}} style={{ ...RD, fontSize:12, padding:"7px 10px" }}>Temizle</button>}
           {liste.length>0 && AKTIF_SIRKET_ONEK==="" && <button onClick={()=>setSipRapor(true)} style={{ background:"linear-gradient(135deg,#0a84ff,#0968cc)", border:"none", borderRadius:9, padding:"8px 12px", color:"#fff", fontSize:12, fontWeight:600, cursor:"pointer" }}>📊 Rapor</button>}
           {liste.length>0 && AKTIF_SIRKET_ONEK!=="" && <button onClick={()=>downloadPDF(buildSipListeRaporuHTML(liste, altinKgUSD, madenCarpan), "siparis-listesi-raporu")} style={{ background:"linear-gradient(135deg,#0a84ff,#0968cc)", border:"none", borderRadius:9, padding:"8px 12px", color:"#fff", fontSize:12, fontWeight:600, cursor:"pointer" }}>📊 Rapor PDF</button>}
-          {sipRapor && AKTIF_SIRKET_ONEK==="" && <KarlilikRaporuEkrani T={T} GH={GH} siparisler={liste} altinKgUSD={altinKgUSD} mc={madenCarpan}
+          {sipRapor && AKTIF_SIRKET_ONEK==="" && <KarlilikRaporuEkrani T={T} GH={GH} siparisler={liste} tumSip={siparisler} usdTry={altinSon?.usdTry || null} altinKgUSD={altinKgUSD} mc={madenCarpan}
             onKapat={()=>setSipRapor(false)}
             onPdf={()=>downloadPDF(buildSipListeRaporuHTML(liste, altinKgUSD, madenCarpan), "siparis-listesi-raporu")}
             onAc={(sp)=>setSipDrawer(sp.id)}
