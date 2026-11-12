@@ -3929,7 +3929,11 @@ function MuhasebeSayfa({ T, GH, sirket="BSP", usdTry=null }) {
   );
 }
 
-function KarlilikRaporuEkrani({ T, GH, siparisler, tumSip, usdTry, altinKgUSD, mc, onAc, onModel, onKapat, onPdf }) {
+function KarlilikRaporuEkrani({ T, GH, siparisler: siparislerHam, tumSip, usdTry, altinKgUSD, mc, onAc, onModel, onKapat, onPdf }) {
+  // Tamamlanan = durum geçmişinin son kaydı tamam/teslim (Siparişler ekranındaki "Tamamlanan" grubuyla aynı)
+  const tamamMi = (s) => { const son = (s.durumGecmisi||[]).slice(-1)[0]; return !!son && ["tamam","teslim"].includes(son.durum); };
+  const [durumF, setDurumF] = useState("hepsi"); // hepsi | acik | tam
+  const siparisler = useMemo(() => durumF==="hepsi" ? siparislerHam : siparislerHam.filter(s => durumF==="tam" ? tamamMi(s) : !tamamMi(s)), [siparislerHam, durumF]);
   const [kayipTur, setKayipTur] = useState("");
   const [karGrup, setKarGrup] = useState("");
   const [musF, setMusF] = useState("");
@@ -4076,6 +4080,8 @@ function KarlilikRaporuEkrani({ T, GH, siparisler, tumSip, usdTry, altinKgUSD, m
         <RpKapi T={T} GH={GH} baslik="Karlılık">
         <div style={{ display:"flex", gap:6, marginBottom:14 }}>
           {[["sip","Sipariş bazlı"],["mus","Müşteri bazlı"]].map(([id,l]) => <button key={id} onClick={()=>setSekme(id)} style={{ background:sekme===id?T.text:"transparent", color:sekme===id?T.bg2:T.sub, border:"1px solid "+(sekme===id?T.text:T.border), borderRadius:20, padding:"6px 16px", fontSize:13, fontWeight:600, cursor:"pointer" }}>{l}</button>)}
+          <span style={{ width:1, background:T.border, margin:"0 6px" }}/>
+          {[["hepsi","Hepsi",siparislerHam.length],["acik","Açık",siparislerHam.filter(s=>!tamamMi(s)).length],["tam","Tamamlanan",siparislerHam.filter(tamamMi).length]].map(([id,l,n]) => <button key={id} onClick={()=>setDurumF(id)} style={{ background:durumF===id?T.text+"22":"transparent", color:durumF===id?T.text:T.sub, border:"1px solid "+(durumF===id?T.text:T.border), borderRadius:20, padding:"6px 14px", fontSize:13, fontWeight:600, cursor:"pointer" }}>{l} <span style={{ fontWeight:400, opacity:.7 }}>{n}</span></button>)}
         </div>
         {sekme==="mus" ? (() => {
           const asamalar = durumSecenekleri();
@@ -10640,6 +10646,7 @@ function Atolye({ onSirketDegis }) {
   const [sipMetal,setSipMetal]= useState("altin");
   const [sipAyAcik,setSipAyAcik]= useState([]);
   const [sipRapor,setSipRapor]= useState(false);
+  const [sipTamAcik,setSipTamAcik]= useState({}); // Aylar görünümü: ay anahtarı → "Tamamlanan" bölümü açık mı
   const [sipSutun,setSipSutunH]= useState(() => { try { const k=Number(localStorage.getItem("sip_sutun")); return k>=1&&k<=6?k:0; } catch { return 0; } });
   const setSipSutun = (k) => { setSipSutunH(k); try { localStorage.setItem("sip_sutun", String(k)); } catch {} };
   const [sipVw,setSipVw]= useState(() => (typeof window!=="undefined"?window.innerWidth:1400));
@@ -13480,10 +13487,12 @@ function Atolye({ onSirketDegis }) {
       </div>
       <div style={{ display:"flex", gap:12, paddingBottom:10, alignItems:"stretch", minHeight:"calc(100vh - 340px)" }}>
         {gorKeys.map(key => {
-          const sl = liste.filter(s=>planAy(s)===key).sort((a,b)=>b.tarih-a.tarih);
+          const sl = liste.filter(s=>planAy(s)===key).sort((a,b)=>((grupNo(a)===3)-(grupNo(b)===3)) || (b.tarih-a.tarih)); // tamamlananlar en sonda
           const oz = sl.map(s=>ozet(s));
-          const topGum = oz.reduce((a,o)=>a+o.gumus,0), topAlt = oz.reduce((a,o)=>a+o.altin,0);
-          const ayTop = {}; oz.forEach(o=>Object.entries(o.ayarlar).forEach(([a,g])=>{ ayTop[a]=(ayTop[a]||0)+g; }));
+          const nTam = sl.filter(s=>grupNo(s)===3).length, tamAcikAy = !!sipTamAcik[key];
+          const ozAcik = oz.filter((o,ix)=>grupNo(sl[ix])!==3); // ay toplamı: tamamlananlar düşülür
+          const topGum = ozAcik.reduce((a,o)=>a+o.gumus,0), topAlt = ozAcik.reduce((a,o)=>a+o.altin,0);
+          const ayTop = {}; ozAcik.forEach(o=>Object.entries(o.ayarlar).forEach(([a,g])=>{ ayTop[a]=(ayTop[a]||0)+g; }));
           const hedef = sipHedefAy===key && sipSurukle;
           return (
             <div key={key}
@@ -13505,7 +13514,7 @@ function Atolye({ onSirketDegis }) {
                   <div style={{ padding:"0 2px 10px" }}>
                     <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", gap:8 }}>
                       <span style={{ fontSize:15, fontWeight:600, color:key===bk?GOLD:"var(--goldtext)" }}>{ayAdi(key)}{key===bk && <span style={{ fontSize:10, marginLeft:6, color:"#6abf69", fontWeight:500 }}>● bu ay</span>}</span>
-                      <span style={{ fontSize:11, color:"#998a6e" }}>{sl.length} sipariş</span>
+                      <span style={{ fontSize:11, color:"#998a6e" }}>{sl.length-nTam} açık{nTam>0 && " · "+nTam+" tamamlanan"}</span>
                     </div>
                     <div title={"%"+Math.round(pTam)+" tamamlandı · %"+Math.round(pUret)+" üretimde"} style={{ display:"flex", height:3, borderRadius:2, overflow:"hidden", background:"rgba(128,128,128,0.2)", margin:"8px 0 7px" }}>
                       <div style={{ width:pTam+"%", background:"#5fae6e" }}/><div style={{ width:pUret+"%", background:"#d4a017", opacity:.7 }}/>
@@ -13525,12 +13534,16 @@ function Atolye({ onSirketDegis }) {
               <div style={{ display:"grid", gridTemplateColumns:sipSutun>0 ? "repeat("+sipSutun+", minmax(0, 1fr))" : "repeat(auto-fill, minmax(max("+(coklu?520:560)+"px, calc((100% - 72px) / 4)), 1fr))", gridAutoRows:"1fr", gap:24, alignItems:"stretch" }}>
                 {sl.length===0 && <div style={{ gridColumn:"1 / -1", color:"#665d4a", fontSize:12, textAlign:"center", padding:"24px 0" }}>Buraya sürükleyip bırak</div>}
                 {sl.map((s,i) => {
+                  const tamSip = grupNo(s)===3;
+                  if (tamSip && !tamAcikAy) return (i===sl.length-nTam) ? <button key={"tamBaslik"+key} onClick={()=>setSipTamAcik(p=>({...p,[key]:true}))} style={{ gridColumn:"1 / -1", background:"transparent", border:"1px dashed "+T.border, borderRadius:10, padding:"10px 14px", color:T.sub, fontSize:13, fontWeight:600, cursor:"pointer", textAlign:"left" }}>▸ Tamamlanan ({nTam}) — göstermek için tıkla</button> : null;
                   const o = oz[i], c = chip(s);
                   const teslimT = s.teslimTarihi ? new Date(s.teslimTarihi).getTime() : 0;
                   const gecikti = o.gecikti;
                   const fotoHepsi = (s.kalemler||[]).filter(k=>k.foto); const fotolar = fotoHepsi.slice(0,8);
                   return (
-                    <div key={s.id} draggable={!bitti(s)} onDragStart={e=>{ setSipSurukle(s.id); e.dataTransfer.setData("text/plain", s.id); e.dataTransfer.effectAllowed="move"; }} onDragEnd={()=>{ setSipSurukle(""); setSipHedefAy(""); }}
+                    <Fragment key={s.id}>
+                    {tamSip && i===sl.length-nTam && <button onClick={()=>setSipTamAcik(p=>({...p,[key]:false}))} style={{ gridColumn:"1 / -1", background:"transparent", border:"1px dashed "+T.border, borderRadius:10, padding:"10px 14px", color:T.sub, fontSize:13, fontWeight:600, cursor:"pointer", textAlign:"left" }}>▾ Tamamlanan ({nTam}) — gizlemek için tıkla</button>}
+                    <div draggable={!bitti(s)} onDragStart={e=>{ setSipSurukle(s.id); e.dataTransfer.setData("text/plain", s.id); e.dataTransfer.effectAllowed="move"; }} onDragEnd={()=>{ setSipSurukle(""); setSipHedefAy(""); }}
                       onClick={()=>setSipDrawer(s.id)}
                       style={{ display:"flex", flexDirection:"column", cursor:bitti(s)?"default":"grab", opacity:sipSurukle===s.id?0.4:1, zoom:kartZoom, padding:"12px 14px", borderRadius:12, background:_acikTema?"#f8f8f9":"#0c0c0c", color:_yazi, ...isik(c.c), border:"1px solid "+(_acikTema?T.border:"#2c2c2c"), borderLeft:"3px solid "+c.c }}>
                       <div style={{ zoom:1.12, paddingBottom:2 }}>
@@ -13559,6 +13572,7 @@ function Atolye({ onSirketDegis }) {
 
                       {fotolar.length>0 && <div style={{ display:"grid", gridTemplateColumns:"repeat(4, minmax(0,1fr))", gap:5, marginTop:8 }}>{fotolar.map((k,ix)=><div key={k.id} title={(k.kod||"")+" "+(k.ad||"")+" — model kartını aç"} onClick={e=>{ const mm=modeller.find(x=>x.id===k.id) || modeller.find(x=>k.kod && x.kod===k.kod); if (mm) { e.stopPropagation(); openEM(mm); } }} style={{ position:"relative", aspectRatio:"1 / 1", borderRadius:8, overflow:"hidden", background:"rgba(0,0,0,0.06)", cursor:"zoom-in" }}><img loading="lazy" decoding="async" src={k.foto} alt="" draggable={false} style={{ width:"100%", height:"100%", objectFit:"cover", display:"block" }}/>{ix===7 && fotoHepsi.length>8 && <div style={{ position:"absolute", inset:0, background:"rgba(0,0,0,0.5)", color:"#fff", fontSize:15, fontWeight:600, display:"flex", alignItems:"center", justifyContent:"center" }}>+{fotoHepsi.length-7}</div>}</div>)}</div>}
                     </div>
+                    </Fragment>
                   );
                 })}
               </div>
