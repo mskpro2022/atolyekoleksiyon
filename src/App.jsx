@@ -10713,6 +10713,7 @@ function Atolye({ onSirketDegis }) {
   const [driveYukleniyor, setDriveYukleniyor] = useState(null);
   const [hurdaModal, setHurdaModal] = useState(null); // {sipId, kalemId, kalemAd, maxAdet, mevcAdet}
   const [tamirModal, setTamirModal] = useState(null); // {sipId, kalemId, kalemAd, maxAdet, mevcAdet}
+  const [adetModal, setAdetModal] = useState(null); // {sipId, kalemId, kalemAd, kalemKod, eski, yeni, alt} — yanlış girilen kalem adedini düzelt
   const HURDA_NEDENLER = ["İade","Çizim Hatası","Döküm Hatası","Atölyede Üretim Hatası","Taş Düşmesi","Müşteri Değişikliği","Diğer"];
 
   // Ayarlar
@@ -13574,6 +13575,7 @@ function Atolye({ onSirketDegis }) {
                   {menu("k"+s.id+k.id, [
                     { l:"🗑 Hurda"+(hA>0?" ("+hA+")":""), c:"#e85a4f", f:()=>setHurdaModal({sipId:s.id,kalemId:k.id,kalemAd:k.ad,maxAdet:k.adet||1,mevcAdet:hA,mevcNeden:(s.kalemHurdaNeden||{})[k.id]||""}) },
                     { l:"↩ İade"+(iA>0?" ("+iA+")":""), c:"#a78bfa", f:()=>setIadeModal({sipId:s.id,kalemId:k.id,kalemAd:k.ad,kalemKod:k.kod,maxAdet:k.adet||1,mevcAdet:iA,mevcNeden:(s.kalemIadeNeden||{})[k.id]||"",iadeTuru:(s.kalemIadeTuru||{})[k.id]||"para"}) },
+                    { l:"✏️ Adet düzenle ("+(k.adet||1)+")", c:"#d4a017", f:()=>setAdetModal({ sipId:s.id, kalemId:k.id, kalemAd:k.ad, kalemKod:k.kod, eski:k.adet||1, yeni:String(k.adet||1), alt:hA+iA+tA }) },
                     { l:"🔧 Tamir"+(tA>0?" ("+tA+")":""), c:"#5b9bd5", f:()=>setTamirModal({sipId:s.id,kalemId:k.id,kalemAd:k.ad,kalemKod:k.kod,maxAdet:k.adet||1,mevcAdet:tA,mevcNeden:(s.kalemTamirNeden||{})[k.id]||""}) },
                   ])}
                 </div>
@@ -17777,6 +17779,33 @@ function Atolye({ onSirketDegis }) {
       )}
 
       {/* TAMİR MODAL */}
+      {adetModal && (
+        <Modal open={!!adetModal} onClose={()=>setAdetModal(null)} title="Kalem Adedini Düzenle" T={T}>
+          <div style={{ fontSize:12, fontWeight:700, marginBottom:10, padding:"6px 10px", background:"rgba(212,160,23,0.08)", borderRadius:6 }}>
+            {adetModal.kalemKod && <span style={{ color:GOLD, marginRight:6 }}>{adetModal.kalemKod}</span>}{adetModal.kalemAd}
+          </div>
+          <Fl label={"Doğru adet (şu an: "+adetModal.eski+")"} T={T}>
+            <input type="number" min="1" autoFocus value={adetModal.yeni} onChange={e=>setAdetModal(p=>({...p, yeni:e.target.value}))} style={{ ...IS, padding:"9px 10px", fontSize:16, fontWeight:700 }}/>
+          </Fl>
+          {adetModal.alt>0 && <div style={{ fontSize:11, color:"#998a6e", marginBottom:6 }}>Bu kalemde hurda/iade/tamir toplamı {adetModal.alt} adet — yeni adet bunun altına inemez.</div>}
+          <div style={{ fontSize:11, color:"#998a6e", lineHeight:1.5 }}>Gram, kâr, rapor ve aşama sayıları yeni adede göre otomatik güncellenir. Eski adet kayıtta tutulur.</div>
+          <div style={{ display:"flex", gap:8, marginTop:12 }}>
+            <button onClick={()=>setAdetModal(null)} style={{ flex:1, padding:"9px", background:"rgba(255,255,255,0.05)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:8, color:"#998a6e", fontSize:11, fontWeight:700, cursor:"pointer" }}>İptal</button>
+            <button onClick={()=>{
+              const yeni = Math.round(Number(adetModal.yeni));
+              if (!(yeni >= 1) || yeni < adetModal.alt) { toastGoster("hata", "Adet en az "+Math.max(1,adetModal.alt)+" olmalı"); return; }
+              if (yeni === adetModal.eski) { setAdetModal(null); return; }
+              svS(siparisler.map(sp => sp.id !== adetModal.sipId ? sp : {
+                ...sp,
+                kalemler: (sp.kalemler||[]).map(k => k.id === adetModal.kalemId ? { ...k, adet: yeni } : k),
+                adetDuzeltme: { ...(sp.adetDuzeltme||{}), [adetModal.kalemId]: [ ...(((sp.adetDuzeltme||{})[adetModal.kalemId])||[]), { eski: adetModal.eski, yeni, t: Date.now() } ] },
+              }));
+              toastGoster("ok", (adetModal.kalemKod||adetModal.kalemAd||"Kalem")+": "+adetModal.eski+" → "+yeni+" adet");
+              setAdetModal(null);
+            }} style={{ flex:1, padding:"9px", background:"rgba(212,160,23,0.2)", border:"1px solid rgba(212,160,23,0.5)", borderRadius:8, color:"#d4a017", fontSize:12, fontWeight:800, cursor:"pointer" }}>Kaydet</button>
+          </div>
+        </Modal>
+      )}
       {tamirModal && (
         <Modal open={!!tamirModal} onClose={()=>setTamirModal(null)} title="Tamir Kaydı" T={T}>
           <div style={{ fontSize:11, color:"#5b9bd5", fontWeight:700, marginBottom:10, padding:"6px 10px", background:"rgba(91,155,213,0.08)", borderRadius:6 }}>
