@@ -357,7 +357,7 @@ function setSirketOnek(onek) {
 const BSP_DURUM_IDS = ["baslanmadi","dokum","teslim"];
 const BSP_DURUM_AD  = { baslanmadi:"İşleme alındı", cizimde:"Çiziliyor", dokum:"Makineye atıldı", teslim:"Müşteriye teslim edildi" };
 function durumEtiket(d) { return (AKTIF_SIRKET_ONEK === "bsp2_" && BSP_DURUM_AD[d.id]) ? BSP_DURUM_AD[d.id] : d.l; }
-function durumSecenekleri() { const l = DURUMLAR.filter(d => d.id !== "hurda"); return AKTIF_SIRKET_ONEK === "bsp2_" ? l.filter(d => BSP_DURUM_IDS.includes(d.id)) : l; }
+function durumSecenekleri() { const l = DURUMLAR.filter(d => d.id !== "hurda" && d.id !== "cizimde"); return AKTIF_SIRKET_ONEK === "bsp2_" ? l.filter(d => BSP_DURUM_IDS.includes(d.id)) : l; }
 // Bu anahtarlar şirketten bağımsız (önek ALMAZ) — her iki şirkette ortak kalır
 const SIRKET_BAGIMSIZ = ["atolye_sifre"];
 function sirketAnahtar(k) {
@@ -3954,7 +3954,7 @@ function KarlilikRaporuEkrani({ T, GH, siparisler: siparislerHam, tumSip, usdTry
         const a = k.adet||1, h=((s.kalemHurda)||{})[k.id]||0, i=((s.kalemIade)||{})[k.id]||0, t=((s.kalemTamir)||{})[k.id]||0;
         const net = Math.max(0, a-h-i-t);
         adet+=net; gram+=hc.mamulGram*net; kar+=hc.karHas*net; hurda+=h; iade+=i; tamir+=t;
-        const st = ((s.kalemDurumlar)||{})[k.id] || k.durum || "baslanmadi";
+        const st0 = ((s.kalemDurumlar)||{})[k.id] || k.durum || "baslanmadi", st = st0==="cizimde" ? "baslanmadi" : st0;
         asamaA[st] = (asamaA[st]||0) + net; asamaG[st] = (asamaG[st]||0) + hc.mamulGram*net;
         return { k, h, i, t, hn:((s.kalemHurdaNeden)||{})[k.id]||"", in_:((s.kalemIadeNeden)||{})[k.id]||"", tn:((s.kalemTamirNeden)||{})[k.id]||"" };
       });
@@ -4080,11 +4080,84 @@ function KarlilikRaporuEkrani({ T, GH, siparisler: siparislerHam, tumSip, usdTry
         </div>
         <RpKapi T={T} GH={GH} baslik="Karlılık">
         <div style={{ display:"flex", gap:6, marginBottom:14 }}>
-          {[["sip","Sipariş bazlı"],["mus","Müşteri bazlı"]].map(([id,l]) => <button key={id} onClick={()=>setSekme(id)} style={{ background:sekme===id?T.text:"transparent", color:sekme===id?T.bg2:T.sub, border:"1px solid "+(sekme===id?T.text:T.border), borderRadius:20, padding:"6px 16px", fontSize:13, fontWeight:600, cursor:"pointer" }}>{l}</button>)}
+          {[["sip","Sipariş bazlı"],["mus","Müşteri bazlı"],["asama","Aşama süreleri"]].map(([id,l]) => <button key={id} onClick={()=>setSekme(id)} style={{ background:sekme===id?T.text:"transparent", color:sekme===id?T.bg2:T.sub, border:"1px solid "+(sekme===id?T.text:T.border), borderRadius:20, padding:"6px 16px", fontSize:13, fontWeight:600, cursor:"pointer" }}>{l}</button>)}
           <span style={{ width:1, background:T.border, margin:"0 6px" }}/>
           {[["hepsi","Hepsi",siparislerHam.length],["acik","Açık",siparislerHam.filter(s=>!tamamMi(s)).length],["tam","Tamamlanan",siparislerHam.filter(tamamMi).length]].map(([id,l,n]) => <button key={id} onClick={()=>setDurumF(id)} style={{ background:durumF===id?T.text+"22":"transparent", color:durumF===id?T.text:T.sub, border:"1px solid "+(durumF===id?T.text:T.border), borderRadius:20, padding:"6px 14px", fontSize:13, fontWeight:600, cursor:"pointer" }}>{l} <span style={{ fontWeight:400, opacity:.7 }}>{n}</span></button>)}
         </div>
-        {sekme==="mus" ? (() => {
+        {sekme==="asama" ? (() => {
+          const asamalar = durumSecenekleri().filter(d => !["tamam","teslim"].includes(d.id));
+          const simdi = Date.now(), GUN = 86400000;
+          const nz = (q) => q==="cizimde" ? "baslanmadi" : q;
+          const ag = {}; asamalar.forEach(d => { ag[d.id] = { adet:0, gram:0, kalem:0, topGun:0, max:0, tah:0, gecSure:0, gecN:0 }; });
+          const bekleyen = [];
+          siparisler.forEach(sp => {
+            if (sp.onayDurum==="bekliyor" || sp.onayDurum==="red" || sp.onayDurum==="iptal") return;
+            const sonG = (sp.durumGecmisi||[]).slice(-1)[0];
+            (sp.kalemler||[]).forEach(k => {
+              const st = nz((sp.kalemDurumlar||{})[k.id] || k.durum || "baslanmadi");
+              const hist = ((sp.kalemAsamaGecmis||{})[k.id]) || [];
+              // geçmiş geçişlerden: her aşamada kalınan süre
+              for (let i = 0; i < hist.length - 1; i++) { const a = ag[nz(hist[i].d)]; if (a) { a.gecSure += (hist[i+1].t - hist[i].t) / GUN; a.gecN++; } }
+              if (!ag[st]) return; // tamamlandı / hurda: bekleyen değil
+              const du=((sp.kalemHurda)||{})[k.id]||0, ia=((sp.kalemIade)||{})[k.id]||0, ta=((sp.kalemTamir)||{})[k.id]||0;
+              const net = Math.max(0, (k.adet||1)-du-ia-ta); if (!net) return;
+              const son = hist.length ? hist[hist.length-1] : null;
+              const since = son ? son.t : (sonG ? sonG.tarih : sp.tarih);
+              const gun = Math.max(0, (simdi - since) / GUN);
+              const hc = hesapla(k, k.secilenAyar||k.refAyar, sp.altinKgUSD||altinKgUSD, sp.mc||mc);
+              const a = ag[st]; a.adet += net; a.gram += hc.mamulGram*net; a.kalem++; a.topGun += gun*net; a.max = Math.max(a.max, gun); if (!son) a.tah++;
+              bekleyen.push({ sp, k, st, net, gun, tahmini: !son });
+            });
+          });
+          // aynı sipariş + aşama tek satır (en uzun bekleyen kalemin süresiyle)
+          const grp = {}; bekleyen.forEach(b => { const key = b.sp.id+"|"+b.st; const g = grp[key] || (grp[key] = { sp:b.sp, st:b.st, net:0, gun:0, tahmini:false }); g.net += b.net; if (b.gun > g.gun) { g.gun = b.gun; g.tahmini = b.tahmini; } });
+          const uzun = Object.values(grp).sort((a,b)=>b.gun-a.gun).slice(0,12);
+          const gunF = (v) => v>=10 ? Math.round(v) : fN(v,1);
+          const thA = (l, sag) => <th style={{ padding:"9px 10px", fontSize:11, fontWeight:600, color:T.sub, textAlign:sag?"right":"left", borderBottom:"1px solid "+T.border, whiteSpace:"nowrap" }}>{l}</th>;
+          return (
+            <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
+              <div style={{ ...kart, padding:0, overflow:"hidden" }}>
+                <div style={{ padding:"14px 16px 4px", fontSize:16, fontWeight:600 }}>Aşamalarda bekleme süreleri <span style={{ fontSize:12, color:T.sub, fontWeight:400 }}>şu an her aşamada bekleyen parçalar</span></div>
+                <div style={{ padding:"0 16px 10px", fontSize:11, color:T.sub, lineHeight:1.5 }}>Süre = parçanın o aşamaya geçtiği günden bugüne. Aşama geçişi kaydı olmayan parçalarda süre, siparişin son durum tarihinden ya da sipariş tarihinden tahmin edilir (T). Bu sürümden sonraki tüm aşama geçişleri tarih/saatiyle kaydedilir; "Geçmiş ort." sütunu bu kayıtlardan dolar.</div>
+                <div style={{ overflow:"auto" }}>
+                  <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13, color:T.text }}>
+                    <thead><tr>{thA("Aşama")}{thA("Şu an adet",1)}{thA("Gram",1)}{thA("Ort. bekleme (gün)",1)}{thA("En uzun (gün)",1)}{thA("Geçmiş ort. (gün)",1)}</tr></thead>
+                    <tbody>
+                      {asamalar.map(d => { const a = ag[d.id]; const ort = a.adet>0 ? a.topGun/a.adet : 0; return (
+                        <tr key={d.id} style={{ borderBottom:"1px solid "+T.border, opacity:a.adet>0||a.gecN>0?1:0.45 }}>
+                          <td style={{ padding:"9px 10px", fontWeight:600 }}><span style={{ display:"inline-block", width:9, height:9, borderRadius:3, background:d.c, marginRight:8 }}/>{d.l}</td>
+                          <td style={{ padding:"9px 10px", textAlign:"right" }}>{a.adet || "—"}</td>
+                          <td style={{ padding:"9px 10px", textAlign:"right", whiteSpace:"nowrap" }}>{a.adet>0 ? fN(a.gram,0)+" gr" : "—"}</td>
+                          <td style={{ padding:"9px 10px", textAlign:"right", fontWeight:600, color:ort>=7?RN.orta:T.text }}>{a.adet>0 ? gunF(ort)+(a.tah>0?" T":"") : "—"}</td>
+                          <td style={{ padding:"9px 10px", textAlign:"right", color:a.max>=7?RN.dusuk:T.text }}>{a.adet>0 ? gunF(a.max) : "—"}</td>
+                          <td style={{ padding:"9px 10px", textAlign:"right", color:T.sub }}>{a.gecN>0 ? gunF(a.gecSure/a.gecN)+" · "+a.gecN+" geçiş" : "—"}</td>
+                        </tr>); })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+              <div style={{ ...kart, padding:0, overflow:"hidden" }}>
+                <div style={{ padding:"14px 16px 6px", fontSize:16, fontWeight:600 }}>En uzun bekleyen siparişler <span style={{ fontSize:12, color:T.sub, fontWeight:400 }}>ilk 12 · satıra tıkla</span></div>
+                <div style={{ overflow:"auto" }}>
+                  <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13, color:T.text }}>
+                    <thead><tr>{thA("Müşteri")}{thA("Sipariş")}{thA("Aşama")}{thA("Adet",1)}{thA("Bekleme (gün)",1)}</tr></thead>
+                    <tbody>
+                      {uzun.map(g => { const d = asamalar.find(x=>x.id===g.st); const po = poBulR(g.sp); return (
+                        <tr key={g.sp.id+g.st} onClick={()=>onAc(g.sp)} style={{ cursor:"pointer", borderBottom:"1px solid "+T.border }} onMouseEnter={e=>e.currentTarget.style.background="rgba(128,128,128,0.08)"} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+                          <td style={{ padding:"9px 10px", fontWeight:600 }}>{g.sp.musKod||g.sp.musteri||"İsimsiz"}</td>
+                          <td style={{ padding:"9px 10px" }}>{g.sp.siparisNo && <span style={kutu}>{g.sp.siparisNo}</span>}{po && <span style={kutu}>PO {po}</span>}</td>
+                          <td style={{ padding:"9px 10px" }}><span style={{ display:"inline-block", width:9, height:9, borderRadius:3, background:d?d.c:T.border, marginRight:8 }}/>{d?d.l:g.st}</td>
+                          <td style={{ padding:"9px 10px", textAlign:"right" }}>{g.net}</td>
+                          <td style={{ padding:"9px 10px", textAlign:"right", fontWeight:600, color:g.gun>=7?RN.dusuk:T.text }}>{gunF(g.gun)}{g.tahmini?" T":""}</td>
+                        </tr>); })}
+                      {uzun.length===0 && <tr><td colSpan={5} style={{ padding:24, textAlign:"center", color:T.sub }}>Bekleyen parça yok.</td></tr>}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          );
+        })() : sekme==="mus" ? (() => {
           const asamalar = durumSecenekleri();
           const topA = musteriler.reduce((a,m)=>a+m.adet,0), topG = musteriler.reduce((a,m)=>a+m.gram,0), topK = musteriler.reduce((a,m)=>a+m.kar,0), topS = musteriler.reduce((a,m)=>a+m.sip,0);
           const topTam = TAMAM_ID.reduce((a,id)=>a+musteriler.reduce((b,m)=>b+(m.asamaA[id]||0),0),0);
@@ -11307,13 +11380,15 @@ function Atolye({ onSirketDegis }) {
     const _tam = (x) => x==="tamam" || x==="teslim";
     d = d.map(sp => {
       const ob = onceki.find(x => String(x.id)===String(sp.id)); if (!ob) return sp;
-      const kd = sp.kalemDurumlar||{}, od = ob.kalemDurumlar||{}; let tt = sp.kalemTamamTarih;
+      const kd = sp.kalemDurumlar||{}, od = ob.kalemDurumlar||{}; let tt = sp.kalemTamamTarih; let ag = sp.kalemAsamaGecmis;
       (sp.kalemler||[]).forEach(k => {
         const yeni = kd[k.id]||k.durum||"baslanmadi", eski = od[k.id]||k.durum||"baslanmadi";
+        // Aşama geçiş kaydı (Karlılık raporu › Aşama süreleri için): kalem aşama değiştirince {d: yeni aşama, t: zaman}
+        if (yeni !== eski) ag = { ...(ag||{}), [k.id]: [ ...(((ag||{})[k.id])||[]), { d: yeni, t: Date.now() } ] };
         if (_tam(yeni) && !_tam(eski)) tt = { ...(tt||{}), [k.id]: Date.now() };
         else if (!_tam(yeni) && tt && tt[k.id]) { const c = { ...tt }; delete c[k.id]; tt = c; }
       });
-      return tt===sp.kalemTamamTarih ? sp : { ...sp, kalemTamamTarih: tt };
+      return (tt===sp.kalemTamamTarih && ag===sp.kalemAsamaGecmis) ? sp : { ...sp, kalemTamamTarih: tt, kalemAsamaGecmis: ag };
     });
     const yeniIdler = new Set(d.map(x => String(x.id)));
     const silinen = onceki.filter(x => !yeniIdler.has(String(x.id))).map(x => String(x.id));
@@ -13261,10 +13336,11 @@ function Atolye({ onSirketDegis }) {
     const gecikti = !!teslimT && teslimT < bugun0.getTime() && !kapali;
     return { ayarlar, hurda, aktif, tam, pct, gram, gumus, altin:gram-gumus, kar, adet, enYaygin, sonraki, son, geciken, gecikti, teslimT };
   };
+  function baslandiMi(s) { return (s.kalemler||[]).some(k => { const d0 = (s.kalemDurumlar||{})[k.id]||k.durum||"baslanmadi"; const dd = DURUMLAR.find(y=>y.id===d0); return !!dd && dd.s>=3; }); } // en az bir kalem Dökümde veya ilerisinde
   const grupNo = s => {
     if (s.onayDurum==="bekliyor") return 0;
     if (s.onayDurum==="red"||s.onayDurum==="iptal") return 4;
-    const son = SON(s); if (!son) return 1;
+    const son = SON(s); if (!son) return baslandiMi(s) ? 2 : 1;
     return ["tamam","teslim"].includes(son.durum) ? 3 : 2;
   };
   const GRUP_AD = ["Onay bekliyor","Başlanmadı","Üretimde","Tamamlanan","İptal / Red"];
@@ -13272,7 +13348,7 @@ function Atolye({ onSirketDegis }) {
     if (s.onayDurum==="bekliyor") return { l:"Onay bekliyor", c:"#f5b942" };
     if (s.onayDurum==="red") return { l:"Reddedildi", c:"#e85a4f" };
     if (s.onayDurum==="iptal") return { l:"İptal", c:"#e85a4f" };
-    const son = SON(s); if (!son) return { l:"Başlanmadı", c:"#998a6e" };
+    const son = SON(s); if (!son) { if (baslandiMi(s)) { const o2 = DURUMLAR.find(d=>d.id===ozet(s).enYaygin); return { l:o2?durumEtiket(o2):"Üretimde", c:o2?.c||"#e8833a" }; } return { l:"Başlanmadı", c:"#998a6e" }; }
     const o = DURUMLAR.find(d=>d.id===son.durum);
     return { l:o?durumEtiket(o):son.durum, c:o?.c||"#998a6e" };
   };
@@ -13299,10 +13375,10 @@ function Atolye({ onSirketDegis }) {
     if (sipTarih1 && s.tarih < new Date(sipTarih1).getTime()) return false;
     if (sipTarih2 && s.tarih > new Date(sipTarih2).getTime()+86399999) return false;
     if (sipMetal!=="tumu") { const oo=ozet(s); if (sipMetal==="gumus" ? oo.gumus<=0 : oo.altin<=0.0001) return false; }
-    if (sipAsama) { if (s.onayDurum==="bekliyor"||s.onayDurum==="red"||s.onayDurum==="iptal") return false; const kd0=s.kalemDurumlar||{}; if (!(s.kalemler||[]).some(k=>(kd0[k.id]||k.durum||"baslanmadi")===sipAsama)) return false; }
+    if (sipAsama) { if (s.onayDurum==="bekliyor"||s.onayDurum==="red"||s.onayDurum==="iptal") return false; const kd0=s.kalemDurumlar||{}; if (!(s.kalemler||[]).some(k=>{ const q0=kd0[k.id]||k.durum||"baslanmadi"; return (q0==="cizimde"?"baslanmadi":q0)===sipAsama; })) return false; }
     const son = SON(s);
     if (sipFiltre==="aktif") { if (!son||BIT.includes(son.durum)) return false; }
-    if (sipFiltre==="baslanmadi") { if (s.durumGecmisi?.length) return false; }
+    if (sipFiltre==="baslanmadi") { if (s.durumGecmisi?.length || baslandiMi(s)) return false; }
     if (sipFiltre==="dokumde") { if (son?.durum!=="dokum") return false; }
     if (sipFiltre==="geciken") { if (!son||BIT.includes(son.durum)||isGunuSure(son.tarih,Date.now())<=7*24*60*60*1000) return false; }
     if (sipFiltre==="teslimgecti") { if (!ozet(s).gecikti) return false; }
@@ -13328,7 +13404,7 @@ function Atolye({ onSirketDegis }) {
   const filtreler = [
     { id:"tumu", l:"Tümü", cnt:siparisler.length },
     { id:"aktif", l:"Aktif", cnt:siparisler.filter(s=>{const n=SON(s);return n&&!BIT.includes(n.durum);}).length },
-    { id:"baslanmadi", l:"Başlanmadı", cnt:siparisler.filter(s=>!s.durumGecmisi?.length).length },
+    { id:"baslanmadi", l:"Başlanmadı", cnt:siparisler.filter(s=>!s.durumGecmisi?.length && !baslandiMi(s)).length },
     { id:"dokumde", l:"Dökümde", cnt:siparisler.filter(s=>SON(s)?.durum==="dokum").length },
     { id:"teslimgecti", l:"Teslimi geçen", cnt:siparisler.filter(s=>ozet(s).gecikti).length },
     { id:"geciken", l:"Aşamada 7+ gün", cnt:siparisler.filter(s=>ozet(s).geciken).length },
@@ -13450,7 +13526,7 @@ function Atolye({ onSirketDegis }) {
               <div style={{ fontSize:10, color:"#7a6f5a", fontWeight:600, letterSpacing:.6, marginBottom:8 }}>ÜRETİM ŞERİDİ <span style={{ fontWeight:600 }}>· aşamaya tıkla = tüm kalemleri oraya al</span></div>
               <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(92px, 1fr))", gap:5 }}>
                 {st.map((d,i) => {
-                  const n = (s.kalemler||[]).filter(k=>(kdd[k.id]||k.durum||"baslanmadi")===d.id).reduce((a,k)=>a+(k.adet||1),0);
+                  const n = (s.kalemler||[]).filter(k=>{ const q0=kdd[k.id]||k.durum||"baslanmadi"; return (q0==="cizimde"?"baslanmadi":q0)===d.id; }).reduce((a,k)=>a+(k.adet||1),0);
                   const h = (s.durumGecmisi||[]).find(x=>x.durum===d.id);
                   const aktif = o.enYaygin===d.id, gecti = i<idx;
                   return (
@@ -13472,7 +13548,7 @@ function Atolye({ onSirketDegis }) {
         </div>
         <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(340px, 1fr))", gap:8 }}>
           {konfSiralaListe(s.kalemler||[], sipSira).map(k => {
-            const mev = kd[k.id]||k.durum||"baslanmadi";
+            const mev0 = kd[k.id]||k.durum||"baslanmadi", mev = mev0==="cizimde" ? "baslanmadi" : mev0;
             const dur = DURUMLAR.find(d=>d.id===mev)||DURUMLAR[0];
             const hA=(s.kalemHurda||{})[k.id]||0, iA=(s.kalemIade||{})[k.id]||0, tA=(s.kalemTamir||{})[k.id]||0;
             const sec_ = durumSecenekleri();
@@ -13687,7 +13763,7 @@ function Atolye({ onSirketDegis }) {
             const g = ay==="925";
             if (sipMetal==="gumus" && !g) return;
             if (sipMetal==="altin" && g) return;
-            const st = kd[k.id]||k.durum||"baslanmadi";
+            const st = (kd[k.id]||k.durum||"baslanmadi")==="cizimde" ? "baslanmadi" : (kd[k.id]||k.durum||"baslanmadi");
             const du=((sp.kalemHurda)||{})[k.id]||0, ia=((sp.kalemIade)||{})[k.id]||0, ta=((sp.kalemTamir)||{})[k.id]||0;
             const net = Math.max(0,(k.adet||1)-du-ia-ta);
             const hc = hesapla(k,ay,sp.altinKgUSD,sp.mc);
@@ -13716,9 +13792,9 @@ function Atolye({ onSirketDegis }) {
                   </button>
                 );
                 return [
-                  ...[["tumu","Tümü","#998a6e"],["aktif","Aktif","#6aa874"]].map(([id,l,col])=>{ const f=filtreler.find(x=>x.id===id); return kutu(id,l,col,f?f.cnt:0,"sipariş","", !sipAsama && (id==="tumu"?tumuF:sipFiltre===id), ()=>{ setSipAsama(""); setSipFiltre(id); }, false); }),
+                  ...[["tumu","Tümü","#998a6e"]].map(([id,l,col])=>{ const f=filtreler.find(x=>x.id===id); return kutu(id,l,col,f?f.cnt:0,"sipariş","", !sipAsama && (id==="tumu"?tumuF:sipFiltre===id), ()=>{ setSipAsama(""); setSipFiltre(id); }, false); }),
                   ...asamalar.map(d => { const l = say(d.id), adet = l.reduce((a,x)=>a+x.net,0), gr = l.reduce((a,x)=>a+x.gram,0), on = sipAsama===d.id; return kutu(d.id, durumEtiket(d), d.c, adet, "adet", l.length?fN(gr,0)+" gr":"", on, ()=>{ setSipFiltre("tumu"); setSipAsama(on?"":d.id); }, !l.length&&!on); }),
-                  ...[["teslimgecti","Teslimi geçen","#d9736b"],["geciken","Aşamada 7+ gün","#d9a066"]].map(([id,l,col])=>{ const f=filtreler.find(x=>x.id===id); const on=!sipAsama && sipFiltre===id; return kutu(id,l,col,f?f.cnt:0,"sipariş","", on, ()=>{ setSipAsama(""); setSipFiltre(on?"tumu":id); }, !(f&&f.cnt)&&!on); })
+                  ...[["teslimgecti","Teslimi geçen","#d9736b"]].map(([id,l,col])=>{ const f=filtreler.find(x=>x.id===id); const on=!sipAsama && sipFiltre===id; return kutu(id,l,col,f?f.cnt:0,"sipariş","", on, ()=>{ setSipAsama(""); setSipFiltre(on?"tumu":id); }, !(f&&f.cnt)&&!on); })
                 ];
               })()}
             </div>
