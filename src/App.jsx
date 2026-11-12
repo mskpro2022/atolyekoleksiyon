@@ -13531,7 +13531,7 @@ function Atolye({ onSirketDegis }) {
                   </div>
                 );
               })()}
-              <div style={{ display:"grid", gridTemplateColumns:sipSutun>0 ? "repeat("+sipSutun+", minmax(0, 1fr))" : "repeat(auto-fill, minmax(max("+(coklu?520:560)+"px, calc((100% - 72px) / 4)), 1fr))", gridAutoRows:"1fr", gap:24, alignItems:"stretch" }}>
+              <div style={{ display:"grid", gridTemplateColumns:sipSutun>0 ? "repeat("+sipSutun+", minmax(0, 1fr))" : "repeat(auto-fill, minmax(max("+(coklu?520:560)+"px, calc((100% - 72px) / 4)), 1fr))", gridAutoRows:nTam>0?"auto":"1fr", gap:24, alignItems:"stretch" }}>
                 {sl.length===0 && <div style={{ gridColumn:"1 / -1", color:"#665d4a", fontSize:12, textAlign:"center", padding:"24px 0" }}>Buraya sürükleyip bırak</div>}
                 {sl.map((s,i) => {
                   const tamSip = grupNo(s)===3;
