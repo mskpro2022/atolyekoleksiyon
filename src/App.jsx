@@ -3944,24 +3944,43 @@ function KarlilikRaporuEkrani({ T, GH, siparisler, altinKgUSD, mc, onAc, onModel
   const veri = useMemo(() => {
     const satirlar = siparisler.map(s => {
       let adet=0, gram=0, kar=0, hurda=0, iade=0, tamir=0;
+      const asamaA = {}, asamaG = {};
       const kalemler = (s.kalemler||[]).map(k => {
         const hc = hesapla(k, k.secilenAyar||k.refAyar, s.altinKgUSD||altinKgUSD, s.mc||mc);
         const a = k.adet||1, h=((s.kalemHurda)||{})[k.id]||0, i=((s.kalemIade)||{})[k.id]||0, t=((s.kalemTamir)||{})[k.id]||0;
         const net = Math.max(0, a-h-i-t);
         adet+=net; gram+=hc.mamulGram*net; kar+=hc.karHas*net; hurda+=h; iade+=i; tamir+=t;
+        const st = ((s.kalemDurumlar)||{})[k.id] || k.durum || "baslanmadi";
+        asamaA[st] = (asamaA[st]||0) + net; asamaG[st] = (asamaG[st]||0) + hc.mamulGram*net;
         return { k, h, i, t, hn:((s.kalemHurdaNeden)||{})[k.id]||"", in_:((s.kalemIadeNeden)||{})[k.id]||"", tn:((s.kalemTamirNeden)||{})[k.id]||"" };
       });
       const mly = gram>0 ? kar/gram : 0;
-      return { s, kalemler, adet, gram, kar, usd:kar*hasUSD, hurda, iade, tamir, mly, grup:grupBul(mly), po:poBulR(s) };
+      return { s, kalemler, adet, gram, kar, usd:kar*hasUSD, hurda, iade, tamir, mly, grup:grupBul(mly), po:poBulR(s), asamaA, asamaG };
     });
+    // Müşteri bazlı özet (Karlılık raporu › Müşteri bazlı sekmesi)
+    const musMap = {};
+    satirlar.forEach(x => {
+      const ad = x.s.musKod || x.s.musteri || "İsimsiz";
+      const m = musMap[ad] || (musMap[ad] = { ad, sip:0, adet:0, gram:0, kar:0, usd:0, asamaA:{}, asamaG:{} });
+      m.sip++; m.adet+=x.adet; m.gram+=x.gram; m.kar+=x.kar; m.usd+=x.usd;
+      Object.keys(x.asamaA).forEach(k => { m.asamaA[k]=(m.asamaA[k]||0)+x.asamaA[k]; m.asamaG[k]=(m.asamaG[k]||0)+(x.asamaG[k]||0); });
+    });
+    const musteriler = Object.values(musMap);
     const top = satirlar.reduce((a,x)=>({ adet:a.adet+x.adet, gram:a.gram+x.gram, kar:a.kar+x.kar, usd:a.usd+x.usd, hurda:a.hurda+x.hurda, iade:a.iade+x.iade, tamir:a.tamir+x.tamir }), { adet:0, gram:0, kar:0, usd:0, hurda:0, iade:0, tamir:0 });
     const sayim = { iyi:0, orta:0, dusuk:0 }; satirlar.forEach(x=>{ sayim[x.grup]++; });
     const kayipMap = {};
     satirlar.forEach(x => x.kalemler.forEach(({k,h,i,t}) => { if (h||i||t) { const key=k.kod||k.id; const m = kayipMap[key]||(kayipMap[key]={ id:k.id, kod:k.kod||"?", ad:k.ad||"", h:0, i:0, t:0 }); m.h+=h; m.i+=i; m.t+=t; } }));
     const kayipModeller = Object.values(kayipMap).sort((a,b)=>(b.h+b.i+b.t)-(a.h+a.i+a.t));
-    return { satirlar, top, sayim, kayipModeller };
+    return { satirlar, top, sayim, kayipModeller, musteriler };
   }, [siparisler, altinKgUSD, mc]);
-  const { satirlar, top, sayim, kayipModeller } = veri;
+  const { satirlar, top, sayim, kayipModeller, musteriler } = veri;
+  const [sekme, setSekme] = useState("sip");
+  const [musSira, setMusSira] = useState({ k:"gram", d:-1 });
+  const [musAcik, setMusAcik] = useState("");
+  const TAMAM_ID = ["tamam","teslim"];
+  const musDeger = { ad:m=>m.ad, sip:m=>m.sip, gram:m=>m.gram, adet:m=>m.adet, kar:m=>m.kar, mly:m=>m.gram>0?m.kar/m.gram:0,
+    tam:m=>m.adet>0 ? TAMAM_ID.reduce((a,id)=>a+(m.asamaA[id]||0),0)/m.adet : 0 };
+  const musListe = [...musteriler].sort((a,b)=>{ const f=musDeger[musSira.k], A=f(a), B=f(b); return (A<B?-1:A>B?1:0)*musSira.d; });
   const topMly = top.gram>0 ? top.kar/top.gram : 0;
   const tarihK = (t) => new Date(t).toLocaleDateString("tr-TR",{day:"2-digit",month:"2-digit",year:"2-digit"});
   const q = ara.trim().toLowerCase();
@@ -3994,6 +4013,65 @@ function KarlilikRaporuEkrani({ T, GH, siparisler, altinKgUSD, mc, onAc, onModel
           <button onClick={onPdf} style={{ ...GH }}>PDF al</button>
         </div>
         <RpKapi T={T} GH={GH} baslik="Karlılık">
+        <div style={{ display:"flex", gap:6, marginBottom:14 }}>
+          {[["sip","Sipariş bazlı"],["mus","Müşteri bazlı"]].map(([id,l]) => <button key={id} onClick={()=>setSekme(id)} style={{ background:sekme===id?T.text:"transparent", color:sekme===id?T.bg2:T.sub, border:"1px solid "+(sekme===id?T.text:T.border), borderRadius:20, padding:"6px 16px", fontSize:13, fontWeight:600, cursor:"pointer" }}>{l}</button>)}
+        </div>
+        {sekme==="mus" ? (() => {
+          const asamalar = durumSecenekleri();
+          const topA = musteriler.reduce((a,m)=>a+m.adet,0), topG = musteriler.reduce((a,m)=>a+m.gram,0), topK = musteriler.reduce((a,m)=>a+m.kar,0), topS = musteriler.reduce((a,m)=>a+m.sip,0);
+          const topTam = TAMAM_ID.reduce((a,id)=>a+musteriler.reduce((b,m)=>b+(m.asamaA[id]||0),0),0);
+          const th = (k,l,sag) => <th onClick={()=>setMusSira(s=>({ k, d: s.k===k ? -s.d : -1 }))} style={{ padding:"9px 10px", fontSize:11, fontWeight:600, color:musSira.k===k?T.text:T.sub, textAlign:sag?"right":"left", cursor:"pointer", whiteSpace:"nowrap", userSelect:"none", borderBottom:"1px solid "+T.border }}>{l}{musSira.k===k ? (musSira.d<0?" ↓":" ↑") : ""}</th>;
+          const yuzde = (m,id) => m.adet>0 ? (m.asamaA[id]||0)/m.adet*100 : 0;
+          return (
+            <div style={{ ...kart, padding:0, overflow:"hidden" }}>
+              <div style={{ padding:"14px 16px 6px", fontSize:16, fontWeight:600 }}>Müşteri bazlı özet <span style={{ fontSize:12, color:T.sub, fontWeight:400 }}>{musListe.length} müşteri · hurda/iade/tamir düşülmüş net · satıra tıkla: aşama detayı</span></div>
+              <div style={{ padding:"0 16px 10px", display:"flex", flexWrap:"wrap", gap:10, fontSize:11, color:T.sub }}>
+                {asamalar.map(d => <span key={d.id} style={{ display:"inline-flex", alignItems:"center", gap:4 }}><span style={{ width:9, height:9, borderRadius:3, background:d.c }}/>{d.l}</span>)}
+              </div>
+              <div style={{ overflow:"auto" }}>
+                <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13, color:T.text }}>
+                  <thead><tr>{th("ad","Müşteri")}{th("sip","Sipariş",1)}{th("gram","Kg",1)}{th("adet","Parça",1)}{th("kar","Kâr (has)",1)}{th("mly","mly/gr",1)}<th style={{ padding:"9px 10px", fontSize:11, fontWeight:600, color:T.sub, textAlign:"left", borderBottom:"1px solid "+T.border, minWidth:220 }}>İlerleme (aşamalar)</th>{th("tam","Tamamlanan",1)}</tr></thead>
+                  <tbody>
+                    {musListe.map(m => { const mly = m.gram>0 ? m.kar/m.gram : 0; const rc = RN[grupBul(mly)]; const tam = m.adet>0 ? TAMAM_ID.reduce((a,id)=>a+(m.asamaA[id]||0),0)/m.adet*100 : 0; const ac = musAcik===m.ad;
+                      return (<Fragment key={m.ad}>
+                        <tr onClick={()=>setMusAcik(ac?"":m.ad)} style={{ cursor:"pointer", borderBottom:"1px solid "+T.border }} onMouseEnter={e=>e.currentTarget.style.background="rgba(128,128,128,0.08)"} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+                          <td style={{ padding:"9px 10px", fontWeight:600 }}>{ac?"▾ ":"▸ "}{m.ad}</td>
+                          <td style={{ padding:"9px 10px", textAlign:"right" }}>{m.sip}</td>
+                          <td style={{ padding:"9px 10px", textAlign:"right", whiteSpace:"nowrap" }}>{fN(m.gram/1000,2)} kg</td>
+                          <td style={{ padding:"9px 10px", textAlign:"right" }}>{m.adet}</td>
+                          <td style={{ padding:"9px 10px", textAlign:"right", color:rc, fontWeight:600, whiteSpace:"nowrap" }}>{fN(m.kar,3)}{m.usd>0 && <div style={{ fontSize:11, color:T.sub, fontWeight:400 }}>≈ ${m.usd.toFixed(0)}</div>}</td>
+                          <td style={{ padding:"9px 10px", textAlign:"right", color:rc, fontWeight:600 }}>{fN(mly,3)}</td>
+                          <td style={{ padding:"9px 10px" }}><div style={{ display:"flex", height:12, borderRadius:6, overflow:"hidden", background:T.border }}>{asamalar.map(d => { const y = yuzde(m,d.id); return y>0 ? <div key={d.id} title={d.l+" %"+Math.round(y)} style={{ width:y+"%", background:d.c }}/> : null; })}</div></td>
+                          <td style={{ padding:"9px 10px", textAlign:"right", fontWeight:600, color:tam>=100?RN.iyi:T.text }}>%{Math.round(tam)}</td>
+                        </tr>
+                        {ac && <tr style={{ borderBottom:"1px solid "+T.border }}><td colSpan={8} style={{ padding:"4px 10px 12px 26px" }}>
+                          <div style={{ display:"flex", flexWrap:"wrap", gap:8 }}>
+                            {asamalar.filter(d => (m.asamaA[d.id]||0)>0).map(d => (
+                              <div key={d.id} style={{ border:"1px solid "+T.border, borderTop:"3px solid "+d.c, borderRadius:8, padding:"6px 10px", minWidth:110 }}>
+                                <div style={{ fontSize:11, color:T.sub }}>{d.l}</div>
+                                <div style={{ fontSize:16, fontWeight:600 }}>{m.asamaA[d.id]} <span style={{ fontSize:11, fontWeight:400, color:T.sub }}>adet · %{Math.round(yuzde(m,d.id))}</span></div>
+                                <div style={{ fontSize:11, color:T.sub }}>{fN((m.asamaG[d.id]||0)/1000,2)} kg</div>
+                              </div>
+                            ))}
+                          </div>
+                        </td></tr>}
+                      </Fragment>); })}
+                    {musListe.length===0 && <tr><td colSpan={8} style={{ padding:30, textAlign:"center", color:T.sub }}>Sipariş yok.</td></tr>}
+                    {musListe.length>0 && <tr style={{ fontWeight:600 }}>
+                      <td style={{ padding:"10px", fontSize:11, color:T.sub }}>TOPLAM</td>
+                      <td style={{ padding:"10px", textAlign:"right" }}>{topS}</td>
+                      <td style={{ padding:"10px", textAlign:"right", whiteSpace:"nowrap" }}>{fN(topG/1000,2)} kg</td>
+                      <td style={{ padding:"10px", textAlign:"right" }}>{topA}</td>
+                      <td style={{ padding:"10px", textAlign:"right" }}>{fN(topK,3)}</td>
+                      <td style={{ padding:"10px", textAlign:"right" }}>{fN(topG>0?topK/topG:0,3)}</td>
+                      <td/>
+                      <td style={{ padding:"10px", textAlign:"right" }}>%{topA>0?Math.round(topTam/topA*100):0}</td></tr>}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          );
+        })() : (
         <div style={{ display:"flex", gap:16, alignItems:"flex-start", flexWrap:"wrap" }}>
           <div style={{ flex:"0 0 380px", maxWidth:"100%", display:"flex", flexDirection:"column", gap:14 }}>
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
@@ -4075,6 +4153,7 @@ function KarlilikRaporuEkrani({ T, GH, siparisler, altinKgUSD, mc, onAc, onModel
             </div>
           </div>
         </div>
+        )}
         </RpKapi>
       </div>
     </div>
