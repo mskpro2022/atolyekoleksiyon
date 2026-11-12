@@ -13533,10 +13533,12 @@ function Atolye({ onSirketDegis }) {
                     <div key={s.id} draggable={!bitti(s)} onDragStart={e=>{ setSipSurukle(s.id); e.dataTransfer.setData("text/plain", s.id); e.dataTransfer.effectAllowed="move"; }} onDragEnd={()=>{ setSipSurukle(""); setSipHedefAy(""); }}
                       onClick={()=>setSipDrawer(s.id)}
                       style={{ display:"flex", flexDirection:"column", cursor:bitti(s)?"default":"grab", opacity:sipSurukle===s.id?0.4:1, zoom:kartZoom, padding:"12px 14px", borderRadius:12, background:_acikTema?"#f8f8f9":"#0c0c0c", color:_yazi, ...isik(c.c), border:"1px solid "+(_acikTema?T.border:"#2c2c2c"), borderLeft:"3px solid "+c.c }}>
+                      <div style={{ zoom:1.12, paddingBottom:2 }}>
                       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:6 }}>
                         <span style={{ display:"flex", gap:9, flexWrap:"nowrap", alignItems:"center", minWidth:0, overflow:"hidden" }}>
                           <span style={kutuS({ fontSize:14.5, fontWeight:600, borderColor:_acikTema?"#777":"#888", flexShrink:0 })}>{s.musKod||s.musteri||"İsimsiz"}</span>
                           {(poBul(s)||s.siparisNo) && <span style={kutuS({ minWidth:0, overflow:"hidden", textOverflow:"ellipsis", display:"block" })}>{poBul(s)?"PO "+poBul(s):s.siparisNo}</span>}
+                          {poBul(s) && s.siparisNo && <span style={kutuS({ flexShrink:0, opacity:.8 })}>{s.siparisNo}</span>}
                           {Object.keys(o.ayarlar).map(a=><span key={a} title={a+" · "+fN(o.ayarlar[a],1)+" gr"} style={kutuS({ fontWeight:700, flexShrink:0, color:ayarRenk(a), borderColor:ayarRenk(a) })}>{a==="925"?"925":a}</span>)}
                           {s.musEtiket && <span style={kutuS({ flexShrink:0 })}>{s.musEtiket}</span>}
                           {(o.altin>0.0001 || o.gumus<=0) && <span style={kutuS({ fontSize:15, fontWeight:600, padding:"2px 9px", flexShrink:0, borderColor:gramRenk(o.altin)+"66", color:"color-mix(in srgb, "+gramRenk(o.altin)+" 40%, "+_yazi+")" })}>{fN(o.altin,1)} gr</span>}{o.gumus>0 && <span style={kutuS({ fontSize:15, fontWeight:600, padding:"2px 9px", flexShrink:0, borderColor:ayarRenk("925"), color:ayarRenk("925") })}>{fN(o.gumus,1)} gr 925</span>}
@@ -13544,18 +13546,18 @@ function Atolye({ onSirketDegis }) {
                         </span>
                         <span style={{ flexShrink:0 }}>{rozet(c.l, c.c)}</span>
                       </div>
-                      <div style={{ display:"flex", gap:9, flexWrap:"nowrap", marginTop:8 }}>
+                      <div style={{ display:"flex", gap:9, flexWrap:"nowrap", marginTop:8, alignItems:"center" }}>
                         <span style={kutuS()}>Sip. {gTarihU(s.tarih)}</span>
                         <span style={kutuS({ color:gecikti?"#ff5a4d":_yazi, fontWeight:gecikti?600:400 })}>Teslim {s.teslimTarihi?gTarihU(teslimT):"—"}{gecikti && " ⚠"}</span>
+                        <span onClick={e=>e.stopPropagation()} style={kutuS({ marginLeft:"auto", padding:0, flexShrink:0 })}>
+                          <select value={key} disabled={bitti(s)} onChange={e=>aya_tasi(s,e.target.value)} title={bitti(s)?"Tamamlanan sipariş taşınamaz":"Başka aya taşı (planlanan ay)"} style={{ ...IS, width:"auto", background:"transparent", border:"none", padding:"2px 6px", fontSize:12.1, lineHeight:"17px", color:_yazi }}>
+                            {sirKeys.map(k2=><option key={k2} value={k2}>{ayAdi(k2)}</option>)}
+                          </select>
+                        </span>
                       </div>
-                      
+                      </div>
+
                       {fotolar.length>0 && <div style={{ display:"grid", gridTemplateColumns:"repeat(4, minmax(0,1fr))", gap:5, marginTop:8 }}>{fotolar.map((k,ix)=><div key={k.id} title={(k.kod||"")+" "+(k.ad||"")+" — model kartını aç"} onClick={e=>{ const mm=modeller.find(x=>x.id===k.id) || modeller.find(x=>k.kod && x.kod===k.kod); if (mm) { e.stopPropagation(); openEM(mm); } }} style={{ position:"relative", aspectRatio:"1 / 1", borderRadius:8, overflow:"hidden", background:"rgba(0,0,0,0.06)", cursor:"zoom-in" }}><img loading="lazy" decoding="async" src={k.foto} alt="" draggable={false} style={{ width:"100%", height:"100%", objectFit:"cover", display:"block" }}/>{ix===7 && fotoHepsi.length>8 && <div style={{ position:"absolute", inset:0, background:"rgba(0,0,0,0.5)", color:"#fff", fontSize:15, fontWeight:600, display:"flex", alignItems:"center", justifyContent:"center" }}>+{fotoHepsi.length-7}</div>}</div>)}</div>}
-                      <div onClick={e=>e.stopPropagation()} style={{ marginTop:"auto", paddingTop:7, display:"flex", justifyContent:"space-between", alignItems:"center", gap:8 }}>
-                        <span style={{ fontSize:12.1, color:_yazi, opacity:.7, whiteSpace:"nowrap" }}>{poBul(s)?(s.siparisNo||""):""}</span>
-                        <select value={key} disabled={bitti(s)} onChange={e=>aya_tasi(s,e.target.value)} title={bitti(s)?"Tamamlanan sipariş taşınamaz":"Başka aya taşı (planlanan ay)"} style={{ ...IS, width:"auto", background:"transparent", border:"none", padding:"2px 0", fontSize:12.1, color:_yazi, opacity:.7 }}>
-                          {sirKeys.map(k2=><option key={k2} value={k2}>{ayAdi(k2)}</option>)}
-                        </select>
-                      </div>
                     </div>
                   );
                 })}
