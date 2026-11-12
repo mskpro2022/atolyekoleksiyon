@@ -11405,6 +11405,54 @@ function Atolye({ onSirketDegis }) {
     })();
   }, [guvenliKaydet]);
 
+  // ── Model kartındaki gram/taş gramı → AÇIK siparişlerin kalemlerine yansıt (fiyatlar sipariş/müşteri bazlı kalır, dokunulmaz) ──
+  // Tamamlanan/teslim/hurda kalemler ve iptal/red siparişler değişmez. Önce sorar; reddedilen fark aynı oturumda tekrar sorulmaz.
+  const modellerRefS = useRef([]); modellerRefS.current = modeller;
+  const gramRedRef = useRef(new Set());
+  const gramFnRef = useRef(null);
+  const gramIlkRef = useRef(false);
+  const gramSenkronSor = () => {
+    const mm = new Map((modellerRefS.current||[]).map(m => [String(m.id), m]));
+    const sips = siparislerRefGuvenli.current || [];
+    const fark = [];
+    sips.forEach(sp => {
+      if (sp.onayDurum==="red" || sp.onayDurum==="iptal") return;
+      (sp.kalemler||[]).forEach(k => {
+        const m = mm.get(String(k.id)); if (!m) return;
+        const st = (sp.kalemDurumlar||{})[k.id] || k.durum || "baslanmadi";
+        if (["tamam","teslim","hurda"].includes(st)) return;
+        const g = Number(m.gram)||0, t = Number(m.tasGram)||0;
+        if (!(g > 0)) return;
+        if (Math.abs((Number(k.gram)||0) - g) < 0.0005 && Math.abs((Number(k.tasGram)||0) - t) < 0.0005) return;
+        const rk = k.id + ":" + g + ":" + t;
+        if (gramRedRef.current.has(rk)) return;
+        fark.push({ sp, k, m, g, t, rk });
+      });
+    });
+    if (!fark.length) return;
+    const satirlar = fark.slice(0, 8).map(f => "• " + (f.k.kod || f.m.kod || "?") + ": " + fN(Number(f.k.gram)||0, 2) + " → " + fN(f.g, 2) + " gr" + (Math.abs((Number(f.k.tasGram)||0) - f.t) >= 0.0005 ? " (taş " + fN(Number(f.k.tasGram)||0, 2) + " → " + fN(f.t, 2) + ")" : "") + "   [" + (f.sp.siparisNo || f.sp.musKod || f.sp.musteri || "sipariş") + ", " + (f.k.adet||1) + " adet]");
+    const msg = "Model kartında gramı değişen ürünler var; açık siparişlerde eski gram kalmış:\n\n" + satirlar.join("\n") + (fark.length > 8 ? "\n… ve " + (fark.length - 8) + " kalem daha" : "") + "\n\nSiparişlerdeki gram da güncellensin mi?\n(Fiyatlar değişmez; tamamlanan kalemlere dokunulmaz.)";
+    if (!window.confirm(msg)) { fark.forEach(f => gramRedRef.current.add(f.rk)); return; }
+    const mapK = new Map(fark.map(f => [String(f.sp.id) + "|" + String(f.k.id), f]));
+    svS(sips.map(sp => {
+      if (!(sp.kalemler||[]).some(k => mapK.has(String(sp.id) + "|" + String(k.id)))) return sp;
+      const log = { ...(sp.gramDuzeltme||{}) };
+      const kalemler = sp.kalemler.map(k => {
+        const f = mapK.get(String(sp.id) + "|" + String(k.id)); if (!f) return k;
+        log[k.id] = [ ...(log[k.id]||[]), { eski:{ gram:k.gram, tasGram:k.tasGram, refAyar:k.refAyar }, yeni:{ gram:f.g, tasGram:f.t, refAyar:f.m.refAyar||k.refAyar }, t:Date.now() } ];
+        return { ...k, gram:f.g, tasGram:f.t, refAyar:f.m.refAyar||k.refAyar };
+      });
+      return { ...sp, kalemler, gramDuzeltme: log };
+    }));
+    toastGoster("ok", fark.length + " kalemin gramı model kartına göre güncellendi");
+  };
+  gramFnRef.current = gramSenkronSor;
+  useEffect(() => {
+    if (gramIlkRef.current || !siparisler.length || !modeller.length) return;
+    gramIlkRef.current = true;
+    setTimeout(() => { try { gramFnRef.current && gramFnRef.current(); } catch (e) { console.error("gram senkron:", e); } }, 3500);
+  }, [siparisler.length, modeller.length]);
+
 
   // ── BSP: "İşleme Al" → önce teslim tarihi sorulur, müşteri vitrinde "İşleme alındı" + teslim tarihini görür ──
   const [islemAlModal, setIslemAlModal] = useState(null); // { id, tarih, istenen }
@@ -11695,6 +11743,7 @@ function Atolye({ onSirketDegis }) {
           : [];
         svMUpsert([editliModel, ...digerDegisenler]);
         islemKaydet(AKTIF_SIRKET_ONEK, "düzenle", "model", (obj.kod || "") + " · " + (obj.ad || ""));
+        setTimeout(() => { try { gramFnRef.current && gramFnRef.current(); } catch (e) { console.error("gram senkron:", e); } }, 1500); // model gramı değiştiyse açık siparişleri güncellemeyi öner
       } else {
         const yeniId = uid();
         // Foto base64 ise Storage'a yükle
