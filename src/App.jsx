@@ -230,7 +230,7 @@ function hesapla(m, secilenAyar, altinKgUSD, varsayilanMly) {
   const refGram    = Number(m.gram) || 0;
   const tasGram    = Number(m.tasGram) || 0;
   const aktifAyar  = secilenAyar || refAyar;
-  const mamulGram  = gramDonustur(refGram, refAyar, aktifAyar, tasGram + (Number(m.tasKarDus) || 0)); // kayıtlı taş gramı "kârdan düş" kadar azaltılmış olabilir; mal gramı için gerçek taş gramı kullanılır
+  const mamulGram  = gramDonustur(refGram, refAyar, aktifAyar, tasGram);
   const ayarOran   = (AYARLAR.find(a => a.id === aktifAyar) || { o: 0.585 }).o;
   const malMly     = Number(m.madenCarpan) || Number(varsayilanMly) || 0.030;
   const hasGramUSD = altinKgUSD > 0 ? altinKgUSD / 1000 : 0;
@@ -268,8 +268,8 @@ function hesapla(m, secilenAyar, altinKgUSD, varsayilanMly) {
   const topMaliyetHas = maliyetHas + ekMaliyetHas;
   // Kâr has
   // Taş listesinde satır bazında girilen "kârdan düş (gr)" (yay, cam vb.): malın gramı DEĞİŞMEZ, gram × ayar oranı (has) kârdan düşer
-  const tasKesinti = 0; // artık düşüm kayıtlı taş gramının içinde (tasHas düşer → gelir/kâr düşer)
-  const karHas = gelirHas - topMaliyetHas;
+  const tasKesinti = (Number(m.tasKarDus) || 0) * ayarOran;
+  const karHas = gelirHas - topMaliyetHas - tasKesinti;
   const karUSD = karHas * hasGramUSD;
   // Karlılık milyem/gr = karHas / mamulGram
   const karMly = mamulGram > 0 ? karHas / mamulGram : 0;
@@ -11695,7 +11695,7 @@ function Atolye({ onSirketDegis }) {
     const hesaplananTasGram = fTaslar.length > 0 && toplamTasGram > 0
       ? toplamTasGram
       : (Number(fTasGram)||0);
-    const obj = { ad: fAd.trim(), kod: fKod.trim().toUpperCase(), kategori: fKategori, gram: Number(fGram)||0, refAyar: fRefAyar, tasGram: Math.max(0, hesaplananTasGram - fTaslar.reduce((a,t)=>a+(Number(t.kd)||0),0)), taslar: fTaslar, tasKarDus: fTaslar.reduce((a,t)=>a+(Number(t.kd)||0),0), tasBoy: fTasBoy.trim(), tasSekil: fTasSekil, tasTur: fTasTur, tasBoyut: fTasBoyut, tasAdet: Number(fTasAdet)||0, madenCarpan: Number(fMadenC)||0, iscilikDolar: Number(fIscilikDolar)||0, iscilikBirim: fIscilikBirim, iscilikAyarlar: fIscilikAyarlar, ekMaliyet: Number(fEkMaliyet)||0, ac: fAc.trim(), foto: fFoto, fotoTemiz: _temizFotolar.has(fFoto), ki: fKolId, durum: fDurum, etiketler: fEtiketler, detayNoktalari: fDetayNoktalari };
+    const obj = { ad: fAd.trim(), kod: fKod.trim().toUpperCase(), kategori: fKategori, gram: Number(fGram)||0, refAyar: fRefAyar, tasGram: hesaplananTasGram, taslar: fTaslar, tasKarDus: fTaslar.reduce((a,t)=>a+(Number(t.kd)||0),0), tasBoy: fTasBoy.trim(), tasSekil: fTasSekil, tasTur: fTasTur, tasBoyut: fTasBoyut, tasAdet: Number(fTasAdet)||0, madenCarpan: Number(fMadenC)||0, iscilikDolar: Number(fIscilikDolar)||0, iscilikBirim: fIscilikBirim, iscilikAyarlar: fIscilikAyarlar, ekMaliyet: Number(fEkMaliyet)||0, ac: fAc.trim(), foto: fFoto, fotoTemiz: _temizFotolar.has(fFoto), ki: fKolId, durum: fDurum, etiketler: fEtiketler, detayNoktalari: fDetayNoktalari };
     if (!obj.id) obj.olusturma = Date.now();
     // Aynı kodlu diğer modeller var mı kontrol et
     // NOT: aynı kod İKİ FARKLI SEBEPLE oluşabilir:
@@ -18457,7 +18457,7 @@ function Atolye({ onSirketDegis }) {
               return gosterilen > 0 ? (
                 <div style={{ fontSize:9, color:"#6abf69", fontWeight:700, marginBottom:8, padding:"4px 8px", background:"rgba(106,191,105,0.08)", borderRadius:5 }}>
                   Toplam taş: {gosterilen.toFixed(4)} gr
-                  {(() => { const kdT = fTaslar.reduce((a,t)=>a+(Number(t.kd)||0),0); return kdT > 0 ? <span style={{ color:"#e8833a", marginLeft:10 }}>· taş gramından düşülecek: {kdT.toFixed(3)} gr → kayıtlı taş: {Math.max(0, gosterilen - kdT).toFixed(4)} gr (malın gramı değişmez)</span> : null; })()}
+                  {(() => { const kdT = fTaslar.reduce((a,t)=>a+(Number(t.kd)||0),0); return kdT > 0 ? <span style={{ color:"#e8833a", marginLeft:10 }}>· kârdan düşülecek: {kdT.toFixed(3)} gr × ayar oranı = {(kdT * ((AYARLAR.find(a=>a.id===fRefAyar)||{o:0.585}).o)).toFixed(3)} has</span> : null; })()}
                 </div>
               ) : null;
             })()}
@@ -18552,7 +18552,7 @@ function Atolye({ onSirketDegis }) {
               const kutuYaz = (ay, v) => setFIscilikAyarlar(p=>{ const y={...p}; if (v==="") { delete y[ay]; } else { y[ay]={ dolar:v, birim:(p[ay]&&p[ay].birim)||varsayilan(ay).birim }; } return y; });
               const karBilgiHesapla = (ayar, val) => {
                 if (!(altinKgUSD>0 && Number(fGram)>0) || ayar==="14K" || ayar==="925") return null;
-                const mf = iscilikStandartUygula({ gram:Number(fGram), refAyar:fRefAyar, tasGram:tlForm, madenCarpan:Number(fMadenC)||0, iscilikDolar:Number(fIscilikDolar)||0, iscilikBirim:fIscilikBirim, iscilikAyarlar:fIscilikAyarlar, ekMaliyet:Number(fEkMaliyet)||0 });
+                const mf = iscilikStandartUygula({ gram:Number(fGram), refAyar:fRefAyar, tasGram:tlForm, tasKarDus:fTaslar.reduce((a,t)=>a+(Number(t.kd)||0),0), madenCarpan:Number(fMadenC)||0, iscilikDolar:Number(fIscilikDolar)||0, iscilikBirim:fIscilikBirim, iscilikAyarlar:fIscilikAyarlar, ekMaliyet:Number(fEkMaliyet)||0 });
                 const hA = hesapla(mf, ayar, altinKgUSD, madenCarpan);
                 const h14 = hesapla(mf, "14K", altinKgUSD, madenCarpan);
                 const kk = karKoruyanFiyat(mf, ayar, altinKgUSD, madenCarpan);
@@ -18629,7 +18629,7 @@ function Atolye({ onSirketDegis }) {
         {/* AYAR KARŞILAŞTIRMA — ANA HESAP: aynı ürün 10K / 14K / 18K'da gram, taş, işçilik, maliyet, kâr ve 1 kg'daki adet */}
         {Number(fGram)>0 && fRefAyar!=="925" && (() => {
           const tl = (() => { const t = fTaslar.reduce((acc,x)=>{const gr=tasGramHesapla(x.sekil,x.tur,isNaN(Number(x.boyut))?x.boyut:Number(x.boyut),Number(x.adet)||1,ozelTaslar,tasGramOverride);return acc+(gr>0?gr:(Number(x.gram)||0));},0); return (fTaslar.length>0&&t>0)?t:(Number(fTasGram)||0); })();
-          const mf = { gram:Number(fGram), refAyar:fRefAyar, tasGram:tl, madenCarpan:Number(fMadenC)||0, iscilikDolar:Number(fIscilikDolar)||0, iscilikBirim:fIscilikBirim, iscilikAyarlar:fIscilikAyarlar, ekMaliyet:Number(fEkMaliyet)||0 };
+          const mf = { gram:Number(fGram), refAyar:fRefAyar, tasGram:tl, tasKarDus:fTaslar.reduce((a,t)=>a+(Number(t.kd)||0),0), madenCarpan:Number(fMadenC)||0, iscilikDolar:Number(fIscilikDolar)||0, iscilikBirim:fIscilikBirim, iscilikAyarlar:fIscilikAyarlar, ekMaliyet:Number(fEkMaliyet)||0 };
           const kar = altinKgUSD>0;
           const satirlar = ayarKarsilastir(mf, altinKgUSD, madenCarpan);
           const kol = kar ? "34px 1.35fr .8fr .9fr .9fr 1.25fr .95fr 1fr" : "34px 1.3fr 1.2fr";
@@ -18668,7 +18668,7 @@ function Atolye({ onSirketDegis }) {
 
         {/* Gümüş (925) için eski tek ayarlı hesap kutusu */}
         {altinKgUSD>0 && Number(fGram)>0 && fRefAyar==="925" && (
-          <OnizlemeBox m={{ gram:Number(fGram), refAyar:fRefAyar, tasGram: (() => { const tl = fTaslar.reduce((acc,t)=>{const gr=tasGramHesapla(t.sekil,t.tur,isNaN(Number(t.boyut))?t.boyut:Number(t.boyut),Number(t.adet)||1,ozelTaslar,tasGramOverride);return acc+(gr>0?gr:(Number(t.gram)||0));},0); return (fTaslar.length>0&&tl>0)?tl:(Number(fTasGram)||0); })(), madenCarpan:Number(fMadenC)||0, iscilikDolar:Number(fIscilikDolar)||0, iscilikBirim:fIscilikBirim, ekMaliyet:Number(fEkMaliyet)||0 }} altinKgUSD={altinKgUSD} mc={madenCarpan} />
+          <OnizlemeBox m={{ gram:Number(fGram), refAyar:fRefAyar, tasGram: (() => { const tl = fTaslar.reduce((acc,t)=>{const gr=tasGramHesapla(t.sekil,t.tur,isNaN(Number(t.boyut))?t.boyut:Number(t.boyut),Number(t.adet)||1,ozelTaslar,tasGramOverride);return acc+(gr>0?gr:(Number(t.gram)||0));},0); return (fTaslar.length>0&&tl>0)?tl:(Number(fTasGram)||0); })(), madenCarpan:Number(fMadenC)||0, iscilikDolar:Number(fIscilikDolar)||0, iscilikBirim:fIscilikBirim, ekMaliyet:Number(fEkMaliyet)||0, tasKarDus:fTaslar.reduce((a,t)=>a+(Number(t.kd)||0),0) }} altinKgUSD={altinKgUSD} mc={madenCarpan} />
         )}
 
 
