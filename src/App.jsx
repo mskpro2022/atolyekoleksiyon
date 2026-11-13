@@ -1,4 +1,4 @@
-import { supabase, dbLoad, dbSave, fotoYukleStorage, yedekKaydet, yedekListesi, yedekGetir, bugunYedekVarMi, tabloModelleriSenkron, tabloModelleriToplu, tabloModelSil, tabloSiparisleriSenkron, tabloSiparisleriToplu, tabloSiparisSil, tabloMusterileriYaz, akilliModelOku, akilliSiparisOku, akilliMusteriOku, islemKaydet, islemGecmisiGetir, realtimeBaslat, tabloKoleksiyonlariYaz, tabloKasaYaz, akilliKoleksiyonOku, akilliKasaOku, tabloKoleksiyonlariOku, tabloKasaOku, saglikDenetimi, ekranSunucuFarki, toptanciKaydet, toptancilariGetir, toptanciSil, vitrinGecmisiGetir, vitrinEnCokBakilan, vitrinOzetGetir, vitrinAnaliz, vitrinGetirGuvenli, siparisOlusturGuvenli, siparislerimGetirGuvenli, siparisIptalGuvenli, siparisMusteriGizleGuvenli, vitrinAktiviteKaydetGuvenli, vitrinSupheliCihazlar, vitrinCevrimiciMusteriler, radarTrendleriOku, radarKaynaklariOku, radarKanitlariOku, radarTumKanitlariOku, radarTrendGuncelle, radarTrendSil, radarManuelKanitEkle } from "./supabase.js";
+import { supabase, dbLoad, dbSave, fotoYukleStorage, yedekKaydet, yedekListesi, yedekGetir, bugunYedekVarMi, tabloModelleriSenkron, tabloModelleriToplu, tabloModelSil, tabloSiparisleriSenkron, tabloSiparisleriToplu, tabloSiparisSil, tabloMusterileriYaz, akilliModelOku, akilliSiparisOku, akilliMusteriOku, islemKaydet, islemGecmisiGetir, realtimeBaslat, tabloKoleksiyonlariYaz, tabloKasaYaz, akilliKoleksiyonOku, akilliKasaOku, tabloKoleksiyonlariOku, tabloKasaOku, saglikDenetimi, ekranSunucuFarki, toptanciKaydet, toptancilariGetir, toptanciSil, vitrinGecmisiGetir, vitrinEnCokBakilan, vitrinOzetGetir, vitrinAnaliz, vitrinGetirGuvenli, siparisOlusturGuvenli, siparislerimGetirGuvenli, siparisIptalGuvenli, siparisGuncelleGuvenli, siparisMusteriGizleGuvenli, vitrinAktiviteKaydetGuvenli, vitrinSupheliCihazlar, vitrinCevrimiciMusteriler, radarTrendleriOku, radarKaynaklariOku, radarKanitlariOku, radarTumKanitlariOku, radarTrendGuncelle, radarTrendSil, radarManuelKanitEkle } from "./supabase.js";
 import { useState, useEffect, useCallback, useMemo, useRef, Fragment } from "react";
 
 const uid = () => "x" + Date.now() + Math.random().toString(36).substr(2, 5);
@@ -8657,6 +8657,10 @@ function VitrinModu({ kod, onizleme }) {
   const [sipFoto, setSipFoto] = useState(null);           // büyütülen kalem
   const [sipAra, setSipAra] = useState("");
   const [sipListeAcik, setSipListeAcik] = useState(false);   // "Siparişlerim" sayfası
+  const [siparisDuzenId, setSiparisDuzenId] = useState(null); // BSP: düzenlenmekte olan (onay bekleyen) siparişin id'si
+  const [siparisGuncellendi, setSiparisGuncellendi] = useState(false); // başarı ekranında "güncellendi" yazısı için
+  const [sipOzet, setSipOzet] = useState(null);               // BSP: onay özeti açık sipariş
+  const [sipOzetTas, setSipOzetTas] = useState(true);         // onay özeti: taş ölçüleriyle / ölçüsüz
   const [sipListe, setSipListe] = useState(null);              // null = yüklenmedi | dizi | "hata"
   const [sipListeYukleniyor, setSipListeYukleniyor] = useState(false);
   const sipListeYukle = async () => {
@@ -9129,6 +9133,33 @@ function VitrinModu({ kod, onizleme }) {
     setSiparisBoylar(p => { const y = { ...p }; seciliModeller.forEach(m => { if (boyGerekli(m) && !(y[m.id]||[]).length) y[m.id] = [boyVarsayilan(m)]; }); return y; });
     setSiparisModal(true);
   };
+  // BSP: onay bekleyen siparişi sipariş ekranında düzenlemeye aç (aynı ekran, mevcut kalemler dolu gelir)
+  const siparisDuzenle = (sp) => {
+    const ids = new Set(); const boylar = {}, adetler = {}, sonra = {}, notlar = {}; const yok = [];
+    (sp.kalemler || []).forEach(k => {
+      const m = modeller.find(x => x.kod === k.kod);
+      if (!m) { if (!yok.includes(k.kod)) yok.push(k.kod); return; }
+      ids.add(m.id);
+      const sipNot = String(k.sipNot || "");
+      const bs = sipNot.indexOf("Boy sonra bildirilecek") >= 0;
+      const temiz = sipNot.split(" · ").filter(x => x && x !== "Boy sonra bildirilecek").join(" · ");
+      if (temiz) notlar[m.id] = temiz;
+      const adet = Number(k.adet) || 1;
+      if (boyGerekli(m) && !bs && k.boyListesi && k.boyListesi.length) boylar[m.id] = [...(boylar[m.id] || []), ...k.boyListesi.map(b => ({ ...b }))];
+      else if (boyGerekli(m) && !bs && k.boy) boylar[m.id] = [...(boylar[m.id] || []), { ...k.boy, adet }];
+      else { adetler[m.id] = (adetler[m.id] || 0) + adet; if (boyGerekli(m) && bs) sonra[m.id] = true; }
+    });
+    if (ids.size === 0) { alert("Bu siparişteki modeller güncel katalogda bulunamadı, düzenlenemiyor."); return; }
+    if (yok.length && !window.confirm("Şu modeller artık katalogda yok ve düzenlemede siparişten çıkarılacak: " + yok.join(", ") + "\n\nDevam edilsin mi?")) return;
+    setSecili(ids); setSiparisAdetler(adetler); setSiparisBoylar(boylar); setSiparisBoySonra(sonra); setSiparisUrunNot(notlar);
+    setSiparisNot(sp.aciklama || ""); setSiparisTeslim(sp.teslimTarihi || "");
+    setSiparisDuzenId(sp.id); setSiparisGuncellendi(false); setSiparisHata(""); setSiparisOzet(false);
+    setSipListeAcik(false); setSiparisModal(true);
+  };
+  const siparisDuzenVazgec = () => {
+    setSiparisDuzenId(null); setSiparisGuncellendi(false); setSiparisModal(false); setSiparisOzet(false);
+    setSecili(new Set()); setSiparisAdetler({}); setSiparisBoylar({}); setSiparisBoySonra({}); setSiparisUrunNot({}); setSiparisNot(""); setSiparisTeslim(""); setSiparisHata("");
+  };
   const siparisOnayaGit = () => {
     if (!vitrinMusteri || seciliModeller.length === 0) return;
     if (seciliModeller.some(boyEksikMi)) { setSiparisHata(ce("boy_gerekli")); return; }
@@ -9170,9 +9201,16 @@ function VitrinModu({ kod, onizleme }) {
         ...(aktifOnek === "bsp2_" ? { onayDurum: "bekliyor" } : {}), // BSP: önce senin onayın gerekir
         kalemler,
       };
-      const sonuc = await siparisOlusturGuvenli(vitrinMusteri.kod, vitrinMusteri.onek, yeniSiparis);
-      if (!sonuc || !sonuc.basarili) throw new Error("Sipariş kaydedilemedi");
-      if (!onizleme) { try { vitrinAktiviteKaydetGuvenli(vitrinMusteri.kod, vitrinMusteri.onek, "siparis", null, null, null); } catch {} }
+      let sonuc;
+      if (siparisDuzenId) {
+        sonuc = await siparisGuncelleGuvenli(vitrinMusteri.kod, vitrinMusteri.onek, siparisDuzenId, { teslimTarihi: yeniSiparis.teslimTarihi, aciklama: yeniSiparis.aciklama, kalemler });
+        if (!sonuc || !sonuc.basarili) throw new Error("Sipariş güncellenemedi (onaylanmış olabilir)");
+      } else {
+        sonuc = await siparisOlusturGuvenli(vitrinMusteri.kod, vitrinMusteri.onek, yeniSiparis);
+        if (!sonuc || !sonuc.basarili) throw new Error("Sipariş kaydedilemedi");
+        if (!onizleme) { try { vitrinAktiviteKaydetGuvenli(vitrinMusteri.kod, vitrinMusteri.onek, "siparis", null, null, null); } catch {} }
+      }
+      setSiparisGuncellendi(!!siparisDuzenId); setSiparisDuzenId(null);
       setSiparisBasarili(true);
       setSecili(new Set());
       setSiparisAdetler({});
@@ -9492,7 +9530,7 @@ function VitrinModu({ kod, onizleme }) {
           <span style={{ fontSize:13, color:"var(--vurgu)", fontWeight:500 }}>{secili.size} model seçildi</span>
           <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
             {aktifOnek === "bsp2_" && (
-              <button onClick={siparisAc} style={{ background:"#2e9e4f", border:"none", borderRadius:8, padding:"8px 18px", color:"#fff", fontSize:13, fontWeight:700, cursor:"pointer", boxShadow:"0 2px 8px rgba(46,158,79,0.35)" }}>{ce("siparis_ver_emoji")}</button>
+              <button onClick={siparisAc} style={{ background:"#2e9e4f", border:"none", borderRadius:8, padding:"8px 18px", color:"#fff", fontSize:13, fontWeight:700, cursor:"pointer", boxShadow:"0 2px 8px rgba(46,158,79,0.35)" }}>{siparisDuzenId ? "✎ Düzenlemeye dön" : ce("siparis_ver_emoji")}</button>
             )}
             <button onClick={()=>vitrinPDF(3)} style={{ background:"var(--vurgu)", border:"none", borderRadius:8, padding:"7px 16px", color:"#1d1d1f", fontSize:12, fontWeight:500, cursor:"pointer" }}>{ce("secilenlerden_pdf")}</button>
             <button onClick={()=>setSecili(new Set())} style={{ background:"transparent", border:"none", color:"var(--vt2)", fontSize:12, fontWeight:500, cursor:"pointer", padding:"7px 10px" }}>Temizle</button>
@@ -9548,7 +9586,7 @@ function VitrinModu({ kod, onizleme }) {
           {siparisBasarili ? (
             <div style={{ maxWidth:520, margin:"18vh auto 0", padding:"40px 28px", textAlign:"center" }}>
               <div style={{ fontSize:48, marginBottom:14 }}>✓</div>
-              <div style={{ fontSize:20, fontWeight:600, color:"var(--vt1)", marginBottom:8 }}>{ce("siparis_alindi")}</div>
+              <div style={{ fontSize:20, fontWeight:600, color:"var(--vt1)", marginBottom:8 }}>{siparisGuncellendi ? (vitrinDil==="en" ? "Your order has been updated" : vitrinDil==="es" ? "Su pedido fue actualizado" : "Siparişiniz güncellendi") : ce("siparis_alindi")}</div>
               <div style={{ fontSize:14, color:"var(--vt2)", marginBottom:24 }}>{ce("en_kisa_surede")}</div>
               <div style={{ display:"flex", gap:10, justifyContent:"center", flexWrap:"wrap" }}>
                 <button onClick={()=>{ setSiparisModal(false); setSiparisBasarili(false); }} style={{ background:"var(--vcard)", border:"1px solid rgba(var(--voverlay-rgb),0.15)", borderRadius:11, padding:"12px 28px", color:"var(--vt1)", fontSize:14, fontWeight:600, cursor:"pointer" }}>Tamam</button>
@@ -9570,7 +9608,8 @@ function VitrinModu({ kod, onizleme }) {
               {/* Başlık */}
               <div style={{ position:"sticky", top:0, zIndex:5, background:"var(--vb)", padding:"18px 0 12px", display:"flex", alignItems:"center", gap:12, flexWrap:"wrap", borderBottom:"1px solid rgba(var(--voverlay-rgb),0.08)" }}>
                 <button onClick={()=>{ if(!siparisGonderiliyor) setSiparisModal(false); }} style={{ background:"var(--vcard)", border:"1px solid rgba(var(--voverlay-rgb),0.12)", borderRadius:980, padding:"8px 16px", color:"var(--vt1)", fontSize:13, fontWeight:600, cursor:"pointer" }}>‹ {ce("geri")}</button>
-                <div style={{ fontSize:22, fontWeight:700, letterSpacing:"-0.02em" }}>{ce("siparis_ver")}</div>
+                <div style={{ fontSize:22, fontWeight:700, letterSpacing:"-0.02em" }}>{siparisDuzenId ? (vitrinDil==="en" ? "Edit order" : vitrinDil==="es" ? "Editar pedido" : "Siparişi düzenle") : ce("siparis_ver")}</div>
+                {siparisDuzenId && <button onClick={()=>{ if (!siparisGonderiliyor && window.confirm(vitrinDil==="en" ? "Discard changes?" : vitrinDil==="es" ? "¿Descartar cambios?" : "Değişiklikler iptal edilsin mi?")) siparisDuzenVazgec(); }} style={{ background:"transparent", border:"1px solid rgba(214,69,69,0.45)", borderRadius:980, padding:"7px 14px", color:"#d64545", fontSize:12, fontWeight:600, cursor:"pointer" }}>{vitrinDil==="en" ? "Discard" : vitrinDil==="es" ? "Descartar" : "Vazgeç"}</button>}
                 {vitrinMusteri && <div style={{ fontSize:13, color:"var(--vt2)", background:"rgba(var(--voverlay-rgb),0.07)", borderRadius:8, padding:"5px 10px", fontWeight:600 }}>{vitrinMusteri.kod}</div>}
                 <div style={{ flex:1 }}/>
                 <label style={{ display:"flex", alignItems:"center", gap:8, fontSize:12, color:"var(--vt2)" }}>{ce("teslim_tarihi")}
@@ -9733,10 +9772,19 @@ function VitrinModu({ kod, onizleme }) {
               <div style={{ fontSize:20, fontWeight:700 }}>{listeGram().toFixed(2)} g</div>
               <button disabled={siparisGonderiliyor} onClick={siparisOnayaGit}
                 style={{ background: siparisGonderiliyor?"rgba(var(--voverlay-rgb),0.15)":"#2e9e4f", border:"none", borderRadius:11, padding:"13px 34px", color:"#fff", fontSize:15, fontWeight:700, cursor: siparisGonderiliyor?"default":"pointer" }}>
-                {siparisGonderiliyor ? ce("gonderiliyor") : ce("siparisi_gonder")}
+                {siparisGonderiliyor ? ce("gonderiliyor") : (siparisDuzenId ? (vitrinDil==="en" ? "Update order" : vitrinDil==="es" ? "Actualizar pedido" : "Siparişi güncelle") : ce("siparisi_gonder"))}
               </button>
             </div>
           )}
+        </div>
+      )}
+
+      {/* BSP: düzenleme sürerken (sipariş ekranı kapalıyken) her zaman görünen çıkış/dönüş çubuğu — eski siparişin yanlışlıkla üzerine yazılmasın */}
+      {siparisDuzenId && !siparisModal && (
+        <div style={{ position:"fixed", left:"50%", transform:"translateX(-50%)", bottom:18, zIndex:109, background:"var(--vcard)", border:"1px solid rgba(var(--voverlay-rgb),0.18)", borderRadius:14, padding:"10px 14px", display:"flex", alignItems:"center", gap:12, boxShadow:"0 8px 28px rgba(0,0,0,0.3)", maxWidth:"94vw", flexWrap:"wrap" }}>
+          <span style={{ fontSize:13, color:"var(--vt1)", fontWeight:600 }}>✎ {vitrinDil==="en" ? "Editing an order — add models from the catalog" : vitrinDil==="es" ? "Editando un pedido — agregue modelos del catálogo" : "Sipariş düzenleniyor — katalogdan model ekleyebilirsiniz"} · {secili.size}</span>
+          <button onClick={()=>{ setSiparisHata(""); setSiparisModal(true); }} style={{ background:"#2e9e4f", border:"none", borderRadius:9, padding:"8px 16px", color:"#fff", fontSize:13, fontWeight:700, cursor:"pointer" }}>{vitrinDil==="en" ? "Back to order" : vitrinDil==="es" ? "Volver al pedido" : "Düzenlemeye dön"}</button>
+          <button onClick={()=>{ if (window.confirm(vitrinDil==="en" ? "Discard changes?" : vitrinDil==="es" ? "¿Descartar cambios?" : "Değişiklikler iptal edilsin mi?")) siparisDuzenVazgec(); }} style={{ background:"transparent", border:"1px solid rgba(214,69,69,0.45)", borderRadius:9, padding:"7px 14px", color:"#d64545", fontSize:12, fontWeight:600, cursor:"pointer" }}>{vitrinDil==="en" ? "Discard" : vitrinDil==="es" ? "Descartar" : "Vazgeç"}</button>
         </div>
       )}
 
@@ -9910,6 +9958,8 @@ function VitrinModu({ kod, onizleme }) {
                     {sp.teslimTarihi && (c === "bekliyor" || c === "iptal") && <div><div style={{ fontSize:11, color:"var(--vt3)" }}>{t3("İstenen teslim","Requested delivery","Entrega deseada")}</div><div style={{ fontSize:15, fontWeight:600, marginTop:2 }}>{tarihYaz(new Date(sp.teslimTarihi).getTime(), true)}</div></div>}
                     {sp.aciklama && <div style={{ flex:"1 1 180px", minWidth:0 }}><div style={{ fontSize:11, color:"var(--vt3)" }}>{t3("Sipariş notu","Order note","Nota")}</div><div style={{ fontSize:13, color:"var(--vt2)", marginTop:2 }}>{sp.aciklama}</div></div>}
                     <div style={{ flex:1 }}/>
+                    {bspS && c !== "iptal" && <button onClick={()=>{ setSipOzetTas(true); setSipOzet(sp); }} style={{ ...dugme }}>{t3("Onay özeti","Order confirmation","Confirmación")}</button>}
+                    {bspS && c === "bekliyor" && <button onClick={()=>siparisDuzenle(sp)} style={{ ...dugme }}>{t3("Düzenle","Edit","Editar")}</button>}
                     {c === "bekliyor" && <button onClick={()=>sipIptalEt(sp.id)} style={{ ...dugme, color:KIRMIZI, borderColor:"rgba(214,69,69,0.4)" }}>{t3("Siparişi iptal et","Cancel order","Cancelar pedido")}</button>}
                     {c === "iptal" && <button onClick={()=>sipListedenKaldir(sp.id)} style={{ ...dugme, color:KIRMIZI, borderColor:"rgba(214,69,69,0.4)" }}>{t3("Listeden kaldır","Remove from list","Quitar de la lista")}</button>}
                   </div>
@@ -9918,6 +9968,77 @@ function VitrinModu({ kod, onizleme }) {
               );
             })}
           </div>
+
+          {sipOzet && (() => {
+            const sp = sipOzet;
+            const kalemlerO = sp.kalemler || [];
+            const tasSatirlari = (k) => {
+              if (Array.isArray(k.taslar) && k.taslar.length) return k.taslar.map(t => [t.sekil, t.boyut ? (t.boyut + (isNaN(Number(t.boyut)) ? "" : " mm")) : "", t.adet ? "× " + t.adet : ""].filter(Boolean).join(" "));
+              if (k.tasSekil && k.tasBoyut) return [k.tasSekil + " " + k.tasBoyut + (isNaN(Number(k.tasBoyut)) ? "" : " mm") + (k.tasAdet ? " × " + k.tasAdet : "")];
+              return [];
+            };
+            const toplamO = kalemlerO.reduce((t,k)=>t+(Number(k.adet)||1),0);
+            const durumO = sp.onayDurum === "bekliyor" ? t3("Onay bekliyor","Awaiting approval","Pendiente de aprobación") : t3("Onaylandı","Approved","Aprobado");
+            const noO = (sp.siparisNo ? String(sp.siparisNo) : String(sp.id || "").slice(-6).toUpperCase());
+            const tarihO = tarihYaz(sp.tarih);
+            const teslimO = sp.teslimTarihi ? tarihYaz(new Date(sp.teslimTarihi).getTime()) : "";
+            const musO = (vitrinMusteri && (vitrinMusteri.ad || vitrinMusteri.kod)) || "";
+            const baslikO = t3("SİPARİŞ ONAY ÖZETİ","ORDER CONFIRMATION","CONFIRMACIÓN DE PEDIDO");
+            const yazdirO = () => {
+              const esc = (x) => String(x == null ? "" : x).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+              const satirH = kalemlerO.map((k,i) => "<tr><td class='n'>" + (i+1) + "</td><td class='f'>" + (k.foto ? "<img src='" + esc(k.foto) + "'>" : "") + "</td><td><b>" + esc(k.kod) + "</b>" + (k.ad ? "<br><span class='m'>" + esc(k.ad) + "</span>" : "") + (k.sipNot ? "<br><span class='m'><i>" + esc(k.sipNot) + "</i></span>" : "") + "</td><td>" + esc(k.secilenAyar || "") + "</td><td>" + esc(boyYaz(k)) + "</td>" + (sipOzetTas ? "<td>" + tasSatirlari(k).map(esc).join("<br>") + "</td>" : "") + "<td class='r'>" + (Number(k.adet)||1) + "</td></tr>").join("");
+              const w = window.open("", "_blank"); if (!w) { alert(t3("Açılır pencere engellendi","Pop-up blocked","Ventana emergente bloqueada")); return; }
+              w.document.write("<!DOCTYPE html><html><head><meta charset='UTF-8'><title>" + esc(baslikO) + " " + esc(noO) + "</title><style>body{font-family:Arial,sans-serif;padding:28px;color:#111}h1{font-size:20px;margin:0 0 4px}.m{color:#666;font-size:11px}.i{display:flex;gap:28px;flex-wrap:wrap;margin:14px 0;font-size:13px}.i div span{display:block;font-size:10px;color:#888;text-transform:uppercase}table{width:100%;border-collapse:collapse;font-size:12px}th{background:#f2f2f2;text-align:left;padding:7px;font-size:10px;text-transform:uppercase}td{padding:7px;border-bottom:1px solid #e5e5e5;vertical-align:middle}td.n{width:24px;color:#888}td.f{width:70px}td.f img{width:64px;height:50px;object-fit:contain}td.r,th.r{text-align:right}.t{margin-top:14px;font-size:14px;font-weight:700;text-align:right}.d{margin-top:22px;font-size:10px;color:#888}@media print{body{padding:10px}}</style></head><body><h1>" + esc(baslikO) + "</h1><div class='m'>BSP Jewelry Design</div><div class='i'><div><span>" + t3("Müşteri","Customer","Cliente") + "</span>" + esc(musO) + "</div><div><span>" + t3("Sipariş no","Order no","N.º pedido") + "</span>" + esc(noO) + "</div><div><span>" + t3("Tarih","Date","Fecha") + "</span>" + esc(tarihO) + "</div>" + (teslimO ? "<div><span>" + t3("İstenen teslim","Requested delivery","Entrega deseada") + "</span>" + esc(teslimO) + "</div>" : "") + "<div><span>" + t3("Durum","Status","Estado") + "</span>" + esc(durumO) + "</div></div>" + (sp.aciklama ? "<div class='m' style='margin-bottom:8px'>" + t3("Not","Note","Nota") + ": " + esc(sp.aciklama) + "</div>" : "") + "<table><thead><tr><th>#</th><th></th><th>" + t3("Model","Model","Modelo") + "</th><th>" + t3("Ayar","Karat","Quilates") + "</th><th>" + t3("Boy","Size","Talla") + "</th>" + (sipOzetTas ? "<th>" + t3("Taş ölçüleri","Stone sizes","Medidas de piedras") + "</th>" : "") + "<th class='r'>" + ce("adet") + "</th></tr></thead><tbody>" + satirH + "</tbody></table><div class='t'>" + kalemlerO.length + " " + t3("model","models","modelos") + " · " + toplamO + " " + ce("adet") + "</div>" + (sp.onayDurum === "bekliyor" ? "<div class='d'>" + t3("Bu özet bilgilendirme amaçlıdır; sipariş BSP onayından sonra kesinleşir.","This summary is for information; the order is final after BSP approval.","Este resumen es informativo; el pedido es definitivo tras la aprobación de BSP.") + "</div>" : "") + "</body></html>");
+              w.document.close(); setTimeout(() => { try { w.focus(); w.print(); } catch {} }, 400);
+            };
+            const th = { fontSize:10, color:"var(--vt3)", fontWeight:700, textAlign:"left", padding:"8px 10px", textTransform:"uppercase", letterSpacing:"0.05em", background:"rgba(var(--voverlay-rgb),0.05)" };
+            const td = { padding:"10px", borderBottom:"1px solid rgba(var(--voverlay-rgb),0.07)", verticalAlign:"middle", fontSize:13 };
+            return (
+              <div onClick={()=>setSipOzet(null)} style={{ position:"fixed", inset:0, zIndex:125, background:"rgba(0,0,0,0.6)", backdropFilter:"blur(10px)", display:"flex", alignItems:"center", justifyContent:"center", padding:14 }}>
+                <div onClick={e=>e.stopPropagation()} style={{ background:"var(--vcard)", color:"var(--vt1)", borderRadius:20, width:"100%", maxWidth:900, maxHeight:"94vh", overflow:"auto", padding:"22px 24px" }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:10, flexWrap:"wrap", marginBottom:14 }}>
+                    <div style={{ fontSize:19, fontWeight:700, letterSpacing:"-0.01em" }}>{baslikO}</div>
+                    <div style={{ flex:1 }}/>
+                    <div style={{ display:"inline-flex", background:"rgba(var(--voverlay-rgb),0.08)", borderRadius:9, padding:3 }}>
+                      {[[true, t3("Taş ölçüleriyle","With stone sizes","Con medidas de piedras")],[false, t3("Taş ölçüsüz","Without stone sizes","Sin medidas de piedras")]].map(([v, l]) => (
+                        <button key={String(v)} onClick={()=>setSipOzetTas(v)} style={{ padding:"6px 14px", fontSize:12, border:"none", borderRadius:6, cursor:"pointer", fontWeight: sipOzetTas===v?700:400, color: sipOzetTas===v?"var(--vt1)":"var(--vt2)", background: sipOzetTas===v?"var(--vb)":"transparent" }}>{l}</button>
+                      ))}
+                    </div>
+                    <button onClick={yazdirO} style={{ background:"var(--vurgu)", border:"none", borderRadius:9, padding:"8px 16px", color:"#1d1d1f", fontSize:13, fontWeight:700, cursor:"pointer" }}>{t3("Yazdır / PDF","Print / PDF","Imprimir / PDF")}</button>
+                    <button onClick={()=>setSipOzet(null)} style={{ background:"rgba(var(--voverlay-rgb),0.1)", border:"none", borderRadius:"50%", width:32, height:32, color:"var(--vt1)", fontSize:15, cursor:"pointer" }}>✕</button>
+                  </div>
+                  <div style={{ display:"flex", gap:26, flexWrap:"wrap", marginBottom:14, fontSize:13 }}>
+                    <div><div style={{ fontSize:10, color:"var(--vt3)" }}>{t3("Müşteri","Customer","Cliente")}</div><b>{musO}</b></div>
+                    <div><div style={{ fontSize:10, color:"var(--vt3)" }}>{t3("Sipariş no","Order no","N.º pedido")}</div><b>{noO}</b></div>
+                    <div><div style={{ fontSize:10, color:"var(--vt3)" }}>{t3("Tarih","Date","Fecha")}</div><b>{tarihO}</b></div>
+                    {teslimO && <div><div style={{ fontSize:10, color:"var(--vt3)" }}>{t3("İstenen teslim","Requested delivery","Entrega deseada")}</div><b>{teslimO}</b></div>}
+                    <div><div style={{ fontSize:10, color:"var(--vt3)" }}>{t3("Durum","Status","Estado")}</div><b>{durumO}</b></div>
+                  </div>
+                  {sp.aciklama && <div style={{ fontSize:12, color:"var(--vt2)", marginBottom:10 }}>{t3("Not","Note","Nota")}: {sp.aciklama}</div>}
+                  <div style={{ overflowX:"auto" }}>
+                    <table style={{ width:"100%", borderCollapse:"collapse" }}>
+                      <thead><tr><th style={th}>#</th><th style={th}></th><th style={th}>{t3("Model","Model","Modelo")}</th><th style={th}>{t3("Ayar","Karat","Quilates")}</th><th style={th}>{t3("Boy","Size","Talla")}</th>{sipOzetTas && <th style={th}>{t3("Taş ölçüleri","Stone sizes","Medidas de piedras")}</th>}<th style={{ ...th, textAlign:"right" }}>{ce("adet")}</th></tr></thead>
+                      <tbody>
+                        {kalemlerO.map((k, i) => (
+                          <tr key={(k.id||"")+i}>
+                            <td style={{ ...td, color:"var(--vt3)" }}>{i+1}</td>
+                            <td style={td}><div style={{ width:64, height:50, borderRadius:8, overflow:"hidden", background:"#f3f3f3" }}>{k.foto ? <img src={k.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"contain" }}/> : null}</div></td>
+                            <td style={td}><b>{k.kod}</b>{k.ad ? <div style={{ fontSize:11, color:"var(--vt2)" }}>{k.ad}</div> : null}{k.sipNot ? <div style={{ fontSize:11, color:"var(--vt3)", fontStyle:"italic" }}>{k.sipNot}</div> : null}</td>
+                            <td style={td}>{k.secilenAyar || ""}</td>
+                            <td style={td}>{boyYaz(k)}</td>
+                            {sipOzetTas && <td style={{ ...td, fontSize:12 }}>{tasSatirlari(k).length ? tasSatirlari(k).map((x, xi) => <div key={xi}>{x}</div>) : <span style={{ color:"var(--vt3)" }}>—</span>}</td>}
+                            <td style={{ ...td, textAlign:"right", fontWeight:600 }}>{Number(k.adet)||1}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div style={{ textAlign:"right", marginTop:12, fontSize:14, fontWeight:700 }}>{kalemlerO.length} {t3("model","models","modelos")} · {toplamO} {ce("adet")}</div>
+                  {sp.onayDurum === "bekliyor" && <div style={{ marginTop:14, fontSize:11, color:"var(--vt3)" }}>{t3("Bu özet bilgilendirme amaçlıdır; sipariş BSP onayından sonra kesinleşir.","This summary is for information; the order is final after BSP approval.","Este resumen es informativo; el pedido es definitivo tras la aprobación de BSP.")}</div>}
+                </div>
+              </div>
+            );
+          })()}
 
           {sipFoto && (
             <div onClick={()=>setSipFoto(null)} style={{ position:"fixed", inset:0, zIndex:120, background:"rgba(0,0,0,0.78)", backdropFilter:"blur(16px)", display:"flex", alignItems:"center", justifyContent:"center", padding:16, cursor:"zoom-out" }}>
