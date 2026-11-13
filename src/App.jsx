@@ -9978,6 +9978,12 @@ function VitrinModu({ kod, onizleme }) {
                   <div style={{ padding:"0 26px 20px", display:"flex", gap:8, alignItems:"center" }}>
                     {kalemler.filter(k=>k.foto).slice(0,7).map((k,i)=>(<div key={i} style={{ width:46, height:46, borderRadius:9, overflow:"hidden", background:"#f3f3f3", flexShrink:0 }}><img src={k.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"contain", transform:"scale(1.2)" }}/></div>))}
                     <div style={{ fontSize:12, color:"var(--vt3)", marginLeft:4 }}>{kalemler.length} {t3("model","models","modelos")} · {toplamAdet} {ce("adet")}</div>
+                    {bspS && c !== "iptal" && (
+                      <div style={{ marginLeft:"auto", display:"flex", gap:8, flexWrap:"wrap", justifyContent:"flex-end" }}>
+                        <button onClick={()=>{ setSipOzetTas(true); setSipOzet(sp); }} style={{ ...dugme }}>{t3("Onay özeti","Order confirmation","Confirmación")}</button>
+                        {c === "bekliyor" && <button onClick={()=>siparisDuzenle(sp)} style={{ ...dugme }}>{t3("Düzenle","Edit","Editar")}</button>}
+                      </div>
+                    )}
                   </div>
                 )}
 
