@@ -227,7 +227,7 @@ function iscilikliModel(m, ayar, konfKayit, hafizaKayit) {
 // Kâr has = Taş has + İşçilik has - Maliyet has - Ek maliyet has
 function hesapla(m, secilenAyar, altinKgUSD, varsayilanMly) {
   const refAyar    = m.refAyar || "14K";
-  const refGram    = Number(m.gram) || 0;
+  const refGram    = Math.max(0, (Number(m.gram) || 0) - (Number(m.yayDus) || 0)); // yayDus: müşteriden düşülen yay gramı (model kartında elle girilir)
   const tasGram    = Number(m.tasGram) || 0;
   const aktifAyar  = secilenAyar || refAyar;
   const mamulGram  = gramDonustur(refGram, refAyar, aktifAyar, tasGram);
@@ -768,7 +768,7 @@ const KONF_SIRA_SECENEKLERI = [
 function konfSiralaListe(liste, mod, ayarFn) {
   const arr = [...(liste || [])];
   const kolId = m => m.ki || m.kaynakKi || "_";
-  const gramDeger = m => gramDonustur(Number(m.gram)||0, m.refAyar||"14K", (ayarFn ? ayarFn(m) : (m.secilenAyar||m.refAyar)) || "14K", Number(m.tasGram)||0);
+  const gramDeger = m => gramDonustur(Math.max(0,(Number(m.gram)||0)-(Number(m.yayDus)||0)), m.refAyar||"14K", (ayarFn ? ayarFn(m) : (m.secilenAyar||m.refAyar)) || "14K", Number(m.tasGram)||0);
   if (mod === "kodTers") return arr.sort((a, b) => dogalSirala(a, b, true));
   if (mod === "kod") return arr.sort((a, b) => dogalSirala(a, b, false));
   if (mod === "gramAzalan") return arr.sort((a, b) => gramDeger(b) - gramDeger(a));
@@ -9711,7 +9711,7 @@ function VitrinModu({ kod, onizleme }) {
         const adimNo = bspS
           ? (d) => { if (d==="baslanmadi"||d==="cizimde") return 0; if (d==="tamam"||d==="teslim") return 2; if (d==="hurda") return -1; return 1; }
           : (d) => { if (d==="baslanmadi") return 0; if (d==="teslim") return 3; if (d==="tamam") return 2; if (d==="hurda") return -1; return 1; };
-        const kalemGram = (k) => { const g = Number(k.gram)||0; if (!(g>0)) return 0; try { return gramDonustur(g, k.refAyar||"14K", k.secilenAyar||k.refAyar||"14K", Number(k.tasGram)||0); } catch { return g; } };
+        const kalemGram = (k) => { const g = Math.max(0,(Number(k.gram)||0)-(Number(k.yayDus)||0)); if (!(g>0)) return 0; try { return gramDonustur(g, k.refAyar||"14K", k.secilenAyar||k.refAyar||"14K", Number(k.tasGram)||0); } catch { return g; } };
         const loc = vitrinDil==="en"?"en-GB":vitrinDil==="es"?"es-ES":"tr-TR";
         const tarihYaz = (t, kisa) => { const n = Number(t); if (!n) return ""; try { return new Date(n).toLocaleDateString(loc, kisa ? { day:"2-digit", month:"short", year:"numeric" } : { day:"numeric", month:"long", year:"numeric" }); } catch { return ""; } };
         const YESIL = "#1f9d55", SARI = "#c98a0b", KIRMIZI = "#d64545", GRI = "var(--vt3)";
@@ -10861,6 +10861,7 @@ function Atolye({ onSirketDegis }) {
   const [fAd,          setFAd]         = useState("");
   const [fKod,         setFKod]        = useState("");
   const [fGram,        setFGram]       = useState("");
+  const [fYayDus,      setFYayDus]     = useState(""); // müşteriden düşülecek yay gramı (gram alanı olduğu gibi kalır)
   const [fRefAyar,     setFRefAyar]    = useState("14K");
   const [fTasGram,     setFTasGram]    = useState("");
   const [fTasBoy,      setFTasBoy]     = useState("");
@@ -11421,16 +11422,16 @@ function Atolye({ onSirketDegis }) {
         const m = mm.get(String(k.id)); if (!m) return;
         const st = (sp.kalemDurumlar||{})[k.id] || k.durum || "baslanmadi";
         if (["tamam","teslim","hurda"].includes(st)) return;
-        const g = Number(m.gram)||0, t = Number(m.tasGram)||0;
+        const g = Number(m.gram)||0, t = Number(m.tasGram)||0, y = Number(m.yayDus)||0;
         if (!(g > 0)) return;
-        if (Math.abs((Number(k.gram)||0) - g) < 0.0005 && Math.abs((Number(k.tasGram)||0) - t) < 0.0005) return;
-        const rk = k.id + ":" + g + ":" + t;
+        if (Math.abs((Number(k.gram)||0) - g) < 0.0005 && Math.abs((Number(k.tasGram)||0) - t) < 0.0005 && Math.abs((Number(k.yayDus)||0) - y) < 0.0005) return;
+        const rk = k.id + ":" + g + ":" + t + ":" + y;
         if (gramRedRef.current.has(rk)) return;
-        fark.push({ sp, k, m, g, t, rk });
+        fark.push({ sp, k, m, g, t, y, rk });
       });
     });
     if (!fark.length) return;
-    const satirlar = fark.slice(0, 8).map(f => "• " + (f.k.kod || f.m.kod || "?") + ": " + fN(Number(f.k.gram)||0, 2) + " → " + fN(f.g, 2) + " gr" + (Math.abs((Number(f.k.tasGram)||0) - f.t) >= 0.0005 ? " (taş " + fN(Number(f.k.tasGram)||0, 2) + " → " + fN(f.t, 2) + ")" : "") + "   [" + (f.sp.siparisNo || f.sp.musKod || f.sp.musteri || "sipariş") + ", " + (f.k.adet||1) + " adet]");
+    const satirlar = fark.slice(0, 8).map(f => "• " + (f.k.kod || f.m.kod || "?") + ": " + fN(Number(f.k.gram)||0, 2) + " → " + fN(f.g, 2) + " gr" + (Math.abs((Number(f.k.tasGram)||0) - f.t) >= 0.0005 ? " (taş " + fN(Number(f.k.tasGram)||0, 2) + " → " + fN(f.t, 2) + ")" : "") + (Math.abs((Number(f.k.yayDus)||0) - f.y) >= 0.0005 ? " (yay düşümü " + fN(Number(f.k.yayDus)||0, 2) + " → " + fN(f.y, 2) + ")" : "") + "   [" + (f.sp.siparisNo || f.sp.musKod || f.sp.musteri || "sipariş") + ", " + (f.k.adet||1) + " adet]");
     const msg = "Model kartında gramı değişen ürünler var; açık siparişlerde eski gram kalmış:\n\n" + satirlar.join("\n") + (fark.length > 8 ? "\n… ve " + (fark.length - 8) + " kalem daha" : "") + "\n\nSiparişlerdeki gram da güncellensin mi?\n(Fiyatlar değişmez; tamamlanan kalemlere dokunulmaz.)";
     if (!window.confirm(msg)) { fark.forEach(f => gramRedRef.current.add(f.rk)); return; }
     const mapK = new Map(fark.map(f => [String(f.sp.id) + "|" + String(f.k.id), f]));
@@ -11439,8 +11440,8 @@ function Atolye({ onSirketDegis }) {
       const log = { ...(sp.gramDuzeltme||{}) };
       const kalemler = sp.kalemler.map(k => {
         const f = mapK.get(String(sp.id) + "|" + String(k.id)); if (!f) return k;
-        log[k.id] = [ ...(log[k.id]||[]), { eski:{ gram:k.gram, tasGram:k.tasGram, refAyar:k.refAyar }, yeni:{ gram:f.g, tasGram:f.t, refAyar:f.m.refAyar||k.refAyar }, t:Date.now() } ];
-        return { ...k, gram:f.g, tasGram:f.t, refAyar:f.m.refAyar||k.refAyar };
+        log[k.id] = [ ...(log[k.id]||[]), { eski:{ gram:k.gram, tasGram:k.tasGram, yayDus:k.yayDus, refAyar:k.refAyar }, yeni:{ gram:f.g, tasGram:f.t, yayDus:f.y, refAyar:f.m.refAyar||k.refAyar }, t:Date.now() } ];
+        return { ...k, gram:f.g, tasGram:f.t, yayDus:f.y, refAyar:f.m.refAyar||k.refAyar };
       });
       return { ...sp, kalemler, gramDuzeltme: log };
     }));
@@ -11652,7 +11653,7 @@ function Atolye({ onSirketDegis }) {
   }, [kollar]);
 
   const rkf = () => { setFkAd(""); setFkAc(""); setFkOn(""); };
-  const rmf = () => { setFAd(""); setFKod(""); setFGram(""); setFRefAyar("14K"); setFTasGram(""); setFTasBoy(""); setFTaslar([]); setFTasSekil("ROUND"); setFTasTur("N"); setFTasBoyut(""); setFTasAdet(""); setFTasOzelIsim(""); setFMadenC(""); setFIscilikDolar(""); setFIscilikBirim("dolar"); setFIscilikAyarlar({}); setFEkMaliyet(""); setFKategori("yuzuk"); setFSetKodu(""); setFAc(""); setFFoto(""); setFKolId(""); setFDurum("baslanmadi"); setFEtiketler([]); setFYeniEtiket(""); setFDetayNoktalari([]); setFDetayAcik(false); setFSetModu(false); setFSetKod1(""); setFSetKod2(""); setFSetM1(null); setFSetM2(null); };
+  const rmf = () => { setFAd(""); setFKod(""); setFGram(""); setFYayDus(""); setFRefAyar("14K"); setFTasGram(""); setFTasBoy(""); setFTaslar([]); setFTasSekil("ROUND"); setFTasTur("N"); setFTasBoyut(""); setFTasAdet(""); setFTasOzelIsim(""); setFMadenC(""); setFIscilikDolar(""); setFIscilikBirim("dolar"); setFIscilikAyarlar({}); setFEkMaliyet(""); setFKategori("yuzuk"); setFSetKodu(""); setFAc(""); setFFoto(""); setFKolId(""); setFDurum("baslanmadi"); setFEtiketler([]); setFYeniEtiket(""); setFDetayNoktalari([]); setFDetayAcik(false); setFSetModu(false); setFSetKod1(""); setFSetKod2(""); setFSetM1(null); setFSetM2(null); };
 
   const saveKol = () => {
     if (!fkAd.trim()) return;
@@ -11692,7 +11693,7 @@ function Atolye({ onSirketDegis }) {
     const hesaplananTasGram = fTaslar.length > 0 && toplamTasGram > 0
       ? toplamTasGram
       : (Number(fTasGram)||0);
-    const obj = { ad: fAd.trim(), kod: fKod.trim().toUpperCase(), kategori: fKategori, gram: Number(fGram)||0, refAyar: fRefAyar, tasGram: hesaplananTasGram, taslar: fTaslar, tasBoy: fTasBoy.trim(), tasSekil: fTasSekil, tasTur: fTasTur, tasBoyut: fTasBoyut, tasAdet: Number(fTasAdet)||0, madenCarpan: Number(fMadenC)||0, iscilikDolar: Number(fIscilikDolar)||0, iscilikBirim: fIscilikBirim, iscilikAyarlar: fIscilikAyarlar, ekMaliyet: Number(fEkMaliyet)||0, ac: fAc.trim(), foto: fFoto, fotoTemiz: _temizFotolar.has(fFoto), ki: fKolId, durum: fDurum, etiketler: fEtiketler, detayNoktalari: fDetayNoktalari };
+    const obj = { ad: fAd.trim(), kod: fKod.trim().toUpperCase(), kategori: fKategori, gram: Number(fGram)||0, yayDus: Number(fYayDus)||0, refAyar: fRefAyar, tasGram: hesaplananTasGram, taslar: fTaslar, tasBoy: fTasBoy.trim(), tasSekil: fTasSekil, tasTur: fTasTur, tasBoyut: fTasBoyut, tasAdet: Number(fTasAdet)||0, madenCarpan: Number(fMadenC)||0, iscilikDolar: Number(fIscilikDolar)||0, iscilikBirim: fIscilikBirim, iscilikAyarlar: fIscilikAyarlar, ekMaliyet: Number(fEkMaliyet)||0, ac: fAc.trim(), foto: fFoto, fotoTemiz: _temizFotolar.has(fFoto), ki: fKolId, durum: fDurum, etiketler: fEtiketler, detayNoktalari: fDetayNoktalari };
     if (!obj.id) obj.olusturma = Date.now();
     // Aynı kodlu diğer modeller var mı kontrol et
     // NOT: aynı kod İKİ FARKLI SEBEPLE oluşabilir:
@@ -11813,7 +11814,7 @@ function Atolye({ onSirketDegis }) {
   const openEK = k => { setFkAd(k.ad); setFkAc(k.ac||""); setFkOn(k.on||""); setEditK(k); setShowKM(true); };
   const openEM = m => {
     _fotoGecmis = []; _koruMaske = null; setFGeriVar(0); if (m.fotoTemiz && m.foto) _temizFotolar.add(m.foto);
-    setFAd(m.ad); setFKod(m.kod||""); setFGram(String(m.gram||"")); setFRefAyar(m.refAyar||"14K");
+    setFAd(m.ad); setFKod(m.kod||""); setFGram(String(m.gram||"")); setFYayDus(String(m.yayDus||"")); setFRefAyar(m.refAyar||"14K");
     setFTasGram(String(m.tasGram||"")); setFTasBoy(m.tasBoy||""); setFTaslar(m.taslar||[]); setFTasSekil(m.tasSekil||"ROUND"); setFTasTur(m.tasTur||"N"); setFTasBoyut(m.tasBoyut||""); setFTasAdet(String(m.tasAdet||"")); setFMadenC(String(m.madenCarpan||""));
     setFIscilikDolar(String(m.iscilikDolar||"")); setFIscilikBirim(m.iscilikBirim||"dolar"); setFIscilikAyarlar(m.iscilikAyarlar||{}); setFEkMaliyet(String(m.ekMaliyet||""));
     setFAc(m.ac||""); setFFoto(m.foto||""); setFKolId(m.ki||""); setFDurum(m.durum||"baslanmadi");
@@ -12139,9 +12140,9 @@ function Atolye({ onSirketDegis }) {
       // Kolye ve bileklik: tek satır, boyListesi içeride
       if ((m.kategori==="kolye" || m.kategori==="bileklik") && boylar.length > 0) {
         const topAdet = boylar.reduce((s,b)=>s+(Number(b.adet)||1),0);
-        const topGram = boylar.reduce((s,b)=>s+(Number(b.gram)||Number(m.gram)||0)*(Number(b.adet)||1),0);
+        const topGram = boylar.reduce((s,b)=>s+Math.max(0,(Number(b.gram)||Number(m.gram)||0)-(Number(m.yayDus)||0))*(Number(b.adet)||1),0);
         // Ortalama gram (toplam/adet)
-        const ortGram = topAdet > 0 ? topGram/topAdet : (Number(m.gram)||0);
+        const ortGram = topAdet > 0 ? topGram/topAdet : Math.max(0,(Number(m.gram)||0)-(Number(m.yayDus)||0));
         satirlar.push({ ...temel, adet: topAdet, boyListesi: boylar, gram: ortGram, boy: null });
       }
       // Yüzük: her boy için ayrı satır (mevcut davranış)
@@ -13610,7 +13611,7 @@ function Atolye({ onSirketDegis }) {
                 </div>
                 <div style={{ flex:"1 1 120px", minWidth:0 }}>
                   <div style={{ fontSize:13, fontWeight:600, color:"var(--goldtext)" }}><span onClick={()=>{ const mm=modeller.find(x=>x.id===k.id)||modeller.find(x=>k.kod&&x.kod===k.kod); if (mm) openEM(mm); }} title="Model kartını aç" style={{ color:GOLD, marginRight:6, cursor:"pointer", textDecoration:"underline dotted", textUnderlineOffset:3 }}>{k.kod||""}</span>{k.ad}{k.renk && <span style={{ color:"var(--gold)", marginLeft:8, fontSize:12 }}>{k.renk}</span>}</div>
-                  <div style={{ fontSize:12, color:"#998a6e", marginTop:3 }}>{k.secilenAyar||k.refAyar} · {fN(k.gram||0)} gr · <b style={{ color:"var(--goldtext)" }}>{k.adet||1} adet</b></div>
+                  <div style={{ fontSize:12, color:"#998a6e", marginTop:3 }}>{k.secilenAyar||k.refAyar} · {fN(Math.max(0,(k.gram||0)-(k.yayDus||0)))} gr{Number(k.yayDus)>0 && <span style={{ color:"#d4a017" }}> (yay −{fN(Number(k.yayDus))})</span>} · <b style={{ color:"var(--goldtext)" }}>{k.adet||1} adet</b></div>
                   {k.sipNot && <div style={{ fontSize:12, color:"#5b9bd5", marginTop:3 }}>{k.sipNot}</div>}
                   {(hA>0||iA>0||tA>0) && <div style={{ display:"flex", gap:5, marginTop:5, flexWrap:"wrap" }}>
                     {hA>0 && rozet("Hurda "+hA,"#e85a4f")}{iA>0 && rozet("İade "+iA,"#a78bfa")}{tA>0 && rozet("Tamir "+tA,"#5b9bd5")}
@@ -14249,7 +14250,7 @@ function Atolye({ onSirketDegis }) {
                                   {k.renk && <span style={{ color:"var(--gold)", marginLeft:6, fontSize:9 }}>{k.renk}</span>}
                                 </div>
                                 <div style={{ fontSize:8, color:"#7a6f5a" }}>
-                                  {k.secilenAyar||k.refAyar} · {fN(k.gram||0)} gr · {k.adet||1} adet
+                                  {k.secilenAyar||k.refAyar} · {fN(Math.max(0,(k.gram||0)-(k.yayDus||0)))} gr{Number(k.yayDus)>0 && <span style={{ color:"#d4a017" }}> (yay −{fN(Number(k.yayDus))})</span>} · {k.adet||1} adet
                                   {k.sipNot && <span style={{ color:"#5b9bd5", marginLeft:4 }}>{k.sipNot}</span>}
                                 </div>
                               </div>
@@ -18319,7 +18320,7 @@ function Atolye({ onSirketDegis }) {
               <button onClick={() => {
                 const m = kodKontrol.eslesme;
                 setEditM(m);
-                setFAd(m.ad||""); setFKod(m.kod||""); setFGram(String(m.gram||"")); setFRefAyar(m.refAyar||"14K");
+                setFAd(m.ad||""); setFKod(m.kod||""); setFGram(String(m.gram||"")); setFYayDus(String(m.yayDus||"")); setFRefAyar(m.refAyar||"14K");
                 setFTasGram(String(m.tasGram||"")); setFTasBoy(m.tasBoy||""); setFIscilikDolar(String(m.iscilikDolar||""));
                 setFEkMaliyet(String(m.ekMaliyet||"")); setFMadenC(String(m.madenCarpan||""));
                 setFKategori(m.kategori||"yuzuk"); setFKolId(m.ki||""); setFDurum(m.durum||"baslanmadi");
@@ -18397,6 +18398,10 @@ function Atolye({ onSirketDegis }) {
           <div style={{ flex:1 }}><Fl label="Gram (Ref Ayarda)" T={T}><input type="number" value={fGram} onChange={e=>setFGram(e.target.value)} placeholder="0.00" style={IS}/></Fl></div>
           <div style={{ flex:1 }}><Fl label="Ref Ayar" T={T}><select value={fRefAyar} onChange={e=>setFRefAyar(e.target.value)} style={IS}>{AYARLAR.map(a=><option key={a.id} value={a.id}>{a.l}</option>)}</select></Fl></div>
         </div>
+        <Fl label="Yay düşümü (gr) — müşteriden düşülecek" T={T}>
+          <input type="number" min="0" step="0.01" value={fYayDus} onChange={e=>setFYayDus(e.target.value)} placeholder="0 (yok)" style={IS}/>
+          {Number(fYayDus) > 0 && Number(fGram) > 0 && <div style={{ fontSize:11, color:"#998a6e", marginTop:4 }}>Siparişlerde hesaplanan gram: {fGram} − {fYayDus} = <b>{(Math.max(0, Number(fGram) - Number(fYayDus))).toFixed(2)}</b> gr ({fRefAyar}). Gram alanı olduğu gibi kalır.</div>}
+        </Fl>
 
         <div style={{ background:"rgba(91,155,213,0.04)", border:"1px solid rgba(91,155,213,0.1)", borderRadius:10, padding:"10px 12px", marginBottom:10 }}>
           <div style={{ fontSize:9, fontWeight:700, color:"#5b9bd5", marginBottom:8 }}>TAŞ LİSTESİ</div>
