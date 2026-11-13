@@ -700,6 +700,14 @@ export async function siparisIptalGuvenli(kod, onek, id) {
     return data || { basarili: false }
   } catch (e) { console.error('siparisIptalGuvenli:', e.message); return { basarili: false } }
 }
+// BSP müşterisi, onay beklenen siparişini düzenler (sunucu: sadece BSP + onayDurum='bekliyor' iken; teslim tarihi, not ve kalemler değişir)
+export async function siparisGuncelleGuvenli(kod, onek, id, veri) {
+  try {
+    const { data, error } = await supabase.rpc('siparis_guncelle', { p_kod: kod, p_onek: onek, p_id: id, p_veri: veri })
+    if (error) { console.error('siparisGuncelleGuvenli:', error.message); return { basarili: false } }
+    return data || { basarili: false }
+  } catch (e) { console.error('siparisGuncelleGuvenli:', e.message); return { basarili: false } }
+}
 // Müşteri, iptal/red edilmiş siparişi kendi listesinden kaldırır (kayıt sende kalır, sadece müşteriye gizlenir)
 export async function siparisMusteriGizleGuvenli(kod, onek, id) {
   try {
