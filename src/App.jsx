@@ -10656,6 +10656,7 @@ function Atolye({ onSirketDegis }) {
 
   const [sayfa,     setSayfa]     = useState("koleksiyonlar");
   const [aktifKol,  setAktifKol]  = useState(null);
+  const [acikUstKol, setAcikUstKol] = useState(null); // içine girilmiş ÜST koleksiyonun id'si (alt koleksiyon kartları gösterilir)
   const [filtre,    setFiltre]    = useState("all");
   const [sirala,    setSirala]    = useState("kod_yeni"); // varsayılan: koda göre en yeni
   const [etiketF,    setEtiketF]    = useState("");
@@ -10859,6 +10860,7 @@ function Atolye({ onSirketDegis }) {
   const [fkAd, setFkAd] = useState("");
   const [fkAc, setFkAc] = useState("");
   const [fkOn, setFkOn] = useState("");
+  const [fkUst, setFkUst] = useState(""); // üst koleksiyon id (boş = ana seviye)
 
   // Model form
   const [fAd,          setFAd]         = useState("");
@@ -11654,12 +11656,12 @@ function Atolye({ onSirketDegis }) {
     return p ? kollar.find(k => k.on && k.on.toUpperCase() === p.toUpperCase()) || null : null;
   }, [kollar]);
 
-  const rkf = () => { setFkAd(""); setFkAc(""); setFkOn(""); };
+  const rkf = () => { setFkAd(""); setFkAc(""); setFkOn(""); setFkUst(""); };
   const rmf = () => { setFAd(""); setFKod(""); setFGram(""); setFRefAyar("14K"); setFTasGram(""); setFTasBoy(""); setFTaslar([]); setFTasSekil("ROUND"); setFTasTur("N"); setFTasBoyut(""); setFTasAdet(""); setFTasOzelIsim(""); setFMadenC(""); setFIscilikDolar(""); setFIscilikBirim("dolar"); setFIscilikAyarlar({}); setFEkMaliyet(""); setFKategori("yuzuk"); setFSetKodu(""); setFAc(""); setFFoto(""); setFKolId(""); setFDurum("baslanmadi"); setFEtiketler([]); setFYeniEtiket(""); setFDetayNoktalari([]); setFDetayAcik(false); setFSetModu(false); setFSetKod1(""); setFSetKod2(""); setFSetM1(null); setFSetM2(null); };
 
   const saveKol = () => {
     if (!fkAd.trim()) return;
-    const obj = { ad: fkAd.trim(), ac: fkAc.trim(), on: fkOn.trim().toUpperCase() };
+    const obj = { ad: fkAd.trim(), ac: fkAc.trim(), on: fkOn.trim().toUpperCase(), ust: (fkUst && fkUst !== (editK && editK.id)) ? fkUst : null };
     if (editK) svK(kollar.map(k => k.id === editK.id ? { ...k, ...obj } : k));
     else svK([...kollar, { id: uid(), ...obj, t: Date.now() }]);
     setShowKM(false); rkf(); setEditK(null);
@@ -11673,7 +11675,8 @@ function Atolye({ onSirketDegis }) {
         return;
       }
     }
-    svK(kollar.filter(k => k.id !== id));
+    svK(kollar.filter(k => k.id !== id).map(k => k.ust === id ? { ...k, ust: null } : k)); // alt koleksiyonlar silinmez, ana seviyeye çıkar
+    if (acikUstKol === id) setAcikUstKol(null);
     // Koleksiyondaki modelleri de sil (hayalet model kalmasın)
     svM(modeller.filter(m => m.ki !== id));
     if (aktifKol && aktifKol.id === id) { setAktifKol(null); setSayfa("koleksiyonlar"); }
@@ -11813,7 +11816,7 @@ function Atolye({ onSirketDegis }) {
     if (sip) islemKaydet(AKTIF_SIRKET_ONEK, "sil", "sipariş", (sip.musteri || "") + " · " + new Date(sip.tarih).toLocaleDateString("tr-TR"));
   };
 
-  const openEK = k => { setFkAd(k.ad); setFkAc(k.ac||""); setFkOn(k.on||""); setEditK(k); setShowKM(true); };
+  const openEK = k => { setFkAd(k.ad); setFkAc(k.ac||""); setFkOn(k.on||""); setFkUst(k.ust||""); setEditK(k); setShowKM(true); };
   const openEM = m => {
     _fotoGecmis = []; _koruMaske = null; setFGeriVar(0); if (m.fotoTemiz && m.foto) _temizFotolar.add(m.foto);
     setFAd(m.ad); setFKod(m.kod||""); setFGram(String(m.gram||"")); setFRefAyar(m.refAyar||"14K");
@@ -12416,7 +12419,7 @@ function Atolye({ onSirketDegis }) {
                   });
                 }
                 return (
-                <button key={n} onClick={() => { setSayfa(n); if (n==="koleksiyonlar") setAktifKol(null); }}
+                <button key={n} onClick={() => { setSayfa(n); if (n==="koleksiyonlar") { setAktifKol(null); setAcikUstKol(null); } }}
                   style={{ ...GH, color:sayfa===n?T.gold:T.sub, background:sayfa===n?T.btnBg:"transparent", borderColor:sayfa===n?T.btnBorder:T.border, fontSize:9, padding:"5px 9px", position:"relative" }}>
                   {{"koleksiyonlar":"Koleksiyonlar","modeller":"Modeller","konfirmasyon":"Konfirmasyon","siparisler":"Siparişler","iadeler":"İadeler","musteriler":"Müşteriler","vitrin":"🛍 Vitrin","kasa":"Kasa","muhasebe":"Muhasebe","personel":"Personel","analiz":"Keşfet","radar":"📡 Trend Radar","ayarlar":"Ayarlar"}[n]||n.charAt(0).toUpperCase()+n.slice(1)}
                   {n==="konfirmasyon" && konfList.length>0 && <span style={{ position:"absolute", top:-4, right:-4, background:GOLD, color:DARK, width:13, height:13, borderRadius:7, fontSize:7, fontWeight:800, display:"flex", alignItems:"center", justifyContent:"center" }}>{konfList.length}</span>}
@@ -12537,21 +12540,30 @@ function Atolye({ onSirketDegis }) {
         {sayfa==="koleksiyonlar" && (
           <div style={{ animation:"fadein .3s" }}>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14, flexWrap:"wrap", gap:8 }}>
-              <h2 style={{ margin:0, fontSize:15, fontWeight:700, color:"var(--goldtext)" }}>Koleksiyonlar</h2>
+              {(() => { const ustK = acikUstKol ? kollar.find(k => k.id === acikUstKol) : null; return (
+                <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                  {ustK && <button onClick={() => setAcikUstKol(null)} style={{ ...GH, padding:"4px 8px", fontSize:11 }}>{"<"}</button>}
+                  <h2 style={{ margin:0, fontSize:15, fontWeight:700, color:"var(--goldtext)" }}>{ustK ? <span><span style={{ opacity:.6, cursor:"pointer" }} onClick={() => setAcikUstKol(null)}>Koleksiyonlar › </span>{ustK.ad}</span> : "Koleksiyonlar"}</h2>
+                  {ustK && <button onClick={() => { setAktifKol(ustK); setSayfa("modeller"); setFiltre("all"); setEtiketF(""); setArama(""); setSirala("kod_yeni"); }} style={{ ...GH, padding:"4px 9px", fontSize:10 }}>Ana modelleri ac ({modeller.filter(m => m.ki===ustK.id).length})</button>}
+                </div>
+              ); })()}
               <div style={{ display:"flex", gap:6 }}>
                 {kollar.length > 1 && (
                   <button onClick={() => setHizalaModal(true)} style={{ background:"rgba(167,139,250,0.1)", border:"1px solid rgba(167,139,250,0.25)", borderRadius:9, padding:"6px 12px", color:"#a78bfa", fontSize:11, fontWeight:700, cursor:"pointer" }}>↕ Hizala</button>
                 )}
-                <button onClick={() => { rkf(); setEditK(null); setShowKM(true); }} style={BG}>+ Koleksiyon</button>
+                <button onClick={() => { rkf(); if (acikUstKol) setFkUst(acikUstKol); setEditK(null); setShowKM(true); }} style={BG}>{acikUstKol ? "+ Alt Koleksiyon" : "+ Koleksiyon"}</button>
               </div>
             </div>
             {kollar.length===0 && <p style={{ color:"#665d4a", textAlign:"center", padding:"40px" }}>Henuz koleksiyon yok</p>}
+            {acikUstKol && !kollar.some(k => k.ust === acikUstKol) && <p style={{ color:"#665d4a", textAlign:"center", padding:"30px" }}>Bu kartin icinde henuz alt koleksiyon yok — "+ Alt Koleksiyon" ile ekle (ornek: Bvlgari, Cartier)</p>}
             <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(320px,1fr))", gap:16 }}>
-              {kollar.map((kol,i) => {
-                const km = modeller.filter(m => m.ki===kol.id);
+              {(acikUstKol ? kollar.filter(k => k.ust === acikUstKol) : kollar.filter(k => !k.ust || !kollar.some(x => x.id === k.ust))).map((kol,i) => {
+                const altlar = kollar.filter(k => k.ust === kol.id);
+                const kimler = new Set([kol.id, ...altlar.map(k => k.id)]); // ust kart: kendi + alt koleksiyonlarinin modelleri
+                const km = modeller.filter(m => kimler.has(m.ki));
                 const ft = km.filter(m => m.foto).slice(0,4);
                 return (
-                  <div key={kol.id} onClick={() => { setAktifKol(kol); setSayfa("modeller"); setFiltre("all"); setEtiketF(""); setArama(""); setSirala("kod_yeni"); }}
+                  <div key={kol.id} onClick={() => { if (altlar.length > 0) { setAcikUstKol(kol.id); return; } setAktifKol(kol); setSayfa("modeller"); setFiltre("all"); setEtiketF(""); setArama(""); setSirala("kod_yeni"); }}
                     style={{ background:"rgba(255,255,255,0.06)", backdropFilter:"blur(10px)", border:"1px solid rgba(255,255,255,0.08)", borderRadius:20, overflow:"hidden", cursor:"pointer", transition:"all .3s ease", animation:"cardin .4s ease "+(i*.05)+"s both", boxShadow:"0 2px 16px rgba(0,0,0,0.15)" }}
                     onMouseOver={e => { e.currentTarget.style.boxShadow="0 8px 32px rgba(0,0,0,0.25)"; e.currentTarget.style.transform="translateY(-4px)"; e.currentTarget.style.borderColor="rgba(255,255,255,0.15)"; }}
                     onMouseOut={e  => { e.currentTarget.style.boxShadow="0 2px 16px rgba(0,0,0,0.15)"; e.currentTarget.style.transform="none"; e.currentTarget.style.borderColor="rgba(255,255,255,0.08)"; }}>
@@ -12571,7 +12583,7 @@ function Atolye({ onSirketDegis }) {
                       </div>
                       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-end" }}>
                         <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
-                          <span style={{ fontSize:10, color:T.sub, fontWeight:500 }}>{km.length} model</span>
+                          <span style={{ fontSize:10, color:T.sub, fontWeight:500 }}>{km.length} model{altlar.length > 0 ? " · " + altlar.length + " alt koleksiyon" : ""}</span>
                           {altinKgUSD > 0 && km.length > 0 && (() => {
                             // Ortalama ürün gramı — her modelin gramı 14K'ya çevrilip ortalaması alınır (gramı olmayan set vb. hariç)
                             const gramlar14 = km.filter(m => Number(m.gram) > 0).map(m => gramDonustur(Number(m.gram), m.refAyar||"14K", "14K", Number(m.tasGram)||0));
@@ -12600,6 +12612,7 @@ function Atolye({ onSirketDegis }) {
                           })()}
                         </div>
                         <div style={{ display:"flex", gap:4 }} onClick={e => e.stopPropagation()}>
+                          {!kol.ust && <button onClick={() => { rkf(); setFkUst(kol.id); setEditK(null); setShowKM(true); }} title="Bu kartin icine yeni alt koleksiyon (marka) ac" style={{ background:"rgba(106,191,105,0.08)", border:"1px solid rgba(106,191,105,0.2)", borderRadius:8, padding:"4px 8px", color:"#6abf69", fontSize:8, fontWeight:700, cursor:"pointer" }}>+ Alt</button>}
                           <button onClick={() => openEK(kol)} style={{ background:"rgba(255,255,255,0.06)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:8, padding:"4px 10px", color:T.text, fontSize:8, fontWeight:600, cursor:"pointer", transition:"all .2s" }}>Edit</button>
                           <button onClick={() => { setKatalogKol(kol); setKatalogSiraliModeller([]); setKatalogSutun(3); setKatalogAyar("14K"); setKatalogSiralaModal(true); }} style={{ background:"rgba(91,155,213,0.08)", border:"1px solid rgba(91,155,213,0.15)", borderRadius:8, padding:"4px 8px", color:"#5b9bd5", fontSize:8, fontWeight:700, cursor:"pointer" }}>PDF 3</button>
                           <button onClick={() => { setKatalogKol(kol); setKatalogSiraliModeller([]); setKatalogSutun(4); setKatalogAyar("14K"); setKatalogSiralaModal(true); }} style={{ background:"rgba(167,139,250,0.08)", border:"1px solid rgba(167,139,250,0.15)", borderRadius:8, padding:"4px 8px", color:"#a78bfa", fontSize:8, fontWeight:700, cursor:"pointer" }}>PDF 4</button>
@@ -18073,6 +18086,18 @@ function Atolye({ onSirketDegis }) {
         <Fl label="Koleksiyon Adi" req T={T}><input value={fkAd} onChange={e=>setFkAd(e.target.value)} placeholder="2025 Nisan Serisi" style={IS}/></Fl>
         <Fl label="Kod Oneki" hint={(fkOn||"XX")+"-001 girilince otomatik eslesir"} T={T}><input value={fkOn} onChange={e=>setFkOn(e.target.value.toUpperCase())} placeholder="NS" style={IS}/></Fl>
         <Fl label="Aciklama" T={T}><textarea value={fkAc} onChange={e=>setFkAc(e.target.value)} rows={2} style={{ ...IS, resize:"vertical" }}/></Fl>
+        {(() => {
+          const kendiAltVar = editK && kollar.some(k => k.ust === editK.id);
+          const adaylar = kollar.filter(k => !k.ust && (!editK || k.id !== editK.id));
+          return (
+            <Fl label="Ust Koleksiyon" hint={kendiAltVar ? "Bu koleksiyonun alt koleksiyonlari var, baska bir koleksiyonun altina tasinamaz" : "Marka / ust kart secersen bu koleksiyon onun icinde acilir"} T={T}>
+              <select value={fkUst} disabled={kendiAltVar} onChange={e=>setFkUst(e.target.value)} style={IS}>
+                <option value="">-- Ana seviye (ust yok) --</option>
+                {adaylar.map(k => <option key={k.id} value={k.id}>{k.ad}</option>)}
+              </select>
+            </Fl>
+          );
+        })()}
         <button onClick={saveKol} disabled={!fkAd.trim()} style={{ ...BG, width:"100%", opacity:fkAd.trim()?1:0.4 }}>{editK?"Kaydet":"Olustur"}</button>
       </Modal>
 
@@ -18224,7 +18249,7 @@ function Atolye({ onSirketDegis }) {
               <input value={fKod} onChange={e=>handleKod(e.target.value)} placeholder="NS-001" style={{ ...IS, borderColor: kodKontrol?.tip==="tekrar" ? "rgba(232,90,79,0.4)" : "rgba(var(--vurgu-rgb),0.12)" }}/>
             </Fl>
           </div>
-          <div style={{ flex:1 }}><Fl label="Koleksiyon" T={T}><select value={fKolId} onChange={e=>setFKolId(e.target.value)} style={IS}><option value="">-- Sec --</option>{kollar.map(k=><option key={k.id} value={k.id}>{k.on?"["+k.on+"] ":""}{k.ad}</option>)}</select></Fl></div>
+          <div style={{ flex:1 }}><Fl label="Koleksiyon" T={T}><select value={fKolId} onChange={e=>setFKolId(e.target.value)} style={IS}><option value="">-- Sec --</option>{kollar.map(k=>{ const ustK = k.ust ? kollar.find(x=>x.id===k.ust) : null; return <option key={k.id} value={k.id}>{ustK ? ustK.ad+" › " : ""}{k.on?"["+k.on+"] ":""}{k.ad}</option>; })}</select></Fl></div>
         </div>
 
         <div style={{ background:"rgba(167,139,250,0.03)", border:"1px solid rgba(167,139,250,0.1)", borderRadius:10, padding:"10px 12px", marginBottom:10 }}>
