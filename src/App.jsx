@@ -9408,6 +9408,43 @@ function VitrinModu({ kod, onizleme }) {
             </div>
           )}
 
+          {/* YENİ MODELLER ŞERİDİ — kayan fotoğraf rulosu; üzerine gelince durur/büyür, tıklayınca model kartı açılır */}
+          {(() => {
+            const yeniler = modeller.filter(m => m.foto && yeniMi(m));
+            if (yeniler.length < 3) return null;
+            // koleksiyonlar arası dağıt (round-robin) — tek koleksiyon şeridi doldurmasın
+            const gruplar = {}; yeniler.sort((a,b)=>(b.t||0)-(a.t||0)).forEach(m => { (gruplar[m.ki] = gruplar[m.ki] || []).push(m); });
+            const dizi = []; let kaldi = true;
+            for (let r = 0; kaldi && dizi.length < 30; r++) { kaldi = false; Object.values(gruplar).forEach(g => { if (g[r]) { dizi.push(g[r]); kaldi = true; } }); }
+            let ogeler = dizi.slice(0, 30);
+            while (ogeler.length < 12) ogeler = ogeler.concat(dizi.slice(0, 30)); // kısa liste de boydan boya dolsun
+            const sure = Math.max(30, ogeler.length * 4);
+            return (
+              <div style={{ padding:"14px 0 6px" }}>
+                <style>{".vs-mq{overflow:hidden;padding:16px 0;margin:-16px 0;-webkit-mask-image:linear-gradient(90deg,transparent,#000 5%,#000 95%,transparent);mask-image:linear-gradient(90deg,transparent,#000 5%,#000 95%,transparent)}.vs-tr{display:flex;gap:12px;width:max-content;animation:vsKay linear infinite}.vs-mq:hover .vs-tr{animation-play-state:paused}@keyframes vsKay{to{transform:translateX(-50%)}}.vs-t{position:relative;width:220px;flex:none;aspect-ratio:5/4;border-radius:14px;overflow:hidden;background:#ededed;cursor:pointer;transition:transform .25s ease,box-shadow .25s ease}.vs-t:hover{transform:scale(1.14);box-shadow:0 14px 34px rgba(0,0,0,.3);z-index:3}@media(max-width:640px){.vs-t{width:150px}}@media(prefers-reduced-motion:reduce){.vs-tr{animation:none!important}.vs-mq{overflow-x:auto}}"}</style>
+                <div style={{ padding:"0 28px 8px", display:"flex", alignItems:"baseline", gap:10 }}>
+                  <span style={{ fontSize:16, fontWeight:600, color:"var(--vt1)", letterSpacing:"-0.01em" }}>Yeni modeller</span>
+                  <span style={{ fontSize:12, color:"var(--vt2)" }}>{yeniler.length} yeni</span>
+                </div>
+                <div className="vs-mq">
+                  <div className="vs-tr" style={{ animationDuration: sure + "s" }}>
+                    {[...ogeler, ...ogeler].map((m, i) => {
+                      const kolAdi = (kollar.find(k => k.id === m.ki) || {}).ad || "";
+                      return (
+                        <div key={m.id + "_" + i} className="vs-t" title={m.kod}
+                          onClick={() => { setDetayModel(m); if (vitrinMusteri && !onizleme) vitrinAktiviteKaydetGuvenli(vitrinMusteri.kod, vitrinMusteri.onek, "model", kolAdi, m.kod, m.ad); }}>
+                          <img src={m.foto} alt="" style={{ position:"absolute", top:"8.5%", left:"8.5%", width:"83%", height:"83%", ...FOTO_KENAR_SOLUK, objectFit:"cover" }}/>
+                          <span style={{ position:"absolute", top:8, left:8, background:"var(--vurgu)", color:"#1d1d1f", fontSize:10, fontWeight:700, padding:"3px 9px", borderRadius:980 }}>YENİ</span>
+                          <span style={{ position:"absolute", bottom:6, right:8, fontSize:10, fontWeight:600, color:"#6e6e73" }}>{m.kod}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+
           {/* KOLEKSİYON KARTLARI */}
           <div className="vm-kart-grid vm-pad" style={{ padding:"14px 28px 8px", ...(kolSayi ? { gridTemplateColumns:"repeat("+kolSayi+", minmax(0,1fr))" } : {}), ...(satirH ? { gridAutoRows:satirH+"px" } : {}) }}>
             {kollarSirali.map(k => {
