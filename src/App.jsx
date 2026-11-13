@@ -230,7 +230,7 @@ function hesapla(m, secilenAyar, altinKgUSD, varsayilanMly) {
   const refGram    = Number(m.gram) || 0;
   const tasGram    = Number(m.tasGram) || 0;
   const aktifAyar  = secilenAyar || refAyar;
-  const mamulGram  = gramDonustur(refGram, refAyar, aktifAyar, tasGram);
+  const mamulGram  = gramDonustur(refGram, refAyar, aktifAyar, tasGram + (Number(m.tasKarDus) || 0)); // kayıtlı taş gramı "kârdan düş" kadar azaltılmış olabilir; mal gramı için gerçek taş gramı kullanılır
   const ayarOran   = (AYARLAR.find(a => a.id === aktifAyar) || { o: 0.585 }).o;
   const malMly     = Number(m.madenCarpan) || Number(varsayilanMly) || 0.030;
   const hasGramUSD = altinKgUSD > 0 ? altinKgUSD / 1000 : 0;
@@ -268,8 +268,8 @@ function hesapla(m, secilenAyar, altinKgUSD, varsayilanMly) {
   const topMaliyetHas = maliyetHas + ekMaliyetHas;
   // Kâr has
   // Taş listesinde satır bazında girilen "kârdan düş (gr)" (yay, cam vb.): malın gramı DEĞİŞMEZ, gram × ayar oranı (has) kârdan düşer
-  const tasKesinti = (Number(m.tasKarDus) || 0) * ayarOran;
-  const karHas = gelirHas - topMaliyetHas - tasKesinti;
+  const tasKesinti = 0; // artık düşüm kayıtlı taş gramının içinde (tasHas düşer → gelir/kâr düşer)
+  const karHas = gelirHas - topMaliyetHas;
   const karUSD = karHas * hasGramUSD;
   // Karlılık milyem/gr = karHas / mamulGram
   const karMly = mamulGram > 0 ? karHas / mamulGram : 0;
@@ -11695,7 +11695,7 @@ function Atolye({ onSirketDegis }) {
     const hesaplananTasGram = fTaslar.length > 0 && toplamTasGram > 0
       ? toplamTasGram
       : (Number(fTasGram)||0);
-    const obj = { ad: fAd.trim(), kod: fKod.trim().toUpperCase(), kategori: fKategori, gram: Number(fGram)||0, refAyar: fRefAyar, tasGram: hesaplananTasGram, taslar: fTaslar, tasKarDus: fTaslar.reduce((a,t)=>a+(Number(t.kd)||0),0), tasBoy: fTasBoy.trim(), tasSekil: fTasSekil, tasTur: fTasTur, tasBoyut: fTasBoyut, tasAdet: Number(fTasAdet)||0, madenCarpan: Number(fMadenC)||0, iscilikDolar: Number(fIscilikDolar)||0, iscilikBirim: fIscilikBirim, iscilikAyarlar: fIscilikAyarlar, ekMaliyet: Number(fEkMaliyet)||0, ac: fAc.trim(), foto: fFoto, fotoTemiz: _temizFotolar.has(fFoto), ki: fKolId, durum: fDurum, etiketler: fEtiketler, detayNoktalari: fDetayNoktalari };
+    const obj = { ad: fAd.trim(), kod: fKod.trim().toUpperCase(), kategori: fKategori, gram: Number(fGram)||0, refAyar: fRefAyar, tasGram: Math.max(0, hesaplananTasGram - fTaslar.reduce((a,t)=>a+(Number(t.kd)||0),0)), taslar: fTaslar, tasKarDus: fTaslar.reduce((a,t)=>a+(Number(t.kd)||0),0), tasBoy: fTasBoy.trim(), tasSekil: fTasSekil, tasTur: fTasTur, tasBoyut: fTasBoyut, tasAdet: Number(fTasAdet)||0, madenCarpan: Number(fMadenC)||0, iscilikDolar: Number(fIscilikDolar)||0, iscilikBirim: fIscilikBirim, iscilikAyarlar: fIscilikAyarlar, ekMaliyet: Number(fEkMaliyet)||0, ac: fAc.trim(), foto: fFoto, fotoTemiz: _temizFotolar.has(fFoto), ki: fKolId, durum: fDurum, etiketler: fEtiketler, detayNoktalari: fDetayNoktalari };
     if (!obj.id) obj.olusturma = Date.now();
     // Aynı kodlu diğer modeller var mı kontrol et
     // NOT: aynı kod İKİ FARKLI SEBEPLE oluşabilir:
@@ -18457,7 +18457,7 @@ function Atolye({ onSirketDegis }) {
               return gosterilen > 0 ? (
                 <div style={{ fontSize:9, color:"#6abf69", fontWeight:700, marginBottom:8, padding:"4px 8px", background:"rgba(106,191,105,0.08)", borderRadius:5 }}>
                   Toplam taş: {gosterilen.toFixed(4)} gr
-                  {(() => { const kdT = fTaslar.reduce((a,t)=>a+(Number(t.kd)||0),0); return kdT > 0 ? <span style={{ color:"#e8833a", marginLeft:10 }}>· kârdan düşülecek: {kdT.toFixed(3)} gr × ayar oranı = {(kdT * ((AYARLAR.find(a=>a.id===fRefAyar)||{o:0.585}).o)).toFixed(3)} has</span> : null; })()}
+                  {(() => { const kdT = fTaslar.reduce((a,t)=>a+(Number(t.kd)||0),0); return kdT > 0 ? <span style={{ color:"#e8833a", marginLeft:10 }}>· taş gramından düşülecek: {kdT.toFixed(3)} gr → kayıtlı taş: {Math.max(0, gosterilen - kdT).toFixed(4)} gr (malın gramı değişmez)</span> : null; })()}
                 </div>
               ) : null;
             })()}
