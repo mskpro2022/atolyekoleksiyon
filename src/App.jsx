@@ -267,7 +267,9 @@ function hesapla(m, secilenAyar, altinKgUSD, varsayilanMly) {
   // Toplam maliyet has
   const topMaliyetHas = maliyetHas + ekMaliyetHas;
   // Kâr has
-  const karHas = gelirHas - topMaliyetHas;
+  // Taş listesinde satır bazında girilen "kârdan düş (gr)" (yay, cam vb.): malın gramı DEĞİŞMEZ, gram × ayar oranı (has) kârdan düşer
+  const tasKesinti = (Number(m.tasKarDus) || 0) * ayarOran;
+  const karHas = gelirHas - topMaliyetHas - tasKesinti;
   const karUSD = karHas * hasGramUSD;
   // Karlılık milyem/gr = karHas / mamulGram
   const karMly = mamulGram > 0 ? karHas / mamulGram : 0;
@@ -288,7 +290,7 @@ function hesapla(m, secilenAyar, altinKgUSD, varsayilanMly) {
   }
 
   return {
-    mamulGram, aktifAyar, ayarOran,
+    mamulGram, tasKesinti, aktifAyar, ayarOran,
     tasHas, iscilikUSD, iscilikHas,
     maliyetHas, ekMaliyetUSD, ekMaliyetHas,
     gelirHas, topMaliyetHas,
@@ -8320,7 +8322,8 @@ function OnizlemeBox({ m, altinKgUSD, mc }) {
   ].filter(Boolean) : [
     { l: "Uretim maliyeti (" + fN(pv.mamulGram) + "gr x " + mc + " mly)", v: fN(pv.maliyetHas, 4), c: "#e85a4f" },
     pv.ekMaliyetUSD > 0 && { l: "Ek maliyet (" + fUSD(pv.ekMaliyetUSD) + ")", v: fN(pv.ekMaliyetHas, 4), c: "#e85a4f" },
-    { l: "--- Toplam Maliyet", v: fN(pv.topMaliyetHas, 4), c: "#e85a4f", bold: true },
+    pv.tasKesinti > 0 && { l: "Taş kesintisi (" + fN(Number(m.tasKarDus), 2) + "gr x " + pv.ayarOran + ")", v: fN(pv.tasKesinti, 4), c: "#e85a4f" },
+    { l: "--- Toplam Maliyet", v: fN(pv.topMaliyetHas + pv.tasKesinti, 4), c: "#e85a4f", bold: true },
     null,
     pv.tasHas > 0 && { l: "Tas has (" + fN(pv.mamulGram) + "gr x " + pv.ayarOran + ")", v: fN(pv.tasHas, 4), c: "#5b9bd5" },
     pv.iscilikHas > 0 && { l: "Iscilik (" + fN(pv.mamulGram) + "gr x " + fUSD(pv.iscilikDolarGr || m.iscilikDolar) + " / " + fUSD(hasGramUSD) + ")", v: fN(pv.iscilikHas, 4), c: "#e8833a" },
@@ -11421,16 +11424,16 @@ function Atolye({ onSirketDegis }) {
         const m = mm.get(String(k.id)); if (!m) return;
         const st = (sp.kalemDurumlar||{})[k.id] || k.durum || "baslanmadi";
         if (["tamam","teslim","hurda"].includes(st)) return;
-        const g = Number(m.gram)||0, t = Number(m.tasGram)||0;
+        const g = Number(m.gram)||0, t = Number(m.tasGram)||0, y = Number(m.tasKarDus)||0;
         if (!(g > 0)) return;
-        if (Math.abs((Number(k.gram)||0) - g) < 0.0005 && Math.abs((Number(k.tasGram)||0) - t) < 0.0005) return;
-        const rk = k.id + ":" + g + ":" + t;
+        if (Math.abs((Number(k.gram)||0) - g) < 0.0005 && Math.abs((Number(k.tasGram)||0) - t) < 0.0005 && Math.abs((Number(k.tasKarDus)||0) - y) < 0.0005) return;
+        const rk = k.id + ":" + g + ":" + t + ":" + y;
         if (gramRedRef.current.has(rk)) return;
-        fark.push({ sp, k, m, g, t, rk });
+        fark.push({ sp, k, m, g, t, y, rk });
       });
     });
     if (!fark.length) return;
-    const satirlar = fark.slice(0, 8).map(f => "• " + (f.k.kod || f.m.kod || "?") + ": " + fN(Number(f.k.gram)||0, 2) + " → " + fN(f.g, 2) + " gr" + (Math.abs((Number(f.k.tasGram)||0) - f.t) >= 0.0005 ? " (taş " + fN(Number(f.k.tasGram)||0, 2) + " → " + fN(f.t, 2) + ")" : "") + "   [" + (f.sp.siparisNo || f.sp.musKod || f.sp.musteri || "sipariş") + ", " + (f.k.adet||1) + " adet]");
+    const satirlar = fark.slice(0, 8).map(f => "• " + (f.k.kod || f.m.kod || "?") + ": " + fN(Number(f.k.gram)||0, 2) + " → " + fN(f.g, 2) + " gr" + (Math.abs((Number(f.k.tasGram)||0) - f.t) >= 0.0005 ? " (taş " + fN(Number(f.k.tasGram)||0, 2) + " → " + fN(f.t, 2) + ")" : "") + (Math.abs((Number(f.k.tasKarDus)||0) - f.y) >= 0.0005 ? " (kârdan düş " + fN(Number(f.k.tasKarDus)||0, 2) + " → " + fN(f.y, 2) + ")" : "") + "   [" + (f.sp.siparisNo || f.sp.musKod || f.sp.musteri || "sipariş") + ", " + (f.k.adet||1) + " adet]");
     const msg = "Model kartında gramı değişen ürünler var; açık siparişlerde eski gram kalmış:\n\n" + satirlar.join("\n") + (fark.length > 8 ? "\n… ve " + (fark.length - 8) + " kalem daha" : "") + "\n\nSiparişlerdeki gram da güncellensin mi?\n(Fiyatlar değişmez; tamamlanan kalemlere dokunulmaz.)";
     if (!window.confirm(msg)) { fark.forEach(f => gramRedRef.current.add(f.rk)); return; }
     const mapK = new Map(fark.map(f => [String(f.sp.id) + "|" + String(f.k.id), f]));
@@ -11439,8 +11442,8 @@ function Atolye({ onSirketDegis }) {
       const log = { ...(sp.gramDuzeltme||{}) };
       const kalemler = sp.kalemler.map(k => {
         const f = mapK.get(String(sp.id) + "|" + String(k.id)); if (!f) return k;
-        log[k.id] = [ ...(log[k.id]||[]), { eski:{ gram:k.gram, tasGram:k.tasGram, refAyar:k.refAyar }, yeni:{ gram:f.g, tasGram:f.t, refAyar:f.m.refAyar||k.refAyar }, t:Date.now() } ];
-        return { ...k, gram:f.g, tasGram:f.t, refAyar:f.m.refAyar||k.refAyar };
+        log[k.id] = [ ...(log[k.id]||[]), { eski:{ gram:k.gram, tasGram:k.tasGram, tasKarDus:k.tasKarDus, refAyar:k.refAyar }, yeni:{ gram:f.g, tasGram:f.t, tasKarDus:f.y, refAyar:f.m.refAyar||k.refAyar }, t:Date.now() } ];
+        return { ...k, gram:f.g, tasGram:f.t, tasKarDus:f.y, refAyar:f.m.refAyar||k.refAyar, ...(Array.isArray(f.m.taslar) ? { taslar:f.m.taslar } : {}) };
       });
       return { ...sp, kalemler, gramDuzeltme: log };
     }));
@@ -11692,7 +11695,7 @@ function Atolye({ onSirketDegis }) {
     const hesaplananTasGram = fTaslar.length > 0 && toplamTasGram > 0
       ? toplamTasGram
       : (Number(fTasGram)||0);
-    const obj = { ad: fAd.trim(), kod: fKod.trim().toUpperCase(), kategori: fKategori, gram: Number(fGram)||0, refAyar: fRefAyar, tasGram: hesaplananTasGram, taslar: fTaslar, tasBoy: fTasBoy.trim(), tasSekil: fTasSekil, tasTur: fTasTur, tasBoyut: fTasBoyut, tasAdet: Number(fTasAdet)||0, madenCarpan: Number(fMadenC)||0, iscilikDolar: Number(fIscilikDolar)||0, iscilikBirim: fIscilikBirim, iscilikAyarlar: fIscilikAyarlar, ekMaliyet: Number(fEkMaliyet)||0, ac: fAc.trim(), foto: fFoto, fotoTemiz: _temizFotolar.has(fFoto), ki: fKolId, durum: fDurum, etiketler: fEtiketler, detayNoktalari: fDetayNoktalari };
+    const obj = { ad: fAd.trim(), kod: fKod.trim().toUpperCase(), kategori: fKategori, gram: Number(fGram)||0, refAyar: fRefAyar, tasGram: hesaplananTasGram, taslar: fTaslar, tasKarDus: fTaslar.reduce((a,t)=>a+(Number(t.kd)||0),0), tasBoy: fTasBoy.trim(), tasSekil: fTasSekil, tasTur: fTasTur, tasBoyut: fTasBoyut, tasAdet: Number(fTasAdet)||0, madenCarpan: Number(fMadenC)||0, iscilikDolar: Number(fIscilikDolar)||0, iscilikBirim: fIscilikBirim, iscilikAyarlar: fIscilikAyarlar, ekMaliyet: Number(fEkMaliyet)||0, ac: fAc.trim(), foto: fFoto, fotoTemiz: _temizFotolar.has(fFoto), ki: fKolId, durum: fDurum, etiketler: fEtiketler, detayNoktalari: fDetayNoktalari };
     if (!obj.id) obj.olusturma = Date.now();
     // Aynı kodlu diğer modeller var mı kontrol et
     // NOT: aynı kod İKİ FARKLI SEBEPLE oluşabilir:
@@ -11702,7 +11705,7 @@ function Atolye({ onSirketDegis }) {
     //     müşteriye özel "MARKALAR" koleksiyonunda). Bu durumda fiyat DAHİL her şey senkronlanır — çünkü gerçekte
     //     tek bir ürün, sadece iki kataloğa da düşsün diye kopyalanmış; fiyatın ikisinde de aynı kalması gerekir.
     const SENKRON_DISI = ["iscilikDolar","iscilikBirim","iscilikAyarlar","ekMaliyet","madenCarpan",
-      "foto","taslar","tasGram","tasBoy","tasSekil","tasTur","tasBoyut","tasAdet","tasOzelIsim","detayNoktalari"];
+      "foto","taslar","tasKarDus","tasGram","tasBoy","tasSekil","tasTur","tasBoyut","tasAdet","tasOzelIsim","detayNoktalari"];
     const syncObj = Object.fromEntries(Object.entries(obj).filter(([k]) => !SENKRON_DISI.includes(k))); // aynı koleksiyon — kısıtlı
     const capraFotoHaric = ["id","ki","kaynakKi","t","olusturma"]; // çapraz koleksiyon — hemen hemen her şey (kendi konum bilgisi hariç)
     const capraSyncObj = Object.fromEntries(Object.entries(obj).filter(([k]) => !capraFotoHaric.includes(k))); // foto URL'si aşağıda ayrıca eklenir
@@ -13610,7 +13613,7 @@ function Atolye({ onSirketDegis }) {
                 </div>
                 <div style={{ flex:"1 1 120px", minWidth:0 }}>
                   <div style={{ fontSize:13, fontWeight:600, color:"var(--goldtext)" }}><span onClick={()=>{ const mm=modeller.find(x=>x.id===k.id)||modeller.find(x=>k.kod&&x.kod===k.kod); if (mm) openEM(mm); }} title="Model kartını aç" style={{ color:GOLD, marginRight:6, cursor:"pointer", textDecoration:"underline dotted", textUnderlineOffset:3 }}>{k.kod||""}</span>{k.ad}{k.renk && <span style={{ color:"var(--gold)", marginLeft:8, fontSize:12 }}>{k.renk}</span>}</div>
-                  <div style={{ fontSize:12, color:"#998a6e", marginTop:3 }}>{k.secilenAyar||k.refAyar} · {fN(k.gram||0)} gr · <b style={{ color:"var(--goldtext)" }}>{k.adet||1} adet</b></div>
+                  <div style={{ fontSize:12, color:"#998a6e", marginTop:3 }}>{k.secilenAyar||k.refAyar} · {fN(k.gram||0)} gr{Number(k.tasKarDus)>0 && <span style={{ color:"#d4a017" }}> (kârdan −{fN(Number(k.tasKarDus))} gr)</span>} · <b style={{ color:"var(--goldtext)" }}>{k.adet||1} adet</b></div>
                   {k.sipNot && <div style={{ fontSize:12, color:"#5b9bd5", marginTop:3 }}>{k.sipNot}</div>}
                   {(hA>0||iA>0||tA>0) && <div style={{ display:"flex", gap:5, marginTop:5, flexWrap:"wrap" }}>
                     {hA>0 && rozet("Hurda "+hA,"#e85a4f")}{iA>0 && rozet("İade "+iA,"#a78bfa")}{tA>0 && rozet("Tamir "+tA,"#5b9bd5")}
@@ -14249,7 +14252,7 @@ function Atolye({ onSirketDegis }) {
                                   {k.renk && <span style={{ color:"var(--gold)", marginLeft:6, fontSize:9 }}>{k.renk}</span>}
                                 </div>
                                 <div style={{ fontSize:8, color:"#7a6f5a" }}>
-                                  {k.secilenAyar||k.refAyar} · {fN(k.gram||0)} gr · {k.adet||1} adet
+                                  {k.secilenAyar||k.refAyar} · {fN(k.gram||0)} gr{Number(k.tasKarDus)>0 && <span style={{ color:"#d4a017" }}> (kârdan −{fN(Number(k.tasKarDus))} gr)</span>} · {k.adet||1} adet
                                   {k.sipNot && <span style={{ color:"#5b9bd5", marginLeft:4 }}>{k.sipNot}</span>}
                                 </div>
                               </div>
@@ -18423,6 +18426,10 @@ function Atolye({ onSirketDegis }) {
                       : <span style={{ color:"#e85a4f", marginLeft:6, fontSize:8 }}>tabloda yok — manuel gir</span>
                     }
                   </span>
+                  <span title="Bu satır için kârdan düşülecek gram (malın gramı değişmez). Ayar oranıyla has'a çevrilir." style={{ display:"inline-flex", alignItems:"center", gap:3, flexShrink:0 }}>
+                    <span style={{ fontSize:8, color:"#e8833a", whiteSpace:"nowrap" }}>kârdan düş</span>
+                    <input type="number" min="0" step="0.01" value={t.kd ?? ""} onChange={e => setFTaslar(fTaslar.map((x,j) => j===i ? {...x, kd:e.target.value} : x))} placeholder="gr" style={{ ...IS, width:58, padding:"2px 5px", fontSize:10 }}/>
+                  </span>
                   <button onClick={() => setFTaslar(fTaslar.filter((_,j)=>j!==i))} style={{ background:"rgba(232,90,79,0.1)", border:"none", borderRadius:4, padding:"2px 6px", color:"#e85a4f", fontSize:9, cursor:"pointer" }}>×</button>
                 </div>
                 {grHesap === 0 && (
@@ -18450,6 +18457,7 @@ function Atolye({ onSirketDegis }) {
               return gosterilen > 0 ? (
                 <div style={{ fontSize:9, color:"#6abf69", fontWeight:700, marginBottom:8, padding:"4px 8px", background:"rgba(106,191,105,0.08)", borderRadius:5 }}>
                   Toplam taş: {gosterilen.toFixed(4)} gr
+                  {(() => { const kdT = fTaslar.reduce((a,t)=>a+(Number(t.kd)||0),0); return kdT > 0 ? <span style={{ color:"#e8833a", marginLeft:10 }}>· kârdan düşülecek: {kdT.toFixed(3)} gr × ayar oranı = {(kdT * ((AYARLAR.find(a=>a.id===fRefAyar)||{o:0.585}).o)).toFixed(3)} has</span> : null; })()}
                 </div>
               ) : null;
             })()}
