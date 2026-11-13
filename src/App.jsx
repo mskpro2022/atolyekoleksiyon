@@ -231,6 +231,8 @@ function hesapla(m, secilenAyar, altinKgUSD, varsayilanMly) {
   const tasGram    = Number(m.tasGram) || 0;
   const aktifAyar  = secilenAyar || refAyar;
   const mamulGram  = gramDonustur(refGram, refAyar, aktifAyar, tasGram);
+  // Yay düşümü müşteriye yansıyan (faturalanan) gramı düşürür; üretim/maliyet yine TAM gram üzerinden — yayı biz de üretiyoruz
+  const mamulTamGram = (Number(m.yayDus) || 0) > 0 ? gramDonustur(Number(m.gram) || 0, refAyar, aktifAyar, tasGram) : mamulGram;
   const ayarOran   = (AYARLAR.find(a => a.id === aktifAyar) || { o: 0.585 }).o;
   const malMly     = Number(m.madenCarpan) || Number(varsayilanMly) || 0.030;
   const hasGramUSD = altinKgUSD > 0 ? altinKgUSD / 1000 : 0;
@@ -256,7 +258,7 @@ function hesapla(m, secilenAyar, altinKgUSD, varsayilanMly) {
   }
 
   // Maliyet has gram
-  const maliyetHas = mamulGram * malMly;
+  const maliyetHas = mamulTamGram * malMly;
 
   // Ek maliyet has gram (USD olarak girilir)
   const ekMaliyetUSD = Number(m.ekMaliyet) || 0;
@@ -288,7 +290,7 @@ function hesapla(m, secilenAyar, altinKgUSD, varsayilanMly) {
   }
 
   return {
-    mamulGram, aktifAyar, ayarOran,
+    mamulGram, mamulTamGram, aktifAyar, ayarOran,
     tasHas, iscilikUSD, iscilikHas,
     maliyetHas, ekMaliyetUSD, ekMaliyetHas,
     gelirHas, topMaliyetHas,
@@ -8318,7 +8320,7 @@ function OnizlemeBox({ m, altinKgUSD, mc }) {
     null,
     { l: "TOPLAM İŞÇİLİK", v: "$" + fN(pv.gumusIscilikTop, 1), c: "#6abf69", bold: true, big: true },
   ].filter(Boolean) : [
-    { l: "Uretim maliyeti (" + fN(pv.mamulGram) + "gr x " + mc + " mly)", v: fN(pv.maliyetHas, 4), c: "#e85a4f" },
+    { l: "Uretim maliyeti (" + fN(pv.mamulTamGram) + "gr x " + mc + " mly)", v: fN(pv.maliyetHas, 4), c: "#e85a4f" },
     pv.ekMaliyetUSD > 0 && { l: "Ek maliyet (" + fUSD(pv.ekMaliyetUSD) + ")", v: fN(pv.ekMaliyetHas, 4), c: "#e85a4f" },
     { l: "--- Toplam Maliyet", v: fN(pv.topMaliyetHas, 4), c: "#e85a4f", bold: true },
     null,
