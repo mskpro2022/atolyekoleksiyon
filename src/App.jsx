@@ -8793,6 +8793,46 @@ function VitrinModu({ kod, onizleme }) {
     gr: { tr:"gram", en:"g", es:"g" },
   };
   const ce = (anahtar) => (CEVIRI_SOZLUK[anahtar]?.[vitrinDil]) || CEVIRI_SOZLUK[anahtar]?.tr || anahtar;
+
+  // ═══ ANA EKRANA EKLE (PWA) — müşteri vitrini telefona uygulama gibi ekler; MSK ve BSP için ayrı ad + ikon ═══
+  const [eklePrompt, setEklePrompt] = useState(null);   // Android/Chrome "yükle" olayı
+  const [ekleIpucu, setEkleIpucu] = useState(false);    // iPhone: "Paylaş ▸ Ana Ekrana Ekle" yönlendirmesi
+  useEffect(() => {
+    if (onizleme || !vitrinMusteri) return;
+    try {
+      const bsp = aktifOnek === "bsp2_";
+      const ad = bsp ? "BSP" : "MSK";
+      const ikon = (boy) => {
+        const c = document.createElement("canvas"); c.width = boy; c.height = boy;
+        const x = c.getContext("2d");
+        const bg = x.createLinearGradient(0, 0, boy, boy); bg.addColorStop(0, "#f7f5f0"); bg.addColorStop(1, "#e8e4da");
+        x.fillStyle = bg; x.fillRect(0, 0, boy, boy);
+        x.strokeStyle = "#1b1b1d"; x.lineWidth = Math.max(2, Math.round(boy * 0.012));
+        x.beginPath(); x.arc(boy / 2, boy / 2, boy * 0.38, 0, Math.PI * 2); x.stroke();
+        x.textAlign = "center"; x.textBaseline = "middle"; x.fillStyle = "#1b1b1d";
+        x.font = "600 " + Math.round(boy * 0.23) + 'px Georgia, "Times New Roman", serif';
+        x.fillText(ad, boy / 2, boy * 0.47);
+        x.font = "500 " + Math.round(boy * 0.042) + "px Helvetica, Arial, sans-serif"; x.fillStyle = "#6b6b70";
+        x.fillText("K A T A L O G", boy / 2, boy * 0.64);
+        return c.toDataURL("image/png");
+      };
+      const meta = (n, v) => { let m = document.querySelector('meta[name="' + n + '"]'); if (!m) { m = document.createElement("meta"); m.setAttribute("name", n); document.head.appendChild(m); } m.setAttribute("content", v); };
+      const link = (rel, href, boyut) => { document.querySelectorAll('link[rel="' + rel + '"]').forEach(e => e.remove()); const l = document.createElement("link"); l.rel = rel; l.href = href; if (boyut) l.setAttribute("sizes", boyut); document.head.appendChild(l); };
+      meta("apple-mobile-web-app-capable", "yes"); meta("mobile-web-app-capable", "yes");
+      meta("apple-mobile-web-app-title", ad + " Katalog"); meta("apple-mobile-web-app-status-bar-style", "black-translucent"); meta("theme-color", "#f7f5f0");
+      link("apple-touch-icon", ikon(180), "180x180");
+      const m = { name: ad + " Katalog", short_name: ad, start_url: window.location.href, scope: window.location.origin + "/", display: "standalone", background_color: "#0a0a0a", theme_color: "#f7f5f0", icons: [{ src: ikon(192), sizes: "192x192", type: "image/png" }, { src: ikon(512), sizes: "512x512", type: "image/png" }] };
+      link("manifest", URL.createObjectURL(new Blob([JSON.stringify(m)], { type: "application/manifest+json" })));
+      const standalone = (window.navigator && window.navigator.standalone) || (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches);
+      let kapali = false; try { kapali = localStorage.getItem("vitrin_ekle_ipucu") === "1"; } catch {}
+      const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+      if (ios && !standalone && !kapali) setEkleIpucu(true);
+      const onBip = (e) => { e.preventDefault(); if (!standalone && !kapali) setEklePrompt(e); };
+      window.addEventListener("beforeinstallprompt", onBip);
+      return () => window.removeEventListener("beforeinstallprompt", onBip);
+    } catch {}
+  }, [vitrinMusteri, aktifOnek]);
+  const ekleKapat = () => { setEkleIpucu(false); setEklePrompt(null); try { localStorage.setItem("vitrin_ekle_ipucu", "1"); } catch {} };
   // Kategori id -> görünen etiket (kategori pill'leri VE set parça etiketleri için)
   const KATEGORI_CEVIRI = {
     yuzuk:{tr:"Yuzuk",en:"Ring",es:"Anillo"}, kolye:{tr:"Kolye",en:"Necklace",es:"Collar"}, kupe:{tr:"Kupe",en:"Earring",es:"Arete"},
@@ -9776,6 +9816,19 @@ function VitrinModu({ kod, onizleme }) {
               </button>
             </div>
           )}
+        </div>
+      )}
+
+      {(ekleIpucu || eklePrompt) && !siparisModal && !sipListeAcik && !detayModel && (
+        <div style={{ position:"fixed", left:12, right:12, bottom:14, margin:"0 auto", maxWidth:440, zIndex:108, background:"var(--vcard)", color:"var(--vt1)", border:"1px solid rgba(var(--voverlay-rgb),0.16)", borderRadius:16, padding:"13px 16px", boxShadow:"0 10px 32px rgba(0,0,0,0.35)", display:"flex", alignItems:"center", gap:12 }}>
+          <div style={{ flex:1, fontSize:13, lineHeight:1.4 }}>
+            <div style={{ fontWeight:700, marginBottom:2 }}>{vitrinDil==="en" ? "Add to your home screen" : vitrinDil==="es" ? "Añadir a la pantalla de inicio" : "Ana ekrana ekleyin"}</div>
+            <div style={{ color:"var(--vt2)" }}>{eklePrompt
+              ? (vitrinDil==="en" ? "Open the catalog like an app." : vitrinDil==="es" ? "Abra el catálogo como una app." : "Kataloğu uygulama gibi açın.")
+              : (vitrinDil==="en" ? "Tap the Share button in Safari, then “Add to Home Screen”." : vitrinDil==="es" ? "Toque Compartir en Safari y luego «Añadir a pantalla de inicio»." : "Safari'de Paylaş düğmesine, sonra “Ana Ekrana Ekle”ye dokunun.")}</div>
+          </div>
+          {eklePrompt && <button onClick={async () => { try { eklePrompt.prompt(); await eklePrompt.userChoice; } catch {} ekleKapat(); }} style={{ background:"var(--vurgu)", border:"none", borderRadius:9, padding:"8px 14px", color:"#1d1d1f", fontSize:13, fontWeight:700, cursor:"pointer" }}>{vitrinDil==="en" ? "Add" : vitrinDil==="es" ? "Añadir" : "Ekle"}</button>}
+          <button onClick={ekleKapat} aria-label="Kapat" style={{ background:"rgba(var(--voverlay-rgb),0.1)", border:"none", borderRadius:"50%", width:28, height:28, color:"var(--vt1)", fontSize:13, cursor:"pointer", flexShrink:0 }}>✕</button>
         </div>
       )}
 
