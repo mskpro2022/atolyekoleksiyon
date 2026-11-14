@@ -4879,7 +4879,7 @@ function PersonelSayfa({ T, GH: GH0, IS, usdTry, siparisler, hasUsd }) {
   });
 
   return (
-    <div ref={persKok}>
+    <div ref={persKok} className="pers-root">
       <style>{`.pers-t tbody tr:last-child td{border-bottom:none}.pers-t tbody tr:hover td{background:${T.btnBg}}.pers-t input:focus,.pers-t select:focus{border-color:${T.text}!important}
 @media(max-width:700px){
 .pers-sek{flex-wrap:nowrap!important;overflow-x:auto;-webkit-overflow-scrolling:touch}.pers-sek button{white-space:nowrap;padding:10px 12px!important}
@@ -4893,9 +4893,17 @@ function PersonelSayfa({ T, GH: GH0, IS, usdTry, siparisler, hasUsd }) {
 .pers-t tbody td[data-l=""]::before,.pers-t tbody td:first-child::before,.pers-t tbody tr.pers-wide td::before{display:none}
 .pers-t tbody td:first-child{grid-column:1/-1;font-size:15px}.pers-t tbody td[data-l=""]{grid-column:1/-1}
 .pers-t input,.pers-t select{width:100%!important;box-sizing:border-box}
+}
+@media(min-width:901px){
+.pers-root{display:grid;grid-template-columns:220px minmax(0,1180px);column-gap:36px;align-items:start;justify-content:start}
+.pers-hd{grid-column:1;grid-row:1;flex-direction:column!important;align-items:flex-start!important;gap:14px!important;margin-bottom:12px!important}
+.pers-sek{grid-column:1;grid-row:2;flex-direction:column!important;flex-wrap:nowrap!important;border-bottom:none!important;margin-bottom:0!important;gap:2px!important;position:sticky;top:12px}
+.pers-sek button{text-align:left!important;border-bottom:none!important;border-radius:10px!important;padding:10px 12px!important;margin:0!important;font-size:14px!important}
+.pers-sek button.on{background:rgba(128,128,128,.14)!important;box-shadow:inset 2px 0 0 currentColor}
+.pers-root>:not(style):not(.pers-hd):not(.pers-sek){grid-column:2;grid-row:1 / span 3}
 }`}</style>
       {bilgi && <div style={{ position:"fixed", top:14, right:14, zIndex:9500, background: bilgi.hata ? "#7f1d1d" : "#14532d", color:"#fff", padding:"9px 14px", borderRadius:10, fontSize:12, fontWeight:700, maxWidth:320 }}>{bilgi.m}</div>}
-      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-end", flexWrap:"wrap", gap:12, marginBottom:18 }}>
+      <div className="pers-hd" style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-end", flexWrap:"wrap", gap:12, marginBottom:18 }}>
         <div>
           <div style={{ fontSize:26, fontWeight:700, color:T.text, letterSpacing:-0.5 }}>Personel</div>
           <div style={{ fontSize:13, color:T.sub, marginTop:3 }}>{atl} Atölye · {aktif.length} aktif personel</div>
@@ -4904,7 +4912,7 @@ function PersonelSayfa({ T, GH: GH0, IS, usdTry, siparisler, hasUsd }) {
       </div>
       <div className="pers-sek" style={{ display:"flex", gap:2, flexWrap:"wrap", marginBottom:22, borderBottom:"1px solid "+T.border }}>
         {SEK.map(([k, y]) => (
-          <button key={k} onClick={() => setSek(k)} style={{ background:"transparent", border:"none", borderBottom:"2px solid "+(sek === k ? T.text : "transparent"), marginBottom:-1, padding:"10px 16px", fontSize:13, fontWeight: sek === k ? 700 : 500, color: sek === k ? T.text : T.sub, cursor:"pointer" }}>{y}</button>
+          <button key={k} className={sek === k ? "on" : ""} onClick={() => setSek(k)} style={{ background:"transparent", border:"none", borderBottom:"2px solid "+(sek === k ? T.text : "transparent"), marginBottom:-1, padding:"10px 16px", fontSize:13, fontWeight: sek === k ? 700 : 500, color: sek === k ? T.text : T.sub, cursor:"pointer" }}>{y}</button>
         ))}
       </div>
       {yuk && <div style={{ fontSize:12, color:T.sub, padding:20 }}>Yükleniyor…</div>}
@@ -4914,7 +4922,8 @@ function PersonelSayfa({ T, GH: GH0, IS, usdTry, siparisler, hasUsd }) {
         <div>
           <div style={{ display:"flex", gap:14, flexWrap:"wrap", marginBottom:20 }}>
             <PersKutu T={T} y="Aktif personel" d={aktif.length} />
-            <PersKutu T={T} y={`Personel maliyeti (${PERS_AY[ay]})`} d={persTL(topNet)} alt={dvAlt(topNet)} />
+            <PersKutu T={T} y={`Personel maaş maliyeti (${PERS_AY[ay]})`} d={persTL(topNet - topMesaiU)} alt={dvAlt(topNet - topMesaiU)} />
+            <PersKutu T={T} y={`Personel mesai maliyeti (${PERS_AY[ay]})`} d={persTL(Math.round(topMesaiU))} alt={<><span>{Number(topSaat).toLocaleString("tr-TR",{maximumFractionDigits:1})} saat</span>{dvAlt(topMesaiU)}</>} />
             <PersKutu T={T} y="Sabit giderler (aylık)" d={sgKurEksik ? "kur gerekli" : persTL(Math.round(sgToplam))} alt={sgKurEksik ? null : dvAlt(sgToplam)} />
             <PersKutu T={T} y="Toplam aylık maliyet" d={persTL(Math.round(topNet + sgToplam))} alt={sgKurEksik ? null : dvAlt(topNet + sgToplam)} />
           </div>
@@ -4982,15 +4991,17 @@ function PersonelSayfa({ T, GH: GH0, IS, usdTry, siparisler, hasUsd }) {
           <div style={{ ...kart, padding:0, overflowX:"auto", overflowY:"hidden" }}>
             <div style={{ padding:"16px 20px", fontSize:15, fontWeight:700, color:T.text }}>Personel Özeti <span style={{ color:T.sub, fontWeight:500, fontSize:12 }}>· {atl} Atölye</span></div>
             <table className="pers-t" style={{ width:"100%", borderCollapse:"collapse" }}>
-              <thead><tr><th style={th}>Ad Soyad</th><th style={th}>Görev</th><th style={{ ...th, textAlign:"right" }}>Maaş</th><th style={{ ...th, textAlign:"right" }}>Puan ({PERS_AY[ay]})</th><th style={th}>Durum</th></tr></thead>
+              <thead><tr><th style={th}>Ad Soyad</th><th style={th}>Görev</th><th style={{ ...th, textAlign:"right" }}>Maaş</th><th style={{ ...th, textAlign:"right" }}>Mesai ({PERS_AY[ay]})</th><th style={{ ...th, textAlign:"right" }}>Dolar</th><th style={{ ...th, textAlign:"right" }}>Puan ({PERS_AY[ay]})</th><th style={th}>Durum</th></tr></thead>
               <tbody>{per.length ? per.map(p => (
                 <tr key={p.id}>
                   <td style={{ ...td, fontWeight:700 }}>{p.ad}</td>
                   <td style={td}>{p.poz ? pill(PERS_POZ_RENK[p.poz] || "#9ca3af", p.poz) : "—"}</td>
                   <td style={sayi}>{persTL(p.maas)}</td>
+                  <td style={sayi} data-l="Mesai">{satir(p).mu > 0 ? persTL(Math.round(satir(p).mu)) : "—"}{satir(p).saat > 0 && <div style={{ fontSize:11, color:T.sub }}>{Number(satir(p).saat).toLocaleString("tr-TR",{maximumFractionDigits:1})} saat</div>}</td>
+                  <td style={{ ...sayi, color:T.sub }} data-l="Dolar">{kur > 0 ? "$" + Math.round(satir(p).net / kur).toLocaleString("tr-TR") : "—"}</td>
                   <td style={sayi}>{puan[p.id]?.puan ?? "—"}</td>
                   <td style={td}>{pill(p.durum === "Ayrıldı" ? "#9ca3af" : "#10b981", p.durum === "Ayrıldı" ? "Ayrıldı" : "Aktif")}</td>
-                </tr>)) : <tr><td colSpan={5} style={{ ...td, textAlign:"center", color:T.sub }}>Personel yok</td></tr>}</tbody>
+                </tr>)) : <tr><td colSpan={7} style={{ ...td, textAlign:"center", color:T.sub }}>Personel yok</td></tr>}</tbody>
             </table>
           </div>
           <div style={{ ...kart, padding:0, overflowX:"auto", overflowY:"hidden", marginTop:20 }}>
