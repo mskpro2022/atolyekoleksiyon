@@ -13135,13 +13135,9 @@ function Atolye({ onSirketDegis }) {
                     })()}
                     <div style={{ padding:"6px 8px" }}>
                       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:2 }}>
-                        <span style={{ background:T.header, border:"1px solid "+T.border, color:dur.c, padding:"1px 5px", borderRadius:3, fontSize:7, fontWeight:700 }}>{dur.l}</span>
                         {m.kategori && <span style={{ background:"rgba(var(--vurgu-rgb),0.12)", color:GOLD, padding:"1px 5px", borderRadius:3, fontSize:7, fontWeight:600 }}>{(KATEGORILER.find(k=>k.id===m.kategori)||{l:m.kategori}).l}</span>}
                         {m.kod && m.kod.match(/[-_](R|B|Y|V?\d+)$/i) && <span style={{ background:"rgba(91,155,213,0.12)", color:"#5b9bd5", padding:"1px 5px", borderRadius:3, fontSize:7, fontWeight:700 }}>VERSİYON</span>}
                         {m.kod && <span style={{ fontSize:9, color:GOLD, fontWeight:700 }}>{m.kod}</span>}
-                      </div>
-                      <div style={{ height:2, background:"rgba(var(--vurgu-rgb),0.07)", borderRadius:1, overflow:"hidden", marginBottom:3 }}>
-                        <div style={{ height:"100%", width:(dur.s/9*100)+"%", background:dur.c, borderRadius:1 }} />
                       </div>
                       {m.ac && <div style={{ fontSize:13, fontWeight:700, color:"var(--goldtext)", marginBottom:2 }}>{m.ac}</div>}
                       <div style={{ display:"flex", gap:3, flexWrap:"wrap", marginBottom:2 }}>
