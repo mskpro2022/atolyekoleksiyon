@@ -11451,6 +11451,7 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
   const [altinKg, setAltinKg]   = useState("");
   const [altinYukleniyor, setAltinYukleniyor] = useState(false);
   const [araclarAcik, setAraclarAcik] = useState(false);
+  const [mobMenuAcik, setMobMenuAcik] = useState(false);
   const [altinAcik, setAltinAcik] = useState(false); // telefonda altın fiyatı paneli: kapalı = tek satır özet
   const [altinSon, setAltinSon] = useState(null); // { ons, kaynak, zaman } — son otomatik güncelleme
   const [altinHata, setAltinHata] = useState("");
@@ -13233,7 +13234,7 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
 
       {/* HEADER */}
       <div className="am-hd" style={{ padding:"14px 14px 10px", background:T.header, borderBottom:"1px solid "+T.headerBorder }}>
-        <style>{".am-ozet{display:none}@media(max-width:700px){.am-nav{flex-wrap:nowrap!important;overflow-x:auto;flex:0 0 100%!important;width:100%;scrollbar-width:none;-webkit-overflow-scrolling:touch;padding:6px 6px 2px 0}.am-nav::-webkit-scrollbar{display:none}.am-nav>button{flex:none!important;font-size:12px!important;padding:7px 14px!important;border-radius:99px!important;white-space:nowrap}.am-ozet{display:flex!important;flex:1 1 100%;align-items:center;justify-content:space-between;gap:8px;cursor:pointer}.am-detay{display:flex!important;flex-wrap:wrap;gap:8px;align-items:center;flex:1 1 100%}.am-kur.kapali .am-detay{display:none!important}}@media(min-width:701px){.am-hd{padding:0 28px!important}.am-row{margin:0!important;align-items:stretch!important}.am-h1{font-size:19px!important;font-weight:800!important;letter-spacing:.3px}.am-nav>.am-nb{background:transparent!important;border-color:transparent!important;border-radius:0!important;font-size:15px!important;font-weight:600!important;padding:18px 17px!important}.am-nav{flex:1 1 auto;justify-content:center}.am-nav>.am-nb.am-on{box-shadow:inset 0 -2px 0 currentColor}.am-kur{margin:0 -28px!important;border-radius:0!important;border-width:1px 0 0 0!important;padding:5px 28px!important;min-height:34px;box-sizing:border-box;gap:6px 22px!important}.am-kur .am-gizle{display:none!important}.am-kur .am-et{font-size:13px!important;font-weight:500!important}.am-kur .am-chip{flex-direction:row!important;align-items:baseline!important;background:transparent!important;border:none!important;padding:0!important;min-width:0!important;gap:6px!important}.am-kur .am-ce{font-size:11px!important;letter-spacing:.06em!important;font-weight:600!important}.am-kur .am-cd{font-size:14px!important}.am-kur .am-ca{display:none!important}.am-kur .am-chip:first-child .am-ca{display:inline!important;font-size:11px!important}.am-kur input{background:transparent!important;border:none!important;border-bottom:1px dashed rgba(var(--vurgu-rgb),.55)!important;border-radius:0!important;width:72px!important;font-size:14px!important;padding:2px 4px!important;color:var(--goldtext)!important}.am-kur .am-has{font-size:14px!important}.am-kur .am-min{font-size:13px!important}.am-kur button{font-size:12px!important}.am-kur .am-arac{font-size:13px!important}}.am-arac-m>button{width:100%;text-align:left!important;font-size:13px!important;background:transparent!important;border:none!important;padding:10px 12px!important;border-radius:8px!important}.am-arac-m>button:hover{background:rgba(var(--vurgu-rgb),.1)!important}"}</style>
+        <style>{".am-ozet{display:none}@media(max-width:700px){.am-nav{flex-wrap:nowrap!important;overflow-x:auto;flex:0 0 100%!important;width:100%;scrollbar-width:none;-webkit-overflow-scrolling:touch;padding:6px 6px 2px 0}.am-nav::-webkit-scrollbar{display:none}.am-nav>button{flex:none!important;font-size:12px!important;padding:7px 14px!important;border-radius:99px!important;white-space:nowrap}.am-ozet{display:flex!important;flex:1 1 100%;align-items:center;justify-content:space-between;gap:8px;cursor:pointer}.am-detay{display:flex!important;flex-wrap:wrap;gap:8px;align-items:center;flex:1 1 100%}.am-kur.kapali .am-detay{display:none!important}}@media(min-width:701px){.am-hd{padding:0 28px!important}.am-row{margin:0!important;align-items:stretch!important}.am-h1{font-size:19px!important;font-weight:800!important;letter-spacing:.3px}.am-nav>.am-nb{background:transparent!important;border-color:transparent!important;border-radius:0!important;font-size:15px!important;font-weight:600!important;padding:18px 17px!important}.am-nav{flex:1 1 auto;justify-content:center}.am-nav>.am-nb.am-on{box-shadow:inset 0 -2px 0 currentColor}.am-kur{margin:0 -28px!important;border-radius:0!important;border-width:1px 0 0 0!important;padding:5px 28px!important;min-height:34px;box-sizing:border-box;gap:6px 22px!important}.am-kur .am-gizle{display:none!important}.am-kur .am-et{font-size:13px!important;font-weight:500!important}.am-kur .am-chip{flex-direction:row!important;align-items:baseline!important;background:transparent!important;border:none!important;padding:0!important;min-width:0!important;gap:6px!important}.am-kur .am-ce{font-size:11px!important;letter-spacing:.06em!important;font-weight:600!important}.am-kur .am-cd{font-size:14px!important}.am-kur .am-ca{display:none!important}.am-kur .am-chip:first-child .am-ca{display:inline!important;font-size:11px!important}.am-kur input{background:transparent!important;border:none!important;border-bottom:1px dashed rgba(var(--vurgu-rgb),.55)!important;border-radius:0!important;width:72px!important;font-size:14px!important;padding:2px 4px!important;color:var(--goldtext)!important}.am-kur .am-has{font-size:14px!important}.am-kur .am-min{font-size:13px!important}.am-kur button{font-size:12px!important}.am-kur .am-arac{font-size:13px!important}}.am-alt{display:none}@media(max-width:700px){.am-nav{display:none!important}.am-alt{display:flex!important}body::after{content:'';display:block;height:84px}}.am-arac-m>button{width:100%;text-align:left!important;font-size:13px!important;background:transparent!important;border:none!important;padding:10px 12px!important;border-radius:8px!important}.am-arac-m>button:hover{background:rgba(var(--vurgu-rgb),.1)!important}"}</style>
         <div style={{ width:"100%" }}>
           <div className="am-row" style={{ display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:8, marginBottom:10 }}>
             <h1 className="am-h1" style={{ margin:0, fontSize:"clamp(13px,2vw,18px)", fontWeight:700, color:GOLD, display:"flex", alignItems:"center", gap:8 }}>
@@ -13383,6 +13384,40 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
           </div>
         </div>
       </div>
+
+      {/* MOBİL ALT MENÜ ÇUBUĞU (sadece telefonda görünür) */}
+      {(() => {
+        const izinli = (AKTIF_KULLANICI && AKTIF_KULLANICI.rol==="usta" ? ["ustatakip"] : ["koleksiyonlar","modeller","konfirmasyon","siparisler","musteriler","kasa","personel","analiz","ayarlar"].filter(izinSayfa));
+        const ana0 = ["koleksiyonlar","modeller","siparisler","analiz"].filter(n => izinli.includes(n));
+        const ana = izinli.length <= 5 ? izinli : ana0;
+        const diger = izinli.filter(n => !ana.includes(n));
+        const AD = {"ustatakip":"Sipariş Takip","koleksiyonlar":"Koleksiyon","modeller":"Modeller","konfirmasyon":"Konfirmasyon","siparisler":"Siparişler","musteriler":"Müşteriler","kasa":"Kasa & Muhasebe","personel":"Personel","analiz":"Keşfet","ayarlar":"Ayarlar"};
+        const aktifS = (n) => sayfa===n || (n==="analiz" && sayfa==="iadeler");
+        const git = (n) => { setSayfa(n); if (n==="koleksiyonlar") { setAktifKol(null); setAcikUstKol(null); } setMobMenuAcik(false); };
+        const iadeSay = (() => { let c = 0; siparisler.forEach(x => { Object.values(x.kalemIade||{}).forEach(v => c += (v||0)>0?1:0); Object.values(x.kalemTamir||{}).forEach(v => c += (v||0)>0?1:0); }); return c; })();
+        const rozet = (n) => n==="konfirmasyon" ? konfList.length : (n==="analiz" ? iadeSay : 0);
+        const digerAktif = diger.some(aktifS);
+        const digerRozet = diger.reduce((a,n)=>a+rozet(n),0);
+        const sekme = (n, ad, aktif, onc, r) => (
+          <button key={n} onClick={onc} style={{ flex:1, background:"transparent", border:"none", borderTop:"2px solid "+(aktif?T.gold:"transparent"), padding:"14px 0 12px", fontSize:12.5, fontWeight:aktif?700:600, color:aktif?T.gold:T.sub, cursor:"pointer", position:"relative", fontFamily:"inherit" }}>
+            {ad}{r>0 && <span style={{ position:"absolute", top:6, right:"14%", background:GOLD, color:DARK, minWidth:14, height:14, borderRadius:7, fontSize:8, fontWeight:800, display:"flex", alignItems:"center", justifyContent:"center", padding:"0 3px" }}>{r}</span>}
+          </button>);
+        return (<>
+          {mobMenuAcik && diger.length>0 && (<div className="am-alt" style={{ position:"fixed", inset:0, zIndex:70, flexDirection:"column", justifyContent:"flex-end" }}>
+            <div onClick={()=>setMobMenuAcik(false)} style={{ position:"absolute", inset:0, background:"rgba(0,0,0,.55)" }} />
+            <div style={{ position:"relative", background:T.card, borderTop:"1px solid "+T.border, borderRadius:"20px 20px 0 0", padding:"10px 16px calc(86px + env(safe-area-inset-bottom,0px))" }}>
+              <div style={{ width:38, height:4, borderRadius:2, background:T.border, margin:"0 auto 14px" }} />
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+                {diger.map(n => (<button key={n} onClick={()=>git(n)} style={{ position:"relative", textAlign:"left", padding:"18px 14px", borderRadius:12, background:T.bg2||"transparent", border:"1px solid "+(aktifS(n)?T.gold:T.border), color:aktifS(n)?T.gold:T.text, fontSize:15, fontWeight:600, cursor:"pointer", fontFamily:"inherit" }}>{AD[n]}{rozet(n)>0 && <span style={{ marginLeft:8, background:GOLD, color:DARK, borderRadius:8, fontSize:10, fontWeight:800, padding:"1px 6px" }}>{rozet(n)}</span>}</button>))}
+              </div>
+            </div>
+          </div>)}
+          <div className="am-alt" style={{ position:"fixed", left:0, right:0, bottom:0, zIndex:75, background:T.header, borderTop:"1px solid "+T.headerBorder, padding:"0 6px calc(8px + env(safe-area-inset-bottom,0px))" }}>
+            {ana.map(n => sekme(n, AD[n], aktifS(n), ()=>git(n), rozet(n)))}
+            {diger.length>0 && sekme("__menu", "Menü", mobMenuAcik||digerAktif, ()=>setMobMenuAcik(v=>!v), digerRozet)}
+          </div>
+        </>);
+      })()}
 
       <div style={{ width:"100%", padding:"12px 12px 60px" }}>
 
