@@ -5601,25 +5601,25 @@ function rpTasAylik(mizanlar){
     const b = String(m.bit).match(/(\d\d)\/(\d\d)\/(\d\d)/), a = String(m.bas).match(/(\d\d)\/(\d\d)\/(\d\d)/);
     if (!b || !a || !m.kur || !m.kur.HAS) return;
     const cev = (r, t) => r[2]==="HAS" ? t : r[2]==="TL" ? t/m.kur.HAS : (t*(m.kur[r[2]]||0))/m.kur.HAS;
-    const h = (kod) => { const r = m.satirlar.find(x=>x[0]===kod); return r ? cev(r, Number(r[4])||0) : 0; };
-    k["20"+b[3]+"-"+b[2]] = { gel: h("602 001 04") + h("600 001 04"), yilBasi: a[1]==="01" && a[2]==="01" && a[3]===b[3], ayBasi: a[1]==="01" && a[2]===b[2] && a[3]===b[3] };
+    const h = (kod, kol=4) => { const r = m.satirlar.find(x=>x[0]===kod); return r ? cev(r, Number(r[kol])||0) : 0; };
+    k["20"+b[3]+"-"+b[2]] = { gel: h("602 001 04") + h("600 001 04"), iade: h("610", 3), yilBasi: a[1]==="01" && a[2]==="01" && a[3]===b[3], ayBasi: a[1]==="01" && a[2]===b[2] && a[3]===b[3] };
   });
-  const aylik = {}; const sirali = Object.keys(k).sort();
+  const aylik = {}, iadeAylik = {}; const sirali = Object.keys(k).sort();
   sirali.forEach(ay => { const x = k[ay]; const [y, mo] = ay.split("-");
-    if (x.ayBasi) { aylik[ay] = x.gel; return; }               // tek aylık mizan: doğrudan o ayın hareketi
+    if (x.ayBasi) { aylik[ay] = x.gel; iadeAylik[ay] = x.iade; return; }   // tek aylık mizan: doğrudan o ayın hareketi
     if (!x.yilBasi) return;
-    if (mo === "01") { aylik[ay] = x.gel; return; }
+    if (mo === "01") { aylik[ay] = x.gel; iadeAylik[ay] = x.iade; return; }
     const onc = k[y+"-"+String(Number(mo)-1).padStart(2,"0")];
-    if (onc && onc.yilBasi) aylik[ay] = x.gel - onc.gel; });
+    if (onc && onc.yilBasi) { aylik[ay] = x.gel - onc.gel; iadeAylik[ay] = x.iade - onc.iade; } });
   const son = sirali.filter(a => k[a].yilBasi).pop();
-  return { aylik, ytd: son ? k[son].gel : null, ytdAy: son || "" };
+  return { aylik, iadeAylik, ytd: son ? k[son].gel : null, iadeYtd: son ? k[son].iade : null, ytdAy: son || "" }; // iade: 610 İşçilik iadeleri (borç hareketi) — gelirden düşülür
 }
 function RpTasNot({ T, tas, aylar }) {
   const var_ = aylar.filter(a => tas.aylik[a] !== undefined), eksik = aylar.filter(a => tas.aylik[a] === undefined);
   return (<div style={{ fontSize:11.5, color:T.sub, marginTop:8, lineHeight:1.6 }}>
-    Gelir = işçilik + maden{var_.length ? " + taş geliri" : ""}. {var_.length ? "Taş geliri " + var_.length + " ayda dahil." : "Taş geliri aylık grafikte yok: aylık rakamı yalnızca ay sonu mizanlarından hesaplanabiliyor."}
+    Gelir = işçilik + maden{var_.length ? " + taş geliri − işçilik iadeleri" : ""}. {var_.length ? "Taş geliri ve işçilik iadesi " + var_.length + " ayda dahil." : "Taş geliri ve işçilik iadeleri aylık grafikte yok: aylık rakamları yalnızca ay sonu mizanlarından hesaplanabiliyor."}
     {eksik.length > 0 && <> Eksik aylar: {eksik.map(a => rpAyAd(a).split(" ")[0]).join(", ")} — bu ayların ay sonu mizanını (01.01 – ay sonu) yükleyin.</>}
-    {tas.ytd !== null && <> Yıl başından {rpAyAd(tas.ytdAy)} mizanına kadar taş geliri: <b style={{ color:T.text }}>{rpF(tas.ytd,1)} has</b>.</>}
+    {tas.ytd !== null && <> Yıl başından {rpAyAd(tas.ytdAy)} mizanına kadar taş geliri: <b style={{ color:T.text }}>{rpF(tas.ytd,1)} has</b>, işçilik iadeleri: <b style={{ color:T.text }}>{rpF(tas.iadeYtd||0,1)} has</b>.</>}
   </div>);
 }
 // ═══ MİZANLA DENGE KONTROLÜ — raporlardan (satış, gider) hesaplanan yıl içi rakamlar ile mizandaki hesap hareketleri yan yana ═══
@@ -5641,6 +5641,7 @@ function RpMizanDenge({ T, v, miz }) {
   const rIsc = top(ss.filter(s=>!gumus(s)), 4), rGumIscHas = top(ss.filter(gumus), 4), rMaden = top(ss, 6);
   const rGider = top(gg.filter(s=>!rpTasTuru(s[1])), 5), rTasGider = top(gg.filter(s=>rpTasTuru(s[1])), 5);
   const mTas = mh("602 001 04", 4) + mh("600 001 04", 4);
+  const mIade = mh("610", 3); // işçilik iadeleri: satış raporunda yok, yalnız mizanda
   const mGider = mh("710", 3) + mh("740", 3) + mh("760", 3);
   const acik = ["600","602","610","621","622","649","659","710","740","760"].reduce((t, k) => t + mh(k, 5), 0); // son kapamadan sonra açık kalan (borç +)
   const mSonuc = -mh("570", 5) - acik;
@@ -5651,7 +5652,8 @@ function RpMizanDenge({ T, v, miz }) {
     ["Maden kâr / zarar (has)", rMaden, mh("649", 4) - mh("659", 3), "649 alacak − 659 borç"],
     ["Giderler (has)", rGider + rTasGider, mGider, "710 + 740 + 760 borç"],
     ["Taş geliri (has)", null, mTas, "602 001 04 + 600 001 04 alacak"],
-    ["Yıl sonucu (has)", rIsc + rGumIscHas + rMaden + mTas - rGider - rTasGider, mSonuc, "570 bakiye + açık dönem"],
+    ["İşçilik iadeleri (has)", null, mIade, "610 borç · gelirden düşülür"],
+    ["Yıl sonucu (has)", rIsc + rGumIscHas + rMaden + mTas - mIade - rGider - rTasGider, mSonuc, "570 bakiye + açık dönem"],
   ];
   const YESIL = T.id==="beyaz" ? "#1f7a4d" : "#6abf69", TUR = T.id==="beyaz" ? "#b8641c" : "#e0954a";
   const th = { textAlign:"right", fontSize:11, color:T.sub, fontWeight:600, padding:"7px 10px", borderBottom:"1px solid "+T.border, whiteSpace:"nowrap" };
@@ -5792,7 +5794,7 @@ function RaporPanel({ T, GH, onRapor }) {
       </div>
       <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(300px,1fr))", gap:12 }}>
         {v.satislar.length>0 && <RpKart T={T} baslik={"AYLIK SATIŞ ("+BR+")"}><RpSutun T={T} veri={aylik.map(x=>({ e:rpAyAd(x.a).split(" ")[0], v:x.o.hasGr }))} onSec={(i)=>{ const a=aylik[i].a; rpDetayAc("Satışlar — "+rpAyAd(a), ()=><DetaySatisIc T={T} satislar={v.satislar} f0={{ ay:a }}/>); }}/></RpKart>}
-        {v.giderler.length>0 && <RpKart T={T} baslik="AYLIK GELİR – GİDER (HAS)"><RpSutun T={T} renk={RP_RENK[1]} ad="Gider (masraf)" ad2="Gelir (işçilik + maden + taş)" veri={aylik.map(x=>({ e:rpAyAd(x.a).split(" ")[0], v:x.o.gider, v2:x.o.isc+x.o.maden+(rpTasAylik(v.mizanlar).aylik[x.a]||0) }))} onSec={(i)=>{ const a=aylik[i].a; rpDetayAc("Masraflar — "+rpAyAd(a), ()=><DetayGiderIc T={T} giderler={v.giderler} ay={a}/>); }}/><RpTasNot T={T} tas={rpTasAylik(v.mizanlar)} aylar={aylik.map(x=>x.a)}/></RpKart>}
+        {v.giderler.length>0 && <RpKart T={T} baslik="AYLIK GELİR – GİDER (HAS)"><RpSutun T={T} renk={RP_RENK[1]} ad="Gider (masraf)" ad2="Gelir (işçilik + maden + taş − iade)" veri={aylik.map(x=>({ e:rpAyAd(x.a).split(" ")[0], v:x.o.gider, v2:x.o.isc+x.o.maden+(rpTasAylik(v.mizanlar).aylik[x.a]||0)-(rpTasAylik(v.mizanlar).iadeAylik[x.a]||0) }))} onSec={(i)=>{ const a=aylik[i].a; rpDetayAc("Masraflar — "+rpAyAd(a), ()=><DetayGiderIc T={T} giderler={v.giderler} ay={a}/>); }}/><RpTasNot T={T} tas={rpTasAylik(v.mizanlar)} aylar={aylik.map(x=>x.a)}/></RpKart>}
         {v.giderler.length>0 && <RpKart T={T} baslik="MASRAF TÜRLERİ (HAS)"><RpYatay T={T} renk={RP_RENK[1]} satirlar={turler} onSec={()=>rpDetayAc("Masraflar — "+(ay?rpAyAd(ay):"tüm dönem"), ()=><DetayGiderIc T={T} giderler={v.giderler} ay={ay}/>)}/></RpKart>}
         {v.satislar.length>0 && <RpKart T={T} baslik={"MÜŞTERİ BAZINDA SATIŞ ("+BR+")"}><RpYatay T={T} satirlar={musteri} fmt={(x)=>rpF(x)} onSec={(r)=>rpDetayAc("Satışlar — "+r.ad, ()=><DetaySatisIc T={T} satislar={v.satislar} f0={{ ay, mus:r.ad }}/>)}/></RpKart>}
         {v.satislar.length>0 && <RpKart T={T} baslik={"AYAR BAZINDA SATIŞ ("+BR+")"}><RpYatay T={T} renk={RP_RENK[2]} satirlar={ayarlar} fmt={(x)=>rpF(x)} onSec={(r)=>{ const m=String(r.ad).match(/(\d{1,2})K\b/i); rpDetayAc("Satışlar — "+r.ad, ()=><DetaySatisIc T={T} satislar={v.satislar} f0={{ ay, ayar:m?m[1]+"K":"Diğer" }}/>); }}/></RpKart>}
@@ -6921,7 +6923,7 @@ function KasaGenel({ T, GH, atolye, ic, onGit }) {
           {v.satislar.length>0 && <div style={kart}><h3 style={bas}>Müşteri yoğunlaşması <span style={altBas}>satış payı · toplam {kgYaz(musTop)} {birim==="brut"?"brüt":"has"}</span></h3>
             <div style={{ display:"flex", height:14, borderRadius:7, overflow:"hidden", gap:2 }}>{payList.map((p,i)=><i key={p.ad} style={{ display:"block", height:"100%", width:p.p+"%", background:pCol[i%5] }}/>)}</div>
             <div style={{ marginTop:10 }}>{payList.map((p,i)=>(<div key={p.ad} onClick={p.ad!=="Diğer"?()=>rpDetayAc("Satışlar — "+p.ad, ()=><DetaySatisIc T={T} satislar={v.satislar} f0={{ ay, mus:p.ad }}/>):undefined} style={{ display:"flex", justifyContent:"space-between", fontSize:13, padding:"6px 0", borderBottom:"1px solid "+T.border, cursor:p.ad!=="Diğer"?"pointer":"default" }}><span><i style={{ display:"inline-block", width:9, height:9, borderRadius:3, marginRight:8, background:pCol[i%5] }}/>{p.ad}</span><span style={{ whiteSpace:"nowrap", fontVariantNumeric:"tabular-nums" }}><span style={{ color:T.sub, marginRight:12 }}>{kgYaz(p.gr)}</span><b style={{ display:"inline-block", minWidth:52, textAlign:"right" }}>%{rpF(p.p,1)}</b></span></div>))}</div></div>}
-          {v.giderler.length>0 && <div style={kart}><h3 style={bas}>{(RP_ACIK && izinHassas("karlilik")) ? "Aylık gelir – gider" : "Aylık masraf"} <span style={altBas}>HAS</span></h3><RpSutun T={T} renk="#5b7fa6" ad="Gider (masraf)" ad2="Gelir (işçilik + maden + taş)" veri={aylik.map(x=>({ e:rpAyAd(x.a).split(" ")[0], v:x.o.gider, ...((RP_ACIK && izinHassas("karlilik")) ? { v2:x.o.isc+x.o.maden+(rpTasAylik(v.mizanlar).aylik[x.a]||0) } : {}) }))} yuk={100} onSec={(i)=>{ const a=aylik[i].a; rpDetayAc("Masraflar — "+rpAyAd(a), ()=><DetayGiderIc T={T} giderler={v.giderler} ay={a}/>); }}/><div style={{ fontSize:11.5, color:T.sub, marginTop:8 }}>Gider: kapanış aktarımları ve taş kalemleri hariç</div>{(RP_ACIK && izinHassas("karlilik")) && <RpTasNot T={T} tas={rpTasAylik(v.mizanlar)} aylar={aylik.map(x=>x.a)}/>}</div>}
+          {v.giderler.length>0 && <div style={kart}><h3 style={bas}>{(RP_ACIK && izinHassas("karlilik")) ? "Aylık gelir – gider" : "Aylık masraf"} <span style={altBas}>HAS</span></h3><RpSutun T={T} renk="#5b7fa6" ad="Gider (masraf)" ad2="Gelir (işçilik + maden + taş − iade)" veri={aylik.map(x=>({ e:rpAyAd(x.a).split(" ")[0], v:x.o.gider, ...((RP_ACIK && izinHassas("karlilik")) ? { v2:x.o.isc+x.o.maden+(rpTasAylik(v.mizanlar).aylik[x.a]||0)-(rpTasAylik(v.mizanlar).iadeAylik[x.a]||0) } : {}) }))} yuk={100} onSec={(i)=>{ const a=aylik[i].a; rpDetayAc("Masraflar — "+rpAyAd(a), ()=><DetayGiderIc T={T} giderler={v.giderler} ay={a}/>); }}/><div style={{ fontSize:11.5, color:T.sub, marginTop:8 }}>Gider: kapanış aktarımları ve taş kalemleri hariç</div>{(RP_ACIK && izinHassas("karlilik")) && <RpTasNot T={T} tas={rpTasAylik(v.mizanlar)} aylar={aylik.map(x=>x.a)}/>}</div>}
         </div>
       )}
 
@@ -16196,7 +16198,7 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
                 </div>
                 <span/>
               </div>
-              {AKTIF_SIRKET_ONEK!=="" && <RpNav T={T} aktif={kasaSayfa==="g_ab"||kasaSayfa==="g_muh"||kasaSayfa==="g_stok"||kasaSayfa==="g_genel"||kasaSayfa==="raporlar"||kasaSayfa==="karlilik" ? kasaSayfa : "g_genel"} onSec={setKasaSayfa} sekmeler={[{id:"g_genel",l:"Genel Bakış"},{id:"g_stok",l:"Stok"},{id:"g_ab",l:"Alacak & Borç"},{id:"g_muh",l:"Muhasebe"},{id:"raporlar",l:"Raporlar"},...(AKTIF_SIRKET_ONEK==="bsp2_"?[]:[{id:"karlilik",l:"🔒 Karlılık"}])]}/>}
+              {AKTIF_SIRKET_ONEK!=="" && <RpNav T={T} aktif={kasaSayfa==="g_ab"||kasaSayfa==="g_muh"||kasaSayfa==="g_stok"||kasaSayfa==="g_genel"||kasaSayfa==="raporlar"||kasaSayfa==="karlilik" ? kasaSayfa : "g_genel"} onSec={setKasaSayfa} sekmeler={[{id:"g_genel",l:"Genel Bakış"},{id:"g_stok",l:"Stok"},{id:"g_ab",l:"Alacak & Borç"},{id:"raporlar",l:"Raporlar"},...(AKTIF_SIRKET_ONEK==="bsp2_"?[]:[{id:"karlilik",l:"🔒 Karlılık"}])]}/>}
 
               {/* ══ ÖZET ══ */}
               {kasaSayfa==="ozet" && !kmGizli && (
@@ -16853,7 +16855,8 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
               {/* ══ RAPORLAR / PANEL / KARLILIK ══ */}
               <DetayHost T={T}/>
               {kasaSayfa==="panel" && !kmGizli && <RaporPanel T={T} GH={GH} onRapor={()=>setKasaSayfa("raporlar")}/>}
-              {kasaSayfa==="g_genel" && !kmGizli && <KasaGenel T={T} GH={GH} atolye={AKTIF_SIRKET_ONEK==="" ? (()=>{ const tum=[...(kasa.atolyeKasa||[])].sort((x,y)=>(y.tarih||0)-(x.tarih||0)); return { son:tum[0]||null, tum, ham:hamAltinGram, hazir:hazirUrunGram+serbestGram }; })() : null} ic={{ alacak:Object.values(musBakiye).reduce((t,d)=>t+Math.max(0,d.borc-d.odenen),0), borc:Math.max(0,dokumBorc), stok:toplamHas, musteriler:Object.entries(musBakiye).map(([ad,d])=>({ad,bakiye:d.borc-d.odenen})).filter(x=>x.bakiye>0.001).sort((a,b)=>b.bakiye-a.bakiye) }} onGit={(h)=>setKasaSayfa(h==="ab"?"g_ab":h==="stok"?"g_stok":"raporlar")}/>}
+              {kasaSayfa==="g_genel" && AKTIF_SIRKET_ONEK!=="" && <MuhasebeSayfa T={T} GH={GH} usdTry={altinSon?.usdTry || null} />}
+              {kasaSayfa==="g_genel" && AKTIF_SIRKET_ONEK==="" && !kmGizli && <KasaGenel T={T} GH={GH} atolye={AKTIF_SIRKET_ONEK==="" ? (()=>{ const tum=[...(kasa.atolyeKasa||[])].sort((x,y)=>(y.tarih||0)-(x.tarih||0)); return { son:tum[0]||null, tum, ham:hamAltinGram, hazir:hazirUrunGram+serbestGram }; })() : null} ic={{ alacak:Object.values(musBakiye).reduce((t,d)=>t+Math.max(0,d.borc-d.odenen),0), borc:Math.max(0,dokumBorc), stok:toplamHas, musteriler:Object.entries(musBakiye).map(([ad,d])=>({ad,bakiye:d.borc-d.odenen})).filter(x=>x.bakiye>0.001).sort((a,b)=>b.bakiye-a.bakiye) }} onGit={(h)=>setKasaSayfa(h==="ab"?"g_ab":h==="stok"?"g_stok":"raporlar")}/>}
               {kasaSayfa==="g_stok" && stokSub==="altin" && AKTIF_SIRKET_ONEK==="" && <ManuelStokKarti T={T} veri={{ tum:[...(kasa.atolyeKasa||[])].sort((x,y)=>(y.tarih||0)-(x.tarih||0)), ham:hamAltinGram, hazir:hazirUrunGram+serbestGram }} onGit={()=>setStokSub("kayit")}/>}
               {kasaSayfa==="g_stok" && stokSub==="altin" && AKTIF_SIRKET_ONEK==="" && <KasaStokAltin T={T} GH={GH}/>}
               {kasaSayfa==="g_ab" && AKTIF_SIRKET_ONEK!=="" && <RpSeg T={T} aktif={abSub} onSec={setAbSub} secenekler={[{id:"musteri",l:"Müşteriler"},{id:"dokumcu",l:"Dökümcü"},{id:"muh",l:"Satıcılar & Muhasebe"}]}/>}
