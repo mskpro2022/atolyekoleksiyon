@@ -3218,7 +3218,7 @@ function MskMuhasebeSayfa({ T, GH, disSek, onDisSek, menuGizle }) {
   };
   const ozetYukle = async () => { try { setOz(null); setOz(await rpc("msk_tzg_ozet", { p_tarih: tarih || null })); } catch (e) { setBilgi("Hata: " + e.message); setOz({ toplam: 0, bakiye: [], rhino_kalan: [] }); } };
   const ozYenile = async () => { try { setOz(await rpc("msk_tzg_ozet", { p_tarih: null })); } catch (e) { /* bir sonraki açılışta yenilenir */ } };
-  const chipS = (on) => ({ fontSize: 12, padding: "5px 11px", borderRadius: 99, border: "1px solid " + (on ? T.text : T.border), background: on ? T.text : "transparent", color: on ? T.card : T.text, cursor: "pointer", whiteSpace: "nowrap", fontFamily: "inherit" });
+  const chipS = (on) => ({ fontSize: 12, padding: "5px 11px", borderRadius: 99, border: "1px solid " + (on ? T.text : T.border), background: on ? T.text : "transparent", color: on ? (T.bg2 || "#111") : T.text, cursor: "pointer", whiteSpace: "nowrap", fontFamily: "inherit" });
   const serit = (et, deger, anahtar, secenekler) => (
     <div style={{ display: "flex", alignItems: "center", gap: 6, margin: "6px 0" }}>
       <span style={{ fontSize: 11, color: T.sub, letterSpacing: 0.5, width: 96, flex: "none", fontWeight: 600 }}>{et}</span>
@@ -5590,19 +5590,29 @@ function ManuelStokKarti({ T, veri, onGit }) {
     </div>
   );
 }
-function RpSutun({ T, veri, renk=RP_RENK[0], birim="", yuk=130, onSec }) {
-  const mx = Math.max(1e-9, ...veri.map(x=>Math.abs(x.v)));
-  return (
-    <div style={{ display:"flex", alignItems:"flex-end", gap:6, height:yuk+34, paddingTop:14 }}>
+function RpSutun({ T, veri, renk=RP_RENK[0], birim="", yuk=130, onSec, renk2, ad, ad2 }) {
+  const cift = veri.some(x=>x.v2!==undefined && x.v2!==null); // çift sütun: v2 = gelir, v = gider
+  const mx = Math.max(1e-9, ...veri.map(x=>Math.max(Math.abs(x.v), cift ? Math.abs(x.v2||0) : 0)));
+  const r2 = renk2 || (T.id==="beyaz" ? "#1f7a4d" : "#6aa57f");
+  return (<>
+    <div style={{ display:"flex", alignItems:"flex-end", gap:6, height:yuk+(cift?48:34), paddingTop:14 }}>
       {veri.map((x,ix)=>(
         <div key={x.e} onClick={onSec?()=>onSec(ix):undefined} style={{ flex:1, minWidth:0, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"flex-end", height:"100%", cursor:onSec?"pointer":"default" }}>
-          <div style={{ fontSize:11, color:T.sub, marginBottom:2, whiteSpace:"nowrap" }}>{rpF(x.v)}{birim}</div>
-          <div title={x.e+": "+rpF(x.v,1)} style={{ width:"70%", maxWidth:34, height:Math.max(2, Math.abs(x.v)/mx*yuk), background: x.v<0?(T.danger||"#e85a4f"):renk, borderRadius:"4px 4px 0 0" }}/>
+          {cift && <div style={{ fontSize:10.5, color:r2, whiteSpace:"nowrap", lineHeight:1.2 }}>{rpF(x.v2||0)}</div>}
+          <div style={{ fontSize:cift?10.5:11, color:cift?renk:T.sub, marginBottom:2, whiteSpace:"nowrap", lineHeight:1.2 }}>{rpF(x.v)}{birim}</div>
+          <div style={{ display:"flex", alignItems:"flex-end", justifyContent:"center", gap:2, width:"100%" }}>
+            {cift && <div title={x.e+" "+(ad2||"gelir")+": "+rpF(x.v2||0,1)} style={{ width:"38%", maxWidth:20, height:Math.max(2, Math.abs(x.v2||0)/mx*yuk), background:(x.v2||0)<0?(T.danger||"#e85a4f"):r2, borderRadius:"4px 4px 0 0" }}/>}
+            <div title={x.e+(cift?" "+(ad||"gider"):"")+": "+rpF(x.v,1)} style={{ width:cift?"38%":"70%", maxWidth:cift?20:34, height:Math.max(2, Math.abs(x.v)/mx*yuk), background: x.v<0?(T.danger||"#e85a4f"):renk, borderRadius:"4px 4px 0 0" }}/>
+          </div>
           <div style={{ fontSize:11, color:T.sub, marginTop:4, whiteSpace:"nowrap" }}>{x.e}</div>
         </div>
       ))}
     </div>
-  );
+    {cift && <div style={{ display:"flex", gap:16, fontSize:11.5, color:T.sub, marginTop:8 }}>
+      <span><i style={{ display:"inline-block", width:9, height:9, borderRadius:2, background:r2, marginRight:6 }}/>{ad2||"Gelir"}</span>
+      <span><i style={{ display:"inline-block", width:9, height:9, borderRadius:2, background:renk, marginRight:6 }}/>{ad||"Gider"}</span>
+    </div>}
+  </>);
 }
 function RpYatay({ T, satirlar, renk=RP_RENK[0], fmt=(v)=>rpF(v,1), bos="Veri yok", onSec }) {
   if (!satirlar.length) return <div style={{ fontSize:12, color:T.sub }}>{bos}</div>;
@@ -5696,7 +5706,7 @@ function RaporPanel({ T, GH, onRapor }) {
       </div>
       <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(300px,1fr))", gap:12 }}>
         {v.satislar.length>0 && <RpKart T={T} baslik={"AYLIK SATIŞ ("+BR+")"}><RpSutun T={T} veri={aylik.map(x=>({ e:rpAyAd(x.a).split(" ")[0], v:x.o.hasGr }))} onSec={(i)=>{ const a=aylik[i].a; rpDetayAc("Satışlar — "+rpAyAd(a), ()=><DetaySatisIc T={T} satislar={v.satislar} f0={{ ay:a }}/>); }}/></RpKart>}
-        {v.giderler.length>0 && <RpKart T={T} baslik="AYLIK MASRAF (HAS)"><RpSutun T={T} renk={RP_RENK[1]} veri={aylik.map(x=>({ e:rpAyAd(x.a).split(" ")[0], v:x.o.gider }))} onSec={(i)=>{ const a=aylik[i].a; rpDetayAc("Masraflar — "+rpAyAd(a), ()=><DetayGiderIc T={T} giderler={v.giderler} ay={a}/>); }}/></RpKart>}
+        {v.giderler.length>0 && <RpKart T={T} baslik="AYLIK GELİR – GİDER (HAS)"><RpSutun T={T} renk={RP_RENK[1]} ad="Gider (masraf)" ad2="Gelir (işçilik + maden)" veri={aylik.map(x=>({ e:rpAyAd(x.a).split(" ")[0], v:x.o.gider, v2:x.o.isc+x.o.maden }))} onSec={(i)=>{ const a=aylik[i].a; rpDetayAc("Masraflar — "+rpAyAd(a), ()=><DetayGiderIc T={T} giderler={v.giderler} ay={a}/>); }}/></RpKart>}
         {v.giderler.length>0 && <RpKart T={T} baslik="MASRAF TÜRLERİ (HAS)"><RpYatay T={T} renk={RP_RENK[1]} satirlar={turler} onSec={()=>rpDetayAc("Masraflar — "+(ay?rpAyAd(ay):"tüm dönem"), ()=><DetayGiderIc T={T} giderler={v.giderler} ay={ay}/>)}/></RpKart>}
         {v.satislar.length>0 && <RpKart T={T} baslik={"MÜŞTERİ BAZINDA SATIŞ ("+BR+")"}><RpYatay T={T} satirlar={musteri} fmt={(x)=>rpF(x)} onSec={(r)=>rpDetayAc("Satışlar — "+r.ad, ()=><DetaySatisIc T={T} satislar={v.satislar} f0={{ ay, mus:r.ad }}/>)}/></RpKart>}
         {v.satislar.length>0 && <RpKart T={T} baslik={"AYAR BAZINDA SATIŞ ("+BR+")"}><RpYatay T={T} renk={RP_RENK[2]} satirlar={ayarlar} fmt={(x)=>rpF(x)} onSec={(r)=>{ const m=String(r.ad).match(/(\d{1,2})K\b/i); rpDetayAc("Satışlar — "+r.ad, ()=><DetaySatisIc T={T} satislar={v.satislar} f0={{ ay, ayar:m?m[1]+"K":"Diğer" }}/>); }}/></RpKart>}
@@ -6174,20 +6184,163 @@ function RaporKarlilik({ T, GH }) {
 }
 
 // ── Raporlar: yükleme + bilanço + yüklü kayıtlar ──
-function RaporlarSayfasi({ T, GH, RD, setRhinoMizan }) {
+// ═══ MSK · AYLIK RAPORLAR — Rhino raporlarının ay ay arşivi (tek kutudan yükleme, ay × rapor tablosu, ay özeti, ay kilidi) ═══
+const AYR_TUR = [["mizan","Mizan"],["tezgah","Tezgah hareketleri"],["satis","Satış & kâr"],["gider","Giderler"],["depo","Depo sayım"]];
+const AYR_AY = ["Ocak","Şubat","Mart","Nisan","Mayıs","Haziran","Temmuz","Ağustos","Eylül","Ekim","Kasım","Aralık"];
+function ayrAyAd(ay) { const [y, m] = String(ay).split("-"); return (AYR_AY[Number(m)-1] || m) + " " + y; }
+function MskAylikRaporlar({ T, setRhinoMizan }) {
   const [v, yenile] = useRpVeri();
-  const [secili, setSecili] = useState("");
-  const [acik, setAcik] = useState({});
-  const [mesaj, setMesaj] = useState(null);
-  const [kurDuz, setKurDuz] = useState({});
-  const [mesgul, setMesgul] = useState(false);
-  useEffect(() => { if (v && !secili && v.mizanlar.length) setSecili(v.mizanlar[v.mizanlar.length-1].id); }, [v, secili]);
+  const simdi = new Date(); const buAy = simdi.getFullYear() + "-" + String(simdi.getMonth()+1).padStart(2,"0");
+  const [yil, setYil] = useState(simdi.getFullYear());
+  const [secAy, setSecAy] = useState(buAy);
+  const [tzg, setTzg] = useState(null);      // { "2026-10": { adet, son } } | { hata }
+  const [kayitlar, setKayitlar] = useState([]); const [kilitler, setKilitler] = useState([]);
+  const [mesaj, setMesaj] = useState(null); const [mesgul, setMesgul] = useState(""); const [surukle, setSurukle] = useState(false);
+  const admin = !!(AKTIF_KULLANICI && AKTIF_KULLANICI.rol === "admin");
+  const benAd = (AKTIF_KULLANICI && (AKTIF_KULLANICI.ad || AKTIF_KULLANICI.kullanici_adi)) || "";
+  const dbYukle = async () => {
+    try { const { data } = await supabase.from("msk_rapor_yukleme").select("*").order("created_at", { ascending:false }).limit(1000); setKayitlar(data || []); } catch (e) { /* arşiv listesi okunamadı */ }
+    try { const { data } = await supabase.from("msk_ay_kilit").select("*"); setKilitler(data || []); } catch (e) { /* kilit listesi okunamadı */ }
+  };
+  const tzgYukle = async () => { try { setTzg(await mskPersRpc("msk_tzg_ay_ozet", {}) || {}); } catch (e) { setTzg({ hata: e.message }); } };
+  useEffect(() => { dbYukle(); tzgYukle(); }, []);
+  const kilitSet = useMemo(() => new Set(kilitler.map(k => k.ay)), [kilitler]);
 
-  const tarihSayi = (s) => { const m = String(s).match(/(\d\d)\/(\d\d)\/(\d\d)/); return m ? Number("20"+m[3]+m[2]+m[1]) : 0; };
-  const dosyaYukle = async (files) => {
-    setMesgul(true);
+  const yukle = async (fileList) => {
+    const files = [...(fileList || [])].filter(f => /\.xlsx?$/i.test(f.name));
+    if (!files.length) { setMesaj(["⚠ Excel dosyası (.xlsx) seçin"]); return; }
+    setMesgul("Dosyalar okunuyor…"); setMesaj(null);
+    const sonuclar = await rpDosyalariIsle(files, v ? v.mizanlar : [], {
+      setRhinoMizan, depoAy: secAy, kilitli: kilitSet, tezgah: true, ilerleme: (m) => setMesgul("Tezgah hareketleri yazılıyor · " + m),
+      kayit: async (file, tur, ay, satir, sonuc) => {
+        if (!/^\d{4}-\d{2}$/.test(ay || "")) return;
+        let yol = file._ayrYol || null;
+        if (!yol && !file._ayrDenendi) { // orijinal dosya bir kez depoya konur
+          file._ayrDenendi = true;
+          const guvenli = file.name.normalize("NFKD").replace(/[^\w.\-]+/g, "_").slice(-80);
+          const hedef = ay + "/" + tur + "/" + Date.now() + "_" + guvenli;
+          const { error } = await supabase.storage.from("msk-raporlar").upload(hedef, file, { upsert:false });
+          if (!error) { yol = hedef; file._ayrYol = hedef; }
+        }
+        await supabase.from("msk_rapor_yukleme").insert({ ay, tur, dosya_ad: file.name, yol, satir: satir || null, sonuc: sonuc || null, yukleyen_ad: benAd });
+      },
+    });
+    setMesaj(sonuclar); setMesgul(""); yenile(); dbYukle(); tzgYukle();
+  };
+  const indir = async (k) => {
+    try { const { data, error } = await supabase.storage.from("msk-raporlar").createSignedUrl(k.yol, 120); if (error) throw error; window.open(data.signedUrl, "_blank"); }
+    catch (e) { alert("Dosya açılamadı: " + (e.message || e)); }
+  };
+  const kilitle = async (ay) => {
+    if (!window.confirm(ayrAyAd(ay) + " kilitlensin mi?\n\nKilitli aya rapor yüklenemez; kilidi yalnızca admin açabilir.")) return;
+    const { error } = await supabase.from("msk_ay_kilit").insert({ ay, kilitleyen_ad: benAd }); if (error) alert("Kilitlenemedi: " + error.message); dbYukle();
+  };
+  const kilitAc = async (ay) => {
+    if (!window.confirm(ayrAyAd(ay) + " kilidi açılsın mı?")) return;
+    const { error } = await supabase.from("msk_ay_kilit").delete().eq("ay", ay); if (error) alert("Açılamadı: " + error.message); dbYukle();
+  };
+
+  const mizAy = (x) => { const m = String(x).match(/(\d\d)\/(\d\d)\/(\d\d)/); return m ? "20"+m[3]+"-"+m[2] : ""; };
+  const durum = (ay) => {
+    if (!v) return {};
+    const mz = v.mizanlar.filter(m => mizAy(m.bit) === ay).pop();
+    const tz = tzg && !tzg.hata ? tzg[ay] : null;
+    const sN = (v.idx.s || {})[ay] || 0, aylikVar = !!(v.aylik || {})[ay];
+    const gN = (v.idx.g || {})[ay] || 0;
+    const dp = v.depo.filter(d => (d.ay || String(d.tarih || "").slice(0,7)) === ay).pop();
+    return {
+      mizan: mz ? { t: mz.bit } : null,
+      tezgah: tz ? { t: Number(tz.adet).toLocaleString("tr-TR") + " hareket · son " + String(tz.son).slice(8,10) + "." + String(tz.son).slice(5,7) } : null,
+      satis: (sN || aylikVar) ? { t: sN ? sN.toLocaleString("tr-TR") + " satır" : "aylık özet" } : null,
+      gider: gN ? { t: gN.toLocaleString("tr-TR") + " satır" } : null,
+      depo: dp ? { t: dp.satirlar.length + " kalem" } : null,
+    };
+  };
+  const aylar = []; for (let m = 12; m >= 1; m--) { const a = yil + "-" + String(m).padStart(2,"0"); if (a <= buAy) aylar.push(a); }
+  const YESIL = T.id === "beyaz" ? "#1f7a4d" : "#6abf69", TUR = T.id === "beyaz" ? "#b8641c" : "#e0954a";
+  const kart = { background: T.id === "beyaz" ? "#fff" : T.card, border: "1px solid " + T.border, borderRadius: 14 };
+  const dug = { background: "transparent", border: "1px solid " + T.border, borderRadius: 9, padding: "6px 12px", fontSize: 12.5, fontWeight: 600, color: T.text, cursor: "pointer", fontFamily: "inherit" };
+  const sutun = "1.25fr repeat(5, 1fr) .8fr";
+  const sd = durum(secAy);
+  const oz = v ? rpOzet(v.giderler, v.satislar, secAy, false, v.ozet) : null;
+  const karGor = RP_ACIK && izinHassas("karlilik");
+  const secKayit = kayitlar.filter(k => k.ay === secAy);
+  const kpi = (l, d, alt, renk) => (<div style={{ flex: "1 1 150px", background: T.bg2 || "transparent", border: "1px solid " + T.border, borderRadius: 12, padding: "13px 16px" }}>
+    <div style={{ fontSize: 11.5, color: T.sub, fontWeight: 600 }}>{l}</div>
+    <div style={{ fontSize: 20, fontWeight: 700, marginTop: 5, color: renk || T.text, fontVariantNumeric: "tabular-nums" }}>{d}</div>
+    {alt ? <div style={{ fontSize: 11.5, color: T.sub, marginTop: 4 }}>{alt}</div> : null}</div>);
+
+  return (
+    <div style={{ color: T.text }}>
+      <style>{`@media(max-width:700px){.ayr-bas{display:none!important}.ayr-sat{grid-template-columns:1fr 1fr!important;gap:6px 12px!important}.ayr-sat>:first-child{grid-column:1/-1}.ayr-sat>[data-l]::before{content:attr(data-l) ' · ';color:${T.sub};font-size:11px}}`}</style>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: 10, marginBottom: 14 }}>
+        <div>
+          <div style={{ fontSize: 24, fontWeight: 700, letterSpacing: -0.4 }}>Aylık Raporlar</div>
+          <div style={{ fontSize: 13, color: T.sub, marginTop: 3 }}>Rhino'dan aldığın raporları ay ay yükle; hangi ayın hangi raporu var, tek tabloda gör.</div>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 4, border: "1px solid " + T.border, borderRadius: 999, padding: "3px 6px", fontSize: 13, fontWeight: 600 }}>
+          <button onClick={() => setYil(y => y - 1)} style={{ ...dug, border: "none", padding: "3px 9px" }}>‹</button><span>{yil}</span>
+          <button onClick={() => setYil(y => Math.min(simdi.getFullYear(), y + 1))} style={{ ...dug, border: "none", padding: "3px 9px" }}>›</button>
+        </div>
+      </div>
+
+      <label onDragOver={e => { e.preventDefault(); setSurukle(true); }} onDragLeave={() => setSurukle(false)} onDrop={e => { e.preventDefault(); setSurukle(false); if (!mesgul) yukle(e.dataTransfer.files); }}
+        style={{ ...kart, display: "block", border: "1.5px dashed " + (surukle ? T.text : T.border), padding: 22, textAlign: "center", cursor: mesgul ? "default" : "pointer" }}>
+        <div style={{ fontSize: 15, fontWeight: 700 }}>{mesgul || "Excel dosyalarını buraya bırak ya da seç"}</div>
+        <div style={{ fontSize: 12.5, color: T.sub, marginTop: 6, lineHeight: 1.6 }}>Birden fazla dosya olur. Tür ve ay dosyadan tanınır: mizan · tezgah hareketleri (Ürün Ekstresi) · satış · giderler · aylık satış · depo sayım.<br/>Depo sayımında ay dosyada yazmaz; aşağıda <b style={{ color: T.text }}>seçili aya ({ayrAyAd(secAy)})</b> kaydedilir.</div>
+        <input type="file" multiple accept=".xlsx,.xls" disabled={!!mesgul} style={{ display: "none" }} onChange={e => { const f = e.target.files; yukle(f); e.target.value = ""; }} />
+      </label>
+      {mesaj && <div style={{ ...kart, padding: "12px 16px", marginTop: 10, fontSize: 13, lineHeight: 1.7 }}>{mesaj.map((m, i) => <div key={i} style={{ color: m.startsWith("⚠") ? (T.danger || "#e85a4f") : m.startsWith("🔒") ? TUR : T.text }}>{m}</div>)}</div>}
+
+      <div style={{ ...kart, overflow: "hidden", marginTop: 14 }}>
+        <div className="ayr-bas" style={{ display: "grid", gridTemplateColumns: sutun, padding: "9px 20px", background: T.bg2 || "transparent", fontSize: 11.5, fontWeight: 600, color: T.sub }}>
+          <span>Ay</span>{AYR_TUR.map(([k, l]) => <span key={k}>{l}</span>)}<span style={{ textAlign: "right" }}>Durum</span>
+        </div>
+        {!v && <div style={{ padding: 20, fontSize: 13, color: T.sub }}>Yükleniyor…</div>}
+        {v && aylar.map(ay => { const d = durum(ay); const var_ = AYR_TUR.filter(([k]) => d[k]).length; const eksik = 5 - var_; const kl = kilitSet.has(ay); return (
+          <div key={ay} className="ayr-sat" onClick={() => setSecAy(ay)} style={{ display: "grid", gridTemplateColumns: sutun, alignItems: "center", padding: "12px 20px", borderTop: "1px solid " + T.border, fontSize: 13, cursor: "pointer", background: ay === secAy ? "rgba(128,128,128,.12)" : "transparent", boxShadow: ay === secAy ? "inset 2px 0 0 " + T.text : "none" }}>
+            <b>{ayrAyAd(ay)}{kl ? " 🔒" : ""}</b>
+            {AYR_TUR.map(([k, l]) => <span key={k} data-l={l}>{d[k] ? <span title={d[k].t}><span style={{ color: YESIL, fontWeight: 600 }}>✓</span> <span style={{ color: T.sub, fontSize: 12 }}>{d[k].t}</span></span> : (k === "tezgah" && tzg && tzg.hata ? <span style={{ color: T.sub, fontSize: 12 }}>okunamadı</span> : <span style={{ color: T.sub, border: "1px dashed " + T.border, borderRadius: 7, padding: "2px 9px", fontSize: 12 }}>eksik</span>)}</span>)}
+            <span data-l="Durum" style={{ textAlign: "right", fontWeight: 600, color: ay === buAy ? T.sub : eksik === 0 ? YESIL : TUR }}>{ay === buAy ? "devam ediyor" : eksik === 0 ? "tam" : eksik + " eksik"}</span>
+          </div>); })}
+      </div>
+
+      <div style={{ ...kart, padding: "18px 20px", marginTop: 14 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10, marginBottom: 12 }}>
+          <div style={{ fontSize: 15, fontWeight: 700 }}>{ayrAyAd(secAy)} <span style={{ fontSize: 12, color: T.sub, fontWeight: 500 }}>· {AYR_TUR.filter(([k]) => sd[k]).length} / 5 rapor{kilitSet.has(secAy) ? " · kilitli" : ""}</span></div>
+          <div style={{ display: "flex", gap: 8 }}>
+            {!kilitSet.has(secAy) && <button onClick={() => kilitle(secAy)} style={dug}>Ayı kilitle</button>}
+            {kilitSet.has(secAy) && admin && <button onClick={() => kilitAc(secAy)} style={dug}>Kilidi aç</button>}
+          </div>
+        </div>
+        {oz && <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+          {kpi("Satış (has)", rpF(oz.hasGr, 1) + " gr", oz.adet ? oz.adet.toLocaleString("tr-TR") + " satır · " + oz.evrak + " evrak" : "satış raporu yok")}
+          {kpi("Masraf (has)", rpF(oz.gider, 1) + " gr", (v.idx.g || {})[secAy] ? "gider raporundan" : "gider raporu yok")}
+          {karGor ? kpi("İşçilik + maden (has)", rpF(oz.isc + oz.maden, 1) + " gr", "işçilik " + rpF(oz.isc, 1) + " · maden " + rpF(oz.maden, 1)) : kpi("İşçilik + maden", "🔒", "Karlılık şifresi gerekir")}
+          {karGor ? kpi("Kaba fark (has)", rpF(oz.sonuc, 1) + " gr", "işçilik + maden − masraf", oz.sonuc < 0 ? (T.danger || "#e85a4f") : YESIL) : kpi("Kaba fark", "🔒", "Karlılık şifresi gerekir")}
+          {kpi("Tezgah hareketi", sd.tezgah ? sd.tezgah.t.split(" ·")[0] : "—", sd.tezgah ? sd.tezgah.t.split("· ")[1] : "yüklenmemiş")}
+        </div>}
+        <div style={{ fontSize: 12, color: T.sub, fontWeight: 700, letterSpacing: ".06em", margin: "18px 0 6px" }}>YÜKLEME GEÇMİŞİ</div>
+        {secKayit.length === 0 && <div style={{ fontSize: 13, color: T.sub }}>Bu ay için bu ekrandan yüklenmiş dosya yok. (Bu ekran eklenmeden önce yüklenen raporların dosyası saklanmadı; verileri tabloda görünür.)</div>}
+        {secKayit.map(k => (<div key={k.id} style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", padding: "8px 0", borderTop: "1px solid " + T.border, fontSize: 13 }}>
+          <span><b>{(AYR_TUR.find(x => x[0] === k.tur) || [0, k.tur === "aylik" ? "Aylık satış" : k.tur])[1]}</b> · {k.dosya_ad}{k.sonuc ? <span style={{ color: T.sub }}> · {k.sonuc}</span> : null}</span>
+          <span style={{ color: T.sub }}>{new Date(k.created_at).toLocaleString("tr-TR", { day:"2-digit", month:"2-digit", year:"numeric", hour:"2-digit", minute:"2-digit" })}{k.yukleyen_ad ? " · " + k.yukleyen_ad : ""}{k.yol ? <button onClick={() => indir(k)} style={{ ...dug, padding: "2px 9px", marginLeft: 10, fontSize: 12 }}>İndir</button> : null}</span>
+        </div>))}
+      </div>
+    </div>
+  );
+}
+
+// Rhino Excel raporlarını tanıyıp kaydeder (mizan · gider · satış · aylık satış · depo sayım · tezgah hareketleri).
+// Hem eski "Mizan Yükleme & Kapsam" ekranı hem "Aylık Raporlar" aynı işlevi kullanır — tek doğru kaynak.
+// o: { setRhinoMizan, onMizanId, depoAy:"YYYY-MM", kilitli:Set, tezgah:true, ilerleme(metin), kayit(file,tur,ay,satir,sonuc) }
+async function rpDosyalariIsle(files, mizBas, o = {}) {
+    const tarihSayi = (s) => { const m = String(s).match(/(\d\d)\/(\d\d)\/(\d\d)/); return m ? Number("20"+m[3]+m[2]+m[1]) : 0; };
     const sonuclar = [];
-    let miz = v ? v.mizanlar : [];
+    let miz = mizBas || [];
+    const kilitli = o.kilitli || new Set();
+    const kyt = async (file, tur, ay, satir, sonuc) => { if (o.kayit) { try { await o.kayit(file, tur, ay, satir, sonuc); } catch (e) { /* arşiv kaydı yazılamadıysa veri yine de yüklendi */ } } };
+    const mizAy = (x) => { const m = String(x).match(/(\d\d)\/(\d\d)\/(\d\d)/); return m ? "20"+m[3]+"-"+m[2] : ""; };
     let mizDegisti = false;
     for (const file of files) {
       try {
@@ -6201,10 +6354,11 @@ function RaporlarSayfasi({ T, GH, RD, setRhinoMizan }) {
           if (m.satirlar.length < 5) { sonuclar.push("⚠ "+file.name+": mizan satırı bulunamadı"); continue; }
           const kur = rpKurBul(rpAgac(m.satirlar));
           const id = m.bas+"-"+m.bit;
+          if (kilitli.has(mizAy(m.bit))) { sonuclar.push("🔒 "+file.name+": "+mizAy(m.bit)+" ayı kilitli, mizan yazılmadı"); continue; }
           const kayit = { id, bas:m.bas, bit:m.bit, firma:m.firma, dosyaAd:file.name, yuklendi:Date.now(), kur, satirlar:m.satirlar };
           const varMi = miz.some(x=>x.id===id);
           miz = [...miz.filter(x=>x.id!==id), kayit].sort((a,b)=>tarihSayi(a.bit)-tarihSayi(b.bit));
-          mizDegisti = true; setSecili(id);
+          mizDegisti = true; if (o.onMizanId) o.onMizanId(id);
           const musteriHas=[], dokumcuHas=[], saticiUsd=[], saticiEur=[];
           const bs = String.fromCharCode(92);
           m.satirlar.forEach(([kod,adRaw,dvz,,,bakiye]) => {
@@ -6214,15 +6368,20 @@ function RaporlarSayfasi({ T, GH, RD, setRhinoMizan }) {
             if (kod.startsWith("320 001 02"+bs) && dvz==="USD" && ad) saticiUsd.push({ ad, bakiye });
             if (kod.startsWith("320 001 03"+bs) && dvz==="EUR" && ad) saticiEur.push({ ad, bakiye });
           });
-          if (setRhinoMizan) setRhinoMizan({ musteriHas, dokumcuHas, saticiUsd, saticiEur, tarih:new Date().toLocaleDateString("tr-TR"), dosyaAd:file.name });
+          if (o.setRhinoMizan) o.setRhinoMizan({ musteriHas, dokumcuHas, saticiUsd, saticiEur, tarih:new Date().toLocaleDateString("tr-TR"), dosyaAd:file.name });
           sonuclar.push((varMi?"♻ ":"✓ ")+"Mizan "+m.bas+" – "+m.bit+(varMi?" (aynı dönem vardı, güncellendi)":" kaydedildi"));
+          await kyt(file, "mizan", mizAy(m.bit), m.satirlar.length, "Mizan "+m.bas+" – "+m.bit);
         } else if (tur === "gider" || tur === "satis") {
           const p = tur==="gider" ? rpGiderAyristir(rows) : rpSatisAyristir(rows);
           if (!p.satirlar.length) { sonuclar.push("⚠ "+file.name+": satır bulunamadı"+(p.hata?" ("+p.hata+")":"")); continue; }
+          const kSay = p.satirlar.filter(x=>kilitli.has(String(x[0]).slice(0,7))).length;
+          if (kSay) { p.satirlar = p.satirlar.filter(x=>!kilitli.has(String(x[0]).slice(0,7))); sonuclar.push("🔒 "+file.name+": kilitli aylara ait "+kSay+" satır atlandı"); if (!p.satirlar.length) continue; }
           const r = await rpYuklemeKaydet(tur==="gider"?"g":"s", p.satirlar);
+          { const ayS = {}; p.satirlar.forEach(x=>{ const k=String(x[0]).slice(0,7); ayS[k]=(ayS[k]||0)+1; }); for (const k of Object.keys(ayS).sort()) await kyt(file, tur==="gider"?"gider":"satis", k, ayS[k], r.eklenen+" yeni, "+r.atlanan+" zaten vardı"); }
           sonuclar.push((r.eklenen?"✓ ":"♻ ")+(tur==="gider"?"Giderler":"Satış")+": "+p.satirlar.length+" satır okundu · "+r.eklenen+" yeni eklendi, "+r.atlanan+" zaten vardı (atlandı)"+(p.disarida?" · "+p.disarida+" gider/gelir satırı dışarıda bırakıldı":""));
         } else if (tur === "aylik") {
           const ap = rpAylikSatisAyristir(rows);
+          Object.keys(ap.aylar).forEach(k=>{ if (kilitli.has(k)) delete ap.aylar[k]; });
           const ayAdet = Object.keys(ap.aylar).length;
           if (!ayAdet) { sonuclar.push("⚠ "+file.name+": aylık satış raporunda ay/ayar bulunamadı"); continue; }
           const eskiA = await ld("v7rp_aylik", { aylar: {} });
@@ -6230,23 +6389,56 @@ function RaporlarSayfasi({ T, GH, RD, setRhinoMizan }) {
           Object.entries(ap.aylar).forEach(([ay,o])=>{ birlesik[ay] = { ...(birlesik[ay]||{}), ...o }; });
           await sv("v7rp_aylik", { aylar: birlesik });
           sonuclar.push("✓ Aylık satış (iade düşülmüş net): "+ayAdet+" ay, "+ap.sayi+" ayar kaydedildi");
+          await kyt(file, "aylik", Object.keys(ap.aylar).sort().pop(), ap.sayi, ayAdet+" ay");
         } else if (tur === "depo") {
           const dp = rpDepoAyristir(rows);
           if (!dp.satirlar.length) { sonuclar.push("⚠ "+file.name+": depo sayımında satır bulunamadı"); continue; }
           const eskiD = await ld("v7rp_depo", { sayimlar: [] });
           const liste = (eskiD && Array.isArray(eskiD.sayimlar)) ? eskiD.sayimlar : [];
-          const bugun = new Date().toISOString().slice(0,10);
-          const yeniD = { id:"d"+Date.now(), tarih:bugun, yuklendi:Date.now(), dosyaAd:file.name, satirlar:dp.satirlar };
-          const ayniGun = liste.findIndex(x=>x.tarih===bugun);
+          let bugun = new Date().toISOString().slice(0,10);
+          const dAy = o.depoAy || "";
+          if (dAy && kilitli.has(dAy)) { sonuclar.push("🔒 "+file.name+": "+dAy+" ayı kilitli, depo sayımı yazılmadı"); continue; }
+          if (dAy && dAy !== bugun.slice(0,7)) { const [yy,mm] = dAy.split("-").map(Number); bugun = dAy+"-"+String(new Date(yy, mm, 0).getDate()).padStart(2,"0"); } // geçmiş ay: ay sonu tarihiyle saklanır
+          const yeniD = { id:"d"+Date.now(), tarih:bugun, ...(dAy ? { ay:dAy } : {}), yuklendi:Date.now(), dosyaAd:file.name, satirlar:dp.satirlar };
+          const ayniGun = dAy ? liste.findIndex(x=>(x.ay || String(x.tarih||"").slice(0,7))===dAy) : liste.findIndex(x=>x.tarih===bugun);
           if (ayniGun>=0) liste[ayniGun]=yeniD; else liste.push(yeniD);
-          await sv("v7rp_depo", { sayimlar: liste.slice(-12) });
+          liste.sort((x,y)=>String(x.tarih||"").localeCompare(String(y.tarih||"")));
+          await sv("v7rp_depo", { sayimlar: liste.slice(-36) });
+          await kyt(file, "depo", dAy || bugun.slice(0,7), dp.satirlar.length, "Depo sayımı");
           sonuclar.push((ayniGun>=0?"♻ ":"✓ ")+"Depo sayımı: "+dp.satirlar.length+" kalem kaydedildi ("+bugun+")"+(ayniGun>=0?" · aynı günün sayımı güncellendi":""));
+        } else if (o.tezgah && rows.slice(0,40).some(r=>typeof r[0]==="string" && r[0].trim().startsWith("Ürün Adı"))) {
+          // Tezgah hareketleri (Rhino "Ürün Ekstresi") — tarih hücreleriyle yeniden okunur, kayıtlı hareketler atlanır
+          const wb2 = XLSX.read(buf, { type:"array", cellDates:true });
+          const tz = mskRhinoOku(XLSX.utils.sheet_to_json(wb2.Sheets[wb2.SheetNames[0]], { header:1, defval:null, raw:true }));
+          let dizi = tz.satirlar; const once = dizi.length;
+          dizi = dizi.filter(x=>!kilitli.has(String(x.tarih).slice(0,7)));
+          if (!once) { sonuclar.push("⚠ "+file.name+": tezgah hareketi bulunamadı"); continue; }
+          let yeniT = 0;
+          for (let i=0;i<dizi.length;i+=1000) { if (o.ilerleme) o.ilerleme(file.name+": "+Math.min(i+1000,dizi.length).toLocaleString("tr-TR")+" / "+dizi.length.toLocaleString("tr-TR")); yeniT += Number(await mskPersRpc("msk_tzg_yukle", { p_rows: dizi.slice(i,i+1000) })) || 0; }
+          const sonAy = dizi.map(x=>String(x.tarih).slice(0,7)).sort().pop() || "";
+          sonuclar.push("✓ Tezgah hareketleri: "+dizi.length.toLocaleString("tr-TR")+" hareket okundu · "+yeniT.toLocaleString("tr-TR")+" yeni eklendi, "+(dizi.length-yeniT).toLocaleString("tr-TR")+" zaten vardı"+(once>dizi.length?" · kilitli aylardan "+(once-dizi.length)+" hareket atlandı":""));
+          if (sonAy) await kyt(file, "tezgah", sonAy, dizi.length, yeniT+" yeni hareket");
         } else {
           sonuclar.push("⚠ "+file.name+": dosya türü tanınamadı");
         }
       } catch (err) { sonuclar.push("⚠ "+file.name+": okunamadı ("+err.message+")"); }
     }
     if (mizDegisti) await sv("v7raporlar", { mizanlar: miz });
+    return sonuclar;
+}
+function RaporlarSayfasi({ T, GH, RD, setRhinoMizan }) {
+  const [v, yenile] = useRpVeri();
+  const [secili, setSecili] = useState("");
+  const [acik, setAcik] = useState({});
+  const [mesaj, setMesaj] = useState(null);
+  const [kurDuz, setKurDuz] = useState({});
+  const [mesgul, setMesgul] = useState(false);
+  useEffect(() => { if (v && !secili && v.mizanlar.length) setSecili(v.mizanlar[v.mizanlar.length-1].id); }, [v, secili]);
+
+  const tarihSayi = (s) => { const m = String(s).match(/(\d\d)\/(\d\d)\/(\d\d)/); return m ? Number("20"+m[3]+m[2]+m[1]) : 0; };
+  const dosyaYukle = async (files) => {
+    setMesgul(true);
+    const sonuclar = await rpDosyalariIsle(files, v ? v.mizanlar : [], { setRhinoMizan, onMizanId: setSecili });
     setMesaj(sonuclar); setMesgul(false); yenile();
   };
   const mizSil = async (id) => {
@@ -6602,7 +6794,7 @@ function KasaGenel({ T, GH, atolye, ic, onGit }) {
           {v.satislar.length>0 && <div style={kart}><h3 style={bas}>Müşteri yoğunlaşması <span style={altBas}>satış payı</span></h3>
             <div style={{ display:"flex", height:14, borderRadius:7, overflow:"hidden", gap:2 }}>{payList.map((p,i)=><i key={p.ad} style={{ display:"block", height:"100%", width:p.p+"%", background:pCol[i%5] }}/>)}</div>
             <div style={{ marginTop:10 }}>{payList.map((p,i)=>(<div key={p.ad} onClick={p.ad!=="Diğer"?()=>rpDetayAc("Satışlar — "+p.ad, ()=><DetaySatisIc T={T} satislar={v.satislar} f0={{ ay, mus:p.ad }}/>):undefined} style={{ display:"flex", justifyContent:"space-between", fontSize:13, padding:"6px 0", borderBottom:"1px solid "+T.border, cursor:p.ad!=="Diğer"?"pointer":"default" }}><span><i style={{ display:"inline-block", width:9, height:9, borderRadius:3, marginRight:8, background:pCol[i%5] }}/>{p.ad}</span><b>%{rpF(p.p,1)}</b></div>))}</div></div>}
-          {v.giderler.length>0 && <div style={kart}><h3 style={bas}>Aylık masraf <span style={altBas}>HAS</span></h3><RpSutun T={T} renk="#5b7fa6" veri={aylik.map(x=>({ e:rpAyAd(x.a).split(" ")[0], v:x.o.gider }))} yuk={100} onSec={(i)=>{ const a=aylik[i].a; rpDetayAc("Masraflar — "+rpAyAd(a), ()=><DetayGiderIc T={T} giderler={v.giderler} ay={a}/>); }}/><div style={{ fontSize:11.5, color:T.sub, marginTop:8 }}>Kapanış aktarımları ve taş kalemleri hariç</div></div>}
+          {v.giderler.length>0 && <div style={kart}><h3 style={bas}>{(RP_ACIK && izinHassas("karlilik")) ? "Aylık gelir – gider" : "Aylık masraf"} <span style={altBas}>HAS</span></h3><RpSutun T={T} renk="#5b7fa6" ad="Gider (masraf)" ad2="Gelir (işçilik + maden)" veri={aylik.map(x=>({ e:rpAyAd(x.a).split(" ")[0], v:x.o.gider, ...((RP_ACIK && izinHassas("karlilik")) ? { v2:x.o.isc+x.o.maden } : {}) }))} yuk={100} onSec={(i)=>{ const a=aylik[i].a; rpDetayAc("Masraflar — "+rpAyAd(a), ()=><DetayGiderIc T={T} giderler={v.giderler} ay={a}/>); }}/><div style={{ fontSize:11.5, color:T.sub, marginTop:8 }}>Kapanış aktarımları ve taş kalemleri hariç</div></div>}
         </div>
       )}
 
@@ -15831,14 +16023,14 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
                 const git = (ks, sub) => { setKasaSayfa(ks); if (ks==="g_stok" && sub) setStokSub(sub); if (ks==="g_ab" && sub) setAbSub(sub); if (ks==="raporlar" && sub) setRapSub(sub); if (ks==="g_muh" && sub) setMskMuhSek(sub); };
                 const aktif = kasaSayfa==="g_stok" ? "g_stok:"+stokSub : kasaSayfa==="g_ab" ? "g_ab:"+abSub : kasaSayfa==="raporlar" ? "raporlar:"+rapSub : kasaSayfa==="g_muh" ? "g_muh:"+mskMuhSek : kasaSayfa;
                 const GR = [
-                  ["", [["Genel Bakış","g_genel"]]],
-                  ["İŞLEMLER", [["Yeni İşlem","g_muh","islem"],["Fiş Listesi"]]],
+                  ["", [["Genel Bakış","g_genel"],["Aylık Raporlar","ayrapor"]]],
                   ["CARİLER", [["Cari Hesaplar","g_muh","cariler"],["Müşteri Bakiyeleri","g_ab","musteri"],["Dökümcü","g_ab","dokumcu"],["Satıcılar","g_ab","muh"],["Ekstre & Mutabakat"]]],
                   ["KASA & BANKA", [["Nakit Hareketleri","g_muh","nakit"],["Hesaplar"]]],
                   ["STOK & ÜRETİM", [["Konum Bakiyeleri","g_muh","konum"],["Tezgah Hareketleri","g_muh","hareket"],["Altın & Gümüş Stok","g_stok","altin"],["Sayım & Stok Kayıtları","g_stok","kayit"],["Fason Takibi"]]],
                   ["GİDERLER", [["Gider Kayıtları","g_muh","giderler"]]],
                   ["RAPORLAR", [["İç Bilanço","raporlar","bilanco"],["Öz Sermaye","g_stok","oz"],["Karlılık","karlilik"],["Mizan"]]],
                   ["VERİ", [["Rhino'dan Aktar","g_muh","aktar"],["Mizan Yükleme & Kapsam","raporlar","yukle"],["Hesap Planı"]]],
+                  ["İŞLEMLER", [["Yeni İşlem","g_muh","islem"],["Fiş Listesi"]]],
                 ];
                 return (
                   <nav className="km-side">
@@ -15852,7 +16044,7 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
 @media(max-width:900px){.km-list{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;padding-bottom:4px;align-items:center}.km-list::-webkit-scrollbar{display:none}.km-gr{flex:none;padding:0 2px 0 10px;font-size:9.5px}.km-it{flex:none;width:auto;white-space:nowrap;border:1px solid ${T.border};border-radius:99px;padding:7px 13px;font-size:12.5px}.km-it.on{box-shadow:none;border-color:${T.text}}.km-it.yk{display:none}.km-yeni{width:auto;display:inline-block;margin-bottom:10px}}`}</style>
                     <div className="km-bas">Kasa & Muhasebe</div>
                     <div className="km-alt">MSK · stok, cari, kasa ve raporlar</div>
-                    <button className="km-yeni" onClick={()=>git("g_muh","islem")}>+ Yeni İşlem</button>
+                    <button className="km-yeni" onClick={()=>git("ayrapor")}>↑ Rapor Yükle</button>
                     <div className="km-list">
                       {GR.map(([g, its]) => (<Fragment key={g || "ana"}>
                         {g && <div className="km-gr">{g}</div>}
@@ -16542,6 +16734,7 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
               {kasaSayfa==="g_muh" && AKTIF_SIRKET_ONEK!=="" && <MuhasebeSayfa T={T} GH={GH} usdTry={altinSon?.usdTry || null} />}
               {kasaSayfa==="g_muh" && AKTIF_SIRKET_ONEK==="" && <MskMuhasebeSayfa T={T} GH={GH} disSek={mskMuhSek} onDisSek={setMskMuhSek} menuGizle />}
               {kasaSayfa==="karlilik" && <RpKapi T={T} GH={GH}><RaporKarlilik T={T} GH={GH}/></RpKapi>}
+              {kasaSayfa==="ayrapor" && AKTIF_SIRKET_ONEK==="" && <MskAylikRaporlar T={T} setRhinoMizan={setRhinoMizan} />}
 
               {/* ══ MODALLAR ══ */}
               {kasaModal && (() => {
