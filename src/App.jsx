@@ -12770,7 +12770,7 @@ function Atolye({ onSirketDegis }) {
               <input type="number" value={mc} onChange={e => setMc(e.target.value)} placeholder="0.25" style={{ ...IS, width:65, padding:"4px 7px", fontSize:12, textAlign:"center", fontWeight:700 }} />
             </div>
             {altinKgUSD > 0 && <span style={{ fontSize:8, color:"#6abf69", fontWeight:700 }}>1 has gr = {fUSD(altinKgUSD/1000)}</span>}
-            <span style={{ fontSize:7, color:"#e85a4f", fontWeight:600 }}>Min karlılık: {MIN_MLY} mly/gr</span>
+            {AKTIF_SIRKET_ONEK !== "bsp2_" && <span style={{ fontSize:7, color:"#e85a4f", fontWeight:600 }}>Min karlılık: {MIN_MLY} mly/gr</span>}
             <div style={{ marginLeft:"auto", display:"flex", gap:5, flexWrap:"wrap" }}>
               {/* CHATGPT — kendi hesabınla yeni sekmede açılır, şifre/API anahtarı gerekmez */}
               <button onClick={()=>window.open("https://chat.openai.com","_blank")}
@@ -12911,11 +12911,11 @@ function Atolye({ onSirketDegis }) {
                                   <span style={{ fontSize:10, color:"#5b9bd5", fontWeight:800 }}>{fN(ortGram14,2)} gr</span>
                                   <span style={{ fontSize:7, color:T.dim }}>(14K)</span>
                                 </div>
-                                <div style={{ display:"flex", gap:4, alignItems:"center" }}>
+                                {AKTIF_SIRKET_ONEK !== "bsp2_" && <div style={{ display:"flex", gap:4, alignItems:"center" }}>
                                   <span style={{ fontSize:8, color:T.dim }}>Ort. karlılık:</span>
                                   <span style={{ fontSize:10, color:GOLD, fontWeight:800 }}>{fN(ortMly,3)}</span>
                                   <span style={{ fontSize:7, color:T.dim }}>mly/gr ({fN(minMly,3)}–{fN(maxMly,3)})</span>
-                                </div>
+                                </div>}
                               </div>
                             );
                           })()}
@@ -13114,7 +13114,7 @@ function Atolye({ onSirketDegis }) {
                       })()}
                       <button onClick={()=>togKonf(m)} style={{ position:"absolute", top:4, right:4, width:20, height:20, borderRadius:5, background:ik?"rgba(var(--vurgu-rgb),0.9)":"rgba(0,0,0,0.55)", border:"2px solid rgba(var(--vurgu-rgb),0.45)", color:ik?DARK:"transparent", fontSize:9, fontWeight:800, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}>V</button>
                       {seciliModeller.has(m.id) && <div style={{ position:"absolute", inset:0, background:"rgba(91,155,213,0.15)", border:"2px solid rgba(91,155,213,0.5)", pointerEvents:"none" }}/>}
-                      {h&&h.karUyari&&!h.gumusMu && <div style={{ position:"absolute", bottom:3, left:3, background:"rgba(232,90,79,0.88)", color:"#fff", padding:"1px 5px", borderRadius:3, fontSize:6, fontWeight:800 }}>⚠ {fN(h.karMly,3)} mly/gr</div>}
+                      {h&&h.karUyari&&!h.gumusMu&&AKTIF_SIRKET_ONEK !== "bsp2_" && <div style={{ position:"absolute", bottom:3, left:3, background:"rgba(232,90,79,0.88)", color:"#fff", padding:"1px 5px", borderRadius:3, fontSize:6, fontWeight:800 }}>⚠ {fN(h.karMly,3)} mly/gr</div>}
                       {(m.satisSayisi||0)>0 && <div style={{ position:"absolute", top:4, left:4, background:"rgba(106,191,105,0.85)", color:"#fff", padding:"1px 5px", borderRadius:3, fontSize:6, fontWeight:800 }}>{m.satisSayisi}x</div>}
                     </div>
                     {m.foto && (() => {
@@ -13608,7 +13608,7 @@ function Atolye({ onSirketDegis }) {
                             )}
                           </div>
                           {/* Karlılık göster */}
-                          {altinKgUSD>0 && <div style={{ fontSize:8, color:hc.karUyari?"#e85a4f":"#6abf69", fontWeight:700, marginTop:3 }}>{fN(hc.karMly,3)} mly</div>}
+                          {altinKgUSD>0 && AKTIF_SIRKET_ONEK !== "bsp2_" && <div style={{ fontSize:8, color:hc.karUyari?"#e85a4f":"#6abf69", fontWeight:700, marginTop:3 }}>{fN(hc.karMly,3)} mly</div>}
                         </div>
                         {/* Altın rengi */}
                         <div style={{ display:"flex", gap:4, justifyContent:"center", paddingTop:4 }}>
@@ -15146,7 +15146,7 @@ function Atolye({ onSirketDegis }) {
                 </div>
                 <span/>
               </div>
-              {<RpNav T={T} aktif={kasaSayfa==="g_ab"||kasaSayfa==="g_stok"||kasaSayfa==="g_genel"||kasaSayfa==="raporlar"||kasaSayfa==="karlilik" ? kasaSayfa : "g_genel"} onSec={setKasaSayfa} sekmeler={[{id:"g_genel",l:"Genel Bakış"},{id:"g_stok",l:"Stok"},{id:"g_ab",l:"Alacak & Borç"},{id:"raporlar",l:"Raporlar"},{id:"karlilik",l:"🔒 Karlılık"}]}/>}
+              {<RpNav T={T} aktif={kasaSayfa==="g_ab"||kasaSayfa==="g_stok"||kasaSayfa==="g_genel"||kasaSayfa==="raporlar"||kasaSayfa==="karlilik" ? kasaSayfa : "g_genel"} onSec={setKasaSayfa} sekmeler={[{id:"g_genel",l:"Genel Bakış"},{id:"g_stok",l:"Stok"},{id:"g_ab",l:"Alacak & Borç"},{id:"raporlar",l:"Raporlar"},...(AKTIF_SIRKET_ONEK==="bsp2_"?[]:[{id:"karlilik",l:"🔒 Karlılık"}])]}/>}
 
               {/* ══ ÖZET ══ */}
               {kasaSayfa==="ozet" && (
@@ -16266,11 +16266,13 @@ function Atolye({ onSirketDegis }) {
                     {kart("Tamamlanan", tamamAdet+" adet", "biten parça", "#6abf69")}
                   </div>
                   {/* KARLILIK satırı */}
+                  {AKTIF_SIRKET_ONEK !== "bsp2_" && (
                   <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:8 }}>
                     {kart("Satılan Karlılık", fN(satilanKarHas,2)+" has", hasGramUSD>0?"≈"+fUSD(satilanKarHas*hasGramUSD)+" (teslim edilen)":"teslim edilen kâr", "#6abf69")}
                     {kart("Bekleyen Karlılık", fN(bekleyenKarHas,2)+" has", hasGramUSD>0?"≈"+fUSD(bekleyenKarHas*hasGramUSD)+" (üretimdeki)":"henüz teslim edilmeyen", "#e8833a")}
                     {kart("Toplam Potansiyel", fN(toplamKarHas,2)+" has", hasGramUSD>0?"≈"+fUSD(toplamKarHas*hasGramUSD)+" (hepsi satılırsa)":"hepsi satılırsa", GOLD)}
                   </div>
+                  )}
                 </div>
               );
             })()}
@@ -16285,7 +16287,7 @@ function Atolye({ onSirketDegis }) {
                   { id:"arizali",  l:"⚠ Arıza Veren",  c:"#e85a4f" },
                   { id:"karli",    l:"💰 En Karlı",     c:GOLD },
                   { id:"kazandiran", l:"💵 Çok Kazandıran", c:"#6abf69" },
-                ].map(t => (
+                ].filter(t => !(AKTIF_SIRKET_ONEK === "bsp2_" && (t.id==="karli" || t.id==="kazandiran"))).map(t => (
                   <button key={t.id} onClick={()=>setKesfetSekme(t.id)} style={{ background:kesfetSekme===t.id?t.c+"22":"rgba(255,255,255,0.03)", border:"1px solid "+(kesfetSekme===t.id?t.c+"66":"rgba(255,255,255,0.08)"), borderRadius:7, padding:"5px 12px", color:kesfetSekme===t.id?t.c:"#7a6f5a", fontSize:10, fontWeight:kesfetSekme===t.id?700:400, cursor:"pointer" }}>{t.l}</button>
                 ))}
               </div>
@@ -16359,7 +16361,7 @@ function Atolye({ onSirketDegis }) {
                             {/* GRAM + KARLILIK — her zaman göster */}
                             <div style={{ display:"flex", gap:6, marginTop:1, flexWrap:"wrap" }}>
                               <span style={{ fontSize:8, color:"#5b9bd5", fontWeight:600 }}>{fN(bilgi.gram,2)}gr · {bilgi.ayar}</span>
-                              {bilgi.mly!=null && <span style={{ fontSize:8, color:bilgi.mly>=0.030?"#6abf69":bilgi.mly>=0.020?"#e8a74f":"#e85a4f", fontWeight:700 }}>{fN(bilgi.mly,3)} mly/gr</span>}
+                              {bilgi.mly!=null && AKTIF_SIRKET_ONEK !== "bsp2_" && <span style={{ fontSize:8, color:bilgi.mly>=0.030?"#6abf69":bilgi.mly>=0.020?"#e8a74f":"#e85a4f", fontWeight:700 }}>{fN(bilgi.mly,3)} mly/gr</span>}
                             </div>
                             {row.barW!=null && (
                               <div style={{ height:3, background:"rgba(255,255,255,0.08)", borderRadius:2, marginTop:3, overflow:"hidden" }}>
@@ -17389,13 +17391,15 @@ function Atolye({ onSirketDegis }) {
                         <span style={{ color:T.sub }}>{hd.gumusMu ? "Gümüş" : "Toplam Maliyet"}</span>
                         <span style={{ fontWeight:700 }}>{hd.gumusMu ? "925" : fN(hd.topMaliyetHas,4) + " has"}</span>
                       </div>
+                      {AKTIF_SIRKET_ONEK !== "bsp2_" && (
                       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline" }}>
                         <span style={{ fontSize:12, color:T.sub }}>Karlılık</span>
                         <span style={{ fontSize:18, fontWeight:800, color: hd.gumusMu?"#c0c0c0":(hd.karUyari?"#e85a4f":"#6abf69") }}>
                           {hd.gumusMu ? "$"+fN(hd.gumusIscilikGr,2)+"/gr" : (hd.mamulGram>0 ? fN(hd.karMly||hd.karHas/hd.mamulGram,3)+" mly/gr" : fN(hd.karHas,4)+" has")}
                         </span>
                       </div>
-                      {!hd.gumusMu && hd.mamulGram>0 && (
+                      )}
+                      {!hd.gumusMu && hd.mamulGram>0 && AKTIF_SIRKET_ONEK !== "bsp2_" && (
                         <div style={{ textAlign:"right", fontSize:10, color:hd.karUyari?"#e85a4f":"#6abf69", opacity:0.8, marginTop:2 }}>({fN(hd.karHas,4)} has kâr)</div>
                       )}
                     </div>
@@ -18928,7 +18932,7 @@ function Atolye({ onSirketDegis }) {
                 </div>
                 {["10K","18K"].map(ay => {
                   const kb = karBilgiHesapla(ay, fIscilikAyarlar[ay]);
-                  if (!kb) return null;
+                  if (!kb || AKTIF_SIRKET_ONEK === "bsp2_") return null;
                   return (
                     <div key={ay} style={{ fontSize:8, color: kb.kar < kb.kar14 - 0.0005 ? "#e85a4f" : "#6abf69", fontWeight:600, display:"flex", gap:8, alignItems:"center", flexWrap:"wrap", marginBottom:4 }}>
                       <span>{ay} kârı: {fN(kb.kar,3)} has · 14K kârı: {fN(kb.kar14,3)} has</span>
