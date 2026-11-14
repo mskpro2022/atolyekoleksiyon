@@ -4485,7 +4485,7 @@ const persBos = { ad:"", poz:"CAD/Tasarım", durum:"Aktif", maas:"", banka_maas:
 // Dış bileşenler (PersonelSayfa içinde tanımlansaydı her tuşta yeniden oluşur, yazı kutuları odağı kaybederdi)
 function PersKutu({ T, y, d, renk }) {
   return (
-    <div style={{ background:T.card, border:"1px solid "+T.border, borderRadius:14, padding:"16px 20px", flex:"1 1 150px" }}>
+    <div className="pers-kutu" style={{ background:T.card, border:"1px solid "+T.border, borderRadius:14, padding:"16px 20px", flex:"1 1 150px" }}>
       <div style={{ fontSize:12, color:T.sub, fontWeight:600, letterSpacing:0.3 }}>{y}</div>
       <div style={{ fontSize:26, fontWeight:700, color:T.text, marginTop:6, letterSpacing:-0.5, fontVariantNumeric:"tabular-nums" }}>{d}</div>
     </div>
@@ -4586,7 +4586,7 @@ function PersonelSayfa({ T, GH: GH0, IS, usdTry, siparisler }) {
   const girdi = { ...IS, padding:"8px 11px", fontSize:13, borderRadius:8 };
   const pill = (renk, yazi) => <span style={{ display:"inline-flex", alignItems:"center", gap:7, background:T.btnBg, color:T.text, padding:"3px 11px 3px 9px", borderRadius:20, fontSize:12, fontWeight:600 }}><span style={{ width:7, height:7, borderRadius:"50%", background:renk, flexShrink:0 }} />{yazi}</span>;
   const ayBar = () => (
-    <div style={{ display:"inline-flex", alignItems:"center", border:"1px solid "+T.border, borderRadius:10, background:T.card }}>
+    <div className="pers-ay" style={{ display:"inline-flex", alignItems:"center", border:"1px solid "+T.border, borderRadius:10, background:T.card }}>
       <button onClick={() => ayDeg(-1)} style={{ ...GH, border:"none", padding:"7px 12px", fontSize:14 }}>‹</button>
       <span style={{ fontSize:13, fontWeight:600, color:T.text, minWidth:116, textAlign:"center" }}>{PERS_AY[ay]} {yil}</span>
       <button onClick={() => ayDeg(1)} style={{ ...GH, border:"none", padding:"7px 12px", fontSize:14 }}>›</button>
@@ -4801,9 +4801,37 @@ function PersonelSayfa({ T, GH: GH0, IS, usdTry, siparisler }) {
   const SEK = [["ozet","Özet"],["personel","Personel"],["bordro","Bordro"],["izin","İzin"],["avans","Avans"],["puan","Puanlama"],["devam","Devam"],["odeme","Ödemeler"],["rapor","Rapor"]];
   const aySekmeler = ["bordro","puan","devam","odeme","rapor"];
 
+  // Telefonda tablolar kart olur: her hücreye sütun başlığı etiket olarak yazılır (masaüstünde etkisi yok)
+  const persKok = useRef(null);
+  useEffect(() => {
+    const r = persKok.current; if (!r) return;
+    r.querySelectorAll("table.pers-t").forEach(t => {
+      const hs = Array.from(t.querySelectorAll("thead th")).map(h => h.textContent.trim());
+      t.querySelectorAll("tbody tr").forEach(tr => {
+        const tds = Array.from(tr.children);
+        if (tds.some(td => td.colSpan > 1)) { tr.classList.add("pers-wide"); return; }
+        tr.classList.remove("pers-wide");
+        tds.forEach((td, i) => td.setAttribute("data-l", hs[i] || ""));
+      });
+    });
+  });
+
   return (
-    <div>
-      <style>{`.pers-t tbody tr:last-child td{border-bottom:none}.pers-t tbody tr:hover td{background:${T.btnBg}}.pers-t input:focus,.pers-t select:focus{border-color:${T.text}!important}`}</style>
+    <div ref={persKok}>
+      <style>{`.pers-t tbody tr:last-child td{border-bottom:none}.pers-t tbody tr:hover td{background:${T.btnBg}}.pers-t input:focus,.pers-t select:focus{border-color:${T.text}!important}
+@media(max-width:700px){
+.pers-sek{flex-wrap:nowrap!important;overflow-x:auto;-webkit-overflow-scrolling:touch}.pers-sek button{white-space:nowrap;padding:10px 12px!important}
+.pers-ay{display:flex!important;width:100%;justify-content:space-between;box-sizing:border-box}.pers-ay span{flex:1}
+.pers-kutu{flex:1 1 calc(50% - 8px)!important;min-width:0;padding:10px 12px!important}.pers-kutu div:last-child{font-size:19px!important}
+.pers-t,.pers-t tbody{display:block;width:100%}.pers-t thead{display:none}
+.pers-t tbody tr{display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;background:${T.bg2||T.card};border:1px solid ${T.border};border-radius:14px;margin:8px;padding:11px 13px}
+.pers-t tbody tr.pers-wide{display:block}.pers-t tbody tr.pers-wide td:empty{display:none}
+.pers-t tbody td{display:block;border:none!important;padding:0!important;text-align:left!important;min-width:0;background:transparent!important;box-shadow:none!important;white-space:normal!important}
+.pers-t tbody td::before{content:attr(data-l);display:block;font-size:10px;font-weight:600;color:${T.sub};margin-bottom:2px}
+.pers-t tbody td[data-l=""]::before,.pers-t tbody td:first-child::before,.pers-t tbody tr.pers-wide td::before{display:none}
+.pers-t tbody td:first-child{grid-column:1/-1;font-size:15px}.pers-t tbody td[data-l=""]{grid-column:1/-1}
+.pers-t input,.pers-t select{width:100%!important;box-sizing:border-box}
+}`}</style>
       {bilgi && <div style={{ position:"fixed", top:14, right:14, zIndex:9500, background: bilgi.hata ? "#7f1d1d" : "#14532d", color:"#fff", padding:"9px 14px", borderRadius:10, fontSize:12, fontWeight:700, maxWidth:320 }}>{bilgi.m}</div>}
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-end", flexWrap:"wrap", gap:12, marginBottom:18 }}>
         <div>
@@ -4812,7 +4840,7 @@ function PersonelSayfa({ T, GH: GH0, IS, usdTry, siparisler }) {
         </div>
         {aySekmeler.includes(sek) && ayBar()}
       </div>
-      <div style={{ display:"flex", gap:2, flexWrap:"wrap", marginBottom:22, borderBottom:"1px solid "+T.border }}>
+      <div className="pers-sek" style={{ display:"flex", gap:2, flexWrap:"wrap", marginBottom:22, borderBottom:"1px solid "+T.border }}>
         {SEK.map(([k, y]) => (
           <button key={k} onClick={() => setSek(k)} style={{ background:"transparent", border:"none", borderBottom:"2px solid "+(sek === k ? T.text : "transparent"), marginBottom:-1, padding:"10px 16px", fontSize:13, fontWeight: sek === k ? 700 : 500, color: sek === k ? T.text : T.sub, cursor:"pointer" }}>{y}</button>
         ))}
@@ -9358,31 +9386,62 @@ function VitrinModu({ kod, onizleme }) {
       {/* ═══ ÜST BAŞLIK ═══ */}
       <div className="vm-pad" style={{ padding:"26px 28px 6px" }}>
         {(aktifKol || tumGorunum) && (
-          <button onClick={kartEkraninaDon}
+          <button className="vh-back-d" onClick={kartEkraninaDon}
             style={{ display:"inline-flex", alignItems:"center", gap:8, background:"var(--vcard)", border:"none", borderRadius:980, padding:"10px 20px", color:"var(--vt1)", fontSize:14, fontWeight:700, cursor:"pointer", boxShadow:"0 4px 16px rgba(0,0,0,0.35)", marginBottom:14 }}>
             <span style={{ fontSize:19, lineHeight:1, marginTop:-1 }}>‹</span> {ce("tum_koleksiyonlar")}
           </button>
         )}
-        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", flexWrap:"wrap", gap:12 }}>
-          <div style={{ flex:"1 1 auto", minWidth:0 }}>
+        <style>{`.vh-back-m{display:none}
+@media(max-width:700px){
+.vh-top{display:grid!important;grid-template-columns:1fr auto auto;align-items:center;gap:8px 8px!important}
+.vh-tb{display:contents!important}
+.vh-top .vm-baslik{grid-column:1;grid-row:1;font-size:26px!important;font-weight:700!important;letter-spacing:.09em!important}
+.vh-lang{grid-column:2;grid-row:1;height:36px!important}.vh-lang button{min-width:30px!important;padding:0 8px!important}
+.vh-tema{grid-column:3;grid-row:1;width:36px!important;height:36px!important}
+.vh-top .vm-aciklama{grid-column:1/-1;grid-row:2;font-size:13px!important;line-height:1.4;margin:0 0 6px!important}
+.vh-acts{grid-column:1/-1;grid-row:3;display:flex!important;gap:10px}
+.vh-acts button{flex:1 1 0;height:46px;border-radius:14px!important;font-size:14px!important;padding:0 10px!important;display:flex;align-items:center;justify-content:center;gap:6px}
+.vh-acts .vh-b1{background:var(--vt1)!important;color:var(--vb)!important}
+.vh-acts .vh-b2{border:1px solid rgba(var(--voverlay-rgb),.14)!important}
+.vh-back-d{display:none!important}
+.vh-back-m{display:flex!important;grid-column:1;grid-row:1;width:34px;height:34px;border-radius:50%;background:var(--vcard);border:1px solid rgba(var(--voverlay-rgb),.14);color:var(--vt1);font-size:22px;line-height:1;padding:0 0 3px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.vh-geri{grid-template-columns:auto 1fr auto auto!important}
+.vh-geri .vm-baslik{grid-column:2!important;font-size:22px!important;letter-spacing:.07em!important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.vh-geri .vh-lang{grid-column:3!important}.vh-geri .vh-tema{grid-column:4!important}
+.vh-geri .vm-aciklama,.vh-geri .vh-acts{grid-column:1/-1!important}
+.vm-hscroll{gap:7px!important;padding-top:6px!important;padding-bottom:6px!important}
+.vm-hscroll .vm-pill{padding:8px 13px!important;font-size:13px!important;border-radius:11px!important}
+.vm-filtre{display:grid!important;grid-template-columns:1fr auto;gap:8px!important}
+.vm-filtre .vh-ayar{grid-column:1/-1;display:flex!important}.vm-filtre .vh-ayar button{flex:1;padding:8px 0!important}
+.vm-filtre input[placeholder]{min-width:0;max-width:none!important;width:100%}
+.vm-filtre .vh-sirala{grid-column:1/-1;width:100%}
+.vh-all{gap:12px!important;padding:10px 14px 10px 10px!important;border-width:1px!important;border-radius:16px!important}
+.vh-all .vh-g{width:58px!important;height:58px!important;border-radius:11px!important}
+.vh-all .vh-t1{font-size:15px!important}.vh-sira{display:none}
+}`}</style>
+        <div className={"vh-top" + ((aktifKol || tumGorunum) ? " vh-geri" : "")} style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", flexWrap:"wrap", gap:12 }}>
+          {(aktifKol || tumGorunum) && <button className="vh-back-m" onClick={kartEkraninaDon} aria-label={ce("tum_koleksiyonlar")}>‹</button>}
+          <div className="vh-tb" style={{ flex:"1 1 auto", minWidth:0 }}>
             <div className="vm-baslik" style={{ fontSize:24, fontWeight:600, color:"var(--vt1)", letterSpacing:"-0.02em" }}>
               {aktifKol ? urunCevir(aktifKol.ad) : (tumGorunum ? ce("tum_koleksiyonlar") : vitrinAd)}
             </div>
             <div className="vm-aciklama" style={{ fontSize:14, color:"var(--vt2)", marginTop:5 }}>
               {(aktifKol || tumGorunum)
                 ? ce("begen_mesaj")
-                : ce("koleksiyon_gir_mesaj")}
+                : (typeof window !== "undefined" && window.innerWidth <= 700 ? ce("koleksiyon_gir_mesaj").replace(/^👇\s*/, "") : ce("koleksiyon_gir_mesaj"))}
             </div>
           </div>
+          <div className="vh-acts" style={{ display:"contents" }}>
           {vitrinMusteri && (
-            <button onClick={sipListeAc} style={{ flexShrink:0, background:"var(--vcard)", color:"var(--vt1)", border:"none", borderRadius:980, padding:"10px 20px", fontSize:14, fontWeight:600, cursor:"pointer" }}>
+            <button className="vh-b1" onClick={sipListeAc} style={{ flexShrink:0, background:"var(--vcard)", color:"var(--vt1)", border:"none", borderRadius:980, padding:"10px 20px", fontSize:14, fontWeight:600, cursor:"pointer" }}>
               📋 {vitrinDil==="en" ? "My Orders" : vitrinDil==="es" ? "Mis pedidos" : "Siparişlerim"}
             </button>
           )}
-          <button onClick={()=>katalogAl(3)} style={{ flexShrink:0, background:"var(--vcard)", color:"var(--vt1)", border:"none", borderRadius:980, padding:"10px 20px", fontSize:14, fontWeight:600, cursor:"pointer" }}>
+          <button className="vh-b2" onClick={()=>katalogAl(3)} style={{ flexShrink:0, background:"var(--vcard)", color:"var(--vt1)", border:"none", borderRadius:980, padding:"10px 20px", fontSize:14, fontWeight:600, cursor:"pointer" }}>
             {ce("katalog_al")}{(!aktifKol && !tumGorunum && seciliKlasorler.length > 0) ? " ("+seciliKlasorler.length+")" : ""}
           </button>
-          <div style={{ flexShrink:0, height:40, padding:3, borderRadius:20, background:"rgba(var(--voverlay-rgb),0.08)", border:"1px solid rgba(var(--voverlay-rgb),0.15)", display:"flex", alignItems:"center", gap:2 }}>
+          </div>
+          <div className="vh-lang" style={{ flexShrink:0, height:40, padding:3, borderRadius:20, background:"rgba(var(--voverlay-rgb),0.08)", border:"1px solid rgba(var(--voverlay-rgb),0.15)", display:"flex", alignItems:"center", gap:2 }}>
             {[["tr","TR"],["en","EN"],["es","ES"]].map(([kod,etiket]) => (
               <button key={kod} onClick={()=>setVitrinDil(kod)}
                 style={{ height:"100%", minWidth:34, padding:"0 8px", borderRadius:17, border:"none", cursor:"pointer",
@@ -9393,7 +9452,7 @@ function VitrinModu({ kod, onizleme }) {
               </button>
             ))}
           </div>
-          <button onClick={()=>setVitrinIsik(gunduz?"gece":"gunduz")} title={gunduz?ce("gece_moduna_gec"):ce("gunduz_moduna_gec")}
+          <button className="vh-tema" onClick={()=>setVitrinIsik(gunduz?"gece":"gunduz")} title={gunduz?ce("gece_moduna_gec"):ce("gunduz_moduna_gec")}
             style={{ flexShrink:0, width:40, height:40, borderRadius:"50%", background:"rgba(var(--voverlay-rgb),0.08)", border:"1px solid rgba(var(--voverlay-rgb),0.15)", color:"var(--vt1)", fontSize:16, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}>
             {gunduz ? "🌙" : "☀️"}
           </button>
@@ -9420,7 +9479,7 @@ function VitrinModu({ kod, onizleme }) {
       {/* ═══ AYAR + ARAMA + SIRALAMA — koleksiyon içinde veya tüm koleksiyonlar görünümünde ═══ */}
       {(aktifKol || tumGorunum) && (
       <div className="vm-pad vm-filtre" style={{ padding:"12px 28px 14px", display:"flex", alignItems:"center", gap:10, flexWrap:"wrap" }}>
-        {!bspMi && <div style={{ display:"inline-flex", background:"rgba(var(--voverlay-rgb),0.07)", borderRadius:9, padding:3 }}>
+        {!bspMi && <div className="vh-ayar" style={{ display:"inline-flex", background:"rgba(var(--voverlay-rgb),0.07)", borderRadius:9, padding:3 }}>
           {VITRIN_AYARLAR.map(a => {
             const on = aktifAyar === a.id;
             return (
@@ -9439,7 +9498,7 @@ function VitrinModu({ kod, onizleme }) {
           <span style={{ color:"#48484a", fontSize:12 }}>–</span>
           <input value={gramFiltre.max} onChange={e=>setGramFiltre(p=>({...p,max:e.target.value}))} placeholder="max" type="number" style={{ width:46, background:"transparent", border:"none", color:"var(--vt1)", fontSize:12, outline:"none" }}/>
         </div>
-        <select value={siralama} onChange={e=>setSiralama(e.target.value)}
+        <select className="vh-sirala" value={siralama} onChange={e=>setSiralama(e.target.value)}
           style={{ background:"rgba(var(--voverlay-rgb),0.07)", border:"none", borderRadius:9, padding:"9px 12px", color:"var(--vt1)", fontSize:13, outline:"none", cursor:"pointer" }}>
           <option value="kodTers" style={{background:"var(--vcard)"}}>{ce("kod_yeni_eski_opt")}</option>
           <option value="kod" style={{background:"var(--vcard)"}}>{ce("kod_eski_yeni_opt")}</option>
@@ -9484,8 +9543,8 @@ function VitrinModu({ kod, onizleme }) {
           {toplamModel > 0 && (
             <div style={{ padding:"10px 28px 4px" }}>
               <div onClick={()=>{ setTumGorunum(true); setArama(""); setGramFiltre({ min:"", max:"" }); if(vitrinMusteri && !onizleme) vitrinAktiviteKaydetGuvenli(vitrinMusteri.kod, vitrinMusteri.onek, "koleksiyon", "Tüm Koleksiyonlar", null, null); }}
-                className="vm-card" style={{ display:"flex", alignItems:"center", gap:16, background:"rgba(var(--voverlay-rgb),0.06)", border:"1.5px solid rgba(var(--voverlay-rgb),0.10)", borderRadius:16, padding:"14px 18px", cursor:"pointer" }}>
-                <div style={{ width:78, height:58, borderRadius:10, overflow:"hidden", background:"#f7f7f8", display:"grid", gridTemplateColumns:"1fr 1fr", gridTemplateRows:"1fr 1fr", gap:1, flexShrink:0 }}>
+                className="vm-card vh-all" style={{ display:"flex", alignItems:"center", gap:16, background:"rgba(var(--voverlay-rgb),0.06)", border:"1.5px solid rgba(var(--voverlay-rgb),0.10)", borderRadius:16, padding:"14px 18px", cursor:"pointer" }}>
+                <div className="vh-g" style={{ width:78, height:58, borderRadius:10, overflow:"hidden", background:"#f7f7f8", display:"grid", gridTemplateColumns:"1fr 1fr", gridTemplateRows:"1fr 1fr", gap:1, flexShrink:0 }}>
                   {[0,1,2,3].map(i => (
                     <div key={i} style={{ overflow:"hidden", background:"#f0f0f0" }}>
                       {tumKapaklar[i] ? <img src={tumKapaklar[i]} alt="" style={{ width:"100%", height:"100%", objectFit:"cover", display:"block" }}/> : null}
@@ -9493,8 +9552,8 @@ function VitrinModu({ kod, onizleme }) {
                   ))}
                 </div>
                 <div style={{ flex:1, minWidth:0 }}>
-                  <div style={{ fontSize:17, fontWeight:600, color:"var(--vt1)", letterSpacing:"-0.01em" }}>{ce("tum_koleksiyonlari_gor")}</div>
-                  <div style={{ fontSize:12, color:"var(--vt2)", marginTop:3 }}>{kollarSirali.length} koleksiyon · {toplamModel} model · en yeniler önce</div>
+                  <div className="vh-t1" style={{ fontSize:17, fontWeight:600, color:"var(--vt1)", letterSpacing:"-0.01em" }}>{ce("tum_koleksiyonlari_gor")}</div>
+                  <div style={{ fontSize:12, color:"var(--vt2)", marginTop:3 }}>{kollarSirali.length} koleksiyon · {toplamModel} model<span className="vh-sira"> · en yeniler önce</span></div>
                 </div>
                 <span style={{ fontSize:22, color:"var(--vurgu)", lineHeight:1, flexShrink:0 }}>›</span>
               </div>
@@ -10959,6 +11018,8 @@ function Atolye({ onSirketDegis }) {
   const [mc,      setMc]         = useState("0.030");
 
   const [sayfa,     setSayfa]     = useState("koleksiyonlar");
+  // Kasa ve Muhasebe tek sekmede birleşti: eski "muhasebe" sayfasına gelen her yönlendirme Kasa & Muhasebe › Muhasebe bölümüne gider
+  useEffect(() => { if (sayfa === "muhasebe") { setSayfa("kasa"); setKasaSayfa("g_muh"); } }, [sayfa]);
   const [aktifKol,  setAktifKol]  = useState(null);
   const [acikUstKol, setAcikUstKol] = useState(null); // içine girilmiş ÜST koleksiyonun id'si (alt koleksiyon kartları gösterilir)
   const [filtre,    setFiltre]    = useState("all");
@@ -12716,7 +12777,7 @@ function Atolye({ onSirketDegis }) {
               <button onClick={()=>{ if (onSirketDegis) onSirketDegis(); }} title="Şirket değiştir" style={{ fontSize:9, fontWeight:800, padding:"3px 10px", borderRadius:20, background: AKTIF_SIRKET_ONEK==="bsp2_" ? "rgba(167,139,250,0.15)" : "rgba(var(--vurgu-rgb),0.15)", border:"1px solid "+(AKTIF_SIRKET_ONEK==="bsp2_" ? "rgba(167,139,250,0.4)" : "rgba(var(--vurgu-rgb),0.4)"), color: AKTIF_SIRKET_ONEK==="bsp2_" ? "#a78bfa" : GOLD, whiteSpace:"nowrap", cursor:"pointer", display:"inline-flex", alignItems:"center", gap:4 }}>{AKTIF_SIRKET_ONEK==="bsp2_" ? "✨ BSP" : "💎 MSK"} <span style={{ fontSize:8, opacity:0.7 }}>⇄</span></button>
             </h1>
             <div className="am-nav" style={{ display:"flex", gap:3, flexWrap:"wrap" }}>
-              {["koleksiyonlar","modeller","konfirmasyon","siparisler","iadeler","musteriler","kasa","muhasebe","personel","analiz","radar","ayarlar"].map(n => {
+              {["koleksiyonlar","modeller","konfirmasyon","siparisler","iadeler","musteriler","kasa","personel","analiz","radar","ayarlar"].map(n => {
                 let badgeSayi = 0;
                 if (n === "iadeler") {
                   siparisler.forEach(s => {
@@ -12727,7 +12788,7 @@ function Atolye({ onSirketDegis }) {
                 return (
                 <button key={n} onClick={() => { setSayfa(n); if (n==="koleksiyonlar") { setAktifKol(null); setAcikUstKol(null); } }}
                   style={{ ...GH, color:sayfa===n?T.gold:T.sub, background:sayfa===n?T.btnBg:"transparent", borderColor:sayfa===n?T.btnBorder:T.border, fontSize:9, padding:"5px 9px", position:"relative" }}>
-                  {{"koleksiyonlar":"Koleksiyonlar","modeller":"Modeller","konfirmasyon":"Konfirmasyon","siparisler":"Siparişler","iadeler":"İadeler","musteriler":"Müşteriler","vitrin":"🛍 Vitrin","kasa":"Kasa","muhasebe":"Muhasebe","personel":"Personel","analiz":"Keşfet","radar":"📡 Trend Radar","ayarlar":"Ayarlar"}[n]||n.charAt(0).toUpperCase()+n.slice(1)}
+                  {{"koleksiyonlar":"Koleksiyonlar","modeller":"Modeller","konfirmasyon":"Konfirmasyon","siparisler":"Siparişler","iadeler":"İadeler","musteriler":"Müşteriler","vitrin":"🛍 Vitrin","kasa":"Kasa & Muhasebe","muhasebe":"Muhasebe","personel":"Personel","analiz":"Keşfet","radar":"📡 Trend Radar","ayarlar":"Ayarlar"}[n]||n.charAt(0).toUpperCase()+n.slice(1)}
                   {n==="konfirmasyon" && konfList.length>0 && <span style={{ position:"absolute", top:-4, right:-4, background:GOLD, color:DARK, width:13, height:13, borderRadius:7, fontSize:7, fontWeight:800, display:"flex", alignItems:"center", justifyContent:"center" }}>{konfList.length}</span>}
                   {n==="iadeler" && badgeSayi>0 && <span style={{ position:"absolute", top:-4, right:-4, background:"#a78bfa", color:"#fff", width:13, height:13, borderRadius:7, fontSize:7, fontWeight:800, display:"flex", alignItems:"center", justifyContent:"center" }}>{badgeSayi}</span>}
                 </button>
@@ -14812,7 +14873,7 @@ function Atolye({ onSirketDegis }) {
           const dBtn = { ...vBtn, marginLeft:0, padding:"7px 13px" };
           return (
           <div style={{ animation:"fadein .3s", maxWidth:1280, margin:"0 auto" }}>
-            <style>{`.vit-t tbody tr:last-child td{border-bottom:none}.vit-t tbody tr:hover td{background:${T.btnBg}}`}</style>
+            <style>{`.vit-t tbody tr:last-child td{border-bottom:none}.vit-t tbody tr:hover td{background:${T.btnBg}}.vm-cards,.vm-back{display:none}@media(max-width:700px){.vm-tablo{display:none}.vm-cards{display:block}.vm-stat{display:grid!important;grid-template-columns:1fr 1fr;gap:8px!important}.vm-stat>*{min-width:0!important}.vm-sek{flex-wrap:nowrap!important;overflow-x:auto}.vm-sek button{white-space:nowrap}.vm-edit{display:none!important}.vm-edit.ac{display:block!important;position:fixed;left:0;right:0;bottom:0;width:auto!important;max-height:88vh;overflow:auto;z-index:960;border-radius:18px 18px 0 0!important;flex:none!important;box-shadow:0 -12px 32px rgba(0,0,0,.35);box-sizing:border-box}.vm-back{display:block;position:fixed;inset:0;z-index:955;background:rgba(0,0,0,.45)}}`}</style>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-end", flexWrap:"wrap", gap:12 }}>
               <div>
                 <div style={{ fontSize:26, fontWeight:700, color:T.text, letterSpacing:-0.5 }}>Müşteriler</div>
@@ -14820,7 +14881,7 @@ function Atolye({ onSirketDegis }) {
               </div>
               <button onClick={()=>{ setVitSek("musteri"); setEditMusteri({ad:"", yeniAd:"", yeni:true}); }} style={{ ...vBtnP, marginLeft:0, padding:"9px 18px", fontSize:13, marginBottom:20 }}>Müşteri ekle</button>
             </div>
-            <div style={{ display:"flex", gap:2, flexWrap:"wrap", borderBottom:"1px solid "+T.border, marginBottom:22 }}>
+            <div className="vm-sek" style={{ display:"flex", gap:2, flexWrap:"wrap", borderBottom:"1px solid "+T.border, marginBottom:22 }}>
               {SEKV.map(([k,y,n]) => (
                 <button key={k} onClick={()=>setVitSek(k)} style={{ background:"transparent", border:"none", borderBottom:"2px solid "+(vitSek===k?T.text:"transparent"), marginBottom:-1, padding:"10px 16px", fontSize:13, fontWeight: vitSek===k?700:500, color: vitSek===k?T.text:T.sub, cursor:"pointer" }}>{y}<span style={{ color:T.sub, fontWeight:500, marginLeft:6, fontSize:12 }}>{n}</span></button>
               ))}
@@ -14829,7 +14890,7 @@ function Atolye({ onSirketDegis }) {
             {/* MÜŞTERİLER */}
             {vitSek==="musteri" && (
               <div>
-                <div style={{ display:"flex", gap:14, flexWrap:"wrap", marginBottom:20 }}>
+                <div className="vm-stat" style={{ display:"flex", gap:14, flexWrap:"wrap", marginBottom:20 }}>
                   {vKutu("Müşteri", musListe.length)}
                   {vKutu("Açık koleksiyon", acikKolSay + " / " + kollar.length)}
                   {vKutu("Toplam giriş", topGiris)}
@@ -14844,7 +14905,7 @@ function Atolye({ onSirketDegis }) {
                         <button onClick={()=>vitrinOzetYukle()} style={{ ...vBtn, marginLeft:0 }}>↻ Analizi yenile</button>
                       </div>
                     </div>
-                    <div style={{ overflowX:"auto" }}>
+                    <div className="vm-tablo" style={{ overflowX:"auto" }}>
                       <table className="vit-t" style={{ width:"100%", borderCollapse:"collapse", minWidth:620 }}>
                         <thead><tr><th style={vTh}>Müşteri</th><th style={vTh}>Koleksiyon</th><th style={vTh}>Aktivite</th><th style={vTh}>Cihaz</th><th style={vTh}></th></tr></thead>
                         <tbody>
@@ -14878,7 +14939,7 @@ function Atolye({ onSirketDegis }) {
                                     const cl = vitrinCihazlar[kod] || [], en = vitrinEngeller[kod] || [];
                                     if (cl.length === 0 && en.length === 0) return <span style={{ color:T.sub }}>Tanımsız</span>;
                                     return (<div style={{ display:"flex", flexDirection:"column", gap:4, alignItems:"flex-start" }}>
-                                      {cl.length > 0 && vPill(cl.length >= 2 ? "#f59e0b" : "#10b981", cl.length + " / 2 cihaz", { title: cl.map(c => c.cihaz_bilgi + " — ilk giriş: " + new Date(c.ilk_zaman).toLocaleDateString("tr-TR")).join("\n"), style:{ cursor:"help" } })}
+                                      {cl.length > 0 && vPill(cl.length >= 5 ? "#f59e0b" : "#10b981", cl.length + " / 5 cihaz", { title: cl.map(c => c.cihaz_bilgi + " — ilk giriş: " + new Date(c.ilk_zaman).toLocaleDateString("tr-TR")).join("\n"), style:{ cursor:"help" } })}
                                       {en.length > 0 && vPill("#ef4444", en.length + " engellenen giriş", { title: en.slice(0,5).map(c => (c.cihaz_bilgi || "Bilinmeyen cihaz") + " — " + new Date(c.zaman).toLocaleString("tr-TR",{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"})).join("\n"), style:{ cursor:"help" } })}
                                     </div>);
                                   })()}
@@ -14892,9 +14953,45 @@ function Atolye({ onSirketDegis }) {
                         </tbody>
                       </table>
                     </div>
+                    <div className="vm-cards" style={{ padding:"0 12px 12px" }}>
+                      {aramaListe.length===0 && <div style={{ color:T.sub, textAlign:"center", padding:24, fontSize:13 }}>{Object.keys(musteriler).length===0?"Henüz müşteri kaydı yok.":"Eşleşen müşteri yok."}</div>}
+                      {aramaListe.map(([ad,kod]) => {
+                        const oz = vitrinOzet[kod] || null;
+                        const cevrimici = vitrinCevrimici[kod] || null;
+                        const acikSayi = kolAcik(kod);
+                        const cl = vitrinCihazlar[kod] || [], en = vitrinEngeller[kod] || [];
+                        return (
+                          <div key={kod} onClick={()=>setEditMusteri({ ad, yeniAd:ad, yeniTel:musteriTel[ad]||"" })} style={{ background:T.bg2||T.card, border:"1px solid "+T.border, borderRadius:14, padding:"11px 12px", marginTop:8, cursor:"pointer" }}>
+                            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:8 }}>
+                              <div style={{ minWidth:0 }}>
+                                <span style={{ display:"inline-block", fontSize:10, fontWeight:700, color:T.sub, border:"1px solid "+T.border, borderRadius:6, padding:"1px 6px", marginRight:7 }}>{kod}</span>
+                                <span style={{ fontWeight:700, fontSize:14 }}>{ad}</span>
+                                <div style={{ fontSize:11, color:T.sub, marginTop:3 }}>{musteriTel[ad] || "telefon yok"}</div>
+                              </div>
+                              <button onClick={e=>{ e.stopPropagation(); navigator.clipboard?.writeText(window.location.origin + "?vitrin=" + kod); toastGoster("ok","🛍 "+ad+" linki kopyalandı"); }} style={{ ...vBtn, flex:"0 0 auto" }}>Linki kopyala</button>
+                            </div>
+                            <div style={{ display:"flex", gap:10, alignItems:"center", flexWrap:"wrap", marginTop:8, fontSize:12 }}>
+                              <span onClick={e=>{ e.stopPropagation(); setMusKolModal(kod); }} style={{ cursor:"pointer" }}>
+                                {acikSayi>0 ? <span style={{ fontWeight:700, borderBottom:"1px dashed "+T.sub }}>{acikSayi} koleksiyon</span> : vPill("#ef4444","Atanmamış")}
+                              </span>
+                              {oz === null ? null : oz.giris > 0
+                                ? <span style={{ color:T.sub }}>{oz.giris} giriş · {oz.model} model · son {oz.son ? new Date(oz.son).toLocaleDateString("tr-TR") : "—"}</span>
+                                : <span style={{ color:T.sub }}>Henüz vitrine girmedi</span>}
+                            </div>
+                            <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginTop:7 }}>
+                              {cevrimici && vPill("#10b981", "Şu an vitrinde · " + (cevrimici.dakika < 1 ? "yeni girdi" : cevrimici.dakika + " dk"))}
+                              {cl.length > 0 && vPill(cl.length >= 5 ? "#f59e0b" : "#10b981", cl.length + " / 5 cihaz")}
+                              {en.length > 0 && vPill("#ef4444", en.length + " engellenen giriş")}
+                              {cl.length === 0 && en.length === 0 && <span style={{ fontSize:11, color:T.sub }}>Cihaz tanımsız</span>}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
 
-                  <div style={{ background:T.card, border:"1px solid "+T.border, borderRadius:14, flex:"1 1 320px", minWidth:0, padding:20 }}>
+                  {editMusteri && <div className="vm-back" onClick={()=>setEditMusteri(null)}/>}
+                  <div className={"vm-edit"+(editMusteri?" ac":"")} style={{ background:T.card, border:"1px solid "+T.border, borderRadius:14, flex:"1 1 320px", minWidth:0, padding:20 }}>
                     {!editMusteri && <div style={{ fontSize:13, color:T.sub, lineHeight:1.6 }}>Düzenlemek için soldaki listeden bir müşteri seçin ya da <b>Müşteri ekle</b>'ye basın.</div>}
                     {yeniMod && (<div>
                       <div style={{ fontSize:15, fontWeight:700, color:T.text }}>Yeni müşteri</div>
@@ -14935,10 +15032,10 @@ function Atolye({ onSirketDegis }) {
                       </div>
                       <div style={{ borderTop:"1px solid "+T.border, margin:"0 0 12px", paddingTop:14 }}>
                         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
-                          <div style={{ fontSize:12, color:T.sub }}>Linke tanımlı cihazlar ({(vitrinCihazlar[secKod]||[]).length} / 2)</div>
+                          <div style={{ fontSize:12, color:T.sub }}>Linke tanımlı cihazlar ({(vitrinCihazlar[secKod]||[]).length} / 5)</div>
                           {((vitrinCihazlar[secKod]||[]).length>0 || (vitrinEngeller[secKod]||[]).length>0) && <button onClick={()=>cihazlariSifirla(secKod, secAd)} style={{ ...dBtn, padding:"4px 10px", fontSize:11 }}>Tümünü sıfırla</button>}
                         </div>
-                        {(vitrinCihazlar[secKod]||[]).length===0 && <div style={{ fontSize:12, color:T.sub, lineHeight:1.5 }}>Henüz cihaz tanımlı değil. Linki ilk açan 2 cihaz tanımlanır; üçüncü cihaz giremez.</div>}
+                        {(vitrinCihazlar[secKod]||[]).length===0 && <div style={{ fontSize:12, color:T.sub, lineHeight:1.5 }}>Henüz cihaz tanımlı değil. Linki ilk açan 5 cihaz tanımlanır; altıncı cihaz giremez.</div>}
                         {(vitrinCihazlar[secKod]||[]).map(c => (
                           <div key={c.id} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:8, padding:"8px 0", borderTop:"1px solid "+T.border }}>
                             <div style={{ minWidth:0 }}>
@@ -15156,7 +15253,7 @@ function Atolye({ onSirketDegis }) {
                 </div>
                 <span/>
               </div>
-              {<RpNav T={T} aktif={kasaSayfa==="g_ab"||kasaSayfa==="g_stok"||kasaSayfa==="g_genel"||kasaSayfa==="raporlar"||kasaSayfa==="karlilik" ? kasaSayfa : "g_genel"} onSec={setKasaSayfa} sekmeler={[{id:"g_genel",l:"Genel Bakış"},{id:"g_stok",l:"Stok"},{id:"g_ab",l:"Alacak & Borç"},{id:"raporlar",l:"Raporlar"},...(AKTIF_SIRKET_ONEK==="bsp2_"?[]:[{id:"karlilik",l:"🔒 Karlılık"}])]}/>}
+              {<RpNav T={T} aktif={kasaSayfa==="g_ab"||kasaSayfa==="g_muh"||kasaSayfa==="g_stok"||kasaSayfa==="g_genel"||kasaSayfa==="raporlar"||kasaSayfa==="karlilik" ? kasaSayfa : "g_genel"} onSec={setKasaSayfa} sekmeler={[{id:"g_genel",l:"Genel Bakış"},{id:"g_stok",l:"Stok"},{id:"g_ab",l:"Alacak & Borç"},{id:"g_muh",l:"Muhasebe"},{id:"raporlar",l:"Raporlar"},...(AKTIF_SIRKET_ONEK==="bsp2_"?[]:[{id:"karlilik",l:"🔒 Karlılık"}])]}/>}
 
               {/* ══ ÖZET ══ */}
               {kasaSayfa==="ozet" && (
@@ -15825,6 +15922,8 @@ function Atolye({ onSirketDegis }) {
               {kasaSayfa==="g_ab" && abSub==="musteri" && <KasaMusteriler msk={AKTIF_SIRKET_ONEK===""} T={T} GH={GH} BG={BG} RD={RD} musBakiye={musBakiye} kasa={kasa} svKasa={svKasa} kasaModalAc={kasaModalAc}/>}
               {kasaSayfa==="raporlar" && <RpSeg T={T} aktif={rapSub} onSec={setRapSub} secenekler={[{id:"yukle",l:"Yükleme & kapsam"},{id:"bilanco",l:"İç bilanço"}]}/>}
               {kasaSayfa==="raporlar" && rapSub==="yukle" && <RaporlarSayfasi T={T} GH={GH} RD={RD} setRhinoMizan={setRhinoMizan}/>}
+              {kasaSayfa==="g_muh" && AKTIF_SIRKET_ONEK!=="" && <MuhasebeSayfa T={T} GH={GH} usdTry={altinSon?.usdTry || null} />}
+              {kasaSayfa==="g_muh" && AKTIF_SIRKET_ONEK==="" && <MskMuhasebeSayfa T={T} GH={GH} />}
               {kasaSayfa==="karlilik" && <RpKapi T={T} GH={GH}><RaporKarlilik T={T} GH={GH}/></RpKapi>}
 
               {/* ══ MODALLAR ══ */}
