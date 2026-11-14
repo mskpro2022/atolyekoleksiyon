@@ -18,7 +18,7 @@ async function atolyeAuthGiris() {
 const kullaniciEposta = (u) => String(u||"").trim().toLowerCase().replace(/[^a-z0-9._-]/g,"") + "@atolyekoleksiyon.internal";
 const SAYFA_LISTESI = [["koleksiyonlar","Koleksiyonlar"],["modeller","Modeller"],["konfirmasyon","Konfirmasyon"],["siparisler","Siparişler"],["musteriler","Müşteriler"],["kasa","Kasa & Muhasebe"],["personel","Personel"],["analiz","Keşfet"],["ayarlar","Ayarlar"]];
 const KESFET_LISTESI = [["genel","Genel"],["uretim","Üretim"],["musteri","Müşteri"],["modeller","Modeller"],["vitrin","Vitrin"],["iade","İade"],["karlilik","Karlılık raporu"]];
-const HASSAS_LISTESI = [["karlilik","Karlılık / kâr rakamları (Keşfet)"],["bsppersonel","BSP Personel — şifre sorulmasın"]];
+const HASSAS_LISTESI = [["karlilik","Karlılık / kâr rakamları (Keşfet)"],["bsppersonel","BSP Personel — şifre sorulmasın"],["kasaislem","MSK Kasa işlemleri — satış, iade, tahsilat, ödeme girişi (şifre sorulmaz)"],["ozsermaye","MSK Net durum, öz sermaye ve bilanço"]];
 const SAYFA_ESLE = { iadeler:"analiz", radar:"analiz", vitrin:"koleksiyonlar", muhasebe:"kasa" };
 let AKTIF_KULLANICI = null; // Root her render'da günceller; admin = her yer açık
 function izinSayfa(id) { const k = AKTIF_KULLANICI; if (!k || k.rol === "admin") return true; if (k.rol === "usta") return id === "ustatakip"; if (id === "ustatakip") return false; return (k.sayfalar||[]).includes(SAYFA_ESLE[id] || id); }
@@ -26,6 +26,8 @@ function izinHassas(id) { const k = AKTIF_KULLANICI; if (!k || k.rol === "admin"
 function izinKesfet(id) { const k = AKTIF_KULLANICI; if (!k || k.rol === "admin") return true; if (k.rol === "usta") return false; if (id === "karlilik" && !izinHassas("karlilik")) return false; return (k.kesfet||[]).includes(id); }
 function ilkIzinliSayfa() { const k = AKTIF_KULLANICI; if (k && k.rol === "usta") return "ustatakip"; for (const [id] of SAYFA_LISTESI) if (izinSayfa(id)) return id; return "koleksiyonlar"; }
 const adminOturum = () => !!(AKTIF_KULLANICI && AKTIF_KULLANICI.rol === "admin"); // admin: Karlılık/Muhasebe/Personel şifresi sorulmaz (sunucu da hesabı tanır)
+// MSK muhasebe RPC'leri: admin ya da "kasaislem" izni olan kullanıcıya şifre sorulmaz (sunucu hesabı tanır)
+const mskMuhOturum = () => adminOturum() || !!(AKTIF_SIRKET_ONEK === "" && AKTIF_KULLANICI && AKTIF_KULLANICI.rol === "kullanici" && (AKTIF_KULLANICI.hassas || []).includes("kasaislem"));
 // ═══ EKİP ETKİNLİĞİ — giriş / sayfa / aktif dakika kaydı (sadece admin raporda görür) ═══
 let AKT_SAYFA = "", AKT_SON_ETKI = Date.now(), AKT_ONIZLEME = false;
 function aktiviteYaz(tip, sayfa) {
@@ -3144,7 +3146,7 @@ function MskIslemEkrani({ T, rpc, st, oz, urunler, onKayit, YESIL, KIRMIZI, TURU
 
 function MskMuhasebeSayfa({ T, GH, disSek, onDisSek, menuGizle }) {
   const KIRMIZI = "#d9675d", YESIL = "#6abf8f";
-  const [sifre, setSifre] = useState(() => adminOturum() ? "admin-oturumu" : ""); const [giris, setGiris] = useState(""); const [hata, setHata] = useState(""); const [kontrol, setKontrol] = useState(false);
+  const [sifre, setSifre] = useState(() => mskMuhOturum() ? "admin-oturumu" : ""); const [giris, setGiris] = useState(""); const [hata, setHata] = useState(""); const [kontrol, setKontrol] = useState(false);
   const [sek0, setSek0] = useState(disSek || "konum"); const [bilgi, setBilgi] = useState("");
   const sek = disSek || sek0; const setSek = (k) => { setSek0(k); if (onDisSek) onDisSek(k); }; // sol menüden (Kasa & Muhasebe) yönetilebilir
   const [oz, setOz] = useState(null); const [tarih, setTarih] = useState("");
@@ -4520,7 +4522,7 @@ const persKidem = (bas, bit) => {
 // Personel ödemesi → MSK muhasebe fişi için şifreli RPC çağrısı (şifre oturum boyunca bellekte tutulur)
 let MSK_PERS_SIFRE = "";
 async function mskPersRpc(ad, args = {}) {
-  if (!MSK_PERS_SIFRE && adminOturum()) MSK_PERS_SIFRE = "admin-oturumu"; // sunucu admin oturumunu tanır
+  if (!MSK_PERS_SIFRE && mskMuhOturum()) MSK_PERS_SIFRE = "admin-oturumu"; // sunucu admin oturumunu tanır
   if (!MSK_PERS_SIFRE) {
     const g = window.prompt("Muhasebe (Karlılık) şifresi:"); if (!g) throw new Error("Şifre girilmedi");
     const { data } = await supabase.rpc("muh_dogrula", { p_sifre: g, p_sirket: "MSK" });
@@ -11623,8 +11625,8 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
   });
   setIscilikStandart(kasa.iscilikStandart); // genel ayar-standart işçilik (render sırasında senkron — kart/form hesapları aynı değeri görür)
   const [stdIscGirdi, setStdIscGirdi] = useState(null); // Ayarlar: 10K standart işçilik giriş kutusu (null = kayıtlı değeri göster)
-  const [kasaSayfa, setKasaSayfa] = useState("g_genel");
-  const [mskMuhSek, setMskMuhSek] = useState("konum"); // MSK Kasa & Muhasebe sol menüsü → muhasebe alt ekranı
+  const [kasaSayfa, setKasaSayfa] = useState(() => (AKTIF_SIRKET_ONEK==="" && !izinHassas("ozsermaye")) ? (izinHassas("kasaislem") ? "g_muh" : "g_ab") : "g_genel"); // net durumu göremeyen kullanıcı işlem/bakiye ekranında açılır
+  const [mskMuhSek, setMskMuhSek] = useState(() => (AKTIF_SIRKET_ONEK==="" && !adminOturum() && izinHassas("kasaislem")) ? "islem" : "konum"); // MSK Kasa & Muhasebe sol menüsü → muhasebe alt ekranı
   const [abSub, setAbSub] = useState("musteri");
   const [stokSub, setStokSub] = useState(AKTIF_SIRKET_ONEK==="" ? "altin" : "oz");
   const [rapSub, setRapSub] = useState("yukle");
@@ -16016,22 +16018,28 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
           const KSEC  = { fontSize:12, fontWeight:700, color:GOLD, marginBottom:10, letterSpacing:".04em" };
           const KIN   = { ...IS, padding:"5px 8px", fontSize:12, marginBottom:6, width:"100%" };
 
+          // MSK: net durum / öz sermaye / bilanço ekranları "ozsermaye" izni ister, karlılık "karlilik" izni ister
+          const kmGizli = AKTIF_SIRKET_ONEK==="" && ((!izinHassas("ozsermaye") && (kasaSayfa==="g_genel" || kasaSayfa==="ozet" || kasaSayfa==="panel" || kasaSayfa==="bilanco" || kasaSayfa==="raporlar" || (kasaSayfa==="g_stok" && stokSub==="oz"))) || (!izinHassas("karlilik") && kasaSayfa==="karlilik"));
           return (
             <div className={AKTIF_SIRKET_ONEK==="" ? "km-root" : ""} style={{ animation:"fadein .3s" }}>
               {AKTIF_SIRKET_ONEK==="" && (() => {
                 // ═══ MSK · Kasa & Muhasebe sol menüsü (iskelet) — mevcut ekranları tek çatı altında toplar ═══
                 const git = (ks, sub) => { setKasaSayfa(ks); if (ks==="g_stok" && sub) setStokSub(sub); if (ks==="g_ab" && sub) setAbSub(sub); if (ks==="raporlar" && sub) setRapSub(sub); if (ks==="g_muh" && sub) setMskMuhSek(sub); };
                 const aktif = kasaSayfa==="g_stok" ? "g_stok:"+stokSub : kasaSayfa==="g_ab" ? "g_ab:"+abSub : kasaSayfa==="raporlar" ? "raporlar:"+rapSub : kasaSayfa==="g_muh" ? "g_muh:"+mskMuhSek : kasaSayfa;
-                const GR = [
-                  ["", [["Genel Bakış","g_genel"],["Aylık Raporlar","ayrapor"]]],
+                const ozG = izinHassas("ozsermaye"), karG = izinHassas("karlilik"), isG = izinHassas("kasaislem");
+                const GR0 = [
+                  ["", [["Genel Bakış","g_genel",null,"oz"],["Aylık Raporlar","ayrapor"]]],
                   ["CARİLER", [["Cari Hesaplar","g_muh","cariler"],["Müşteri Bakiyeleri","g_ab","musteri"],["Dökümcü","g_ab","dokumcu"],["Satıcılar","g_ab","muh"],["Ekstre & Mutabakat"]]],
                   ["KASA & BANKA", [["Nakit Hareketleri","g_muh","nakit"],["Hesaplar"]]],
                   ["STOK & ÜRETİM", [["Konum Bakiyeleri","g_muh","konum"],["Tezgah Hareketleri","g_muh","hareket"],["Altın & Gümüş Stok","g_stok","altin"],["Sayım & Stok Kayıtları","g_stok","kayit"],["Fason Takibi"]]],
                   ["GİDERLER", [["Gider Kayıtları","g_muh","giderler"]]],
-                  ["RAPORLAR", [["İç Bilanço","raporlar","bilanco"],["Öz Sermaye","g_stok","oz"],["Karlılık","karlilik"],["Mizan"]]],
-                  ["VERİ", [["Rhino'dan Aktar","g_muh","aktar"],["Mizan Yükleme & Kapsam","raporlar","yukle"],["Hesap Planı"]]],
+                  ["RAPORLAR", [["İç Bilanço","raporlar","bilanco","oz"],["Öz Sermaye","g_stok","oz","oz"],["Karlılık","karlilik",null,"kar"],["Mizan"]]],
+                  ["VERİ", [["Rhino'dan Aktar","g_muh","aktar"],["Mizan Yükleme & Kapsam","raporlar","yukle","oz"],["Hesap Planı"]]],
                   ["İŞLEMLER", [["Yeni İşlem","g_muh","islem"],["Fiş Listesi"]]],
                 ];
+                // izne göre süz: "oz" = net durum/öz sermaye/bilanço, "kar" = karlılık. Kasa personelinde İşlemler en üste gelir.
+                let GR = GR0.map(([g, its]) => [g, its.filter(x => x[3]==="oz" ? ozG : x[3]==="kar" ? karG : true)]).filter(([g, its]) => its.length);
+                if (isG && !adminOturum()) GR = [GR[0], ...GR.filter(x => x[0]==="İŞLEMLER"), ...GR.slice(1).filter(x => x[0]!=="İŞLEMLER")];
                 return (
                   <nav className="km-side">
                     <style>{`.km-side{margin-bottom:14px}.km-bas{font-size:20px;font-weight:700;color:${T.text};letter-spacing:-.3px}.km-alt{font-size:12px;color:${T.sub};margin:2px 0 12px}
@@ -16044,7 +16052,7 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
 @media(max-width:900px){.km-list{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;padding-bottom:4px;align-items:center}.km-list::-webkit-scrollbar{display:none}.km-gr{flex:none;padding:0 2px 0 10px;font-size:9.5px}.km-it{flex:none;width:auto;white-space:nowrap;border:1px solid ${T.border};border-radius:99px;padding:7px 13px;font-size:12.5px}.km-it.on{box-shadow:none;border-color:${T.text}}.km-it.yk{display:none}.km-yeni{width:auto;display:inline-block;margin-bottom:10px}}`}</style>
                     <div className="km-bas">Kasa & Muhasebe</div>
                     <div className="km-alt">MSK · stok, cari, kasa ve raporlar</div>
-                    <button className="km-yeni" onClick={()=>git("ayrapor")}>↑ Rapor Yükle</button>
+                    {isG && !adminOturum() ? <button className="km-yeni" onClick={()=>git("g_muh","islem")}>+ Yeni İşlem</button> : <button className="km-yeni" onClick={()=>git("ayrapor")}>↑ Rapor Yükle</button>}
                     <div className="km-list">
                       {GR.map(([g, its]) => (<Fragment key={g || "ana"}>
                         {g && <div className="km-gr">{g}</div>}
@@ -16054,6 +16062,7 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
                     </div>
                   </nav>);
               })()}
+              {kmGizli && <div style={{ padding:"40px 20px", textAlign:"center", color:T.sub, fontSize:14 }}>Bu bölümü görme yetkiniz yok. Soldaki menüden başka bir bölüm seçin.</div>}
               {/* Başlık + alt sekmeler */}
               <div style={{ display: AKTIF_SIRKET_ONEK==="" ? "none" : "flex", justifyContent:"space-between", alignItems:"center", marginBottom:12, flexWrap:"wrap", gap:6 }}>
                 <div>
@@ -16065,7 +16074,7 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
               {AKTIF_SIRKET_ONEK!=="" && <RpNav T={T} aktif={kasaSayfa==="g_ab"||kasaSayfa==="g_muh"||kasaSayfa==="g_stok"||kasaSayfa==="g_genel"||kasaSayfa==="raporlar"||kasaSayfa==="karlilik" ? kasaSayfa : "g_genel"} onSec={setKasaSayfa} sekmeler={[{id:"g_genel",l:"Genel Bakış"},{id:"g_stok",l:"Stok"},{id:"g_ab",l:"Alacak & Borç"},{id:"g_muh",l:"Muhasebe"},{id:"raporlar",l:"Raporlar"},...(AKTIF_SIRKET_ONEK==="bsp2_"?[]:[{id:"karlilik",l:"🔒 Karlılık"}])]}/>}
 
               {/* ══ ÖZET ══ */}
-              {kasaSayfa==="ozet" && (
+              {kasaSayfa==="ozet" && !kmGizli && (
                 <div>
                   {/* Öz Sermaye */}
                   <div style={KCARD}>
@@ -16606,7 +16615,7 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
               )}
 
               {/* ══ BİLANÇO ══ */}
-              {(kasaSayfa==="bilanco" || (kasaSayfa==="raporlar" && rapSub==="bilanco")) && (() => {
+              {(kasaSayfa==="bilanco" || (kasaSayfa==="raporlar" && rapSub==="bilanco")) && !kmGizli && (() => {
                 // AKTİF
                 const topAktif = hamAltinGram + uretimAltin + uretimTas + satilmamisAltin + satilmamisTas + iadeTas + hurdaAltin + hurdaTas + hazirUrunGram + serbestGram;
                 const topAlacak = Object.values(musBakiye).reduce((s,d)=>s+Math.max(0,d.borc-d.odenen),0);
@@ -16718,22 +16727,22 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
 
               {/* ══ RAPORLAR / PANEL / KARLILIK ══ */}
               <DetayHost T={T}/>
-              {kasaSayfa==="panel" && <RaporPanel T={T} GH={GH} onRapor={()=>setKasaSayfa("raporlar")}/>}
-              {kasaSayfa==="g_genel" && <KasaGenel T={T} GH={GH} atolye={AKTIF_SIRKET_ONEK==="" ? (()=>{ const tum=[...(kasa.atolyeKasa||[])].sort((x,y)=>(y.tarih||0)-(x.tarih||0)); return { son:tum[0]||null, tum, ham:hamAltinGram, hazir:hazirUrunGram+serbestGram }; })() : null} ic={{ alacak:Object.values(musBakiye).reduce((t,d)=>t+Math.max(0,d.borc-d.odenen),0), borc:Math.max(0,dokumBorc), stok:toplamHas, musteriler:Object.entries(musBakiye).map(([ad,d])=>({ad,bakiye:d.borc-d.odenen})).filter(x=>x.bakiye>0.001).sort((a,b)=>b.bakiye-a.bakiye) }} onGit={(h)=>setKasaSayfa(h==="ab"?"g_ab":h==="stok"?"g_stok":"raporlar")}/>}
+              {kasaSayfa==="panel" && !kmGizli && <RaporPanel T={T} GH={GH} onRapor={()=>setKasaSayfa("raporlar")}/>}
+              {kasaSayfa==="g_genel" && !kmGizli && <KasaGenel T={T} GH={GH} atolye={AKTIF_SIRKET_ONEK==="" ? (()=>{ const tum=[...(kasa.atolyeKasa||[])].sort((x,y)=>(y.tarih||0)-(x.tarih||0)); return { son:tum[0]||null, tum, ham:hamAltinGram, hazir:hazirUrunGram+serbestGram }; })() : null} ic={{ alacak:Object.values(musBakiye).reduce((t,d)=>t+Math.max(0,d.borc-d.odenen),0), borc:Math.max(0,dokumBorc), stok:toplamHas, musteriler:Object.entries(musBakiye).map(([ad,d])=>({ad,bakiye:d.borc-d.odenen})).filter(x=>x.bakiye>0.001).sort((a,b)=>b.bakiye-a.bakiye) }} onGit={(h)=>setKasaSayfa(h==="ab"?"g_ab":h==="stok"?"g_stok":"raporlar")}/>}
               {kasaSayfa==="g_stok" && stokSub==="altin" && AKTIF_SIRKET_ONEK==="" && <ManuelStokKarti T={T} veri={{ tum:[...(kasa.atolyeKasa||[])].sort((x,y)=>(y.tarih||0)-(x.tarih||0)), ham:hamAltinGram, hazir:hazirUrunGram+serbestGram }} onGit={()=>setStokSub("kayit")}/>}
               {kasaSayfa==="g_stok" && stokSub==="altin" && AKTIF_SIRKET_ONEK==="" && <KasaStokAltin T={T} GH={GH}/>}
               {kasaSayfa==="g_ab" && AKTIF_SIRKET_ONEK!=="" && <RpSeg T={T} aktif={abSub} onSec={setAbSub} secenekler={[{id:"musteri",l:"Müşteriler"},{id:"dokumcu",l:"Dökümcü"},{id:"muh",l:"Satıcılar & Muhasebe"}]}/>}
               {kasaSayfa==="g_ab" && abSub==="dokumcu" && <KasaDokumcu T={T} GH={GH} BG={BG} RD={RD} kasa={kasa} svKasa={svKasa} kasaModalAc={kasaModalAc} dokumGiden={dokumGiden} dokumOdenen={dokumOdenen} dokumBorc={dokumBorc} fN={fN} msk={AKTIF_SIRKET_ONEK===""}/>}
-              {kasaSayfa==="g_stok" && stokSub==="oz" && <KasaOzSermaye T={T} fN={fN} fUSD={fUSD} hasGramUSD={hasGramUSD} toplamHas={toplamHas} kalemler={[
+              {kasaSayfa==="g_stok" && stokSub==="oz" && !kmGizli && <KasaOzSermaye T={T} fN={fN} fUSD={fUSD} hasGramUSD={hasGramUSD} toplamHas={toplamHas} kalemler={[
                 { l:"Ham altın", v:hamAltinGram, c:"#6b7a8f" }, { l:"Üretimdeki altın", v:uretimAltin, c:"#2f7fb8" }, { l:"Üretimdeki taş", v:uretimTas, c:"#7c6abf" },
                 { l:"Satılmamış mamul (altın)", v:satilmamisAltin, c:"#2e9d6a" }, { l:"Satılmamış mamul (taş)", v:satilmamisTas, c:"#a78bfa" }, { l:"İade taşları", v:iadeTas, c:"#c27ba0" },
                 { l:"Hurda altın", v:hurdaAltin, c:"#e8833a" }, { l:"Hurda taş", v:hurdaTas, c:"#b86a3a" }, { l:"Hazır ürün + serbest", v:hazirUrunGram+serbestGram, c:"#8f8a7c" } ]}/>}
               {kasaSayfa==="g_ab" && abSub==="musteri" && <KasaMusteriler msk={AKTIF_SIRKET_ONEK===""} T={T} GH={GH} BG={BG} RD={RD} musBakiye={musBakiye} kasa={kasa} svKasa={svKasa} kasaModalAc={kasaModalAc}/>}
               {kasaSayfa==="raporlar" && AKTIF_SIRKET_ONEK!=="" && <RpSeg T={T} aktif={rapSub} onSec={setRapSub} secenekler={[{id:"yukle",l:"Yükleme & kapsam"},{id:"bilanco",l:"İç bilanço"}]}/>}
-              {kasaSayfa==="raporlar" && rapSub==="yukle" && <RaporlarSayfasi T={T} GH={GH} RD={RD} setRhinoMizan={setRhinoMizan}/>}
+              {kasaSayfa==="raporlar" && rapSub==="yukle" && !kmGizli && <RaporlarSayfasi T={T} GH={GH} RD={RD} setRhinoMizan={setRhinoMizan}/>}
               {kasaSayfa==="g_muh" && AKTIF_SIRKET_ONEK!=="" && <MuhasebeSayfa T={T} GH={GH} usdTry={altinSon?.usdTry || null} />}
               {kasaSayfa==="g_muh" && AKTIF_SIRKET_ONEK==="" && <MskMuhasebeSayfa T={T} GH={GH} disSek={mskMuhSek} onDisSek={setMskMuhSek} menuGizle />}
-              {kasaSayfa==="karlilik" && <RpKapi T={T} GH={GH}><RaporKarlilik T={T} GH={GH}/></RpKapi>}
+              {kasaSayfa==="karlilik" && !kmGizli && <RpKapi T={T} GH={GH}><RaporKarlilik T={T} GH={GH}/></RpKapi>}
               {kasaSayfa==="ayrapor" && AKTIF_SIRKET_ONEK==="" && <MskAylikRaporlar T={T} setRhinoMizan={setRhinoMizan} />}
 
               {/* ══ MODALLAR ══ */}
