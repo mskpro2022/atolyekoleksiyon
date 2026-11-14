@@ -8704,6 +8704,9 @@ function VitrinModu({ kod, onizleme }) {
     return (typeof window !== "undefined" && window.innerWidth <= 640) ? 4 : 5;
   });
   useEffect(() => { try { localStorage.setItem("vitrin_sutun", String(vitrinSutun)); } catch {} }, [vitrinSutun]);
+  // Koleksiyon kartları ekranı: kart sütun sayısı (müşteri +/− ile büyütür/küçültür). null = otomatik
+  const [kolSutun, setKolSutun] = useState(() => { try { const k = Number(localStorage.getItem("vitrin_kol_sutun")); if (k >= 1 && k <= 6) return k; } catch {} return null; });
+  useEffect(() => { try { if (kolSutun) localStorage.setItem("vitrin_kol_sutun", String(kolSutun)); } catch {} }, [kolSutun]);
   const [vitrinIsik, setVitrinIsik] = useState(() => {
     try { return localStorage.getItem("vitrin_isik") || "gunduz"; } catch { return "gunduz"; }
   });
@@ -9452,6 +9455,12 @@ function VitrinModu({ kod, onizleme }) {
           const bosluk = 14, yan = 56;
           kolSayi = Math.max(2, Math.floor((ekranBoyut.w - yan + bosluk) / (300 + bosluk)));
         }
+        const mobilKol = ekranBoyut.w <= 640;
+        const maxKol = mobilKol ? 3 : 6;
+        const kolEf = kolSutun ? Math.min(kolSutun, maxKol) : (mobilKol ? 2 : kolSayi);
+        if (kolEf) kolSayi = kolEf;
+        const yogun = kolEf ? (mobilKol ? kolEf >= 3 : kolEf >= 5) : false;   // dar kartlar: yazılar ve rozetler küçülür
+        const genisKart = kolEf === 1;
         return (
         <div>
           {/* Katalog seçim çubuğu — koleksiyon seçilince */}
@@ -9499,7 +9508,7 @@ function VitrinModu({ kod, onizleme }) {
             const sure = Math.max(30, ogeler.length * 4);
             return (
               <div style={{ padding:"14px 0 6px" }}>
-                <style>{".vs-mq{overflow:hidden;padding:16px 0;margin:-16px 0;-webkit-mask-image:linear-gradient(90deg,transparent,#000 5%,#000 95%,transparent);mask-image:linear-gradient(90deg,transparent,#000 5%,#000 95%,transparent)}.vs-tr{display:flex;gap:12px;width:max-content;animation:vsKay linear infinite}.vs-mq:hover .vs-tr{animation-play-state:paused}@keyframes vsKay{to{transform:translateX(-50%)}}.vs-t{position:relative;width:220px;flex:none;aspect-ratio:5/4;border-radius:14px;overflow:hidden;background:#ededed;cursor:pointer;transition:transform .25s ease,box-shadow .25s ease}.vs-t:hover{transform:scale(1.14);box-shadow:0 14px 34px rgba(0,0,0,.3);z-index:3}@media(max-width:640px){.vs-t{width:150px}}@media(prefers-reduced-motion:reduce){.vs-tr{animation:none!important}.vs-mq{overflow-x:auto}}"}</style>
+                <style>{".vs-mq{overflow:hidden;padding:16px 0;margin:-16px 0;-webkit-mask-image:linear-gradient(90deg,transparent,#000 5%,#000 95%,transparent);mask-image:linear-gradient(90deg,transparent,#000 5%,#000 95%,transparent)}.vs-tr{display:flex;gap:12px;width:max-content;animation:vsKay linear infinite}.vs-mq:hover .vs-tr{animation-play-state:paused}@keyframes vsKay{to{transform:translateX(-50%)}}.vs-t{position:relative;width:220px;flex:none;aspect-ratio:5/4;border-radius:14px;overflow:hidden;background:#ededed;cursor:pointer;transition:transform .25s ease,box-shadow .25s ease}.vs-t:hover{transform:scale(1.14);box-shadow:0 14px 34px rgba(0,0,0,.3);z-index:3}@media(max-width:640px){.vs-t{width:132px}.vs-t span{font-size:9px!important;padding:2px 7px!important}}@media(prefers-reduced-motion:reduce){.vs-tr{animation:none!important}.vs-mq{overflow-x:auto}}"}</style>
                 <div style={{ padding:"0 28px 8px", display:"flex", alignItems:"baseline", gap:10 }}>
                   <span style={{ fontSize:16, fontWeight:600, color:"var(--vt1)", letterSpacing:"-0.01em" }}>Yeni modeller</span>
                   <span style={{ fontSize:12, color:"var(--vt2)" }}>{yeniler.length} yeni</span>
@@ -9524,7 +9533,7 @@ function VitrinModu({ kod, onizleme }) {
           })()}
 
           {/* KOLEKSİYON KARTLARI */}
-          <div className="vm-kart-grid vm-pad" style={{ padding:"14px 28px 8px", ...(kolSayi ? { gridTemplateColumns:"repeat("+kolSayi+", minmax(0,1fr))" } : {}), ...(satirH ? { gridAutoRows:satirH+"px" } : {}) }}>
+          <div className="vm-kart-grid vm-pad" style={{ padding:"14px 28px 8px", alignItems:"start", ...(kolSayi ? { gridTemplateColumns:"repeat("+kolSayi+", minmax(0,1fr))", gap: yogun ? 8 : 12 } : {}), ...(satirH ? { gridAutoRows:satirH+"px" } : {}) }}>
             {kollarSirali.map(k => {
               const kolModelleri = modeller.filter(m => m.ki === k.id);
               const kapaklar = kapakAl(k.id);
@@ -9536,11 +9545,11 @@ function VitrinModu({ kod, onizleme }) {
                 style={{ borderRadius:14, overflow:"hidden", background:"rgba(var(--voverlay-rgb),0.04)", cursor:"pointer", position:"relative", ...(satirH ? { display:"flex", flexDirection:"column", minHeight:0 } : {}), border: secildi ? "2px solid var(--vurgu)" : (yeniSay>0 ? "1.5px solid rgba(var(--vurgu-rgb),0.4)" : "1.5px solid transparent") }}>
                 {/* KATALOG SEÇİM BUTONU — sıra numarası */}
                 <button onClick={(e)=>{ e.stopPropagation(); setSeciliKlasorler(p => secildi ? p.filter(x=>x!==k.id) : [...p, k.id]); }}
-                  style={{ position:"absolute", top:10, left:10, zIndex:4, minWidth:30, height:30, borderRadius:"50%", background: secildi?"var(--vurgu)":"rgba(255,255,255,0.92)", border: secildi?"none":"1px solid rgba(0,0,0,0.1)", color: secildi?"#fff":"var(--vt2)", fontSize:14, fontWeight:800, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", boxShadow:"0 2px 8px rgba(0,0,0,0.25)", padding:"0 8px" }}>
+                  style={{ position:"absolute", top: yogun?5:10, left: yogun?5:10, zIndex:4, minWidth: yogun?17:30, height: yogun?17:30, borderRadius:"50%", background: secildi?"var(--vurgu)":"rgba(255,255,255,0.92)", border: secildi?"none":"1px solid rgba(0,0,0,0.1)", color: secildi?"#fff":"var(--vt2)", fontSize: yogun?10:14, fontWeight:800, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", boxShadow:"0 2px 8px rgba(0,0,0,0.25)", padding:"0 8px" }}>
                   {secildi ? (sira+1) : "+"}
                 </button>
                 {yeniSay > 0 && (
-                  <div style={{ position:"absolute", top:10, right:10, zIndex:3, background:"var(--vurgu)", color:"#1d1d1f", fontSize:11, fontWeight:700, padding:"4px 11px", borderRadius:980, boxShadow:"0 2px 8px rgba(0,0,0,0.3)" }}>{yeniSay} yeni</div>
+                  <div style={{ position:"absolute", top: yogun?6:10, right: yogun?6:10, zIndex:3, background:"var(--vurgu)", color:"#1d1d1f", fontSize: yogun?9:11, fontWeight:700, padding: yogun?"2px 7px":"4px 11px", borderRadius:980, boxShadow:"0 2px 8px rgba(0,0,0,0.3)" }}>{yeniSay} yeni</div>
                 )}
                 <div style={{ ...(satirH ? { flex:"1 1 0", minHeight:0 } : { aspectRatio:"4/3" }), background:"#f7f7f8", display:"grid", gridTemplateColumns:"1fr 1fr", gridTemplateRows:"1fr 1fr", gap:1 }}>
                   {kapaklar.length > 0 ? [0,1,2,3].map(i => (
@@ -9549,14 +9558,23 @@ function VitrinModu({ kod, onizleme }) {
                     </div>
                   )) : <div style={{ gridColumn:"1/-1", gridRow:"1/-1", display:"flex", alignItems:"center", justifyContent:"center", color:"#d2d2d7", fontSize:32 }}>◇</div>}
                 </div>
-                <div style={{ padding:"12px 14px", flexShrink:0 }}>
-                  <div style={{ fontSize:15, fontWeight:500, color:"var(--vt1)", letterSpacing:"-0.01em" }}>{urunCevir(k.ad)}</div>
-                  <div style={{ fontSize:11, color:"var(--vt2)", marginTop:3 }}>{kolModelleri.length} model</div>
+                <div style={{ padding: yogun ? "7px 9px 9px" : genisKart ? "14px 18px" : "11px 13px", flexShrink:0 }}>
+                  <div style={{ fontSize: yogun ? 12 : genisKart ? 18 : 15, fontWeight:500, color:"var(--vt1)", letterSpacing:"-0.01em", lineHeight:1.2 }}>{urunCevir(k.ad)}</div>
+                  <div style={{ fontSize: yogun ? 10 : genisKart ? 13 : 11, color:"var(--vt2)", marginTop:3 }}>{kolModelleri.length} model</div>
                 </div>
               </div>
               );
             })}
           </div>
+          {kollarSirali.length > 1 && (
+            <div style={{ position:"fixed", right:16, bottom:20, zIndex:50, display:"flex", flexDirection:"column", background:"var(--vfloatbg)", backdropFilter:"blur(12px)", WebkitBackdropFilter:"blur(12px)", borderRadius:16, boxShadow:"0 6px 24px rgba(0,0,0,0.5)", border:"1px solid rgba(var(--voverlay-rgb),0.12)", overflow:"hidden" }}>
+              <button onClick={()=>setKolSutun(Math.max(1, (kolEf || 2) - 1))} disabled={(kolEf || 2) <= 1}
+                title={ce("buyut")} style={{ width:48, height:48, border:"none", background:"transparent", color: (kolEf||2)<=1?"#48484a":"var(--vt1)", fontSize:26, fontWeight:300, cursor: (kolEf||2)<=1?"default":"pointer", display:"flex", alignItems:"center", justifyContent:"center", lineHeight:1 }}>+</button>
+              <div style={{ height:1, background:"rgba(var(--voverlay-rgb),0.12)" }}/>
+              <button onClick={()=>setKolSutun(Math.min(maxKol, (kolEf || 2) + 1))} disabled={(kolEf || 2) >= maxKol}
+                title={ce("kucult")} style={{ width:48, height:48, border:"none", background:"transparent", color: (kolEf||2)>=maxKol?"#48484a":"var(--vt1)", fontSize:26, fontWeight:300, cursor: (kolEf||2)>=maxKol?"default":"pointer", display:"flex", alignItems:"center", justifyContent:"center", lineHeight:1 }}>−</button>
+            </div>
+          )}
           {kollarSirali.length === 0 && (
             <div style={{ textAlign:"center", color:"var(--vt3)", padding:"60px 0", fontSize:14 }}>{ce("henuz_koleksiyon_yok")}</div>
           )}
@@ -10848,6 +10866,7 @@ function Atolye({ onSirketDegis }) {
   // Kur: kg USD fiyatı
   const [altinKg, setAltinKg]   = useState("");
   const [altinYukleniyor, setAltinYukleniyor] = useState(false);
+  const [altinAcik, setAltinAcik] = useState(false); // telefonda altın fiyatı paneli: kapalı = tek satır özet
   const [altinSon, setAltinSon] = useState(null); // { ons, kaynak, zaman } — son otomatik güncelleme
   const [altinHata, setAltinHata] = useState("");
   // Ons altın (XAU/USD) → 1 kg has altın dolar fiyatı = ons / 31.1035 × 1000 (Supabase "altin-ons" fonksiyonu çeker)
@@ -12620,13 +12639,14 @@ function Atolye({ onSirketDegis }) {
 
       {/* HEADER */}
       <div style={{ padding:"14px 14px 10px", background:T.header, borderBottom:"1px solid "+T.headerBorder }}>
+        <style>{".am-ozet{display:none}@media(max-width:700px){.am-nav{flex-wrap:nowrap!important;overflow-x:auto;flex:0 0 100%!important;width:100%;scrollbar-width:none;-webkit-overflow-scrolling:touch;padding:6px 6px 2px 0}.am-nav::-webkit-scrollbar{display:none}.am-nav>button{flex:none!important;font-size:12px!important;padding:7px 14px!important;border-radius:99px!important;white-space:nowrap}.am-ozet{display:flex!important;flex:1 1 100%;align-items:center;justify-content:space-between;gap:8px;cursor:pointer}.am-detay{display:flex!important;flex-wrap:wrap;gap:8px;align-items:center;flex:1 1 100%}.am-kur.kapali .am-detay{display:none!important}}"}</style>
         <div style={{ width:"100%" }}>
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:8, marginBottom:10 }}>
             <h1 style={{ margin:0, fontSize:"clamp(13px,2vw,18px)", fontWeight:700, color:GOLD, display:"flex", alignItems:"center", gap:8 }}>
               Atolye Koleksiyon Sistemi
               <button onClick={()=>{ if (onSirketDegis) onSirketDegis(); }} title="Şirket değiştir" style={{ fontSize:9, fontWeight:800, padding:"3px 10px", borderRadius:20, background: AKTIF_SIRKET_ONEK==="bsp2_" ? "rgba(167,139,250,0.15)" : "rgba(var(--vurgu-rgb),0.15)", border:"1px solid "+(AKTIF_SIRKET_ONEK==="bsp2_" ? "rgba(167,139,250,0.4)" : "rgba(var(--vurgu-rgb),0.4)"), color: AKTIF_SIRKET_ONEK==="bsp2_" ? "#a78bfa" : GOLD, whiteSpace:"nowrap", cursor:"pointer", display:"inline-flex", alignItems:"center", gap:4 }}>{AKTIF_SIRKET_ONEK==="bsp2_" ? "✨ BSP" : "💎 MSK"} <span style={{ fontSize:8, opacity:0.7 }}>⇄</span></button>
             </h1>
-            <div style={{ display:"flex", gap:3, flexWrap:"wrap" }}>
+            <div className="am-nav" style={{ display:"flex", gap:3, flexWrap:"wrap" }}>
               {["koleksiyonlar","modeller","konfirmasyon","siparisler","iadeler","musteriler","kasa","muhasebe","personel","analiz","radar","ayarlar"].map(n => {
                 let badgeSayi = 0;
                 if (n === "iadeler") {
@@ -12647,7 +12667,19 @@ function Atolye({ onSirketDegis }) {
             </div>
           </div>
           {/* KUR */}
-          <div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap", background:T.card, border:"1px solid "+T.border, borderRadius:10, padding:"7px 12px" }}>
+          <div className={"am-kur" + (altinAcik ? "" : " kapali")} style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap", background:T.card, border:"1px solid "+T.border, borderRadius:10, padding:"7px 12px" }}>
+            {/* Telefonda: tek satır özet (dokununca detay açılır). Bilgisayarda gizli */}
+            <div className="am-ozet" onClick={()=>setAltinAcik(v=>!v)}>
+              <div>
+                <div style={{ fontSize:9, fontWeight:700, color:"#8a7d64", letterSpacing:".05em" }}>{altinSon && altinSon.usdTry ? "GRAM ALTIN · 24K" : "ALTIN FİYATI"}</div>
+                <div style={{ fontSize:17, fontWeight:800, color:"var(--goldtext)", lineHeight:1.2 }}>
+                  {altinSon && altinSon.usdTry ? "₺" + Number(altinSon.ons / 31.1035 * altinSon.usdTry).toLocaleString("tr-TR", { maximumFractionDigits:0 }) : "$/kg " + (altinKg || "-")}
+                  {altinSon && <span style={{ fontSize:10, fontWeight:500, color:T.sub }}> · ons ${Number(altinSon.ons).toLocaleString("tr-TR", { maximumFractionDigits:0 })}{altinSon.usdTry ? " · $" + Number(altinSon.usdTry).toLocaleString("tr-TR", { minimumFractionDigits:2, maximumFractionDigits:2 }) : ""}</span>}
+                </div>
+              </div>
+              <span style={{ fontSize:11, color:T.sub, whiteSpace:"nowrap" }}>{altinAcik ? "Kapat ▴" : "Detay ▾"}</span>
+            </div>
+            <div className="am-detay" style={{ display:"contents" }}>
             <span style={{ fontSize:8, color:"#8a7d64", fontWeight:700 }}>ALTIN FIYATI:</span>
             <div style={{ display:"flex", alignItems:"center", gap:4 }}>
               <span style={{ fontSize:8, color:"#998a6e" }}>$/kg</span>
@@ -12745,6 +12777,7 @@ function Atolye({ onSirketDegis }) {
               </button>
               {/* DRIVE GERİ YÜKLEfixture */}
               <button onClick={() => { setYedekJson(""); setShowYedek(true); }} style={{ background:"rgba(91,155,213,0.1)", border:"1px solid rgba(91,155,213,0.2)", borderRadius:7, padding:"4px 10px", color:"#5b9bd5", fontSize:9, fontWeight:700, cursor:"pointer" }}>Geri Yukle</button>
+            </div>
             </div>
           </div>
         </div>
