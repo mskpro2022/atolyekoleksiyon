@@ -18,7 +18,7 @@ async function atolyeAuthGiris() {
 const kullaniciEposta = (u) => String(u||"").trim().toLowerCase().replace(/[^a-z0-9._-]/g,"") + "@atolyekoleksiyon.internal";
 const SAYFA_LISTESI = [["koleksiyonlar","Koleksiyonlar"],["modeller","Modeller"],["konfirmasyon","Konfirmasyon"],["siparisler","Siparişler"],["musteriler","Müşteriler"],["kasa","Kasa & Muhasebe"],["personel","Personel"],["analiz","Keşfet"],["ayarlar","Ayarlar"]];
 const KESFET_LISTESI = [["genel","Genel"],["uretim","Üretim"],["musteri","Müşteri"],["modeller","Modeller"],["vitrin","Vitrin"],["iade","İade"],["karlilik","Karlılık raporu"]];
-const HASSAS_LISTESI = [["karlilik","Karlılık / kâr rakamları (Keşfet)"]];
+const HASSAS_LISTESI = [["karlilik","Karlılık / kâr rakamları (Keşfet)"],["bsppersonel","BSP Personel — şifre sorulmasın"]];
 const SAYFA_ESLE = { iadeler:"analiz", radar:"analiz", vitrin:"koleksiyonlar", muhasebe:"kasa" };
 let AKTIF_KULLANICI = null; // Root her render'da günceller; admin = her yer açık
 function izinSayfa(id) { const k = AKTIF_KULLANICI; if (!k || k.rol === "admin") return true; if (k.rol === "usta") return id === "ustatakip"; if (id === "ustatakip") return false; return (k.sayfalar||[]).includes(SAYFA_ESLE[id] || id); }
@@ -4439,12 +4439,13 @@ function KarlilikRaporuEkrani({ T, GH, siparisler: siparislerHam, tumSip, usdTry
 }
 
 function RpKapi({ T, GH, children, baslik }) {
-  const [durum, setDurum] = useState(RP_ACIK ? "acik" : "yukleniyor");
+  const muaf = baslik === "Personel" && AKTIF_SIRKET_ONEK === "bsp2_" && izinHassas("bsppersonel");
+  const [durum, setDurum] = useState(RP_ACIK || muaf ? "acik" : "yukleniyor");
   const [kayitli, setKayitli] = useState(null);
   const [a, setA] = useState(""); const [b, setB] = useState(""); const [hata, setHata] = useState("");
   const [degistir, setDegistir] = useState(false);
   useEffect(() => {
-    if (RP_ACIK) return;
+    if (RP_ACIK || muaf) return;
     ld("v7karsifre", null).then(h => { setKayitli(h && h.hash ? h.hash : null); setDurum(h && h.hash ? "kilitli" : "kur"); });
   }, []);
   const girdi = { background:"transparent", border:"1px solid "+T.border, borderRadius:10, padding:"13px 16px", color:T.text, fontSize:15, outline:"none", width:"100%", boxSizing:"border-box", textAlign:"center", letterSpacing:2, marginBottom:8 };
@@ -11449,6 +11450,7 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
   // Kur: kg USD fiyatı
   const [altinKg, setAltinKg]   = useState("");
   const [altinYukleniyor, setAltinYukleniyor] = useState(false);
+  const [araclarAcik, setAraclarAcik] = useState(false);
   const [altinAcik, setAltinAcik] = useState(false); // telefonda altın fiyatı paneli: kapalı = tek satır özet
   const [altinSon, setAltinSon] = useState(null); // { ons, kaynak, zaman } — son otomatik güncelleme
   const [altinHata, setAltinHata] = useState("");
@@ -11618,7 +11620,7 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
   const [sipHedefAy, setSipHedefAy] = useState("");
   const [sipDrawer, setSipDrawer] = useState("");
   const [sipTab, setSipTab] = useState("kal"); // telefon: sipariş detayı sekmesi (kal / asm / ozt)
-  const [sipYeni, setSipYeni] = useState(()=>{ try { return localStorage.getItem("sipYeni")!=="0"; } catch(e) { return true; } });
+  const [sipYeni, setSipYeni] = useState(true); // "Eski görünüm" seçeneği kaldırıldı: yeni görünüm sabit (eski sayfa kodu duruyor)
   const [analizMusF,  setAnalizMusF]  = useState("");
   const [analizTarih1,setAnalizTarih1]= useState("");
   const [analizTarih2,setAnalizTarih2]= useState("");
@@ -13230,11 +13232,11 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
       )}
 
       {/* HEADER */}
-      <div style={{ padding:"14px 14px 10px", background:T.header, borderBottom:"1px solid "+T.headerBorder }}>
-        <style>{".am-ozet{display:none}@media(max-width:700px){.am-nav{flex-wrap:nowrap!important;overflow-x:auto;flex:0 0 100%!important;width:100%;scrollbar-width:none;-webkit-overflow-scrolling:touch;padding:6px 6px 2px 0}.am-nav::-webkit-scrollbar{display:none}.am-nav>button{flex:none!important;font-size:12px!important;padding:7px 14px!important;border-radius:99px!important;white-space:nowrap}.am-ozet{display:flex!important;flex:1 1 100%;align-items:center;justify-content:space-between;gap:8px;cursor:pointer}.am-detay{display:flex!important;flex-wrap:wrap;gap:8px;align-items:center;flex:1 1 100%}.am-kur.kapali .am-detay{display:none!important}}"}</style>
+      <div className="am-hd" style={{ padding:"14px 14px 10px", background:T.header, borderBottom:"1px solid "+T.headerBorder }}>
+        <style>{".am-ozet{display:none}@media(max-width:700px){.am-nav{flex-wrap:nowrap!important;overflow-x:auto;flex:0 0 100%!important;width:100%;scrollbar-width:none;-webkit-overflow-scrolling:touch;padding:6px 6px 2px 0}.am-nav::-webkit-scrollbar{display:none}.am-nav>button{flex:none!important;font-size:12px!important;padding:7px 14px!important;border-radius:99px!important;white-space:nowrap}.am-ozet{display:flex!important;flex:1 1 100%;align-items:center;justify-content:space-between;gap:8px;cursor:pointer}.am-detay{display:flex!important;flex-wrap:wrap;gap:8px;align-items:center;flex:1 1 100%}.am-kur.kapali .am-detay{display:none!important}}@media(min-width:701px){.am-hd{padding:0 28px!important}.am-row{margin:0!important;align-items:stretch!important}.am-h1{font-size:19px!important;font-weight:800!important;letter-spacing:.3px}.am-nav>.am-nb{background:transparent!important;border-color:transparent!important;border-radius:0!important;font-size:15px!important;font-weight:600!important;padding:18px 17px!important}.am-nav>.am-nb.am-on{box-shadow:inset 0 -2px 0 currentColor}.am-kur{margin:0 -28px!important;border-radius:0!important;border-width:1px 0 0 0!important;padding:7px 28px!important;min-height:38px;box-sizing:border-box;gap:6px 22px!important}.am-kur .am-gizle{display:none!important}.am-kur .am-et{font-size:13px!important;font-weight:500!important}.am-kur .am-chip{flex-direction:row!important;align-items:baseline!important;background:transparent!important;border:none!important;padding:0!important;min-width:0!important;gap:6px!important}.am-kur .am-ce{font-size:11px!important;letter-spacing:.06em!important;font-weight:600!important}.am-kur .am-cd{font-size:14px!important}.am-kur .am-ca{display:none!important}.am-kur .am-chip:first-child .am-ca{display:inline!important;font-size:11px!important}.am-kur input{background:transparent!important;border:none!important;border-bottom:1px dashed rgba(var(--vurgu-rgb),.55)!important;border-radius:0!important;width:72px!important;font-size:14px!important;padding:2px 4px!important;color:var(--goldtext)!important}.am-kur .am-has{font-size:14px!important}.am-kur .am-min{font-size:13px!important}.am-kur button{font-size:12px!important}.am-kur .am-arac{font-size:13px!important}}.am-arac-m>button{width:100%;text-align:left!important;font-size:13px!important;background:transparent!important;border:none!important;padding:10px 12px!important;border-radius:8px!important}.am-arac-m>button:hover{background:rgba(var(--vurgu-rgb),.1)!important}"}</style>
         <div style={{ width:"100%" }}>
-          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:8, marginBottom:10 }}>
-            <h1 style={{ margin:0, fontSize:"clamp(13px,2vw,18px)", fontWeight:700, color:GOLD, display:"flex", alignItems:"center", gap:8 }}>
+          <div className="am-row" style={{ display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:8, marginBottom:10 }}>
+            <h1 className="am-h1" style={{ margin:0, fontSize:"clamp(13px,2vw,18px)", fontWeight:700, color:GOLD, display:"flex", alignItems:"center", gap:8 }}>
               Atolye Koleksiyon Sistemi
               <button onClick={()=>{ if (onSirketDegis) onSirketDegis(); }} title="Şirket değiştir" style={{ fontSize:9, fontWeight:800, padding:"3px 10px", borderRadius:20, background: AKTIF_SIRKET_ONEK==="bsp2_" ? "rgba(167,139,250,0.15)" : "rgba(var(--vurgu-rgb),0.15)", border:"1px solid "+(AKTIF_SIRKET_ONEK==="bsp2_" ? "rgba(167,139,250,0.4)" : "rgba(var(--vurgu-rgb),0.4)"), color: AKTIF_SIRKET_ONEK==="bsp2_" ? "#a78bfa" : GOLD, whiteSpace:"nowrap", cursor:"pointer", display:"inline-flex", alignItems:"center", gap:4 }}>{AKTIF_SIRKET_ONEK==="bsp2_" ? "✨ BSP" : "💎 MSK"} <span style={{ fontSize:8, opacity:0.7 }}>⇄</span></button>
             </h1>
@@ -13248,7 +13250,7 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
                   });
                 }
                 return (
-                <button key={n} onClick={() => { setSayfa(n); if (n==="koleksiyonlar") { setAktifKol(null); setAcikUstKol(null); } }}
+                <button key={n} className={"am-nb" + ((sayfa===n||(n==="analiz"&&sayfa==="iadeler")) ? " am-on" : "")} onClick={() => { setSayfa(n); if (n==="koleksiyonlar") { setAktifKol(null); setAcikUstKol(null); } }}
                   style={{ ...GH, color:(sayfa===n||(n==="analiz"&&sayfa==="iadeler"))?T.gold:T.sub, background:(sayfa===n||(n==="analiz"&&sayfa==="iadeler"))?T.btnBg:"transparent", borderColor:(sayfa===n||(n==="analiz"&&sayfa==="iadeler"))?T.btnBorder:T.border, fontSize:9, padding:"5px 9px", position:"relative" }}>
                   {{"ustatakip":"Sipariş Takip","koleksiyonlar":"Koleksiyonlar","modeller":"Modeller","konfirmasyon":"Konfirmasyon","siparisler":"Siparişler","iadeler":"İadeler","musteriler":"Müşteriler","vitrin":"🛍 Vitrin","kasa":"Kasa & Muhasebe","muhasebe":"Muhasebe","personel":"Personel","analiz":"Keşfet","radar":"📡 Trend Radar","ayarlar":"Ayarlar"}[n]||n.charAt(0).toUpperCase()+n.slice(1)}
                   {n==="konfirmasyon" && konfList.length>0 && <span style={{ position:"absolute", top:-4, right:-4, background:GOLD, color:DARK, width:13, height:13, borderRadius:7, fontSize:7, fontWeight:800, display:"flex", alignItems:"center", justifyContent:"center" }}>{konfList.length}</span>}
@@ -13272,19 +13274,19 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
               <span style={{ fontSize:11, color:T.sub, whiteSpace:"nowrap" }}>{altinAcik ? "Kapat ▴" : "Detay ▾"}</span>
             </div>
             <div className="am-detay" style={{ display:"contents" }}>
-            <span style={{ fontSize:8, color:"#8a7d64", fontWeight:700 }}>ALTIN FIYATI:</span>
+            <span className="am-et am-gizle" style={{ fontSize:8, color:"#8a7d64", fontWeight:700 }}>ALTIN FIYATI:</span>
             <div style={{ display:"flex", alignItems:"center", gap:4 }}>
-              <span style={{ fontSize:8, color:"#998a6e" }}>$/kg</span>
+              <span className="am-et" style={{ fontSize:8, color:"#998a6e" }}>Altın $/kg</span>
               <input type="number" value={altinKg} onChange={e => setAltinKg(e.target.value)} placeholder="96000" style={{ ...IS, width:90, padding:"4px 7px", fontSize:12, textAlign:"center", fontWeight:700 }} />
               <button onClick={altinGuncelle} disabled={altinYukleniyor} title="Ons altın fiyatından otomatik hesapla: ons ÷ 31,1035 × 1000" style={{ background:"rgba(106,191,105,0.12)", border:"1px solid rgba(106,191,105,0.35)", borderRadius:6, padding:"4px 9px", color:"#6abf69", fontSize:10, fontWeight:700, cursor: altinYukleniyor?"default":"pointer", opacity: altinYukleniyor?0.6:1 }}>{altinYukleniyor ? "..." : "↻ Ons'tan güncelle"}</button>
               {altinSon && !altinHata && (() => {
                 const tr = (n, d) => Number(n).toLocaleString("tr-TR", { minimumFractionDigits:d, maximumFractionDigits:d });
                 const gramTL = altinSon.usdTry ? altinSon.ons / 31.1035 * altinSon.usdTry : 0;
                 const chip = (et, deger, alt, renk) => (
-                  <div key={et} style={{ display:"flex", flexDirection:"column", gap:1, background:"rgba(var(--vurgu-rgb),0.07)", border:"1px solid rgba(var(--vurgu-rgb),0.16)", borderRadius:8, padding:"3px 10px", minWidth:78 }}>
-                    <span style={{ fontSize:7, fontWeight:800, letterSpacing:".08em", color:"#998a6e" }}>{et}</span>
-                    <span style={{ fontSize:13, fontWeight:800, color:renk||"var(--goldtext)", lineHeight:1.1 }}>{deger}</span>
-                    {alt && <span style={{ fontSize:7, color:"#8a7d64" }}>{alt}</span>}
+                  <div key={et} className="am-chip" style={{ display:"flex", flexDirection:"column", gap:1, background:"rgba(var(--vurgu-rgb),0.07)", border:"1px solid rgba(var(--vurgu-rgb),0.16)", borderRadius:8, padding:"3px 10px", minWidth:78 }}>
+                    <span className="am-ce" style={{ fontSize:7, fontWeight:800, letterSpacing:".08em", color:"#998a6e" }}>{et}</span>
+                    <span className="am-cd" style={{ fontSize:13, fontWeight:800, color:renk||"var(--goldtext)", lineHeight:1.1 }}>{deger}</span>
+                    {alt && <span className="am-ca" style={{ fontSize:7, color:"#8a7d64" }}>{alt}</span>}
                   </div>
                 );
                 const saat = new Date(altinSon.zaman).toLocaleTimeString("tr-TR",{hour:"2-digit",minute:"2-digit"});
@@ -13298,13 +13300,18 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
               })()}
               {altinHata && <span style={{ fontSize:8, color:"#e85a4f", fontWeight:700 }}>{altinHata}</span>}
             </div>
-            <div style={{ display:"flex", alignItems:"center", gap:4 }}>
-              <span style={{ fontSize:8, color:"#998a6e" }}>Uretim mly/gr</span>
+            {AKTIF_SIRKET_ONEK !== "bsp2_" && <div style={{ display:"flex", alignItems:"center", gap:4 }}>
+              <span className="am-et" style={{ fontSize:8, color:"#998a6e" }}>Uretim mly/gr</span>
               <input type="number" value={mc} onChange={e => setMc(e.target.value)} placeholder="0.25" style={{ ...IS, width:65, padding:"4px 7px", fontSize:12, textAlign:"center", fontWeight:700 }} />
-            </div>
-            {altinKgUSD > 0 && <span style={{ fontSize:8, color:"#6abf69", fontWeight:700 }}>1 has gr = {fUSD(altinKgUSD/1000)}</span>}
-            {AKTIF_SIRKET_ONEK !== "bsp2_" && <span style={{ fontSize:7, color:"#e85a4f", fontWeight:600 }}>Min karlılık: {MIN_MLY} mly/gr</span>}
+            </div>}
+            {altinKgUSD > 0 && <span className="am-has" style={{ fontSize:8, color:"#6abf69", fontWeight:700 }}>1 has gr = {fUSD(altinKgUSD/1000)}</span>}
+            {AKTIF_SIRKET_ONEK !== "bsp2_" && <span className="am-min" style={{ fontSize:7, color:"#e85a4f", fontWeight:600 }}>Min karlılık: {MIN_MLY} mly/gr</span>}
             <div style={{ marginLeft:"auto", display:"flex", gap:5, flexWrap:"wrap" }}>
+              {AKTIF_KULLANICI && AKTIF_KULLANICI.rol === "admin" && (<div style={{ position:"relative" }}>
+              <button className="am-arac" onClick={()=>setAraclarAcik(v=>!v)} style={{ background:"transparent", border:"1px solid "+T.border, borderRadius:999, padding:"6px 14px", color:T.sub, fontSize:13, fontWeight:600, cursor:"pointer" }}>Araçlar ▾</button>
+              {araclarAcik && (<>
+              <div onClick={()=>setAraclarAcik(false)} style={{ position:"fixed", inset:0, zIndex:40 }} />
+              <div className="am-arac-m" onClick={()=>setAraclarAcik(false)} style={{ position:"absolute", right:0, top:"calc(100% + 6px)", zIndex:41, minWidth:230, display:"flex", flexDirection:"column", gap:2, padding:6, background:T.card, border:"1px solid "+T.border, borderRadius:12, boxShadow:"0 10px 30px rgba(0,0,0,.35)" }}>
               {/* CHATGPT — kendi hesabınla yeni sekmede açılır, şifre/API anahtarı gerekmez */}
               <button onClick={()=>window.open("https://chat.openai.com","_blank")}
                 style={{ background:"rgba(16,163,127,0.1)", border:"1px solid rgba(16,163,127,0.3)", borderRadius:8, padding:"6px 12px", color:"#10a37f", fontSize:9, fontWeight:700, cursor:"pointer" }}>
@@ -13369,6 +13376,8 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
               </button>
               {/* DRIVE GERİ YÜKLEfixture */}
               <button onClick={() => { setYedekJson(""); setShowYedek(true); }} style={{ background:"rgba(91,155,213,0.1)", border:"1px solid rgba(91,155,213,0.2)", borderRadius:7, padding:"4px 10px", color:"#5b9bd5", fontSize:9, fontWeight:700, cursor:"pointer" }}>Geri Yukle</button>
+              </div></>)}
+              </div>)}
             </div>
             </div>
           </div>
@@ -14683,7 +14692,6 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
           {(sipMusF||sipMus||sipTarih1||sipTarih2||!tumuF) && <button onClick={()=>{setSipMusF("");setSipMus("");setSipTarih1("");setSipTarih2("");setSipFiltre("tumu");}} style={{ ...RD, fontSize:12, padding:"7px 10px" }}>Temizle</button>}
           <div className="sm-only"><div style={{ fontSize:11, fontWeight:600, color:"#7a6f5a", letterSpacing:.6, marginBottom:4 }}>METAL</div>
             <div style={{ display:"flex", border:"1px solid rgba(var(--vurgu-rgb),0.3)", borderRadius:9, overflow:"hidden" }}>{[["tumu","Tümü"],["altin","🥇 Altın"],["gumus","🥈 Gümüş 925"]].map(([id,l])=><button key={id} onClick={()=>setSipMetal(id)} style={{ flex:1, background:sipMetal===id?"rgba(var(--vurgu-rgb),0.25)":"transparent", border:"none", padding:"10px 8px", color:sipMetal===id?GOLD:"#998a6e", fontSize:13, fontWeight:600, cursor:"pointer" }}>{l}</button>)}</div></div>
-          <button className="sm-only" onClick={()=>{ setSipYeni(false); try{localStorage.setItem("sipYeni","0");}catch(e){} }} style={{ ...GH, fontSize:12, padding:"10px" }}>Eski görünüm</button>
           <div className="sm-sheet-bar"><button onClick={()=>{setSipMusF("");setSipMus("");setSipTarih1("");setSipTarih2("");setSipFiltre("tumu");}} style={{ ...RD }}>Temizle</button><button onClick={()=>setSipFiltAcik(false)} style={{ ...GH, borderColor:"rgba(var(--vurgu-rgb),0.6)", color:GOLD, fontWeight:600 }}>Uygula</button></div>
           </div>
           {liste.length>0 && AKTIF_SIRKET_ONEK==="" && izinKesfet("karlilik") && <button className="sm-rapor" onClick={()=>{ setSayfa("analiz"); setKTab("karlilik"); }} style={{ background:"linear-gradient(135deg,#0a84ff,#0968cc)", border:"none", borderRadius:9, padding:"8px 12px", color:"#fff", fontSize:12, fontWeight:600, cursor:"pointer" }}>📊 Rapor</button>}
@@ -14694,7 +14702,6 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
             onAc={(sp)=>setSipDrawer(sp.id)}
             onModel={(k)=>{ const mm=modeller.find(x=>x.id===k.id)||modeller.find(x=>k.kod&&x.kod===k.kod); if (mm) openEM(mm); }} />}
           <div className="sm-seg" style={{ display:"flex", border:"1px solid rgba(var(--vurgu-rgb),0.3)", borderRadius:9, overflow:"hidden" }}>{[["aylar","📅 Aylar"],["liste","☰ Liste"]].map(([id,l])=><button key={id} onClick={()=>{ setSipGorunum(id); try{localStorage.setItem("sipGorunum",id);}catch(e){} }} style={{ background:sipGorunum===id?"rgba(var(--vurgu-rgb),0.25)":"transparent", border:"none", padding:"7px 12px", color:sipGorunum===id?GOLD:"#998a6e", fontSize:12, fontWeight:600, cursor:"pointer" }}>{l}</button>)}</div>
-          <button className="sm-metal-orj" onClick={()=>{ setSipYeni(false); try{localStorage.setItem("sipYeni","0");}catch(e){} }} style={{ ...GH, fontSize:11, padding:"7px 10px" }}>Eski görünüm</button>
         </div>
       </div>
       {siparisler.length>0 && (() => {
