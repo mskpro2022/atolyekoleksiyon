@@ -14,6 +14,18 @@ async function atolyeAuthGiris() {
     if (error) console.warn("Supabase Auth girişi başarısız:", error.message);
   } catch (e) { console.warn("Supabase Auth girişi hata:", e.message); }
 }
+// ═══ KULLANICI SİSTEMİ — her kişi kendi hesabıyla girer, görebileceği yerleri admin belirler ═══
+const kullaniciEposta = (u) => String(u||"").trim().toLowerCase().replace(/[^a-z0-9._-]/g,"") + "@atolyekoleksiyon.internal";
+const SAYFA_LISTESI = [["koleksiyonlar","Koleksiyonlar"],["modeller","Modeller"],["konfirmasyon","Konfirmasyon"],["siparisler","Siparişler"],["musteriler","Müşteriler"],["kasa","Kasa & Muhasebe"],["personel","Personel"],["analiz","Keşfet"],["ayarlar","Ayarlar"]];
+const KESFET_LISTESI = [["genel","Genel"],["uretim","Üretim"],["musteri","Müşteri"],["modeller","Modeller"],["vitrin","Vitrin"],["iade","İade"],["karlilik","Karlılık raporu"]];
+const HASSAS_LISTESI = [["karlilik","Karlılık / kâr rakamları (Keşfet)"]];
+const SAYFA_ESLE = { iadeler:"analiz", radar:"analiz", vitrin:"koleksiyonlar", muhasebe:"kasa" };
+let AKTIF_KULLANICI = null; // Root her render'da günceller; admin = her yer açık
+function izinSayfa(id) { const k = AKTIF_KULLANICI; if (!k || k.rol === "admin") return true; if (k.rol === "usta") return id === "ustatakip"; if (id === "ustatakip") return false; return (k.sayfalar||[]).includes(SAYFA_ESLE[id] || id); }
+function izinHassas(id) { const k = AKTIF_KULLANICI; if (!k || k.rol === "admin") return true; if (k.rol === "usta") return false; return (k.hassas||[]).includes(id); }
+function izinKesfet(id) { const k = AKTIF_KULLANICI; if (!k || k.rol === "admin") return true; if (k.rol === "usta") return false; if (id === "karlilik" && !izinHassas("karlilik")) return false; return (k.kesfet||[]).includes(id); }
+function ilkIzinliSayfa() { const k = AKTIF_KULLANICI; if (k && k.rol === "usta") return "ustatakip"; for (const [id] of SAYFA_LISTESI) if (izinSayfa(id)) return id; return "koleksiyonlar"; }
+async function kullaniciCikis() { try { await supabase.auth.signOut(); } catch {} try { localStorage.removeItem("atolye_oturum"); localStorage.removeItem("atolye_gecici"); sessionStorage.removeItem("atolye_gecici_ok"); } catch {} window.location.reload(); }
 // ═══ GLOBAL SIFIRLAMA — Vite'ın varsayılan #root kısıtını (max-width:1280px, padding:2rem) ezer ═══
 // Dosya yüklenirken BİR KEZ çalışır, TÜM ekranları kapsar (giriş, seçim, vitrin, ana sistem)
 if (typeof document !== "undefined" && !document.getElementById("atolye-global-reset")) {
@@ -8391,8 +8403,10 @@ function OnizlemeBox({ m, altinKgUSD, mc }) {
 }
 
 function GirisEkrani({ onGiris }) {
+  const [ad, setAd] = useState("");
   const [sifre, setSifre] = useState("");
-  const [hata, setHata] = useState(false);
+  const [hata, setHata] = useState("");
+  const [bekle, setBekle] = useState(false);
   const [hatirla, setHatirla] = useState(true);
   useEffect(() => {
     document.body.style.margin = "0";
@@ -8400,46 +8414,216 @@ function GirisEkrani({ onGiris }) {
     document.documentElement.style.margin = "0";
     document.documentElement.style.padding = "0";
   }, []);
-  const kontrol = () => {
-    const aktifSifre = localStorage.getItem("atolye_sifre") || "19671967*Mm";
-    if (sifre === aktifSifre) {
-      // "Beni Hatırla" işaretliyse 30 günlük oturum token'ı kaydet
+  const kontrol = async () => {
+    if (bekle) return;
+    if (!ad.trim() || !sifre) { setHata("Kullanıcı adı ve şifre girin"); return; }
+    setBekle(true); setHata("");
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({ email: ad.includes("@") ? ad.trim().toLowerCase() : kullaniciEposta(ad), password: sifre });
+      if (error || !data || !data.user) { setHata("Kullanıcı adı / e-posta veya şifre yanlış"); setBekle(false); return; }
+      const { data: satir } = await supabase.from("app_kullanici").select("*").eq("user_id", data.user.id).maybeSingle();
+      if (!satir || !satir.aktif) { try { await supabase.auth.signOut(); } catch {} setHata(satir ? "Bu hesap pasif" : "Bu hesap sisteme tanımlı değil"); setBekle(false); return; }
       try {
-        if (hatirla) {
-          const sonGecerlilik = Date.now() + 30 * 24 * 60 * 60 * 1000; // 30 gün
-          localStorage.setItem("atolye_oturum", String(sonGecerlilik));
-        } else {
-          localStorage.removeItem("atolye_oturum");
-        }
+        if (hatirla) { localStorage.removeItem("atolye_gecici"); }
+        else { localStorage.setItem("atolye_gecici", "1"); sessionStorage.setItem("atolye_gecici_ok", "1"); }
       } catch {}
-      onGiris();
-    }
-    else setHata(true);
+      onGiris(satir);
+    } catch (e) { setHata("Giriş yapılamadı: " + (e && e.message ? e.message : "bağlantı hatası")); }
+    setBekle(false);
   };
   // Uygulamanın gündüz/gece temasını izler (şirket seçim ekranıyla aynı mantık)
   const T = (() => {
     try { if (localStorage.getItem("atolye_tema_modu") === "manuel") { const t = localStorage.getItem("atolye_tema"); return TEMALAR[t] || TEMALAR.altin; } } catch {}
     return otoTemaHesapla();
   })();
+  const girdi = { width:"100%", background:"transparent", border:"1px solid "+(hata?(T.danger||"#e85a4f"):T.border), borderRadius:10, padding:"13px 16px", color:T.text, fontSize:15, outline:"none", boxSizing:"border-box", textAlign:"center" };
   return (
     <div style={{ minHeight:"100vh", width:"100vw", background:T.bg2, display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"'Segoe UI',Arial,sans-serif", margin:0, padding:0, boxSizing:"border-box", color:T.text }}>
       <style>{`.giris-in:focus{border-color:${T.text}!important}.giris-in::placeholder{color:${T.sub}}`}</style>
       <div style={{ textAlign:"center", maxWidth:320, width:"86%" }}>
         <div style={{ fontSize:26, fontWeight:700, letterSpacing:-0.4, color:T.text }}>Atölye Koleksiyon</div>
         <div style={{ width:40, height:2, background:T.gold, opacity:0.6, margin:"16px auto 14px" }} />
-        <div style={{ fontSize:13, color:T.sub, marginBottom:32 }}>Sisteme giriş yapın</div>
-        <input className="giris-in" type="password" value={sifre} onChange={e=>{ setSifre(e.target.value); setHata(false); }}
-          onKeyDown={e=>e.key==="Enter"&&kontrol()}
-          placeholder="Şifre" autoFocus
-          style={{ width:"100%", background:"transparent", border:"1px solid "+(hata?(T.danger||"#e85a4f"):T.border), borderRadius:10, padding:"13px 16px", color:T.text, fontSize:15, outline:"none", boxSizing:"border-box", textAlign:"center", letterSpacing:2 }}/>
-        <div style={{ height:22, marginTop:8, color:T.danger||"#e85a4f", fontSize:12 }}>{hata ? "Şifre yanlış" : ""}</div>
-        <button onClick={kontrol} style={{ width:"100%", background:T.text, border:"1px solid "+T.text, borderRadius:10, padding:"13px", color:T.bg2, fontSize:14, fontWeight:700, cursor:"pointer" }}>Giriş Yap</button>
+        <div style={{ fontSize:13, color:T.sub, marginBottom:28 }}>Sisteme giriş yapın</div>
+        <input className="giris-in" type="text" value={ad} onChange={e=>{ setAd(e.target.value); setHata(""); }}
+          onKeyDown={e=>e.key==="Enter"&&kontrol()} placeholder="Kullanıcı adı veya e-posta" autoFocus autoCapitalize="none" autoCorrect="off" spellCheck={false}
+          style={{ ...girdi, marginBottom:10 }}/>
+        <input className="giris-in" type="password" value={sifre} onChange={e=>{ setSifre(e.target.value); setHata(""); }}
+          onKeyDown={e=>e.key==="Enter"&&kontrol()} placeholder="Şifre"
+          style={{ ...girdi, letterSpacing:2 }}/>
+        <div style={{ minHeight:22, marginTop:8, color:T.danger||"#e85a4f", fontSize:12 }}>{hata}</div>
+        <button onClick={kontrol} disabled={bekle} style={{ width:"100%", background:T.text, border:"1px solid "+T.text, borderRadius:10, padding:"13px", color:T.bg2, fontSize:14, fontWeight:700, cursor:"pointer", opacity:bekle?0.6:1 }}>{bekle ? "Giriş yapılıyor…" : "Giriş Yap"}</button>
         <label style={{ display:"inline-flex", alignItems:"center", gap:8, marginTop:18, cursor:"pointer", userSelect:"none" }}>
           <input type="checkbox" checked={hatirla} onChange={e=>setHatirla(e.target.checked)}
             style={{ width:15, height:15, accentColor:T.text, cursor:"pointer", margin:0 }}/>
-          <span style={{ fontSize:12, color:T.sub }}>Beni hatırla (30 gün)</span>
+          <span style={{ fontSize:12, color:T.sub }}>Beni hatırla</span>
         </label>
       </div>
+    </div>
+  );
+}
+
+// ═══ USTA TAKİP — ustalar için sade, salt okunur sipariş takibi (fiyat/kâr/milyem yok, model kartı açılmaz) ═══
+function UstaTakip({ T, siparisler, profil }) {
+  const [asama, setAsama] = useState("hepsi");
+  const [ara, setAra] = useState("");
+  const [buyuk, setBuyuk] = useState(null);
+  const BITTI = ["tamam", "teslim"];
+  const asamalar = durumSecenekleri().filter(d => !BITTI.includes(d.id));
+  const acik = useMemo(() => (siparisler||[]).filter(s => !["red","iptal","bekliyor"].includes(s.onayDurum)).map(s => {
+    const kdm = s.kalemDurumlar || {};
+    const kl = (s.kalemler||[]).map(k => { let d = kdm[k.id] || k.durum || "baslanmadi"; if (d === "cizimde") d = "baslanmadi"; return { k, d }; }).filter(x => x.d !== "hurda");
+    const bekleyen = kl.filter(x => !BITTI.includes(x.d));
+    const topAdet = kl.reduce((a,x) => a + (x.k.adet||1), 0), bitenAdet = kl.filter(x => BITTI.includes(x.d)).reduce((a,x) => a + (x.k.adet||1), 0);
+    return { s, kl, bekleyen, topAdet, bitenAdet, pct: topAdet > 0 ? Math.round(bitenAdet/topAdet*100) : 0 };
+  }).filter(o => o.bekleyen.length > 0).sort((a,b) => { const ta = a.s.teslimTarihi ? new Date(a.s.teslimTarihi).getTime() : 9e15, tb = b.s.teslimTarihi ? new Date(b.s.teslimTarihi).getTime() : 9e15; return ta - tb; }), [siparisler]);
+  const say = {}; acik.forEach(o => o.bekleyen.forEach(x => { say[x.d] = (say[x.d]||0) + (x.k.adet||1); }));
+  const q = ara.trim().toLowerCase();
+  const liste = acik.filter(o => (asama === "hepsi" || o.bekleyen.some(x => x.d === asama)) && (!q || [o.s.musteri, o.s.musKod, o.s.siparisNo, ...(o.s.kalemler||[]).map(k=>k.kod)].some(v => String(v||"").toLowerCase().includes(q))));
+  const bugun0 = new Date(); bugun0.setHours(0,0,0,0);
+  const chip = (id, l, n, renk) => <button key={id} onClick={()=>setAsama(id)} style={{ flex:"0 0 auto", whiteSpace:"nowrap", background:asama===id?(renk||T.text):"transparent", color:asama===id?(T.bg2||"#14130f"):T.sub, border:"1px solid "+(asama===id?(renk||T.text):T.border), borderRadius:18, padding:"7px 13px", fontSize:12, fontWeight:600, cursor:"pointer" }}>{l}{n!=null ? " · "+n : ""}</button>;
+  return (
+    <div style={{ animation:"fadein .3s", maxWidth:900, margin:"0 auto" }}>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:10, marginBottom:12 }}>
+        <div><div style={{ fontSize:20, fontWeight:700, color:T.text }}>Sipariş Takip</div><div style={{ fontSize:12, color:T.sub }}>{profil && profil.ad ? profil.ad+" · " : ""}{acik.length} açık sipariş</div></div>
+        <button onClick={()=>{ if (window.confirm("Çıkış yapmak istiyor musunuz?")) kullaniciCikis(); }} style={{ background:"transparent", border:"1px solid "+T.border, borderRadius:10, padding:"7px 14px", color:T.sub, fontSize:12, cursor:"pointer" }}>Çıkış</button>
+      </div>
+      <input value={ara} onChange={e=>setAra(e.target.value)} placeholder="Ara: müşteri, sipariş no, model kodu" style={{ width:"100%", boxSizing:"border-box", background:T.card, border:"1px solid "+T.border, borderRadius:12, padding:"11px 14px", color:T.text, fontSize:14, outline:"none", marginBottom:10 }}/>
+      <div style={{ display:"flex", gap:6, overflowX:"auto", paddingBottom:6, marginBottom:10, scrollbarWidth:"none" }}>
+        {chip("hepsi","Hepsi",null)}
+        {asamalar.filter(d => say[d.id]).map(d => chip(d.id, durumEtiket(d), say[d.id], d.c))}
+      </div>
+      {liste.length === 0 && <div style={{ padding:"40px 0", textAlign:"center", color:T.sub, fontSize:14 }}>Gösterilecek sipariş yok.</div>}
+      {liste.map(o => {
+        const s = o.s, teslimT = s.teslimTarihi ? new Date(s.teslimTarihi).getTime() : 0, gecikti = !!teslimT && teslimT < bugun0.getTime();
+        const gorunen = asama === "hepsi" ? o.kl : o.kl.filter(x => x.d === asama);
+        return (
+          <div key={s.id} style={{ background:T.card, border:"1px solid "+T.border, borderRadius:16, padding:"13px 14px", marginBottom:10 }}>
+            <div style={{ display:"flex", justifyContent:"space-between", gap:10, alignItems:"flex-start" }}>
+              <div style={{ minWidth:0 }}>
+                <div style={{ fontSize:12, color:T.sub }}>{s.siparisNo || s.musKod || ""}</div>
+                <div style={{ fontSize:16, fontWeight:700, color:T.text, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{s.musteri || s.musKod || "İsimsiz"}</div>
+              </div>
+              <div style={{ textAlign:"right", flexShrink:0 }}>
+                {teslimT > 0 && <div style={{ fontSize:12, fontWeight:600, color:gecikti?"#ff5a4d":T.sub }}>Teslim {new Date(teslimT).toLocaleDateString("tr-TR",{day:"2-digit",month:"long"})}{gecikti ? " ⚠" : ""}</div>}
+                <div style={{ fontSize:12, color:T.sub }}>{o.topAdet} adet · %{o.pct} tamam</div>
+              </div>
+            </div>
+            <div style={{ height:6, borderRadius:3, background:"rgba(128,128,128,0.22)", margin:"10px 0", overflow:"hidden" }}><div style={{ width:o.pct+"%", height:"100%", background:"#5fae6e" }}/></div>
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(92px,1fr))", gap:10 }}>
+              {gorunen.map(({k, d}) => { const dd = DURUMLAR.find(z => z.id === d) || DURUMLAR[0]; return (
+                <div key={k.id} style={{ minWidth:0 }}>
+                  <div onClick={()=>k.foto && setBuyuk(k)} style={{ aspectRatio:"1", borderRadius:12, overflow:"hidden", background:"#f0f0f0", cursor:k.foto?"zoom-in":"default" }}>{k.foto ? <img loading="lazy" decoding="async" src={k.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"cover", display:"block" }}/> : null}</div>
+                  <div style={{ fontSize:12, fontWeight:700, color:T.text, marginTop:4, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{k.kod || k.ad}</div>
+                  <div style={{ fontSize:11, color:T.sub }}>{k.adet||1} adet</div>
+                  <div style={{ display:"inline-block", marginTop:3, fontSize:10, fontWeight:700, padding:"2px 8px", borderRadius:10, background:dd.c+"26", color:dd.c }}>{durumEtiket(dd)}</div>
+                </div>); })}
+            </div>
+          </div>);
+      })}
+      {buyuk && <div onClick={()=>setBuyuk(null)} style={{ position:"fixed", inset:0, zIndex:9500, background:"rgba(0,0,0,0.85)", display:"flex", alignItems:"center", justifyContent:"center", padding:16, flexDirection:"column", gap:10 }}>
+        <img src={buyuk.foto} alt="" style={{ maxWidth:"100%", maxHeight:"80vh", borderRadius:12 }}/>
+        <div style={{ color:"#fff", fontSize:14, fontWeight:600 }}>{buyuk.kod || buyuk.ad} · {buyuk.adet||1} adet</div>
+      </div>}
+    </div>
+  );
+}
+
+// ═══ KULLANICI YÖNETİMİ — Ayarlar içinde, sadece admin ═══
+function KullaniciYonetimi({ T }) {
+  const [liste, setListe] = useState(null);
+  const [hata, setHata] = useState("");
+  const [form, setForm] = useState(null); // { yeni, user_id, kullanici_adi, ad, sifre, rol, sirketler, sayfalar, kesfet, hassas, aktif }
+  const [bekle, setBekle] = useState(false);
+  const cagir = async (body) => {
+    const { data, error } = await supabase.functions.invoke("kullanici-yonet", { body });
+    if (error) { let m = error.message; try { const j = await error.context.json(); if (j && j.hata) m = j.hata; } catch {} throw new Error(m); }
+    if (data && data.hata) throw new Error(data.hata);
+    return data;
+  };
+  const yukle = async () => { try { const r = await cagir({ action:"list" }); setListe(r.kullanicilar || []); setHata(""); } catch (e) { setHata(e.message); setListe([]); } };
+  useEffect(() => { yukle(); }, []);
+  const yeniForm = () => setForm({ yeni:true, kullanici_adi:"", eposta:"", ad:"", sifre:"", rol:"kullanici", sirketler:["msk"], sayfalar:[], kesfet:[], hassas:[], aktif:true });
+  const duzenle = (k) => setForm({ yeni:false, user_id:k.user_id, kullanici_adi:k.kullanici_adi, eposta:k.eposta||"", ad:k.ad||"", sifre:"", rol:k.rol, sirketler:k.sirketler||[], sayfalar:k.sayfalar||[], kesfet:k.kesfet||[], hassas:k.hassas||[], aktif:k.aktif });
+  const tg = (alan, id) => setForm(f => ({ ...f, [alan]: f[alan].includes(id) ? f[alan].filter(x => x !== id) : [...f[alan], id] }));
+  const sifreUret = () => { const h = "abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789"; let r = ""; const a = new Uint32Array(10); (window.crypto||{}).getRandomValues ? window.crypto.getRandomValues(a) : a.forEach((_,i)=>{ a[i]=Math.floor(Math.random()*4e9); }); a.forEach(v => { r += h[v % h.length]; }); setForm(f => ({ ...f, sifre:r })); };
+  const kaydet = async () => {
+    setBekle(true); setHata("");
+    try {
+      const f = form;
+      if (f.yeni) await cagir({ action:"olustur", kullanici_adi:f.kullanici_adi.trim().toLowerCase(), eposta:f.eposta.trim(), sifre:f.sifre, ad:f.ad, rol:f.rol, sirketler:f.sirketler, sayfalar:f.sayfalar, kesfet:f.kesfet, hassas:f.hassas });
+      else {
+        await cagir({ action:"guncelle", user_id:f.user_id, eposta:f.eposta.trim(), ad:f.ad, rol:f.rol, sirketler:f.sirketler, sayfalar:f.sayfalar, kesfet:f.kesfet, hassas:f.hassas, aktif:f.aktif });
+        if (f.sifre) await cagir({ action:"sifre_sifirla", user_id:f.user_id, sifre:f.sifre });
+      }
+      setForm(null); await yukle();
+    } catch (e) { setHata(e.message); }
+    setBekle(false);
+  };
+  const sil = async () => {
+    if (!window.confirm(form.kullanici_adi + " kalıcı olarak silinsin mi? (Geçici engel için 'Pasif' yapmak yeterlidir.)")) return;
+    setBekle(true); setHata("");
+    try { await cagir({ action:"sil", user_id:form.user_id }); setForm(null); await yukle(); } catch (e) { setHata(e.message); }
+    setBekle(false);
+  };
+  const girdi = { background:T.card, border:"1px solid "+T.border, borderRadius:9, padding:"9px 12px", color:T.text, fontSize:13, outline:"none", width:"100%", boxSizing:"border-box" };
+  const chip = (on, l, f) => <button key={l} type="button" onClick={f} style={{ background:on?"rgba(var(--vurgu-rgb),0.2)":"transparent", border:"1px solid "+(on?"var(--goldtext)":T.border), color:on?"var(--goldtext)":T.sub, borderRadius:10, padding:"6px 11px", fontSize:12, fontWeight:on?700:500, cursor:"pointer" }}>{l}</button>;
+  const baslik = (t) => <div style={{ fontSize:10, fontWeight:700, letterSpacing:1, color:T.sub, margin:"14px 0 6px" }}>{t}</div>;
+  const ozet = (k) => k.rol === "admin" ? "Admin · tüm yetkiler" : k.rol === "usta" ? "Usta · sipariş takip" : (k.sayfalar||[]).map(id => (SAYFA_LISTESI.find(x => x[0]===id)||[])[1]).filter(Boolean).join(", ") || "Yetki verilmemiş";
+  const sirketYaz = (k) => (k.sirketler||[]).map(x => x.toUpperCase()).join(" + ");
+  return (
+    <div style={{ background:T.card, border:"1px solid "+T.border, borderRadius:14, padding:"15px 16px" }}>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
+        <div style={{ fontSize:10, fontWeight:700, color:T.sub, letterSpacing:"0.05em", textTransform:"uppercase" }}>Kullanıcılar</div>
+        {!form && <button onClick={yeniForm} style={{ background:T.text, color:T.bg2, border:"none", borderRadius:9, padding:"7px 14px", fontSize:12, fontWeight:700, cursor:"pointer" }}>+ Yeni kullanıcı</button>}
+      </div>
+      {hata && <div style={{ fontSize:12, color:"#e85a4f", marginBottom:8, fontWeight:600 }}>{hata}</div>}
+      {!form && liste === null && <div style={{ fontSize:12, color:T.sub }}>Yükleniyor…</div>}
+      {!form && liste && liste.map(k => (
+        <div key={k.user_id} onClick={()=>duzenle(k)} style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 0", borderTop:"1px solid "+T.border, cursor:"pointer", opacity:k.aktif?1:0.5 }}>
+          <div style={{ width:36, height:36, borderRadius:"50%", background:"rgba(var(--vurgu-rgb),0.15)", color:"var(--goldtext)", display:"flex", alignItems:"center", justifyContent:"center", fontWeight:700 }}>{(k.ad||k.kullanici_adi||"?").charAt(0).toUpperCase()}</div>
+          <div style={{ flex:1, minWidth:0 }}>
+            <div style={{ fontSize:14, fontWeight:700, color:T.text }}>{k.ad || k.kullanici_adi} <span style={{ fontSize:10, fontWeight:700, padding:"2px 8px", borderRadius:8, marginLeft:4, background:k.aktif?"rgba(95,174,110,0.18)":"rgba(232,90,79,0.18)", color:k.aktif?"#5fae6e":"#e85a4f" }}>{k.aktif?"Aktif":"Pasif"}</span></div>
+            <div style={{ fontSize:11, color:T.sub, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{k.eposta || k.kullanici_adi} · {sirketYaz(k)} · {ozet(k)}</div>
+          </div>
+          <span style={{ color:T.sub }}>›</span>
+        </div>))}
+      {form && (
+        <div>
+          <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+            <input value={form.ad} onChange={e=>setForm({...form, ad:e.target.value})} placeholder="Ad (örn. Ahmet Usta)" style={{ ...girdi, flex:"1 1 160px" }}/>
+            <input value={form.kullanici_adi} disabled={!form.yeni} onChange={e=>setForm({...form, kullanici_adi:e.target.value.toLowerCase().replace(/[^a-z0-9._-]/g,"")})} placeholder="kullanıcı adı" autoCapitalize="none" style={{ ...girdi, flex:"1 1 160px", opacity:form.yeni?1:0.6 }}/>
+          </div>
+          <input value={form.eposta} onChange={e=>setForm({...form, eposta:e.target.value})} placeholder="E-posta (isteğe bağlı — doluysa bununla da girer)" autoCapitalize="none" type="email" style={{ ...girdi, marginTop:8 }}/>
+          <div style={{ display:"flex", gap:8, marginTop:8, flexWrap:"wrap" }}>
+            <input value={form.sifre} onChange={e=>setForm({...form, sifre:e.target.value})} placeholder={form.yeni ? "Şifre (en az 8 karakter)" : "Şifre sıfırla (boş = değişmez)"} style={{ ...girdi, flex:"1 1 200px" }}/>
+            <button type="button" onClick={sifreUret} style={{ background:"transparent", border:"1px solid "+T.border, color:T.sub, borderRadius:9, padding:"8px 14px", fontSize:12, cursor:"pointer" }}>Şifre üret</button>
+          </div>
+          {baslik("ROL")}
+          <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
+            {[["kullanici","Kullanıcı"],["usta","Usta (sipariş takip)"],["admin","Admin"]].map(([id,l]) => chip(form.rol===id, l, ()=>setForm({...form, rol:id})))}
+          </div>
+          {baslik("ŞİRKET")}
+          <div style={{ display:"flex", gap:6 }}>{[["msk","MSK"],["bsp","BSP"]].map(([id,l]) => chip(form.sirketler.includes(id), l, ()=>tg("sirketler", id)))}</div>
+          {form.rol === "kullanici" && <>
+            {baslik("GÖRECEĞİ SAYFALAR")}
+            <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>{SAYFA_LISTESI.map(([id,l]) => chip(form.sayfalar.includes(id), l, ()=>tg("sayfalar", id)))}</div>
+            {form.sayfalar.includes("analiz") && <>
+              {baslik("KEŞFET İÇİNDE")}
+              <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>{KESFET_LISTESI.map(([id,l]) => chip(form.kesfet.includes(id), l, ()=>tg("kesfet", id)))}</div>
+            </>}
+            {baslik("HASSAS BÖLÜMLER")}
+            <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>{HASSAS_LISTESI.map(([id,l]) => chip(form.hassas.includes(id), l, ()=>tg("hassas", id)))}</div>
+          </>}
+          {form.rol === "usta" && <div style={{ fontSize:12, color:T.sub, marginTop:12 }}>Usta sadece "Sipariş Takip" ekranını görür: açık siparişler, model fotoğrafları ve aşamalar. Fiyat, kâr ve milyem yoktur, hiçbir şeyi değiştiremez.</div>}
+          {form.rol === "admin" && <div style={{ fontSize:12, color:T.sub, marginTop:12 }}>Admin her yeri görür ve kullanıcıları yönetir.</div>}
+          {!form.yeni && <div style={{ marginTop:14 }}>{chip(form.aktif, form.aktif ? "Hesap aktif" : "Hesap pasif (giriş kapalı)", ()=>setForm({...form, aktif:!form.aktif}))}</div>}
+          <div style={{ display:"flex", gap:8, marginTop:16 }}>
+            <button onClick={kaydet} disabled={bekle} style={{ flex:1, background:T.text, color:T.bg2, border:"none", borderRadius:10, padding:"11px", fontSize:14, fontWeight:700, cursor:"pointer", opacity:bekle?0.6:1 }}>{bekle ? "Kaydediliyor…" : "Kaydet"}</button>
+            <button onClick={()=>{ setForm(null); setHata(""); }} style={{ background:"transparent", border:"1px solid "+T.border, color:T.sub, borderRadius:10, padding:"11px 18px", fontSize:14, cursor:"pointer" }}>Vazgeç</button>
+          </div>
+          {!form.yeni && <div style={{ textAlign:"center", marginTop:12 }}><span onClick={sil} style={{ fontSize:12, color:"#e85a4f", cursor:"pointer" }}>Kullanıcıyı sil</span></div>}
+        </div>
+      )}
     </div>
   );
 }
@@ -8451,78 +8635,36 @@ function SifreDegistir({ T }) {
   const [yeniSifre,  setYeniSifre]  = useState("");
   const [yeniSifre2, setYeniSifre2] = useState("");
   const [mesaj,      setMesaj]      = useState(null);
-  const [adim,       setAdim]       = useState("form"); // form → kod_gonderiliyor → kod_bekleniyor
-  const [onayKodu,   setOnayKodu]   = useState("");
-  const [kodToken,   setKodToken]   = useState(null);
-  const [gonderiliyor, setGonderiliyor] = useState(false);
-  const [dogrulaniyor, setDogrulaniyor] = useState(false);
-
-  // 1. ADIM — mevcut şifre + yeni şifre kontrolleri geçerse, e-postaya 6 haneli kod gönder
-  const kodGonder = async () => {
-    const aktif = localStorage.getItem("atolye_sifre") || "19671967*Mm";
-    if (eskiSifre !== aktif) { setMesaj({ok:false,txt:"Mevcut şifre yanlış!"}); return; }
-    if (yeniSifre.length < 6) { setMesaj({ok:false,txt:"En az 6 karakter olmalı!"}); return; }
+  const [bekle,      setBekle]      = useState(false);
+  // Kendi hesabının şifresini değiştirir (mevcut şifre doğrulanır, sonra Supabase Auth güncellenir)
+  const kaydet = async () => {
+    const k = AKTIF_KULLANICI;
+    if (!k) { setMesaj({ok:false,txt:"Oturum bulunamadı"}); return; }
+    if (yeniSifre.length < 8) { setMesaj({ok:false,txt:"En az 8 karakter olmalı!"}); return; }
     if (yeniSifre !== yeniSifre2) { setMesaj({ok:false,txt:"Şifreler eşleşmiyor!"}); return; }
-    setMesaj(null); setGonderiliyor(true);
+    setMesaj(null); setBekle(true);
     try {
-      const r = await fetch("/api/sifre-kod-gonder", { method:"POST" });
-      const j = await r.json();
-      if (!j.basarili) { setMesaj({ok:false,txt:j.hata||"Kod gönderilemedi"}); setGonderiliyor(false); return; }
-      setKodToken(j.token);
-      setAdim("kod_bekleniyor");
-      setMesaj({ok:true,txt:"Kayıtlı e-postanıza 6 haneli bir kod gönderildi."});
-    } catch (e) {
-      setMesaj({ok:false,txt:"Kod gönderilemedi: "+e.message});
-    }
-    setGonderiliyor(false);
-  };
-
-  // 2. ADIM — kullanıcı e-postadaki kodu girer, sunucu doğrular, ancak ONDAN SONRA şifre kaydedilir
-  const kodDogrulaVeKaydet = async () => {
-    if (!onayKodu.trim()) { setMesaj({ok:false,txt:"Kodu girin"}); return; }
-    setMesaj(null); setDogrulaniyor(true);
-    try {
-      const r = await fetch("/api/sifre-kod-dogrula", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ token: kodToken, kod: onayKodu.trim() }) });
-      const j = await r.json();
-      if (!j.basarili) { setMesaj({ok:false,txt:j.hata||"Kod doğrulanamadı"}); setDogrulaniyor(false); return; }
-      localStorage.setItem("atolye_sifre", yeniSifre);
-      try { localStorage.removeItem("atolye_oturum"); } catch {} // şifre değişti, oturum sıfırlansın
-      setEskiSifre(""); setYeniSifre(""); setYeniSifre2(""); setOnayKodu(""); setKodToken(null);
-      setAdim("form");
+      const { data: { user: au } } = await supabase.auth.getUser();
+      const { error: e1 } = await supabase.auth.signInWithPassword({ email: (au && au.email) || k.eposta || kullaniciEposta(k.kullanici_adi), password: eskiSifre });
+      if (e1) { setMesaj({ok:false,txt:"Mevcut şifre yanlış!"}); setBekle(false); return; }
+      const { error: e2 } = await supabase.auth.updateUser({ password: yeniSifre });
+      if (e2) { setMesaj({ok:false,txt:"Değiştirilemedi: "+e2.message}); setBekle(false); return; }
+      setEskiSifre(""); setYeniSifre(""); setYeniSifre2("");
       setMesaj({ok:true,txt:"Şifre değiştirildi!"});
       setTimeout(()=>setMesaj(null), 4000);
-    } catch (e) {
-      setMesaj({ok:false,txt:"Doğrulama hatası: "+e.message});
-    }
-    setDogrulaniyor(false);
+    } catch (e) { setMesaj({ok:false,txt:"Hata: "+e.message}); }
+    setBekle(false);
   };
-
-  const vazgec = () => { setAdim("form"); setOnayKodu(""); setKodToken(null); setMesaj(null); };
-
   return (
     <div style={{ background:"rgba(232,90,79,0.06)", border:"1px solid rgba(232,90,79,0.18)", borderRadius:12, padding:"14px 16px", marginBottom:14 }}>
-      <div style={{ fontSize:10, fontWeight:700, color:"#e85a4f", marginBottom:12 }}>🔒 ŞİFRE DEĞİŞTİR <span style={{ color:tema.sub, fontWeight:600 }}>— e-posta onayı gerekir</span></div>
-      {adim === "form" && (
-        <div style={{ display:"flex", flexDirection:"column", gap:8, maxWidth:320 }}>
-          <input type="password" value={eskiSifre}  onChange={e=>setEskiSifre(e.target.value)}  placeholder="Mevcut şifre"      style={IS2}/>
-          <input type="password" value={yeniSifre}  onChange={e=>setYeniSifre(e.target.value)}  placeholder="Yeni şifre"         style={IS2}/>
-          <input type="password" value={yeniSifre2} onChange={e=>setYeniSifre2(e.target.value)} placeholder="Yeni şifre (tekrar)" style={IS2}/>
-          {mesaj && <div style={{ fontSize:9, color:mesaj.ok?"#6abf69":"#e85a4f", fontWeight:700 }}>{mesaj.txt}</div>}
-          <button onClick={kodGonder} disabled={gonderiliyor} style={{ background:"rgba(var(--vurgu-rgb),0.16)", border:"1px solid rgba(var(--vurgu-rgb),0.32)", borderRadius:7, padding:"7px 14px", color:tema.text, fontSize:10, fontWeight:700, cursor: gonderiliyor?"wait":"pointer", opacity: gonderiliyor?0.6:1 }}>{gonderiliyor ? "Kod gönderiliyor..." : "Devam Et — E-postama Kod Gönder"}</button>
-        </div>
-      )}
-      {adim === "kod_bekleniyor" && (
-        <div style={{ display:"flex", flexDirection:"column", gap:8, maxWidth:320 }}>
-          <div style={{ fontSize:10, color:tema.sub }}>Kayıtlı e-postanıza gönderilen 6 haneli kodu girin.</div>
-          <input type="text" inputMode="numeric" maxLength={6} value={onayKodu} onChange={e=>setOnayKodu(e.target.value.replace(/\D/g,""))} placeholder="••••••" style={{ ...IS2, letterSpacing:"0.3em", fontSize:16, fontWeight:700, textAlign:"center" }}/>
-          {mesaj && <div style={{ fontSize:9, color:mesaj.ok?"#6abf69":"#e85a4f", fontWeight:700 }}>{mesaj.txt}</div>}
-          <div style={{ display:"flex", gap:8 }}>
-            <button onClick={kodDogrulaVeKaydet} disabled={dogrulaniyor} style={{ flex:1, background:"rgba(var(--vurgu-rgb),0.16)", border:"1px solid rgba(var(--vurgu-rgb),0.32)", borderRadius:7, padding:"7px 14px", color:tema.text, fontSize:10, fontWeight:700, cursor: dogrulaniyor?"wait":"pointer", opacity: dogrulaniyor?0.6:1 }}>{dogrulaniyor ? "Doğrulanıyor..." : "Kodu Onayla ve Şifreyi Değiştir"}</button>
-            <button onClick={vazgec} style={{ background:"rgba(255,255,255,0.04)", border:"1px solid "+tema.border, borderRadius:7, padding:"7px 14px", color:tema.sub, fontSize:10, fontWeight:700, cursor:"pointer" }}>Vazgeç</button>
-          </div>
-          <button onClick={kodGonder} disabled={gonderiliyor} style={{ background:"none", border:"none", color:tema.sub, fontSize:9, textDecoration:"underline", cursor:"pointer", padding:0, textAlign:"left" }}>{gonderiliyor ? "Gönderiliyor..." : "Kodu tekrar gönder"}</button>
-        </div>
-      )}
+      <div style={{ fontSize:10, fontWeight:700, color:"#e85a4f", marginBottom:12 }}>🔒 ŞİFRE DEĞİŞTİR <span style={{ color:tema.sub, fontWeight:600 }}>— kendi hesabın</span></div>
+      <div style={{ display:"flex", flexDirection:"column", gap:8, maxWidth:320 }}>
+        <input type="password" value={eskiSifre}  onChange={e=>setEskiSifre(e.target.value)}  placeholder="Mevcut şifre"      style={IS2}/>
+        <input type="password" value={yeniSifre}  onChange={e=>setYeniSifre(e.target.value)}  placeholder="Yeni şifre (en az 8)" style={IS2}/>
+        <input type="password" value={yeniSifre2} onChange={e=>setYeniSifre2(e.target.value)} placeholder="Yeni şifre (tekrar)" style={IS2}/>
+        {mesaj && <div style={{ fontSize:9, color:mesaj.ok?"#6abf69":"#e85a4f", fontWeight:700 }}>{mesaj.txt}</div>}
+        <button onClick={kaydet} disabled={bekle} style={{ background:"rgba(var(--vurgu-rgb),0.16)", border:"1px solid rgba(var(--vurgu-rgb),0.32)", borderRadius:7, padding:"7px 14px", color:"var(--goldtext)", fontSize:10, fontWeight:700, cursor:"pointer" }}>{bekle ? "Kaydediliyor…" : "Şifreyi Değiştir"}</button>
+      </div>
     </div>
   );
 }
@@ -8563,9 +8705,12 @@ function SecimEkrani({ onKatalog }) {
   );
 }
 
-function SirketSecimEkrani({ onSec }) {
+function SirketSecimEkrani({ onSec, izinli }) {
   const [hover, setHover] = useState(null);
-  const sec = (onek, ad) => { setSirketOnek(onek); onSec(); };
+  const izin = Array.isArray(izinli) && izinli.length ? izinli : ["msk","bsp"];
+  const sec = (onek, ad) => { if (!izin.includes(onek === "bsp2_" ? "bsp" : "msk")) return; setSirketOnek(onek); onSec(); };
+  // Tek şirkete yetkili kullanıcı seçim ekranını görmeden doğrudan girer
+  useEffect(() => { if (izin.length === 1) { setSirketOnek(izin[0] === "bsp" ? "bsp2_" : ""); onSec(); } }, []);
   // Son kullanılan şirket (hiç seçilmediyse null): "" = MSK, "bsp2_" = BSP
   const son = (() => { try { return localStorage.getItem("atolye_sirket_onek"); } catch { return null; } })();
   // Klavye: M / ← / 1 → MSK, B / → / 2 → BSP, Enter → son kullanılan (yoksa MSK)
@@ -8614,8 +8759,8 @@ function SirketSecimEkrani({ onSec }) {
   };
   return (
     <div style={{ position:"relative", height:"100vh", width:"100vw", background:T.bg2, display:"flex", flexWrap:"wrap", gap:16, alignContent:"stretch", fontFamily:"'Segoe UI',Arial,sans-serif", margin:0, padding:"46px 18px 38px", boxSizing:"border-box", overflow:"auto" }}>
-      {yarim("msk", "MSK", "MSK Jewelry", "", 0, son === "", ()=>sec("", "MSK"))}
-      {yarim("bsp", "BSP", "BSP Jewelry Design", "", 0, son === "bsp2_", ()=>sec("bsp2_", "BSP"))}
+      {izin.includes("msk") && yarim("msk", "MSK", "MSK Jewelry", "", 0, son === "", ()=>sec("", "MSK"))}
+      {izin.includes("bsp") && yarim("bsp", "BSP", "BSP Jewelry Design", "", 0, son === "bsp2_", ()=>sec("bsp2_", "BSP"))}
       <div style={{ position:"absolute", top:16, left:0, right:0, textAlign:"center", fontSize:12, letterSpacing:1, color:T.sub, pointerEvents:"none" }}>ŞİRKET SEÇİN</div>
       <div style={{ position:"absolute", bottom:14, left:0, right:0, textAlign:"center", fontSize:11, letterSpacing:1, color:T.sub, pointerEvents:"none" }}>M / ←  MSK    ·    B / →  BSP    ·    ENTER  son kullanılan</div>
     </div>
@@ -10957,27 +11102,51 @@ export default function Root() {
   })();
   if (vitrinKod) return <VitrinModu kod={vitrinKod} onizleme={onizleme} />;
 
-  const [giris, setGiris] = useState(() => {
-    // "Beni Hatırla" — token varsa ve süresi dolmamışsa otomatik giriş
-    try {
-      const t = localStorage.getItem("atolye_oturum");
-      if (t) {
-        const son = parseInt(t, 10);
-        if (son && Date.now() < son) return true; // süre dolmamış
-        localStorage.removeItem("atolye_oturum"); // süresi dolmuş, temizle
-      }
-    } catch {}
-    return false;
-  });
+  const [profil, setProfil] = useState(null);       // giriş yapan kullanıcının app_kullanici satırı
+  const [oturumKontrol, setOturumKontrol] = useState(true);
+  AKTIF_KULLANICI = profil;
+  const giris = !!profil;
+  useEffect(() => {
+    let iptal = false;
+    (async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+          let gecici = false;
+          try { gecici = localStorage.getItem("atolye_gecici") === "1" && !sessionStorage.getItem("atolye_gecici_ok"); } catch {}
+          if (gecici) { await supabase.auth.signOut(); }
+          else {
+            const { data: satir } = await supabase.from("app_kullanici").select("*").eq("user_id", session.user.id).maybeSingle();
+            if (satir && satir.aktif) { if (!iptal) setProfil(satir); }
+            else { await supabase.auth.signOut(); } // eski ortak oturum veya pasif hesap
+          }
+        }
+      } catch (e) { console.warn("Oturum kontrolü:", e && e.message); }
+      if (!iptal) setOturumKontrol(false);
+    })();
+    return () => { iptal = true; };
+  }, []);
+  // Açık oturumda hesap pasif yapıldıysa / yetkiler değiştiyse 5 dakikada bir yakala
+  useEffect(() => {
+    if (!profil) return;
+    const t = setInterval(async () => {
+      try {
+        const { data: satir } = await supabase.from("app_kullanici").select("*").eq("user_id", profil.user_id).maybeSingle();
+        if (!satir || !satir.aktif) { await supabase.auth.signOut(); window.location.reload(); }
+        else if (JSON.stringify(satir) !== JSON.stringify(profil)) setProfil(satir);
+      } catch {}
+    }, 5 * 60 * 1000);
+    return () => clearInterval(t);
+  }, [profil]);
   // Eski "Katalog / Personel" ara ekranı kaldırıldı: Personel artık ERP içinde (Karlılık şifreli sekme). Giriş → doğrudan şirket seçimi.
   const [secim, setSecim] = useState(true);
   const [sirket, setSirket] = useState(false);   // şirket seçildi mi
   const [sirketKey, setSirketKey] = useState(0); // şirket değişince Atolye'yi yeniden mount eder
-  useEffect(() => { if (giris) atolyeAuthGiris(); }, [giris]);
   useEffect(() => { atolyeIkonKur(""); }, []);
-  if (!giris) return <GirisEkrani onGiris={()=>setGiris(true)} />;
+  if (oturumKontrol) return <div style={{ minHeight:"100vh", background:otoTemaHesapla().bg2 }} />;
+  if (!giris) return <GirisEkrani onGiris={(p)=>setProfil(p)} />;
   if (!secim) return <SecimEkrani onKatalog={()=>setSecim(true)} />;
-  if (!sirket) return <SirketSecimEkrani onSec={()=>{ setSirketKey(k=>k+1); setSirket(true); }} />;
+  if (!sirket) return <SirketSecimEkrani izinli={profil.sirketler} onSec={()=>{ setSirketKey(k=>k+1); setSirket(true); }} />;
   return <Atolye key={sirketKey} onSirketDegis={()=>setSirket(false)} />;
 }
 
@@ -11143,7 +11312,8 @@ function Atolye({ onSirketDegis }) {
   }, [loaded, altinGuncelle]);
   const [mc,      setMc]         = useState("0.030");
 
-  const [sayfa,     setSayfa]     = useState("koleksiyonlar");
+  const [sayfa,     setSayfa]     = useState(()=>ilkIzinliSayfa());
+  useEffect(() => { if (!izinSayfa(sayfa)) setSayfa(ilkIzinliSayfa()); }, [sayfa]);
   // Kasa ve Muhasebe tek sekmede birleşti: eski "muhasebe" sayfasına gelen her yönlendirme Kasa & Muhasebe › Muhasebe bölümüne gider
   useEffect(() => { if (sayfa === "muhasebe") { setSayfa("kasa"); setKasaSayfa("g_muh"); } }, [sayfa]);
   const [aktifKol,  setAktifKol]  = useState(null);
@@ -11297,6 +11467,7 @@ function Atolye({ onSirketDegis }) {
   const [analizAyB, setAnalizAyB] = useState(()=>new Date().getMonth());
   const [csTum, setCsTum] = useState(false); // Çok satan: false = seçili dönem, true = tüm zamanlar
   const [kTab, setKTab] = useState("genel");        // Keşfet ana sekmesi: genel/uretim/musteri/modeller/vitrin/iade
+  useEffect(() => { if (sayfa === "analiz" && !izinKesfet(kTab)) { const f = ["genel","uretim","musteri","modeller","vitrin","iade","karlilik"].find(izinKesfet); if (f) setKTab(f); } }, [sayfa, kTab]);
   const [kDrill, setKDrill] = useState(null);         // Keşfet derine inme: {tip:"asama"|"gecik"|"mus", id}
   const [kDrillSek, setKDrillSek] = useState("sip");
   const [kGrafik, setKGrafik] = useState("kg");
@@ -12902,7 +13073,7 @@ function Atolye({ onSirketDegis }) {
               <button onClick={()=>{ if (onSirketDegis) onSirketDegis(); }} title="Şirket değiştir" style={{ fontSize:9, fontWeight:800, padding:"3px 10px", borderRadius:20, background: AKTIF_SIRKET_ONEK==="bsp2_" ? "rgba(167,139,250,0.15)" : "rgba(var(--vurgu-rgb),0.15)", border:"1px solid "+(AKTIF_SIRKET_ONEK==="bsp2_" ? "rgba(167,139,250,0.4)" : "rgba(var(--vurgu-rgb),0.4)"), color: AKTIF_SIRKET_ONEK==="bsp2_" ? "#a78bfa" : GOLD, whiteSpace:"nowrap", cursor:"pointer", display:"inline-flex", alignItems:"center", gap:4 }}>{AKTIF_SIRKET_ONEK==="bsp2_" ? "✨ BSP" : "💎 MSK"} <span style={{ fontSize:8, opacity:0.7 }}>⇄</span></button>
             </h1>
             <div className="am-nav" style={{ display:"flex", gap:3, flexWrap:"wrap" }}>
-              {["koleksiyonlar","modeller","konfirmasyon","siparisler","musteriler","kasa","personel","analiz","ayarlar"].map(n => { // İadeler → Keşfet içine taşındı, Trend Radar gizlendi (sayfa kodu duruyor)
+              {(AKTIF_KULLANICI && AKTIF_KULLANICI.rol==="usta" ? ["ustatakip"] : ["koleksiyonlar","modeller","konfirmasyon","siparisler","musteriler","kasa","personel","analiz","ayarlar"].filter(izinSayfa)).map(n => { // İadeler → Keşfet içine taşındı, Trend Radar gizlendi (sayfa kodu duruyor)
                 let badgeSayi = 0;
                 if (n === "analiz") {
                   siparisler.forEach(s => {
@@ -12913,7 +13084,7 @@ function Atolye({ onSirketDegis }) {
                 return (
                 <button key={n} onClick={() => { setSayfa(n); if (n==="koleksiyonlar") { setAktifKol(null); setAcikUstKol(null); } }}
                   style={{ ...GH, color:(sayfa===n||(n==="analiz"&&sayfa==="iadeler"))?T.gold:T.sub, background:(sayfa===n||(n==="analiz"&&sayfa==="iadeler"))?T.btnBg:"transparent", borderColor:(sayfa===n||(n==="analiz"&&sayfa==="iadeler"))?T.btnBorder:T.border, fontSize:9, padding:"5px 9px", position:"relative" }}>
-                  {{"koleksiyonlar":"Koleksiyonlar","modeller":"Modeller","konfirmasyon":"Konfirmasyon","siparisler":"Siparişler","iadeler":"İadeler","musteriler":"Müşteriler","vitrin":"🛍 Vitrin","kasa":"Kasa & Muhasebe","muhasebe":"Muhasebe","personel":"Personel","analiz":"Keşfet","radar":"📡 Trend Radar","ayarlar":"Ayarlar"}[n]||n.charAt(0).toUpperCase()+n.slice(1)}
+                  {{"ustatakip":"Sipariş Takip","koleksiyonlar":"Koleksiyonlar","modeller":"Modeller","konfirmasyon":"Konfirmasyon","siparisler":"Siparişler","iadeler":"İadeler","musteriler":"Müşteriler","vitrin":"🛍 Vitrin","kasa":"Kasa & Muhasebe","muhasebe":"Muhasebe","personel":"Personel","analiz":"Keşfet","radar":"📡 Trend Radar","ayarlar":"Ayarlar"}[n]||n.charAt(0).toUpperCase()+n.slice(1)}
                   {n==="konfirmasyon" && konfList.length>0 && <span style={{ position:"absolute", top:-4, right:-4, background:GOLD, color:DARK, width:13, height:13, borderRadius:7, fontSize:7, fontWeight:800, display:"flex", alignItems:"center", justifyContent:"center" }}>{konfList.length}</span>}
                   {n==="analiz" && badgeSayi>0 && <span style={{ position:"absolute", top:-4, right:-4, background:"#a78bfa", color:"#fff", width:13, height:13, borderRadius:7, fontSize:7, fontWeight:800, display:"flex", alignItems:"center", justifyContent:"center" }}>{badgeSayi}</span>}
                 </button>
@@ -14349,7 +14520,7 @@ function Atolye({ onSirketDegis }) {
           <button className="sm-only" onClick={()=>{ setSipYeni(false); try{localStorage.setItem("sipYeni","0");}catch(e){} }} style={{ ...GH, fontSize:12, padding:"10px" }}>Eski görünüm</button>
           <div className="sm-sheet-bar"><button onClick={()=>{setSipMusF("");setSipMus("");setSipTarih1("");setSipTarih2("");setSipFiltre("tumu");}} style={{ ...RD }}>Temizle</button><button onClick={()=>setSipFiltAcik(false)} style={{ ...GH, borderColor:"rgba(var(--vurgu-rgb),0.6)", color:GOLD, fontWeight:600 }}>Uygula</button></div>
           </div>
-          {liste.length>0 && AKTIF_SIRKET_ONEK==="" && <button className="sm-rapor" onClick={()=>{ setSayfa("analiz"); setKTab("karlilik"); }} style={{ background:"linear-gradient(135deg,#0a84ff,#0968cc)", border:"none", borderRadius:9, padding:"8px 12px", color:"#fff", fontSize:12, fontWeight:600, cursor:"pointer" }}>📊 Rapor</button>}
+          {liste.length>0 && AKTIF_SIRKET_ONEK==="" && izinKesfet("karlilik") && <button className="sm-rapor" onClick={()=>{ setSayfa("analiz"); setKTab("karlilik"); }} style={{ background:"linear-gradient(135deg,#0a84ff,#0968cc)", border:"none", borderRadius:9, padding:"8px 12px", color:"#fff", fontSize:12, fontWeight:600, cursor:"pointer" }}>📊 Rapor</button>}
           {liste.length>0 && AKTIF_SIRKET_ONEK!=="" && <button className="sm-rapor" onClick={()=>downloadPDF(buildSipListeRaporuHTML(liste, altinKgUSD, madenCarpan), "siparis-listesi-raporu")} style={{ background:"linear-gradient(135deg,#0a84ff,#0968cc)", border:"none", borderRadius:9, padding:"8px 12px", color:"#fff", fontSize:12, fontWeight:600, cursor:"pointer" }}>📊 Rapor PDF</button>}
           {sipRapor && AKTIF_SIRKET_ONEK==="" && <KarlilikRaporuEkrani T={T} GH={GH} siparisler={liste} tumSip={siparisler} usdTry={altinSon?.usdTry || null} altinKgUSD={altinKgUSD} mc={madenCarpan}
             onKapat={()=>setSipRapor(false)}
@@ -16194,6 +16365,8 @@ function Atolye({ onSirketDegis }) {
         })()}
 
 
+        {sayfa==="ustatakip" && <UstaTakip T={T} siparisler={siparisler} profil={AKTIF_KULLANICI} />}
+
         {/* ANALİZ */}
         {sayfa==="analiz" && (
           <div className={"kx-root kx-t-"+kTab} style={{ animation:"fadein .3s" }}>
@@ -16249,11 +16422,11 @@ function Atolye({ onSirketDegis }) {
 @media(max-width:900px){.kx-kp{grid-template-columns:1fr 1fr}.kx-kp .kx-hero{grid-column:1/-1}.kx-r2,.kx-r3{grid-template-columns:1fr}.kx-g4{grid-template-columns:1fr 1fr!important}.kx-g2{grid-template-columns:1fr!important}.kx-dash>div{grid-template-columns:repeat(auto-fit,minmax(130px,1fr))!important}}
 @media(max-width:700px){.kx-dr .pn{left:0;right:0;top:70px;bottom:0;width:auto;border-radius:20px 20px 0 0;box-shadow:0 -12px 32px rgba(0,0,0,.5)}}`}</style>
             <div className="kx-tabs">
-              {[["genel","Genel"],["uretim","Üretim"],["musteri","Müşteri"],["modeller","Modeller"],["vitrin","Vitrin"],["iade","İade"],...(AKTIF_SIRKET_ONEK===""?[["karlilik","Karlılık raporu"]]:[])].map(([id,l]) => (
+              {[["genel","Genel"],["uretim","Üretim"],["musteri","Müşteri"],["modeller","Modeller"],["vitrin","Vitrin"],["iade","İade"],...(AKTIF_SIRKET_ONEK===""?[["karlilik","Karlılık raporu"]]:[])].filter(([id]) => izinKesfet(id)).map(([id,l]) => (
                 <button key={id} onClick={()=>setKTab(id)} style={{ background:kTab===id?"var(--goldtext)":"rgba(var(--vurgu-rgb),0.06)", color:kTab===id?(T.bg2||"#14130f"):T.sub, border:"none", borderRadius:16, padding:"7px 15px", fontSize:12, fontWeight:600, cursor:"pointer" }}>{l}</button>
               ))}
             </div>
-            {kTab==="karlilik" && AKTIF_SIRKET_ONEK==="" && (() => {
+            {kTab==="karlilik" && AKTIF_SIRKET_ONEK==="" && izinKesfet("karlilik") && (() => {
               const [kb, ke] = analizDonem==="ozel" ? [0, 8.64e15] : kxDonemAralik(analizDonem, analizYil, analizAyA, analizAyB);
               const lst = [...siparisler].reverse().filter(x => x.tarih >= kb && x.tarih <= ke);
               return <KarlilikRaporuEkrani gomulu T={T} GH={GH} siparisler={lst} tumSip={siparisler} usdTry={altinSon?.usdTry || null} altinKgUSD={altinKgUSD} mc={madenCarpan}
@@ -16265,7 +16438,7 @@ function Atolye({ onSirketDegis }) {
             <div className="kx-s-genel">
             {kTab==="genel" && (() => {
               const BITD = ["tamam","teslim"];
-              const MSKM = AKTIF_SIRKET_ONEK !== "bsp2_";
+              const MSKM = AKTIF_SIRKET_ONEK !== "bsp2_" && izinHassas("karlilik");
               const ayKey = (t) => { const d = new Date(t); return d.getFullYear()*12 + d.getMonth(); };
               const buAy = ayKey(Date.now());
               const AY = ["Oca","Şub","Mar","Nis","May","Haz","Tem","Ağu","Eyl","Eki","Kas","Ara"];
@@ -16813,7 +16986,7 @@ function Atolye({ onSirketDegis }) {
                   { id:"arizali",  l:"⚠ Arıza Veren",  c:"#e85a4f" },
                   { id:"karli",    l:"💰 En Karlı",     c:GOLD },
                   { id:"kazandiran", l:"💵 Çok Kazandıran", c:"#6abf69" },
-                ].filter(t => !(AKTIF_SIRKET_ONEK === "bsp2_" && (t.id==="karli" || t.id==="kazandiran"))).map(t => (
+                ].filter(t => !((AKTIF_SIRKET_ONEK === "bsp2_" || !izinHassas("karlilik")) && (t.id==="karli" || t.id==="kazandiran"))).map(t => (
                   <button key={t.id} onClick={()=>setKesfetSekme(t.id)} style={{ background:kesfetSekme===t.id?t.c+"22":"rgba(255,255,255,0.03)", border:"1px solid "+(kesfetSekme===t.id?t.c+"66":"rgba(255,255,255,0.08)"), borderRadius:7, padding:"5px 12px", color:kesfetSekme===t.id?t.c:"#7a6f5a", fontSize:10, fontWeight:kesfetSekme===t.id?700:400, cursor:"pointer" }}>{t.l}</button>
                 ))}
                 {kesfetSekme==="coksatan" && <button onClick={()=>setCsTum(v=>!v)} style={{ background:"transparent", border:"1px dashed rgba(var(--vurgu-rgb),0.35)", borderRadius:7, padding:"5px 12px", color:"var(--goldtext)", fontSize:10, fontWeight:600, cursor:"pointer" }}>{csTum?"Tüm zamanlar":"Seçili dönem"} ⇄</button>}
@@ -17413,6 +17586,11 @@ function Atolye({ onSirketDegis }) {
             </div>
             </Akordiyon>
 
+            {/* KULLANICILAR — sadece admin */}
+            {AKTIF_KULLANICI && AKTIF_KULLANICI.rol==="admin" && <Akordiyon baslik="👥 Kullanıcılar" T={T}>
+            <KullaniciYonetimi T={T}/>
+            </Akordiyon>}
+
             {/* ŞİFRE DEĞİŞTİR */}
             <Akordiyon baslik="🔒 Şifre Değiştir" T={T}>
             <SifreDegistir T={T}/>
@@ -17425,8 +17603,7 @@ function Atolye({ onSirketDegis }) {
               <div style={{ fontSize:9, color:T.dim, marginBottom:10 }}>"Beni hatırla" ile açık oturumu kapatır, bir dahaki açılışta tekrar şifre sorulur.</div>
               <button onClick={()=>{
                 if (!window.confirm("Oturumu kapatmak istediğinize emin misiniz? Tekrar şifre girmeniz gerekecek.")) return;
-                try { localStorage.removeItem("atolye_oturum"); } catch {}
-                window.location.reload();
+                kullaniciCikis();
               }} style={{ background:"rgba(232,90,79,0.12)", border:"1px solid rgba(232,90,79,0.25)", borderRadius:7, padding:"7px 14px", color:"#e85a4f", fontSize:10, fontWeight:700, cursor:"pointer" }}>Oturumu Kapat</button>
             </div>
             </Akordiyon>
