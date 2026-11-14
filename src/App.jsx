@@ -8682,6 +8682,7 @@ function VitrinModu({ kod, onizleme }) {
   }, []);
   const [sipKapali, setSipKapali] = useState({});         // { siparisId: true/false } — kart aç/kapa (varsayılan: devam edenler açık)
   const [sipFiltre, setSipFiltre] = useState("tumu");   // tumu | acik | teslim | iptal
+  const [sipNotAcik, setSipNotAcik] = useState({});         // sipariş ver (telefon): notu açılan satırlar
   const [sipFoto, setSipFoto] = useState(null);           // büyütülen kalem
   const [sipAra, setSipAra] = useState("");
   const [sipListeAcik, setSipListeAcik] = useState(false);   // "Siparişlerim" sayfası
@@ -9706,7 +9707,29 @@ function VitrinModu({ kod, onizleme }) {
       {/* ═══ SİPARİŞ MODALI — müşteri kendi siparişini oluşturur (BSP) ═══ */}
       {siparisModal && (
         <div style={{ position:"fixed", inset:0, zIndex:110, background:"var(--vb)", overflow:"auto", color:"var(--vt1)" }}>
-          <style>{".vs-row{display:grid;grid-template-columns:168px 96px 1fr 270px 84px 92px 44px;gap:10px;align-items:start;padding:12px 14px}.vs-hd{display:grid;grid-template-columns:168px 96px 1fr 270px 84px 92px 44px;gap:10px;padding:8px 14px}@media(max-width:860px){.vs-hd{display:none}.vs-row{grid-template-columns:132px 1fr}.vs-row>.vs-boy,.vs-row>.vs-adet,.vs-row>.vs-top,.vs-row>.vs-sil{grid-column:1/-1}.vs-top,.vs-sil,.vs-adet{text-align:left!important}}"}</style>
+          <style>{`.vs-pm,.vs-nbtn{display:none}
+@media(max-width:700px){
+.vs-hdr{gap:8px!important;padding:12px 0 10px!important}.vs-hdr>label{flex:1 1 100%;justify-content:space-between}.vs-hdr>div[style*="flex: 1"],.vs-hdr>div[style*="flex:1"]{display:none}
+.vs-gt{display:none}.vs-back{width:34px;height:34px;padding:0 0 3px!important;font-size:20px!important;display:flex;align-items:center;justify-content:center}
+.vs-tools{gap:10px!important;padding:8px 10px!important;margin:10px 0!important}.vs-tools>div:first-child{flex:1 1 100%}.vs-tools>div:first-child>div{flex:1;display:flex!important}.vs-tools>div:first-child button{flex:1}
+.vs-row{grid-template-columns:68px 1fr auto!important;gap:6px 10px!important;align-items:center!important;padding:16px 12px 10px!important;position:relative}
+.vs-row>div:first-child{grid-column:1;grid-row:1/3;width:68px!important;height:68px!important}.vs-row>div:first-child:empty{display:none}
+.vs-row>div:nth-child(2){grid-column:2;grid-row:1/3;min-width:0}
+.vs-row.uzun>div:nth-child(2){grid-column:1/3}
+.vs-row>div:nth-child(3){grid-column:1/-1;grid-row:3}
+.vs-row>.vs-boy{grid-column:1/-1!important;grid-row:4}
+.vs-row>.vs-adet{grid-column:3!important;grid-row:1;text-align:right!important;display:flex;justify-content:flex-end}
+.vs-row>.vs-top{grid-column:3!important;grid-row:2;text-align:right!important;font-size:13px!important}
+.vs-row>.vs-sil{position:absolute;top:4px;right:8px;grid-column:auto!important;text-align:right!important}.vs-row>.vs-sil button{padding:1px 7px!important;font-size:11px!important}
+.vs-adet input{width:44px!important;padding:6px 2px!important}.vs-pm{display:inline-flex;align-items:center;justify-content:center;width:30px;height:32px;border:none;background:rgba(var(--voverlay-rgb),0.08);color:var(--vt1);font-size:17px;border-radius:9px;cursor:pointer;flex-shrink:0}
+.vs-adet>div.vs-stp{display:flex;align-items:center;gap:4px}
+.vs-nw .vs-nin{display:none}.vs-nw.ac .vs-nin{display:block}.vs-nw.ac .vs-nbtn{display:none}.vs-nbtn{display:inline-block;background:transparent;border:none;color:#5b9bd5;font-size:12px;font-weight:600;padding:2px 0;margin-top:4px;cursor:pointer}
+.vs-nw{display:flex;flex-wrap:wrap;gap:4px 14px;align-items:center}.vs-nw>div:first-child{flex:1 1 100%}
+.vs-bar{flex-wrap:wrap!important;justify-content:space-between!important;gap:6px 12px!important;padding:10px 14px calc(12px + env(safe-area-inset-bottom,0px))!important}
+.vs-bar>.vs-hata{flex:1 1 100%!important}.vs-tot{display:flex!important;flex-direction:column;gap:2px;font-size:11px}.vs-tot>div:last-child{font-size:21px!important;color:var(--vt1)}
+.vs-bar>button{flex:1;padding:13px 14px!important}
+}
+`}</style><style>{".vs-row{display:grid;grid-template-columns:168px 96px 1fr 270px 84px 92px 44px;gap:10px;align-items:start;padding:12px 14px}.vs-hd{display:grid;grid-template-columns:168px 96px 1fr 270px 84px 92px 44px;gap:10px;padding:8px 14px}@media(max-width:860px){.vs-hd{display:none}.vs-row{grid-template-columns:132px 1fr}.vs-row>.vs-boy,.vs-row>.vs-adet,.vs-row>.vs-top,.vs-row>.vs-sil{grid-column:1/-1}.vs-top,.vs-sil,.vs-adet{text-align:left!important}}"}</style>
           {siparisBasarili ? (
             <div style={{ maxWidth:520, margin:"18vh auto 0", padding:"40px 28px", textAlign:"center" }}>
               <div style={{ fontSize:48, marginBottom:14 }}>✓</div>
@@ -9730,8 +9753,8 @@ function VitrinModu({ kod, onizleme }) {
             return (
             <div style={{ maxWidth:1280, margin:"0 auto", padding:"0 20px 120px" }}>
               {/* Başlık */}
-              <div style={{ position:"sticky", top:0, zIndex:5, background:"var(--vb)", padding:"18px 0 12px", display:"flex", alignItems:"center", gap:12, flexWrap:"wrap", borderBottom:"1px solid rgba(var(--voverlay-rgb),0.08)" }}>
-                <button onClick={()=>{ if(!siparisGonderiliyor) setSiparisModal(false); }} style={{ background:"var(--vcard)", border:"1px solid rgba(var(--voverlay-rgb),0.12)", borderRadius:980, padding:"8px 16px", color:"var(--vt1)", fontSize:13, fontWeight:600, cursor:"pointer" }}>‹ {ce("geri")}</button>
+              <div className="vs-hdr" style={{ position:"sticky", top:0, zIndex:5, background:"var(--vb)", padding:"18px 0 12px", display:"flex", alignItems:"center", gap:12, flexWrap:"wrap", borderBottom:"1px solid rgba(var(--voverlay-rgb),0.08)" }}>
+                <button className="vs-back" onClick={()=>{ if(!siparisGonderiliyor) setSiparisModal(false); }} style={{ background:"var(--vcard)", border:"1px solid rgba(var(--voverlay-rgb),0.12)", borderRadius:980, padding:"8px 16px", color:"var(--vt1)", fontSize:13, fontWeight:600, cursor:"pointer" }}>‹<span className="vs-gt"> {ce("geri")}</span></button>
                 <div style={{ fontSize:22, fontWeight:700, letterSpacing:"-0.02em" }}>{siparisDuzenId ? (vitrinDil==="en" ? "Edit order" : vitrinDil==="es" ? "Editar pedido" : "Siparişi düzenle") : ce("siparis_ver")}</div>
                 {siparisDuzenId && <button onClick={()=>{ if (!siparisGonderiliyor && window.confirm(vitrinDil==="en" ? "Discard changes?" : vitrinDil==="es" ? "¿Descartar cambios?" : "Değişiklikler iptal edilsin mi?")) siparisDuzenVazgec(); }} style={{ background:"transparent", border:"1px solid rgba(214,69,69,0.45)", borderRadius:980, padding:"7px 14px", color:"#d64545", fontSize:12, fontWeight:600, cursor:"pointer" }}>{vitrinDil==="en" ? "Discard" : vitrinDil==="es" ? "Descartar" : "Vazgeç"}</button>}
                 {vitrinMusteri && <div style={{ fontSize:13, color:"var(--vt2)", background:"rgba(var(--voverlay-rgb),0.07)", borderRadius:8, padding:"5px 10px", fontWeight:600 }}>{vitrinMusteri.kod}</div>}
@@ -9742,7 +9765,7 @@ function VitrinModu({ kod, onizleme }) {
               </div>
 
               {/* Araç çubuğu — konfirmasyondaki AYAR / GENEL BOY gibi */}
-              <div style={{ display:"flex", gap:18, flexWrap:"wrap", alignItems:"center", background:"var(--vcard)", border:"1px solid rgba(var(--voverlay-rgb),0.08)", borderRadius:12, padding:"10px 14px", margin:"14px 0" }}>
+              <div className="vs-tools" style={{ display:"flex", gap:18, flexWrap:"wrap", alignItems:"center", background:"var(--vcard)", border:"1px solid rgba(var(--voverlay-rgb),0.08)", borderRadius:12, padding:"10px 14px", margin:"14px 0" }}>
                 <div style={{ display:"flex", alignItems:"center", gap:8 }}>
                   <span style={etiket}>{ce("ayar")}</span>
                   <div style={{ display:"inline-flex", background:"rgba(var(--voverlay-rgb),0.07)", borderRadius:9, padding:3 }}>
@@ -9788,7 +9811,7 @@ function VitrinModu({ kod, onizleme }) {
                         </div>
                       </div>
                     )}
-                    <div className="vs-row">
+                    <div className={"vs-row"+(uzunUrun ? " uzun" : "")}>
                       {uzunUrun ? <div/> : (
                         <div style={{ width:"min(150px,30vw)", height:"min(150px,30vw)", borderRadius:10, overflow:"hidden", background:"#f3f3f3" }}>
                           {m.foto ? <img src={m.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"contain", display:"block", transform:"scale(1.25)" }}/> : null}
@@ -9801,8 +9824,11 @@ function VitrinModu({ kod, onizleme }) {
                       </div>
                       <div style={{ minWidth:0 }}>
                         {m.ad && <div style={{ fontSize:13, fontWeight:600, color:"var(--vt1)" }}>{urunCevir(m.ad)}</div>}
-                        <input value={siparisUrunNot[m.id]||""} onChange={e=>setSiparisUrunNot(p=>({...p,[m.id]:e.target.value}))} placeholder={ce("urun_notu")}
+                        <div className={"vs-nw" + ((siparisUrunNot[m.id] || sipNotAcik[m.id]) ? " ac" : "")} style={{ display:"contents" }}>
+                        <button className="vs-nbtn" onClick={()=>setSipNotAcik(p=>({ ...p, [m.id]: true }))}>＋ {ce("urun_notu")}</button>
+                        <input className="vs-nin" value={siparisUrunNot[m.id]||""} onChange={e=>setSiparisUrunNot(p=>({...p,[m.id]:e.target.value}))} placeholder={ce("urun_notu")}
                           style={{ ...kutu, width:"100%", marginTop:6, fontSize:12 }}/>
+                        </div>
                         {boyli && (
                           <label style={{ display:"flex", alignItems:"center", gap:7, marginTop:8, fontSize:12, color:"var(--vt2)", cursor:"pointer" }}>
                             <input type="checkbox" checked={sonra} onChange={e=>{ const isaret=e.target.checked; if (isaret) { const toplam = boylar.reduce((t,x)=>t+(Number(x.adet)||1),0); setSiparisAdetler(p=>({...p,[m.id]: Number(p[m.id])>=1 ? p[m.id] : (toplam>0 ? toplam : "")})); } setSiparisBoySonra(p=>({...p,[m.id]:isaret})); }}/>
@@ -9842,7 +9868,7 @@ function VitrinModu({ kod, onizleme }) {
                         ) : (
                           boyli ? (
                           <div><div style={{ fontSize:10, color:"var(--vt3)", marginBottom:3 }}>{ce("adet_sor")}</div><input type="number" min="1" inputMode="numeric" placeholder="?" value={siparisAdetler[m.id] ?? ""} onChange={e=>{ const v=e.target.value; setSiparisAdetler(p=>({...p,[m.id]: v==="" ? "" : Math.max(1, Math.floor(Number(v)||1))})); }} style={{ ...kutu, width:68, textAlign:"center", fontWeight:700, border: adetEksikMi(m) ? "2px solid #e85a4f" : kutu.border }}/></div>
-                        ) : <input type="number" min="1" value={Number(siparisAdetler[m.id])||1} onChange={e=>setSiparisAdetler(p=>({...p,[m.id]:Math.max(1,Number(e.target.value)||1)}))} style={{ ...kutu, width:68, textAlign:"center", fontWeight:700 }}/>
+                        ) : <div className="vs-stp" style={{ display:"contents" }}><button className="vs-pm" onClick={()=>setSiparisAdetler(p=>({...p,[m.id]:Math.max(1,(Number(p[m.id])||1)-1)}))}>−</button><input type="number" min="1" value={Number(siparisAdetler[m.id])||1} onChange={e=>setSiparisAdetler(p=>({...p,[m.id]:Math.max(1,Number(e.target.value)||1)}))} style={{ ...kutu, width:68, textAlign:"center", fontWeight:700 }}/><button className="vs-pm" onClick={()=>setSiparisAdetler(p=>({...p,[m.id]:(Number(p[m.id])||1)+1}))}>+</button></div>
                         )}
                       </div>
                       <div className="vs-top" style={{ textAlign:"center", fontSize:14, fontWeight:700 }}>{satirGram(m).toFixed(2)} g</div>
@@ -9890,10 +9916,12 @@ function VitrinModu({ kod, onizleme }) {
           )}
           {/* Alt çubuk — toplam + gönder */}
           {!siparisBasarili && (
-            <div style={{ position:"fixed", left:0, right:0, bottom:0, zIndex:6, background:"var(--vcard)", borderTop:"1px solid rgba(var(--voverlay-rgb),0.12)", padding:"12px 20px", display:"flex", alignItems:"center", gap:16, flexWrap:"wrap", justifyContent:"flex-end" }}>
-              {siparisHata && <div style={{ flex:"1 1 260px", fontSize:12, color:"#e85a4f" }}>{siparisHata}</div>}
+            <div className="vs-bar" style={{ position:"fixed", left:0, right:0, bottom:0, zIndex:6, background:"var(--vcard)", borderTop:"1px solid rgba(var(--voverlay-rgb),0.12)", padding:"12px 20px", display:"flex", alignItems:"center", gap:16, flexWrap:"wrap", justifyContent:"flex-end" }}>
+              {siparisHata && <div className="vs-hata" style={{ flex:"1 1 260px", fontSize:12, color:"#e85a4f" }}>{siparisHata}</div>}
+              <div className="vs-tot" style={{ display:"contents" }}>
               <div style={{ fontSize:13, color:"var(--vt2)" }}>{seciliModeller.reduce((t,m)=>t+satirAdet(m),0)} {ce("adet")} · {ce("liste_gram")} · {aktifAyar.replace("K"," Ayar")}</div>
               <div style={{ fontSize:20, fontWeight:700 }}>{listeGram().toFixed(2)} g</div>
+              </div>
               <button disabled={siparisGonderiliyor} onClick={siparisOnayaGit}
                 style={{ background: siparisGonderiliyor?"rgba(var(--voverlay-rgb),0.15)":"#2e9e4f", border:"none", borderRadius:11, padding:"13px 34px", color:"#fff", fontSize:15, fontWeight:700, cursor: siparisGonderiliyor?"default":"pointer" }}>
                 {siparisGonderiliyor ? ce("gonderiliyor") : (siparisDuzenId ? (vitrinDil==="en" ? "Update order" : vitrinDil==="es" ? "Actualizar pedido" : "Siparişi güncelle") : ce("siparisi_gonder"))}
@@ -10006,10 +10034,15 @@ function VitrinModu({ kod, onizleme }) {
           return { top, haz, ur, bk, sipN, onayli, teslimS, uretimS, yuzde: yz(haz, top), onayYz: yz(onayli, sipN), teslimYz: yz(teslimS, sipN) };
         })();
         const spCss = `.sp-cards{display:grid;grid-template-columns:1fr;gap:12px}.sp-cards>div{margin-bottom:0!important}.sp-tabs{scrollbar-width:none}.sp-tabs::-webkit-scrollbar{display:none}
+.sp-strip{display:contents}.sp-kod,.sp-all{display:none}
 .sp-main{display:block}.sp-side{margin:8px 0 14px}
 .sp-tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:10px}
 @media(min-width:1000px){.sp-in{max-width:1120px!important}.sp-main{display:grid;grid-template-columns:290px 1fr;gap:26px;align-items:start}.sp-side{position:sticky;top:16px;margin:6px 0 0}.sp-tiles{grid-template-columns:1fr 1fr}.sp-cards{grid-template-columns:1fr 1fr;align-items:start}.sp-cards>.sp-acik{grid-column:1/-1}}
-@media(max-width:700px){.sp-pad{padding-left:16px!important;padding-right:16px!important}}`;
+@media(max-width:700px){.sp-pad{padding-left:16px!important;padding-right:16px!important}
+.sp-strip{display:flex;gap:8px;overflow-x:auto;width:100%;-webkit-overflow-scrolling:touch;scrollbar-width:none}.sp-strip::-webkit-scrollbar{display:none}
+.sp-th{flex:0 0 auto;width:78px}.sp-th .sp-img{width:78px!important;height:78px!important;border-radius:12px!important}
+.sp-kod{display:block;text-align:center;margin-top:4px}.sp-kod b{display:block;font-size:11px}.sp-kod small{display:block;font-size:10px;color:var(--vt3)}
+.sp-all{display:inline-block;margin-left:auto;background:transparent;border:none;color:var(--vt1);font-size:12px;font-weight:700;cursor:pointer;padding:4px 0}}`;
         return (
         <div style={{ position:"fixed", inset:0, zIndex:111, background:"var(--vb)", overflow:"auto", color:"var(--vt1)", letterSpacing:"-0.005em" }}>
           <div className="sp-in" style={{ maxWidth:920, margin:"0 auto", padding:"0 22px 80px" }}>
@@ -10121,8 +10154,11 @@ function VitrinModu({ kod, onizleme }) {
 
                 {!acik && (
                   <div style={{ padding:"0 18px 16px", display:"flex", gap:6, alignItems:"center", flexWrap:"wrap" }}>
-                    {kalemler.filter(k=>k.foto).slice(0,5).map((k,i)=>(<div key={i} style={{ width:46, height:46, borderRadius:9, overflow:"hidden", background:"#f3f3f3", flexShrink:0 }}><img src={k.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"contain", transform:"scale(1.2)" }}/></div>))}
+                    <div className="sp-strip">
+                    {kalemler.filter(k=>k.foto).slice(0,24).map((k,i)=>{ const mv = modeller.find(x => (k.id != null && x.id === k.id)) || modeller.find(x => x.kod && x.kod === k.kod); return (<div key={i} className="sp-th" onClick={mv ? (e)=>{ e.stopPropagation(); setDetayModel({ ...mv, kaynakAd: "" }); } : undefined} style={{ cursor: mv ? "pointer" : "default" }}><div className="sp-img" style={{ width:46, height:46, borderRadius:9, overflow:"hidden", background:"#f3f3f3", flexShrink:0 }}><img src={k.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"contain", transform:"scale(1.2)" }}/></div><div className="sp-kod"><b>{k.kod}</b>{k.secilenAyar ? <small>{k.secilenAyar}{(Number(k.adet)||1) > 1 ? " · ×"+(Number(k.adet)||1) : ""}</small> : ((Number(k.adet)||1) > 1 ? <small>×{Number(k.adet)}</small> : null)}</div></div>); })}
+                    </div>
                     <div style={{ fontSize:12, color:"var(--vt3)", marginLeft:4 }}>{kalemler.length} {t3("model","models","modelos")} · {toplamAdet} {ce("adet")}</div>
+                    <button className="sp-all" onClick={()=>setSipKapali(p=>({ ...p, [sp.id]: false }))}>{t3("Tümünü gör ▾","See all ▾","Ver todo ▾")}</button>
                     {bspS && c !== "iptal" && (
                       <div style={{ marginLeft:"auto", display:"flex", gap:8, flexWrap:"wrap", justifyContent:"flex-end" }}>
                         <button onClick={()=>{ setSipOzetTas(true); setSipOzet(sp); }} style={{ ...dugme }}>{t3("Onay özeti","Order confirmation","Confirmación")}</button>
@@ -10273,7 +10309,7 @@ function VitrinModu({ kod, onizleme }) {
         const dIdx = koldaki.findIndex(m => m.id === detayModel.id);
         const dToplam = koldaki.length;
         return (
-        <div onClick={()=>setDetayModel(null)} style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.7)", zIndex: sipOzet ? 130 : 100, display:"flex", alignItems:"center", justifyContent:"center", gap:10, padding:20, backdropFilter:"blur(20px)" }}>
+        <div onClick={()=>setDetayModel(null)} style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.7)", zIndex: (sipOzet || sipListeAcik) ? 130 : 100, display:"flex", alignItems:"center", justifyContent:"center", gap:10, padding:20, backdropFilter:"blur(20px)" }}>
             {/* ═══ SOLDAKİ ÖNİZLEME — kartın DIŞINDA, koyu arka planda, önceki modelin flu fotoğrafı ═══ */}
             {dIdx > 0 && typeof window !== "undefined" && window.innerWidth > 760 && (() => { const pm = koldaki[dIdx-1]; return (
               <div onClick={(e)=>{ e.stopPropagation(); detayKomsu(-1); }} title={ce("onceki")}
@@ -14958,7 +14994,7 @@ function Atolye({ onSirketDegis }) {
           const dBtn = { ...vBtn, marginLeft:0, padding:"7px 13px" };
           return (
           <div style={{ animation:"fadein .3s", maxWidth:1280, margin:"0 auto" }}>
-            <style>{`.vit-t tbody tr:last-child td{border-bottom:none}.vit-t tbody tr:hover td{background:${T.btnBg}}.vm-cards,.vm-back{display:none}@media(max-width:700px){.vm-tablo{display:none}.vm-cards{display:block}.vm-stat{display:grid!important;grid-template-columns:1fr 1fr;gap:8px!important}.vm-stat>*{min-width:0!important}.vm-sek{flex-wrap:nowrap!important;overflow-x:auto}.vm-sek button{white-space:nowrap}.vm-edit{display:none!important}.vm-edit.ac{display:block!important;position:fixed;left:0;right:0;bottom:0;width:auto!important;max-height:88vh;overflow:auto;z-index:960;border-radius:18px 18px 0 0!important;flex:none!important;box-shadow:0 -12px 32px rgba(0,0,0,.35);box-sizing:border-box}.vm-back{display:block;position:fixed;inset:0;z-index:955;background:rgba(0,0,0,.45)}}`}</style>
+            <style>{`.vit-t tbody tr:last-child td{border-bottom:none}.vit-t tbody tr:hover td{background:${T.btnBg}}.vm-cards,.vm-back{display:none}@media(max-width:700px){.vm-tablo{display:none}.vm-cards{display:block}.vm-stat{display:grid!important;grid-template-columns:1fr 1fr;gap:8px!important}.vm-stat>*{min-width:0!important}.vm-sek{flex-wrap:nowrap!important;overflow-x:auto}.vm-sek button{white-space:nowrap}.vm-edit{display:none!important}.vm-edit.ac{display:block!important;position:fixed;left:0;right:0;bottom:0;width:auto!important;max-height:88vh;overflow:auto;z-index:960;border-radius:18px 18px 0 0!important;flex:none!important;box-shadow:0 -12px 32px rgba(0,0,0,.35);box-sizing:border-box;background:${T.bg2||"#1c1a16"}!important;padding-bottom:28px!important}.vm-back{display:block;position:fixed;inset:0;z-index:955;background:rgba(0,0,0,.45)}}`}</style>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-end", flexWrap:"wrap", gap:12 }}>
               <div>
                 <div style={{ fontSize:26, fontWeight:700, color:T.text, letterSpacing:-0.5 }}>Müşteriler</div>
