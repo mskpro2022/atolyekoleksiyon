@@ -3507,10 +3507,11 @@ function MskMuhasebeSayfa({ T, GH, disSek, onDisSek, menuGizle }) {
   );
 }
 
-function MuhasebeSayfa({ T, GH, sirket="BSP", usdTry=null }) {
+function MuhasebeSayfa({ T, GH, sirket="BSP", usdTry=null, disSek, onDisSek, menuGizle }) {
   const KIRMIZI="#d9675d", YESIL="#6abf8f", TURUNCU="#e0954a";
   const [sifre, setSifre] = useState(() => adminOturum() ? "admin-oturumu" : ""); const [giris, setGiris] = useState(""); const [hata, setHata] = useState(""); const [kontrol, setKontrol] = useState(false);
-  const [sek, setSek] = useState("ozet");
+  const [sek0, setSek0] = useState(disSek || "ozet");
+  const sek = disSek || sek0; const setSek = (k) => { setSek0(k); if (onDisSek) onDisSek(k); }; // BSP sol menüsünden yönetilebilir
   const [oz, setOz] = useState(null); const [cariler, setCariler] = useState(null); const [arsiv, setArsiv] = useState(false);
   const [filtre, setFiltre] = useState("hepsi"); const [ara, setAra] = useState("");
   const [secili, setSecili] = useState(null); const [ekstre, setEkstre] = useState(null);
@@ -3697,7 +3698,7 @@ function MuhasebeSayfa({ T, GH, sirket="BSP", usdTry=null }) {
 
   return (
     <div style={{ color:T.text, display:"flex", gap:18, flexWrap:"wrap", alignItems:"flex-start" }}>
-      <nav style={{ flex:"1 1 188px", maxWidth:230, background:T.card, border:"1px solid "+T.border, borderRadius:14, overflow:"hidden" }}>
+      <nav style={{ display: menuGizle ? "none" : "block", flex:"1 1 188px", maxWidth:230, background:T.card, border:"1px solid "+T.border, borderRadius:14, overflow:"hidden" }}>
         {menuOge("ozet", "Güncel Durum")}
         {menuGrup("satislar", "Satışlar", [["satis", "Satış Faturaları", true], ["tahsilat", "Tahsilatlar", true]])}
         {menuGrup("giderler", "Giderler", [["gider", "Gider Faturaları", false], ["odeme", "Ödemeler", false]])}
@@ -6273,6 +6274,264 @@ function RaporKarlilik({ T, GH }) {
 }
 
 // ── Raporlar: yükleme + bilanço + yüklü kayıtlar ──
+// ═══ BSP · ÖN MUHASEBE EK EKRANLARI — Güncel Durum, Giderler, Ödemeler, Kasa ve Bankalar, Nakit Akışı, Raporlar ═══
+// Satış faturaları, tahsilatlar, cariler ve Paraşüt aktarımı MuhasebeSayfa'da; bu bileşen kalan ekranları ekler. Tutarlar USD.
+let BSP_MUH_SIFRE = "";
+async function bspRpc(ad, args = {}) {
+  if (!BSP_MUH_SIFRE && adminOturum()) BSP_MUH_SIFRE = "admin-oturumu"; // sunucu admin oturumunu tanır
+  if (!BSP_MUH_SIFRE) {
+    const g = window.prompt("Muhasebe şifresi (BSP):"); if (!g) throw new Error("Şifre girilmedi");
+    const { data, error } = await supabase.rpc("muh_dogrula", { p_sifre: g, p_sirket: "BSP" });
+    if (error) throw new Error(error.message); if (data !== true) throw new Error("Şifre yanlış"); BSP_MUH_SIFRE = g;
+  }
+  const { data, error } = await supabase.rpc(ad, { p_sifre: BSP_MUH_SIFRE, p_sirket: "BSP", ...args });
+  if (error) { if (error.message === "yetkisiz") BSP_MUH_SIFRE = ""; throw new Error(error.message === "yetkisiz" ? "Şifre geçersiz" : error.message); }
+  return data;
+}
+const BSP_AY = ["Oca","Şub","Mar","Nis","May","Haz","Tem","Ağu","Eyl","Eki","Kas","Ara"];
+function BspMuhEk({ T, GH, sek, usdTry, onGit }) {
+  const KIRM = T.id === "beyaz" ? "#b3382c" : "#e0776c", YESIL = T.id === "beyaz" ? "#1f7a4d" : "#5fbf8f", TUR = T.id === "beyaz" ? "#b8641c" : "#e0954a", MAVI = "#5b7fa6";
+  const simdi = new Date();
+  const bugun = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); };
+  const para = (n, k = 0) => "$" + (Number(n) || 0).toLocaleString("tr-TR", { maximumFractionDigits: k, minimumFractionDigits: k });
+  const tarihTR = (t) => t ? new Date(t + "T12:00:00").toLocaleDateString("tr-TR", { day: "2-digit", month: "2-digit", year: "numeric" }) : "—";
+  const sayiOku = (v) => { const x = String(v == null ? "" : v).trim(); return Number(x.includes(",") ? x.replace(/\./g, "").replace(",", ".") : x) || 0; }; // "1.250,50" ve "1250.5" ikisi de okunur
+  const [yil, setYil] = useState(simdi.getFullYear());
+  const [oz, setOz] = useState(null), [yas, setYas] = useState(null), [rap, setRap] = useState(null), [son, setSon] = useState(null), [kasa, setKasa] = useState(null);
+  const [gl, setGl] = useState(null), [gF, setGF] = useState("hepsi"), [gAra, setGAra] = useState("");
+  const [ol, setOl] = useState(null), [hesapF, setHesapF] = useState("");
+  const [cariler, setCariler] = useState([]);
+  const [form, setForm] = useState(null); // { tip:"gider"|"odeme"|"virman"|"hesap", ... }
+  const [hata, setHata] = useState(""), [bilgi, setBilgi] = useState(""), [mesgul, setMesgul] = useState(false);
+  const dene = async (f, set, bos) => { try { set(await f()); } catch (e) { setHata(e.message); if (bos !== undefined) set(bos); } };
+  const kasaYukle = () => dene(() => bspRpc("muh_hesap_hareket", { p_hesap: hesapF || null, p_limit: 300 }), setKasa, { hesaplar: [], hareketler: [] });
+  const yukle = () => {
+    setHata("");
+    if (sek === "guncel") { dene(() => bspRpc("muh_ozet"), setOz, {}); dene(() => bspRpc("muh_yaslandirma"), setYas, { alacak: [], borc: [] }); dene(() => bspRpc("muh_rapor", { p_yil: yil }), setRap, null); dene(() => bspRpc("muh_son_islemler", { p_limit: 10 }), setSon, []); kasaYukle(); }
+    if (sek === "gider") dene(() => bspRpc("muh_gider_liste", { p_filtre: gF, p_ara: gAra || null, p_limit: 300 }), setGl, { kayitlar: [], toplam: 0, acik_usd: 0, kategoriler: [] });
+    if (sek === "odeme") dene(() => bspRpc("muh_odeme_liste", { p_limit: 300 }), setOl, []);
+    if (sek === "kasa") kasaYukle();
+    if (sek === "akis" || sek === "r_satis" || sek === "r_gider" || sek === "r_sahsi") dene(() => bspRpc("muh_rapor", { p_yil: yil }), setRap, null);
+    if (sek === "r_yas") dene(() => bspRpc("muh_yaslandirma"), setYas, { alacak: [], borc: [] });
+  };
+  useEffect(() => { const t = setTimeout(yukle, sek === "gider" ? 250 : 0); return () => clearTimeout(t); }, [sek, yil, gF, gAra, hesapF]);
+  useEffect(() => { dene(() => bspRpc("muh_cariler", { p_arsiv: false }), setCariler, []); }, []);
+  useEffect(() => { if (!bilgi) return; const t = setTimeout(() => setBilgi(""), 3500); return () => clearTimeout(t); }, [bilgi]);
+  const hesaplar = (kasa && kasa.hesaplar) || [];
+  useEffect(() => { if (!kasa && sek !== "guncel" && sek !== "kasa") dene(() => bspRpc("muh_hesap_hareket", { p_hesap: null, p_limit: 1 }), setKasa, { hesaplar: [], hareketler: [] }); }, [sek]);
+
+  const kart = { background: T.id === "beyaz" ? "#fff" : T.card, border: "1px solid " + T.border, borderRadius: 14, overflow: "hidden" };
+  const kBas = { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, padding: "15px 20px 8px", fontSize: 15, fontWeight: 700 };
+  const altB = { fontSize: 12, color: T.sub, fontWeight: 500 };
+  const dug = { background: "transparent", border: "1px solid " + T.border, borderRadius: 10, padding: "7px 13px", fontSize: 13, fontWeight: 600, color: T.text, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" };
+  const dugAna = { ...dug, background: T.text, color: T.bg2 || "#111", borderColor: T.text, fontWeight: 700 };
+  const th = { textAlign: "left", fontSize: 11.5, color: T.sub, fontWeight: 600, padding: "8px 12px", background: T.bg2 || "transparent", whiteSpace: "nowrap" };
+  const td = { fontSize: 13, padding: "10px 12px", borderTop: "1px solid " + T.border, verticalAlign: "top" };
+  const sag = { textAlign: "right", fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" };
+  const girdi = { background: "transparent", border: "1px solid " + T.border, borderRadius: 8, padding: "9px 12px", color: T.text, fontSize: 13, outline: "none", boxSizing: "border-box", width: "100%", fontFamily: "inherit", colorScheme: T.id === "beyaz" ? "light" : "dark" };
+  const chip = (on) => ({ ...dug, borderRadius: 999, padding: "5px 12px", fontSize: 12.5, borderColor: on ? T.text : T.border, color: on ? T.text : T.sub });
+  const baslik = (b, alt, sagEl) => (<div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: 10, marginBottom: 14 }}>
+    <div><div style={{ fontSize: 24, fontWeight: 700, letterSpacing: -0.4 }}>{b}</div><div style={{ fontSize: 13, color: T.sub, marginTop: 3 }}>{alt}</div></div>
+    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>{sagEl}</div></div>);
+  const yilSec = (<div style={{ display: "flex", alignItems: "center", gap: 2, border: "1px solid " + T.border, borderRadius: 999, padding: "3px 6px", fontSize: 13, fontWeight: 600 }}>
+    <button onClick={() => setYil(y => y - 1)} style={{ ...dug, border: "none", padding: "3px 9px" }}>‹</button><span>{yil}</span>
+    <button onClick={() => setYil(y => Math.min(simdi.getFullYear(), y + 1))} style={{ ...dug, border: "none", padding: "3px 9px" }}>›</button></div>);
+  const bosSatir = (n, m) => <tr><td colSpan={n} style={{ ...td, textAlign: "center", color: T.sub, padding: 24 }}>{m}</td></tr>;
+  const alan = (l, el, tam) => <div style={{ gridColumn: tam ? "1 / -1" : "auto" }}><div style={{ fontSize: 11, color: T.sub, fontWeight: 600, letterSpacing: ".04em", marginBottom: 4 }}>{l}</div>{el}</div>;
+  const hesapSec = (v, set) => <select value={v || ""} onChange={e => set(e.target.value)} style={girdi}>{hesaplar.length === 0 && <option value="">Varsayılan kasa</option>}{hesaplar.map(h => <option key={h.id} value={h.id}>{h.ad} · {para(h.bakiye, 2)}</option>)}</select>;
+  const cariBul = (ad) => { const q = String(ad || "").trim().toLocaleUpperCase("tr"); return q ? cariler.find(c => String(c.ad).toLocaleUpperCase("tr") === q) : null; };
+  const formAc = (tip, ek = {}) => { setHata(""); setForm({ tip, tarih: bugun(), pb: "USD", kur: usdTry ? Number(usdTry).toFixed(2) : "", hesap: (hesaplar[0] || {}).id || "", ...ek }); };
+  const kaydet = async () => {
+    const f = form; setMesgul(true); setHata("");
+    try {
+      if (f.tip === "gider") {
+        const c = cariBul(f.cariAd);
+        await bspRpc("muh_gider_ekle", { p_cari: c ? c.id : null, p_cari_ad: c ? null : (f.cariAd || null), p_tarih: f.tarih, p_vade: f.vade || null, p_ad: f.ad || "", p_kategori: f.kategori || null, p_pb: f.pb, p_kur: f.pb === "TRL" ? sayiOku(f.kur) : null, p_tutar: sayiOku(f.tutar), p_sahsi: !!f.sahsi, p_odendi: !!f.odendi, p_hesap: f.odendi ? (f.hesap || null) : null });
+        setBilgi("Gider kaydedildi ✓");
+      } else if (f.tip === "odeme") {
+        const c = f.giderId ? null : cariBul(f.cariAd);
+        if (!f.giderId && !c) throw new Error("Listeden bir cari seçin");
+        await bspRpc("muh_odeme_ekle", { p_cari: c ? c.id : null, p_gider: f.giderId || null, p_tutar_usd: sayiOku(f.tutar), p_tarih: f.tarih, p_hesap: f.hesap || null, p_aciklama: f.aciklama || null });
+        setBilgi("Ödeme kaydedildi ✓");
+      } else if (f.tip === "virman") {
+        await bspRpc("muh_virman_ekle", { p_kaynak: f.kaynak || null, p_hedef: f.hedef || null, p_tutar_usd: sayiOku(f.tutar), p_tarih: f.tarih, p_aciklama: f.aciklama || null });
+        setBilgi("Virman kaydedildi ✓");
+      } else if (f.tip === "hesap") {
+        await bspRpc("muh_hesap_ekle", { p_ad: f.ad || "", p_tur: f.tur || "nakit" });
+        setBilgi("Hesap açıldı ✓");
+      }
+      setForm(null); setKasa(null); yukle(); if (sek !== "kasa" && sek !== "guncel") kasaYukle();
+      dene(() => bspRpc("muh_cariler", { p_arsiv: false }), setCariler, []);
+    } catch (e) { setHata(e.message); }
+    setMesgul(false);
+  };
+  const sil = async (ad, args, soru) => { if (!window.confirm(soru)) return; try { await bspRpc(ad, args); setBilgi("Silindi ✓"); yukle(); } catch (e) { alert(e.message); } };
+  const yasCubuk = (l, renkAna) => { const t = (k) => l.reduce((s, x) => s + (Number(x[k]) || 0), 0); const P = [["Vadesi gelmemiş", t("vadesiz"), MAVI], ["Vadesiz kayıt", t("plansiz"), T.sub], ["0–30 gün gecikmiş", t("g30"), TUR], ["31–90 gün", t("g90"), TUR], ["90+ gün", t("g90p"), KIRM]].filter(p => p[1] > 0.5); const top = t("toplam"); return (
+    <div style={{ padding: "0 20px 14px" }}>
+      <div style={{ fontSize: 28, fontWeight: 700, letterSpacing: -0.5, color: renkAna, fontVariantNumeric: "tabular-nums" }}>{para(top)}</div>
+      <div style={{ display: "flex", gap: 2, borderRadius: 5, overflow: "hidden", margin: "12px 0 8px", height: 10, background: "rgba(128,128,128,.18)" }}>{P.map(p => <i key={p[0]} style={{ flex: p[1], background: p[2] }} />)}</div>
+      {P.map(p => <div key={p[0]} style={{ display: "flex", justifyContent: "space-between", fontSize: 13, padding: "7px 0", borderTop: "1px solid " + T.border }}><span><i style={{ display: "inline-block", width: 9, height: 9, borderRadius: 2, background: p[2], marginRight: 8 }} />{p[0]}</span><b style={{ fontVariantNumeric: "tabular-nums" }}>{para(p[1])}</b></div>)}
+      {P.length === 0 && <div style={{ fontSize: 13, color: T.sub }}>Açık kayıt yok</div>}
+    </div>); };
+  const katListe = (l, renk) => { const mx = Math.max(1e-9, ...l.map(x => x.usd)); return l.length === 0 ? <div style={{ padding: "4px 20px 16px", fontSize: 13, color: T.sub }}>Kayıt yok</div> : l.slice(0, 15).map(x => (
+    <div key={x.ad} style={{ padding: "9px 20px", borderTop: "1px solid " + T.border }}>
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 10, fontSize: 13.5 }}><span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{x.ad}</span><span style={{ whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}><b>{para(x.usd)}</b><span style={{ color: T.sub, fontSize: 12, marginLeft: 8 }}>{x.adet} kayıt</span></span></div>
+      <div style={{ height: 4, borderRadius: 2, background: "rgba(128,128,128,.18)", marginTop: 6 }}><div style={{ width: (x.usd / mx * 100) + "%", height: 4, borderRadius: 2, background: renk }} /></div>
+    </div>)); };
+  const ayVeri = (k, k2) => ((rap && rap.aylik) || []).map(a => ({ e: BSP_AY[a.ay - 1], v: a[k], ...(k2 ? { v2: a[k2] } : {}) }));
+  const ayTop = (k) => ((rap && rap.aylik) || []).reduce((s, a) => s + (Number(a[k]) || 0), 0);
+  const yukleniyor = <div style={{ fontSize: 13, color: T.sub, padding: 20 }}>Yükleniyor…</div>;
+
+  return (
+    <div style={{ color: T.text }}>
+      {bilgi && <div style={{ position: "fixed", top: 14, right: 14, zIndex: 9500, background: "#14532d", color: "#fff", padding: "9px 14px", borderRadius: 10, fontSize: 12, fontWeight: 700 }}>{bilgi}</div>}
+      {hata && !form && <div style={{ ...kart, padding: "10px 16px", marginBottom: 12, fontSize: 13, color: KIRM }}>Hata: {hata}</div>}
+
+      {sek === "guncel" && (<>
+        {baslik("Güncel Durum", "BSP · " + new Date().toLocaleDateString("tr-TR", { day: "numeric", month: "long", year: "numeric" }) + (usdTry ? " · kur ₺" + Number(usdTry).toFixed(2) : "") + " · tutarlar USD", <>
+          <button onClick={() => onGit("satis")} style={dug}>Satış faturası</button><button onClick={() => onGit("tahsilat")} style={dug}>Tahsilat</button>
+          <button onClick={() => formAc("gider")} style={dug}>Gider</button><button onClick={() => formAc("odeme")} style={dug}>Ödeme</button><button onClick={() => formAc("virman", { kaynak: (hesaplar[0] || {}).id || "", hedef: (hesaplar[1] || {}).id || "" })} style={dug}>Virman</button></>)}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(300px,1fr))", gap: 14 }}>
+          <div style={kart}><div style={kBas}><span>Tahsil edilecek</span><span onClick={() => onGit("r_yas")} style={{ ...altB, cursor: "pointer" }}>{yas ? yas.alacak.length + " müşteri · " : ""}Tümü ›</span></div>{yas ? yasCubuk(yas.alacak, T.text) : yukleniyor}</div>
+          <div style={kart}><div style={kBas}><span>Ödenecek</span><span onClick={() => onGit("gider")} style={{ ...altB, cursor: "pointer" }}>{yas ? yas.borc.length + " cari · " : ""}Tümü ›</span></div>{yas ? yasCubuk(yas.borc, KIRM) : yukleniyor}</div>
+          <div style={kart}><div style={kBas}><span>Kasa ve bankalar</span><span onClick={() => onGit("kasa")} style={{ ...altB, cursor: "pointer" }}>toplam {para(hesaplar.reduce((s, h) => s + Number(h.bakiye || 0), 0))} · Tümü ›</span></div>
+            {!kasa ? yukleniyor : hesaplar.length === 0 ? <div style={{ padding: "4px 20px 16px", fontSize: 13, color: T.sub }}>Hesap yok</div> : hesaplar.map(h => <div key={h.id} style={{ display: "flex", justifyContent: "space-between", padding: "10px 20px", borderTop: "1px solid " + T.border, fontSize: 13.5 }}><span>{h.ad} <span style={{ color: T.sub, fontSize: 12 }}>{h.tur}</span></span><b style={{ color: h.bakiye < 0 ? KIRM : T.text, fontVariantNumeric: "tabular-nums" }}>{para(h.bakiye, 2)}</b></div>)}
+            {oz && <div style={{ padding: "10px 20px 14px", borderTop: "1px solid " + T.border, fontSize: 12.5, color: T.sub, lineHeight: 1.7 }}>Bu ay: satış <b style={{ color: T.text }}>{para(oz.ay_satis)}</b> · tahsilat <b style={{ color: T.text }}>{para(oz.ay_tahsilat)}</b> · ödeme <b style={{ color: T.text }}>{para(oz.ay_odeme)}</b>{oz.supheli_alacak > 0.5 ? <> · şüpheli alacak <b style={{ color: TUR }}>{para(oz.supheli_alacak)}</b></> : null}</div>}
+          </div>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(380px,1fr))", gap: 14, marginTop: 14 }}>
+          <div style={kart}><div style={kBas}><span>Aylık satış ve gider</span>{yilSec}</div><div style={{ padding: "0 20px 16px" }}>{rap ? <RpSutun T={T} renk={MAVI} renk2={YESIL} ad="Gider (şahsi dahil)" ad2="Satış" yuk={110} veri={((rap.aylik) || []).map(a => ({ e: BSP_AY[a.ay - 1], v: a.gider + a.sahsi, v2: a.satis }))} /> : yukleniyor}</div></div>
+          <div style={kart}><div style={kBas}><span>Son işlemler</span><span onClick={() => onGit("kasa")} style={{ ...altB, cursor: "pointer" }}>Kasa hareketleri ›</span></div>
+            {!son ? yukleniyor : son.length === 0 ? <div style={{ padding: "4px 20px 16px", fontSize: 13, color: T.sub }}>Kayıt yok</div> : son.map((x, i) => <div key={i} style={{ display: "grid", gridTemplateColumns: "78px 1fr auto", gap: 10, padding: "9px 20px", borderTop: "1px solid " + T.border, fontSize: 13 }}><span style={{ color: T.sub }}>{tarihTR(x.tarih).slice(0, 5)}</span><span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{x.tur}{x.cari_ad ? " · " + x.cari_ad : ""}{x.aciklama ? <span style={{ color: T.sub }}> · {x.aciklama}</span> : null}</span><b style={{ color: x.yon > 0 ? YESIL : x.yon < 0 ? KIRM : T.text, fontVariantNumeric: "tabular-nums" }}>{x.yon > 0 ? "+ " : x.yon < 0 ? "− " : ""}{para(x.usd)}</b></div>)}
+          </div>
+        </div>
+      </>)}
+
+      {sek === "gider" && (<>
+        {baslik("Gider Listesi", gl ? gl.toplam.toLocaleString("tr-TR") + " kayıt · ödenecek toplam " + para(gl.acik_usd) : "", <button onClick={() => formAc("gider")} style={dugAna}>+ Gider</button>)}
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12, alignItems: "center" }}>
+          {[["hepsi", "Tümü"], ["acik", "Ödenecek"], ["gecikmis", "Gecikmiş"], ["sahsi", "Şahsi"]].map(([k, l]) => <button key={k} onClick={() => setGF(k)} style={chip(gF === k)}>{l}</button>)}
+          <input value={gAra} onChange={e => setGAra(e.target.value)} placeholder="Gider, cari ya da kategori ara…" style={{ ...girdi, width: 260, marginLeft: "auto" }} />
+        </div>
+        <div style={{ ...kart, overflowX: "auto" }}><table style={{ width: "100%", borderCollapse: "collapse", minWidth: 760 }}>
+          <thead><tr><th style={th}>Tarih</th><th style={th}>Gider</th><th style={th}>Cari</th><th style={th}>Kategori</th><th style={{ ...th, textAlign: "right" }}>Tutar</th><th style={{ ...th, textAlign: "right" }}>Kalan</th><th style={th}>Vade</th><th style={th}></th></tr></thead>
+          <tbody>{!gl ? bosSatir(8, "Yükleniyor…") : gl.kayitlar.length === 0 ? bosSatir(8, "Bu filtreyle gider yok") : gl.kayitlar.map(g => { const acik = g.kalan > 0.5, gec = acik && g.vade && g.vade < bugun(); return (
+            <tr key={g.id}><td style={{ ...td, color: T.sub, whiteSpace: "nowrap" }}>{tarihTR(g.tarih)}</td>
+              <td style={td}>{g.ad || "—"}{g.sahsi && <span style={{ marginLeft: 8, fontSize: 11, color: TUR, border: "1px solid " + TUR, borderRadius: 6, padding: "0 6px" }}>şahsi</span>}</td>
+              <td style={td}>{g.cari_ad || "—"}</td><td style={{ ...td, color: T.sub }}>{g.kategori || "—"}</td>
+              <td style={{ ...td, ...sag, fontWeight: 600 }}>{para(g.tutar_usd, 2)}{g.para_birimi === "TRL" && <div style={{ fontSize: 11, color: T.sub, fontWeight: 400 }}>₺{Number(g.tutar).toLocaleString("tr-TR")}</div>}</td>
+              <td style={{ ...td, ...sag, color: acik ? KIRM : YESIL, fontWeight: 600 }}>{acik ? para(g.kalan, 2) : "ödendi"}</td>
+              <td style={{ ...td, color: gec ? KIRM : T.sub, whiteSpace: "nowrap" }}>{g.vade ? tarihTR(g.vade) : "—"}</td>
+              <td style={{ ...td, whiteSpace: "nowrap", textAlign: "right" }}>{acik && <button onClick={() => formAc("odeme", { giderId: g.id, giderAd: (g.ad || g.cari_ad || "Gider"), tutar: String(g.kalan).replace(".", ","), kalan: g.kalan })} style={{ ...dug, padding: "3px 10px", fontSize: 12 }}>Öde</button>}{g.kaynak === "uygulama" && <button onClick={() => sil("muh_gider_sil", { p_id: g.id }, "Bu gider ve bağlı ödemeleri silinsin mi?")} style={{ ...dug, padding: "3px 10px", fontSize: 12, marginLeft: 6, color: KIRM }}>Sil</button>}</td></tr>); })}</tbody>
+        </table></div>
+        {gl && gl.toplam > gl.kayitlar.length && <div style={{ fontSize: 12, color: T.sub, marginTop: 8 }}>İlk {gl.kayitlar.length} kayıt gösteriliyor; daraltmak için arama ya da filtre kullanın.</div>}
+      </>)}
+
+      {sek === "odeme" && (<>
+        {baslik("Ödemeler", "Tedarikçi ve gider ödemeleri · son 300 kayıt", <button onClick={() => formAc("odeme")} style={dugAna}>+ Ödeme</button>)}
+        <div style={{ ...kart, overflowX: "auto" }}><table style={{ width: "100%", borderCollapse: "collapse", minWidth: 680 }}>
+          <thead><tr><th style={th}>Tarih</th><th style={th}>Tür</th><th style={th}>Cari</th><th style={th}>Açıklama</th><th style={th}>Hesap</th><th style={{ ...th, textAlign: "right" }}>Tutar</th><th style={th}></th></tr></thead>
+          <tbody>{!ol ? bosSatir(7, "Yükleniyor…") : ol.length === 0 ? bosSatir(7, "Ödeme yok") : ol.map(o => (
+            <tr key={o.id}><td style={{ ...td, color: T.sub, whiteSpace: "nowrap" }}>{tarihTR(o.tarih)}</td><td style={td}>{o.tur}</td><td style={td}>{o.cari_ad || "—"}</td><td style={{ ...td, color: T.sub }}>{o.aciklama || o.gider || "—"}</td><td style={{ ...td, color: T.sub }}>{o.hesap || "—"}</td>
+              <td style={{ ...td, ...sag, fontWeight: 600, color: KIRM }}>− {para(o.cikis_usd, 2)}</td>
+              <td style={{ ...td, textAlign: "right" }}>{o.kaynak === "uygulama" && <button onClick={() => sil("muh_odeme_sil", { p_id: o.id }, "Bu ödeme silinsin mi? Bağlı giderin kalanı geri açılır.")} style={{ ...dug, padding: "3px 10px", fontSize: 12, color: KIRM }}>Sil</button>}</td></tr>))}</tbody>
+        </table></div>
+      </>)}
+
+      {sek === "kasa" && (<>
+        {baslik("Kasa ve Bankalar", "Hesap bakiyeleri ve hareketler · USD", <><button onClick={() => formAc("virman", { kaynak: (hesaplar[0] || {}).id || "", hedef: (hesaplar[1] || {}).id || "" })} style={dug}>Virman</button><button onClick={() => formAc("hesap", { tur: "nakit" })} style={dugAna}>+ Hesap</button></>)}
+        <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 14 }}>
+          {hesaplar.map(h => <div key={h.id} onClick={() => setHesapF(hesapF === h.id ? "" : h.id)} style={{ ...kart, flex: "1 1 200px", padding: "14px 18px", cursor: "pointer", borderColor: hesapF === h.id ? T.text : T.border }}>
+            <div style={{ fontSize: 12, color: T.sub, fontWeight: 600 }}>{h.ad} · {h.tur}</div><div style={{ fontSize: 22, fontWeight: 700, marginTop: 5, color: h.bakiye < 0 ? KIRM : T.text, fontVariantNumeric: "tabular-nums" }}>{para(h.bakiye, 2)}</div><div style={{ fontSize: 12, color: T.sub, marginTop: 4 }}>{Number(h.adet).toLocaleString("tr-TR")} hareket{hesapF === h.id ? " · süzülüyor" : ""}</div></div>)}
+        </div>
+        <div style={{ ...kart, overflowX: "auto" }}><table style={{ width: "100%", borderCollapse: "collapse", minWidth: 720 }}>
+          <thead><tr><th style={th}>Tarih</th><th style={th}>İşlem</th><th style={th}>Cari / Açıklama</th><th style={th}>Hesap</th><th style={{ ...th, textAlign: "right" }}>Giriş</th><th style={{ ...th, textAlign: "right" }}>Çıkış</th><th style={th}></th></tr></thead>
+          <tbody>{!kasa ? bosSatir(7, "Yükleniyor…") : kasa.hareketler.length === 0 ? bosSatir(7, "Hareket yok") : kasa.hareketler.map(m => (
+            <tr key={m.id}><td style={{ ...td, color: T.sub, whiteSpace: "nowrap" }}>{tarihTR(m.tarih)}</td><td style={td}>{m.tur === "aktarim_farki" ? "Aktarım farkı" : m.tur}</td><td style={td}>{m.cari_ad || ""}{m.aciklama ? <span style={{ color: T.sub }}>{m.cari_ad ? " · " : ""}{m.aciklama}</span> : null}</td><td style={{ ...td, color: T.sub }}>{m.hesap}</td>
+              <td style={{ ...td, ...sag, color: YESIL, fontWeight: 600 }}>{m.giris_usd > 0 ? para(m.giris_usd, 2) : ""}</td><td style={{ ...td, ...sag, color: KIRM, fontWeight: 600 }}>{m.cikis_usd > 0 ? para(m.cikis_usd, 2) : ""}</td>
+              <td style={{ ...td, textAlign: "right" }}>{m.virman_id && m.kaynak === "uygulama" && <button onClick={() => sil("muh_virman_sil", { p_virman: m.virman_id }, "Bu virmanın iki tarafı da silinsin mi?")} style={{ ...dug, padding: "3px 10px", fontSize: 12, color: KIRM }}>Sil</button>}</td></tr>))}</tbody>
+        </table></div>
+      </>)}
+
+      {sek === "akis" && (<>
+        {baslik("Nakit Akışı", "Kasa ve bankalara giren ve çıkan para · virmanlar hariç · USD", yilSec)}
+        {!rap ? yukleniyor : (<>
+          <div style={{ ...kart, padding: "8px 20px 16px", marginBottom: 14 }}><RpSutun T={T} renk={KIRM} renk2={YESIL} ad="Çıkış" ad2="Giriş" veri={ayVeri("cikis", "giris")} /></div>
+          <div style={{ ...kart, overflowX: "auto" }}><table style={{ width: "100%", borderCollapse: "collapse", minWidth: 520 }}>
+            <thead><tr><th style={th}>Ay</th><th style={{ ...th, textAlign: "right" }}>Giriş</th><th style={{ ...th, textAlign: "right" }}>Çıkış</th><th style={{ ...th, textAlign: "right" }}>Net</th></tr></thead>
+            <tbody>{rap.aylik.map(a => <tr key={a.ay}><td style={td}>{BSP_AY[a.ay - 1]} {rap.yil}</td><td style={{ ...td, ...sag }}>{para(a.giris)}</td><td style={{ ...td, ...sag }}>{para(a.cikis)}</td><td style={{ ...td, ...sag, fontWeight: 600, color: a.giris - a.cikis < 0 ? KIRM : T.text }}>{para(a.giris - a.cikis)}</td></tr>)}
+              <tr><td style={{ ...td, fontWeight: 700 }}>Toplam</td><td style={{ ...td, ...sag, fontWeight: 700 }}>{para(ayTop("giris"))}</td><td style={{ ...td, ...sag, fontWeight: 700 }}>{para(ayTop("cikis"))}</td><td style={{ ...td, ...sag, fontWeight: 700, color: ayTop("giris") - ayTop("cikis") < 0 ? KIRM : T.text }}>{para(ayTop("giris") - ayTop("cikis"))}</td></tr></tbody>
+          </table></div></>)}
+      </>)}
+
+      {(sek === "r_satis" || sek === "r_gider" || sek === "r_sahsi") && (() => { const S = sek === "r_satis", G = sek === "r_gider"; const k = S ? "satis" : G ? "gider" : "sahsi"; const renk = S ? YESIL : G ? MAVI : TUR; return (<>
+        {baslik(S ? "Satış Raporu" : G ? "Gider Raporu" : "Şahsi Giderler", (S ? "Satış faturaları" : G ? "İşletme giderleri · şahsi giderler hariç" : "Şahsi olarak işaretlenen giderler · işletme giderine dahil değil") + " · iç şirket kayıtları hariç · USD", yilSec)}
+        {!rap ? yukleniyor : (<>
+          <div style={{ ...kart, padding: "8px 20px 16px", marginBottom: 14 }}><div style={{ fontSize: 13, color: T.sub, padding: "8px 0 0" }}>{rap.yil} toplamı: <b style={{ color: T.text, fontSize: 18 }}>{para(ayTop(k))}</b>{S ? <> · tahsilat <b style={{ color: T.text }}>{para(ayTop("tahsilat"))}</b></> : G ? <> · ödeme <b style={{ color: T.text }}>{para(ayTop("odeme"))}</b></> : null}</div><RpSutun T={T} renk={renk} veri={ayVeri(k)} /></div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(340px,1fr))", gap: 14 }}>
+            <div style={kart}><div style={kBas}><span>Kategoriye göre</span><span style={altB}>{rap.yil}</span></div>{katListe(S ? rap.satis_kategori : G ? rap.gider_kategori : rap.sahsi_kategori, renk)}</div>
+            {!(!S && !G) && <div style={kart}><div style={kBas}><span>{S ? "Müşteriye göre" : "Tedarikçiye göre"}</span><span style={altB}>ilk 15</span></div>{katListe(S ? rap.musteri : rap.tedarikci, renk)}</div>}
+          </div></>)}
+      </>); })()}
+
+      {sek === "r_yas" && (<>
+        {baslik("Alacak / Borç Yaşlandırma", "Açık faturalar ve giderler, vadesine göre · USD")}
+        {!yas ? yukleniyor : [["Tahsil edilecek (müşteriler)", yas.alacak, T.text], ["Ödenecek (tedarikçiler ve giderler)", yas.borc, KIRM]].map(([b, l, renk]) => (
+          <div key={b} style={{ ...kart, overflowX: "auto", marginBottom: 14 }}><div style={kBas}><span>{b}</span><span style={{ ...altB, color: renk, fontWeight: 700, fontSize: 15 }}>{para(l.reduce((s, x) => s + Number(x.toplam || 0), 0))}</span></div>
+            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 760 }}>
+              <thead><tr><th style={th}>Cari</th><th style={{ ...th, textAlign: "right" }}>Vadesi gelmemiş</th><th style={{ ...th, textAlign: "right" }}>Vadesiz kayıt</th><th style={{ ...th, textAlign: "right" }}>0–30 gün</th><th style={{ ...th, textAlign: "right" }}>31–90 gün</th><th style={{ ...th, textAlign: "right" }}>90+ gün</th><th style={{ ...th, textAlign: "right" }}>Toplam</th></tr></thead>
+              <tbody>{l.length === 0 ? bosSatir(7, "Açık kayıt yok") : l.map(x => { const h = (v, c) => <td style={{ ...td, ...sag, color: v > 0.5 ? (c || T.text) : T.sub }}>{v > 0.5 ? para(v) : "—"}</td>; return (
+                <tr key={(x.cari_id || "") + x.ad}><td style={td}>{x.ad}{x.supheli > 0.5 && <span style={{ marginLeft: 8, fontSize: 11, color: TUR }}>şüpheli {para(x.supheli)}</span>}<div style={{ fontSize: 11, color: T.sub }}>{x.adet} kayıt</div></td>{h(x.vadesiz)}{h(x.plansiz)}{h(x.g30, TUR)}{h(x.g90, TUR)}{h(x.g90p, KIRM)}<td style={{ ...td, ...sag, fontWeight: 700 }}>{para(x.toplam)}</td></tr>); })}</tbody>
+            </table></div>))}
+      </>)}
+
+      {form && (<div style={{ position: "fixed", inset: 0, zIndex: 9000, background: "rgba(0,0,0,.6)", display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "8vh 14px", overflowY: "auto" }} onClick={() => !mesgul && setForm(null)}>
+        <div onClick={e => e.stopPropagation()} style={{ background: T.bg2 || "#151515", border: "1px solid " + T.border, borderRadius: 16, padding: 22, width: "100%", maxWidth: 560, color: T.text }}>
+          <datalist id="bsp-cari-l">{cariler.slice(0, 600).map(c => <option key={c.id} value={c.ad} />)}</datalist>
+          <datalist id="bsp-kat-l">{((gl && gl.kategoriler) || []).map(k => <option key={k} value={k} />)}</datalist>
+          <div style={{ fontSize: 17, fontWeight: 700, marginBottom: 16 }}>{form.tip === "gider" ? "Yeni gider" : form.tip === "odeme" ? (form.giderId ? "Gider ödemesi · " + form.giderAd : "Yeni ödeme") : form.tip === "virman" ? "Virman (hesaplar arası aktarım)" : "Yeni kasa / banka hesabı"}</div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", gap: 12 }}>
+            {form.tip === "gider" && (<>
+              {alan("Gider adı", <input autoFocus value={form.ad || ""} onChange={e => setForm({ ...form, ad: e.target.value })} placeholder="örn. Mum hammaddesi" style={girdi} />, true)}
+              {alan("Cari (isteğe bağlı)", <input list="bsp-cari-l" value={form.cariAd || ""} onChange={e => setForm({ ...form, cariAd: e.target.value })} placeholder="Tedarikçi ara ya da yeni ad yaz" style={girdi} />)}
+              {alan("Kategori", <input list="bsp-kat-l" value={form.kategori || ""} onChange={e => setForm({ ...form, kategori: e.target.value })} style={girdi} />)}
+              {alan("Tarih", <input type="date" value={form.tarih} onChange={e => setForm({ ...form, tarih: e.target.value })} style={girdi} />)}
+              {alan("Vade (isteğe bağlı)", <input type="date" value={form.vade || ""} onChange={e => setForm({ ...form, vade: e.target.value })} style={girdi} />)}
+              {alan("Tutar", <div style={{ display: "flex", gap: 6 }}><input inputMode="decimal" value={form.tutar || ""} onChange={e => setForm({ ...form, tutar: e.target.value })} placeholder="0,00" style={girdi} /><select value={form.pb} onChange={e => setForm({ ...form, pb: e.target.value })} style={{ ...girdi, width: 90 }}><option value="USD">USD</option><option value="TRL">TL</option></select></div>)}
+              {form.pb === "TRL" && alan("Kur (1 USD = ₺)", <input inputMode="decimal" value={form.kur || ""} onChange={e => setForm({ ...form, kur: e.target.value })} style={girdi} />)}
+              {alan("", <label style={{ fontSize: 13, display: "flex", gap: 8, alignItems: "center", cursor: "pointer" }}><input type="checkbox" checked={!!form.sahsi} onChange={e => setForm({ ...form, sahsi: e.target.checked })} />Şahsi gider (işletme giderine dahil olmaz)</label>, true)}
+              {alan("", <label style={{ fontSize: 13, display: "flex", gap: 8, alignItems: "center", cursor: "pointer" }}><input type="checkbox" checked={!!form.odendi} onChange={e => setForm({ ...form, odendi: e.target.checked })} />Ödendi (kasadan şimdi düş)</label>, true)}
+              {form.odendi && alan("Ödenen hesap", hesapSec(form.hesap, v => setForm({ ...form, hesap: v })), true)}
+            </>)}
+            {form.tip === "odeme" && (<>
+              {!form.giderId && alan("Cari", <input autoFocus list="bsp-cari-l" value={form.cariAd || ""} onChange={e => setForm({ ...form, cariAd: e.target.value })} placeholder="Tedarikçi seçin" style={girdi} />, true)}
+              {!form.giderId && (() => { const c = cariBul(form.cariAd); return c ? <div style={{ gridColumn: "1 / -1", fontSize: 12.5, color: T.sub }}>{c.bakiye < -0.5 ? "Bu cariye " + para(-c.bakiye, 2) + " borçluyuz; ödeme en eski vadeli giderden başlayarak kapatılır." : "Bu carinin açık borcu görünmüyor."}</div> : null; })()}
+              {alan("Tutar (USD)" + (form.kalan ? " · kalan " + para(form.kalan, 2) : ""), <input inputMode="decimal" value={form.tutar || ""} onChange={e => setForm({ ...form, tutar: e.target.value })} placeholder="0,00" style={girdi} />)}
+              {alan("Tarih", <input type="date" value={form.tarih} onChange={e => setForm({ ...form, tarih: e.target.value })} style={girdi} />)}
+              {alan("Ödenen hesap", hesapSec(form.hesap, v => setForm({ ...form, hesap: v })))}
+              {alan("Açıklama", <input value={form.aciklama || ""} onChange={e => setForm({ ...form, aciklama: e.target.value })} style={girdi} />)}
+            </>)}
+            {form.tip === "virman" && (<>
+              {hesaplar.length < 2 && <div style={{ gridColumn: "1 / -1", fontSize: 13, color: TUR }}>Virman için en az iki hesap gerekir. Önce Kasa ve Bankalar'dan yeni hesap açın.</div>}
+              {alan("Çıkan hesap", hesapSec(form.kaynak, v => setForm({ ...form, kaynak: v })))}
+              {alan("Giren hesap", hesapSec(form.hedef, v => setForm({ ...form, hedef: v })))}
+              {alan("Tutar (USD)", <input inputMode="decimal" value={form.tutar || ""} onChange={e => setForm({ ...form, tutar: e.target.value })} placeholder="0,00" style={girdi} />)}
+              {alan("Tarih", <input type="date" value={form.tarih} onChange={e => setForm({ ...form, tarih: e.target.value })} style={girdi} />)}
+              {alan("Açıklama", <input value={form.aciklama || ""} onChange={e => setForm({ ...form, aciklama: e.target.value })} style={girdi} />, true)}
+            </>)}
+            {form.tip === "hesap" && (<>
+              {alan("Hesap adı", <input autoFocus value={form.ad || ""} onChange={e => setForm({ ...form, ad: e.target.value })} placeholder="örn. Banka — Vadesiz" style={girdi} />)}
+              {alan("Tür", <select value={form.tur} onChange={e => setForm({ ...form, tur: e.target.value })} style={girdi}><option value="nakit">Kasa (nakit)</option><option value="banka">Banka</option></select>)}
+              <div style={{ gridColumn: "1 / -1", fontSize: 12.5, color: T.sub }}>Hesaplar USD olarak tutulur; TL işlemler girildiği günün kuruyla USD'ye çevrilir.</div>
+            </>)}
+          </div>
+          <div style={{ minHeight: 20, fontSize: 12.5, color: KIRM, marginTop: 10 }}>{hata}</div>
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 6 }}><button onClick={() => setForm(null)} disabled={mesgul} style={dug}>Vazgeç</button><button onClick={kaydet} disabled={mesgul} style={dugAna}>{mesgul ? "Kaydediliyor…" : "Kaydet"}</button></div>
+        </div></div>)}
+    </div>
+  );
+}
+
 // ═══ MSK · AYLIK RAPORLAR — Rhino raporlarının ay ay arşivi (tek kutudan yükleme, ay × rapor tablosu, ay özeti, ay kilidi) ═══
 const AYR_TUR = [["mizan","Mizan"],["tezgah","Tezgah hareketleri"],["satis","Satış & kâr"],["gider","Giderler"],["depo","Depo sayım"]];
 const AYR_AY = ["Ocak","Şubat","Mart","Nisan","Mayıs","Haziran","Temmuz","Ağustos","Eylül","Ekim","Kasım","Aralık"];
@@ -11753,6 +12012,7 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
   setIscilikStandart(kasa.iscilikStandart); // genel ayar-standart işçilik (render sırasında senkron — kart/form hesapları aynı değeri görür)
   const [stdIscGirdi, setStdIscGirdi] = useState(null); // Ayarlar: 10K standart işçilik giriş kutusu (null = kayıtlı değeri göster)
   const [kasaSayfa, setKasaSayfa] = useState(() => (AKTIF_SIRKET_ONEK==="" && !izinHassas("ozsermaye")) ? (izinHassas("kasaislem") ? "g_muh" : "g_ab") : "g_genel"); // net durumu göremeyen kullanıcı işlem/bakiye ekranında açılır
+  const [bspSek, setBspSek] = useState("guncel"); // BSP ön muhasebe sol menüsü
   const [mskMuhSek, setMskMuhSek] = useState(() => (AKTIF_SIRKET_ONEK==="" && !adminOturum() && izinHassas("kasaislem")) ? "islem" : "konum"); // MSK Kasa & Muhasebe sol menüsü → muhasebe alt ekranı
   const [abSub, setAbSub] = useState("musteri");
   const [stokSub, setStokSub] = useState(AKTIF_SIRKET_ONEK==="" ? "altin" : "oz");
@@ -16148,11 +16408,12 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
           // MSK: net durum / öz sermaye / bilanço ekranları "ozsermaye" izni ister, karlılık "karlilik" izni ister
           const kmGizli = AKTIF_SIRKET_ONEK==="" && ((!izinHassas("ozsermaye") && (kasaSayfa==="g_genel" || kasaSayfa==="ozet" || kasaSayfa==="panel" || kasaSayfa==="bilanco" || kasaSayfa==="raporlar" || (kasaSayfa==="g_stok" && stokSub==="oz"))) || (!izinHassas("karlilik") && kasaSayfa==="karlilik"));
           return (
-            <div className={AKTIF_SIRKET_ONEK==="" ? "km-root" : ""} style={{ animation:"fadein .3s" }}>
-              {AKTIF_SIRKET_ONEK==="" && (() => {
+            <div className="km-root" style={{ animation:"fadein .3s" }}>
+              {(() => {
                 // ═══ MSK · Kasa & Muhasebe sol menüsü (iskelet) — mevcut ekranları tek çatı altında toplar ═══
-                const git = (ks, sub) => { setKasaSayfa(ks); if (ks==="g_stok" && sub) setStokSub(sub); if (ks==="g_ab" && sub) setAbSub(sub); if (ks==="raporlar" && sub) setRapSub(sub); if (ks==="g_muh" && sub) setMskMuhSek(sub); };
-                const aktif = kasaSayfa==="g_stok" ? "g_stok:"+stokSub : kasaSayfa==="g_ab" ? "g_ab:"+abSub : kasaSayfa==="raporlar" ? "raporlar:"+rapSub : kasaSayfa==="g_muh" ? "g_muh:"+mskMuhSek : kasaSayfa;
+                const git = (ks, sub) => { if (ks==="bsp") { setKasaSayfa("g_genel"); setBspSek(sub); return; } setKasaSayfa(ks); if (ks==="g_stok" && sub) setStokSub(sub); if (ks==="g_ab" && sub) setAbSub(sub); if (ks==="raporlar" && sub) setRapSub(sub); if (ks==="g_muh" && sub) setMskMuhSek(sub); };
+                const bsp = AKTIF_SIRKET_ONEK!=="";
+                const aktif = bsp ? "bsp:"+bspSek : kasaSayfa==="g_stok" ? "g_stok:"+stokSub : kasaSayfa==="g_ab" ? "g_ab:"+abSub : kasaSayfa==="raporlar" ? "raporlar:"+rapSub : kasaSayfa==="g_muh" ? "g_muh:"+mskMuhSek : kasaSayfa;
                 const ozG = izinHassas("ozsermaye"), karG = izinHassas("karlilik"), isG = izinHassas("kasaislem");
                 const GR0 = [
                   ["", [["Genel Bakış","g_genel",null,"oz"],["Aylık Raporlar","ayrapor"]]],
@@ -16167,6 +16428,16 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
                 // izne göre süz: "oz" = net durum/öz sermaye/bilanço, "kar" = karlılık. Kasa personelinde İşlemler en üste gelir.
                 let GR = GR0.map(([g, its]) => [g, its.filter(x => x[3]==="oz" ? ozG : x[3]==="kar" ? karG : true)]).filter(([g, its]) => its.length);
                 if (isG && !adminOturum()) GR = [GR[0], ...GR.filter(x => x[0]==="İŞLEMLER"), ...GR.slice(1).filter(x => x[0]!=="İŞLEMLER")];
+                // BSP: Paraşüt karşılığı ön muhasebe — kendi verisi (muh_*), USD
+                if (bsp) GR = [
+                  ["", [["Güncel Durum","bsp","guncel"]]],
+                  ["SATIŞLAR", [["Faturalar","bsp","satis"],["Tahsilatlar","bsp","tahsilat"]]],
+                  ["GİDERLER", [["Gider Listesi","bsp","gider"],["Ödemeler","bsp","odeme"]]],
+                  ["CARİLER", [["Müşteriler ve Tedarikçiler","bsp","cariler"]]],
+                  ["NAKİT", [["Kasa ve Bankalar","bsp","kasa"],["Nakit Akışı","bsp","akis"]]],
+                  ["RAPORLAR", [["Satış Raporu","bsp","r_satis"],["Gider Raporu","bsp","r_gider"],["Alacak / Borç Yaşlandırma","bsp","r_yas"],["Şahsi Giderler","bsp","r_sahsi"]]],
+                  ["VERİ", [["Paraşüt'ten Aktar","bsp","aktar"]]],
+                ];
                 return (
                   <nav className="km-side">
                     <style>{`.km-side{margin-bottom:14px}.km-bas{font-size:20px;font-weight:700;color:${T.text};letter-spacing:-.3px}.km-alt{font-size:12px;color:${T.sub};margin:2px 0 12px}
@@ -16177,9 +16448,9 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
 .km-it.yk{opacity:.45;cursor:default}.km-it.yk::after{content:' · yakında';font-size:11px}
 @media(min-width:901px){.km-root{display:grid;grid-template-columns:230px minmax(0,1340px);column-gap:34px;align-items:start;justify-content:center}.km-root>.km-side{grid-column:1;grid-row:1 / span 400;position:sticky;top:10px;max-height:calc(100vh - 20px);overflow-y:auto;scrollbar-width:thin;margin-bottom:0}.km-root>:not(.km-side){grid-column:2;min-width:0}}
 @media(max-width:900px){.km-list{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;padding-bottom:4px;align-items:center}.km-list::-webkit-scrollbar{display:none}.km-gr{flex:none;padding:0 2px 0 10px;font-size:9.5px}.km-it{flex:none;width:auto;white-space:nowrap;border:1px solid ${T.border};border-radius:99px;padding:7px 13px;font-size:12.5px}.km-it.on{box-shadow:none;border-color:${T.text}}.km-it.yk{display:none}.km-yeni{width:auto;display:inline-block;margin-bottom:10px}}`}</style>
-                    <div className="km-bas">Kasa & Muhasebe</div>
-                    <div className="km-alt">MSK · stok, cari, kasa ve raporlar</div>
-                    {isG && !adminOturum() ? <button className="km-yeni" onClick={()=>git("g_muh","islem")}>+ Yeni İşlem</button> : <button className="km-yeni" onClick={()=>git("ayrapor")}>↑ Rapor Yükle</button>}
+                    <div className="km-bas">{bsp ? "Muhasebe" : "Kasa & Muhasebe"}</div>
+                    <div className="km-alt">{bsp ? "BSP · ön muhasebe · tutarlar USD" : "MSK · stok, cari, kasa ve raporlar"}</div>
+                    {bsp ? <button className="km-yeni" onClick={()=>git("bsp","satis")}>+ Satış Faturası</button> : isG && !adminOturum() ? <button className="km-yeni" onClick={()=>git("g_muh","islem")}>+ Yeni İşlem</button> : <button className="km-yeni" onClick={()=>git("ayrapor")}>↑ Rapor Yükle</button>}
                     <div className="km-list">
                       {GR.map(([g, its]) => (<Fragment key={g || "ana"}>
                         {g && <div className="km-gr">{g}</div>}
@@ -16191,14 +16462,14 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
               })()}
               {kmGizli && <div style={{ padding:"40px 20px", textAlign:"center", color:T.sub, fontSize:14 }}>Bu bölümü görme yetkiniz yok. Soldaki menüden başka bir bölüm seçin.</div>}
               {/* Başlık + alt sekmeler */}
-              <div style={{ display: AKTIF_SIRKET_ONEK==="" ? "none" : "flex", justifyContent:"space-between", alignItems:"center", marginBottom:12, flexWrap:"wrap", gap:6 }}>
+              <div style={{ display:"none", justifyContent:"space-between", alignItems:"center", marginBottom:12, flexWrap:"wrap", gap:6 }}>
                 <div>
                   <h2 style={{ margin:0, fontSize:18, fontWeight:700, color:T.text, letterSpacing:"-.01em" }}>Kasa & Stok</h2>
                   <div style={{ fontSize:12, color:T.sub, marginTop:2 }}>{AKTIF_SIRKET_ONEK==="" ? "MSK" : "BSP"} · Stok, alacak-borç ve raporlar</div>
                 </div>
                 <span/>
               </div>
-              {AKTIF_SIRKET_ONEK!=="" && <RpNav T={T} aktif={kasaSayfa==="g_ab"||kasaSayfa==="g_muh"||kasaSayfa==="g_stok"||kasaSayfa==="g_genel"||kasaSayfa==="raporlar"||kasaSayfa==="karlilik" ? kasaSayfa : "g_genel"} onSec={setKasaSayfa} sekmeler={[{id:"g_genel",l:"Genel Bakış"},{id:"g_stok",l:"Stok"},{id:"g_ab",l:"Alacak & Borç"},{id:"raporlar",l:"Raporlar"},...(AKTIF_SIRKET_ONEK==="bsp2_"?[]:[{id:"karlilik",l:"🔒 Karlılık"}])]}/>}
+              {false && <RpNav T={T} aktif={kasaSayfa==="g_ab"||kasaSayfa==="g_muh"||kasaSayfa==="g_stok"||kasaSayfa==="g_genel"||kasaSayfa==="raporlar"||kasaSayfa==="karlilik" ? kasaSayfa : "g_genel"} onSec={setKasaSayfa} sekmeler={[{id:"g_genel",l:"Genel Bakış"},{id:"g_stok",l:"Stok"},{id:"g_ab",l:"Alacak & Borç"},{id:"raporlar",l:"Raporlar"},...(AKTIF_SIRKET_ONEK==="bsp2_"?[]:[{id:"karlilik",l:"🔒 Karlılık"}])]}/>}
 
               {/* ══ ÖZET ══ */}
               {kasaSayfa==="ozet" && !kmGizli && (
@@ -16855,7 +17126,8 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
               {/* ══ RAPORLAR / PANEL / KARLILIK ══ */}
               <DetayHost T={T}/>
               {kasaSayfa==="panel" && !kmGizli && <RaporPanel T={T} GH={GH} onRapor={()=>setKasaSayfa("raporlar")}/>}
-              {kasaSayfa==="g_genel" && AKTIF_SIRKET_ONEK!=="" && <MuhasebeSayfa T={T} GH={GH} usdTry={altinSon?.usdTry || null} />}
+              {AKTIF_SIRKET_ONEK!=="" && ["satis","tahsilat","cariler","aktar"].includes(bspSek) && <MuhasebeSayfa T={T} GH={GH} usdTry={altinSon?.usdTry || null} disSek={bspSek} onDisSek={(k)=>setBspSek(k==="ozet" ? "guncel" : k)} menuGizle />}
+              {AKTIF_SIRKET_ONEK!=="" && !["satis","tahsilat","cariler","aktar"].includes(bspSek) && <BspMuhEk T={T} GH={GH} sek={bspSek} usdTry={altinSon?.usdTry || null} onGit={setBspSek} />}
               {kasaSayfa==="g_genel" && AKTIF_SIRKET_ONEK==="" && !kmGizli && <KasaGenel T={T} GH={GH} atolye={AKTIF_SIRKET_ONEK==="" ? (()=>{ const tum=[...(kasa.atolyeKasa||[])].sort((x,y)=>(y.tarih||0)-(x.tarih||0)); return { son:tum[0]||null, tum, ham:hamAltinGram, hazir:hazirUrunGram+serbestGram }; })() : null} ic={{ alacak:Object.values(musBakiye).reduce((t,d)=>t+Math.max(0,d.borc-d.odenen),0), borc:Math.max(0,dokumBorc), stok:toplamHas, musteriler:Object.entries(musBakiye).map(([ad,d])=>({ad,bakiye:d.borc-d.odenen})).filter(x=>x.bakiye>0.001).sort((a,b)=>b.bakiye-a.bakiye) }} onGit={(h)=>setKasaSayfa(h==="ab"?"g_ab":h==="stok"?"g_stok":"raporlar")}/>}
               {kasaSayfa==="g_stok" && stokSub==="altin" && AKTIF_SIRKET_ONEK==="" && <ManuelStokKarti T={T} veri={{ tum:[...(kasa.atolyeKasa||[])].sort((x,y)=>(y.tarih||0)-(x.tarih||0)), ham:hamAltinGram, hazir:hazirUrunGram+serbestGram }} onGit={()=>setStokSub("kayit")}/>}
               {kasaSayfa==="g_stok" && stokSub==="altin" && AKTIF_SIRKET_ONEK==="" && <KasaStokAltin T={T} GH={GH}/>}
@@ -16868,7 +17140,7 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
               {kasaSayfa==="g_ab" && abSub==="musteri" && <KasaMusteriler msk={AKTIF_SIRKET_ONEK===""} T={T} GH={GH} BG={BG} RD={RD} musBakiye={musBakiye} kasa={kasa} svKasa={svKasa} kasaModalAc={kasaModalAc}/>}
               {kasaSayfa==="raporlar" && AKTIF_SIRKET_ONEK!=="" && <RpSeg T={T} aktif={rapSub} onSec={setRapSub} secenekler={[{id:"yukle",l:"Yükleme & kapsam"},{id:"bilanco",l:"İç bilanço"}]}/>}
               {kasaSayfa==="raporlar" && rapSub==="yukle" && !kmGizli && <RaporlarSayfasi T={T} GH={GH} RD={RD} setRhinoMizan={setRhinoMizan}/>}
-              {kasaSayfa==="g_muh" && AKTIF_SIRKET_ONEK!=="" && <MuhasebeSayfa T={T} GH={GH} usdTry={altinSon?.usdTry || null} />}
+              {/* BSP: eski tek parça Muhasebe ekranı artık sol menülü modülün içinde açılır (yukarıda) */}
               {kasaSayfa==="g_muh" && AKTIF_SIRKET_ONEK==="" && <MskMuhasebeSayfa T={T} GH={GH} disSek={mskMuhSek} onDisSek={setMskMuhSek} menuGizle />}
               {kasaSayfa==="karlilik" && !kmGizli && <RpKapi T={T} GH={GH}><RaporKarlilik T={T} GH={GH}/></RpKapi>}
               {kasaSayfa==="ayrapor" && AKTIF_SIRKET_ONEK==="" && <MskAylikRaporlar T={T} setRhinoMizan={setRhinoMizan} />}
