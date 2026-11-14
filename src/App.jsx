@@ -25,6 +25,7 @@ function izinSayfa(id) { const k = AKTIF_KULLANICI; if (!k || k.rol === "admin")
 function izinHassas(id) { const k = AKTIF_KULLANICI; if (!k || k.rol === "admin") return true; if (k.rol === "usta") return false; return (k.hassas||[]).includes(id); }
 function izinKesfet(id) { const k = AKTIF_KULLANICI; if (!k || k.rol === "admin") return true; if (k.rol === "usta") return false; if (id === "karlilik" && !izinHassas("karlilik")) return false; return (k.kesfet||[]).includes(id); }
 function ilkIzinliSayfa() { const k = AKTIF_KULLANICI; if (k && k.rol === "usta") return "ustatakip"; for (const [id] of SAYFA_LISTESI) if (izinSayfa(id)) return id; return "koleksiyonlar"; }
+const adminOturum = () => !!(AKTIF_KULLANICI && AKTIF_KULLANICI.rol === "admin"); // admin: Karlılık/Muhasebe/Personel şifresi sorulmaz (sunucu da hesabı tanır)
 async function kullaniciCikis() { try { await supabase.auth.signOut(); } catch {} try { localStorage.removeItem("atolye_oturum"); localStorage.removeItem("atolye_gecici"); sessionStorage.removeItem("atolye_gecici_ok"); } catch {} window.location.reload(); }
 // ═══ GLOBAL SIFIRLAMA — Vite'ın varsayılan #root kısıtını (max-width:1280px, padding:2rem) ezer ═══
 // Dosya yüklenirken BİR KEZ çalışır, TÜM ekranları kapsar (giriş, seçim, vitrin, ana sistem)
@@ -3115,7 +3116,7 @@ function MskIslemEkrani({ T, rpc, st, oz, urunler, onKayit, YESIL, KIRMIZI, TURU
 
 function MskMuhasebeSayfa({ T, GH }) {
   const KIRMIZI = "#d9675d", YESIL = "#6abf8f";
-  const [sifre, setSifre] = useState(""); const [giris, setGiris] = useState(""); const [hata, setHata] = useState(""); const [kontrol, setKontrol] = useState(false);
+  const [sifre, setSifre] = useState(() => adminOturum() ? "admin-oturumu" : ""); const [giris, setGiris] = useState(""); const [hata, setHata] = useState(""); const [kontrol, setKontrol] = useState(false);
   const [sek, setSek] = useState("konum"); const [bilgi, setBilgi] = useState("");
   const [oz, setOz] = useState(null); const [tarih, setTarih] = useState("");
   const [hf, setHf] = useState({ urun: "", sube: "", bas: "", bit: "", ara: "", etip: "", yon: "" }); const [liste, setListe] = useState(null); const [sayfaNo, setSayfaNo] = useState(0);
@@ -3477,7 +3478,7 @@ function MskMuhasebeSayfa({ T, GH }) {
 
 function MuhasebeSayfa({ T, GH, sirket="BSP", usdTry=null }) {
   const KIRMIZI="#d9675d", YESIL="#6abf8f", TURUNCU="#e0954a";
-  const [sifre, setSifre] = useState(""); const [giris, setGiris] = useState(""); const [hata, setHata] = useState(""); const [kontrol, setKontrol] = useState(false);
+  const [sifre, setSifre] = useState(() => adminOturum() ? "admin-oturumu" : ""); const [giris, setGiris] = useState(""); const [hata, setHata] = useState(""); const [kontrol, setKontrol] = useState(false);
   const [sek, setSek] = useState("ozet");
   const [oz, setOz] = useState(null); const [cariler, setCariler] = useState(null); const [arsiv, setArsiv] = useState(false);
   const [filtre, setFiltre] = useState("hepsi"); const [ara, setAra] = useState("");
@@ -4465,7 +4466,7 @@ function RpKapi({ T, GH, children, baslik }) {
     <div>
       <div style={{ display:"flex", justifyContent:"flex-end", gap:6, marginBottom:6 }}>
         <button onClick={()=>{setA("");setB("");setDegistir(true);}} style={{ ...GH, fontSize:11, padding:"3px 9px" }}>Şifreyi değiştir</button>
-        <button onClick={()=>{ RP_ACIK=false; setDurum("kilitli"); }} style={{ ...GH, fontSize:11, padding:"3px 9px" }}>Kilitle</button>
+        {!adminOturum() && <button onClick={()=>{ RP_ACIK=false; setDurum("kilitli"); }} style={{ ...GH, fontSize:11, padding:"3px 9px" }}>Kilitle</button>}
       </div>
       {children}
     </div>
@@ -4489,6 +4490,7 @@ const persKidem = (bas, bit) => {
 // Personel ödemesi → MSK muhasebe fişi için şifreli RPC çağrısı (şifre oturum boyunca bellekte tutulur)
 let MSK_PERS_SIFRE = "";
 async function mskPersRpc(ad, args = {}) {
+  if (!MSK_PERS_SIFRE && adminOturum()) MSK_PERS_SIFRE = "admin-oturumu"; // sunucu admin oturumunu tanır
   if (!MSK_PERS_SIFRE) {
     const g = window.prompt("Muhasebe (Karlılık) şifresi:"); if (!g) throw new Error("Şifre girilmedi");
     const { data } = await supabase.rpc("muh_dogrula", { p_sifre: g, p_sirket: "MSK" });
@@ -11105,6 +11107,7 @@ export default function Root() {
   const [profil, setProfil] = useState(null);       // giriş yapan kullanıcının app_kullanici satırı
   const [oturumKontrol, setOturumKontrol] = useState(true);
   AKTIF_KULLANICI = profil;
+  if (profil && profil.rol === "admin") RP_ACIK = true; // admin için Karlılık kapısı açık
   const giris = !!profil;
   useEffect(() => {
     let iptal = false;
