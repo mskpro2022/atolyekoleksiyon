@@ -13856,7 +13856,7 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
         <div style={{ width:"100%" }}>
           <div className="am-row" style={{ display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:8, marginBottom:10 }}>
             <h1 className="am-h1" style={{ margin:0, fontSize:"clamp(13px,2vw,18px)", fontWeight:700, color:GOLD, display:"flex", alignItems:"center", gap:8 }}>
-              <span style={{ fontWeight:800, letterSpacing:".04em", color: AKTIF_SIRKET_ONEK==="bsp2_" ? "#a78bfa" : GOLD }}>{AKTIF_SIRKET_ONEK==="bsp2_" ? "BSP" : "MSK"}</span>
+              <span style={{ fontWeight:800, letterSpacing:".04em", color: AKTIF_SIRKET_ONEK==="bsp2_" ? "#34b889" : GOLD }}>{AKTIF_SIRKET_ONEK==="bsp2_" ? "BSP" : "MSK"}</span>
             </h1>
             <div className="am-nav" style={{ display:"flex", gap:3, flexWrap:"wrap" }}>
               {(AKTIF_KULLANICI && AKTIF_KULLANICI.rol==="usta" ? ["ustatakip"] : ["koleksiyonlar","modeller","konfirmasyon","siparisler","musteriler","kasa","personel","analiz","ayarlar"].filter(izinSayfa)).map(n => { // İadeler → Keşfet içine taşındı, Trend Radar gizlendi (sayfa kodu duruyor)
@@ -13877,7 +13877,7 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
                 );
               })}
             </div>
-            {(() => { const bsp = AKTIF_SIRKET_ONEK === "bsp2_"; const digeri = bsp ? "msk" : "bsp"; const iz = (AKTIF_KULLANICI && AKTIF_KULLANICI.rol !== "admin") ? (AKTIF_KULLANICI.sirketler || []) : ["msk","bsp"]; if (!iz.includes(digeri)) return null; const renk = bsp ? GOLD : "#a78bfa";
+            {(() => { const bsp = AKTIF_SIRKET_ONEK === "bsp2_"; const digeri = bsp ? "msk" : "bsp"; const iz = (AKTIF_KULLANICI && AKTIF_KULLANICI.rol !== "admin") ? (AKTIF_KULLANICI.sirketler || []) : ["msk","bsp"]; if (!iz.includes(digeri)) return null; const renk = bsp ? GOLD : "#34b889";
               return (<button className="am-sirket" onClick={()=>{ if (onSirketDegis) onSirketDegis(); }} title={(bsp ? "MSK" : "BSP") + " şirketine geç"} style={{ fontSize:9, fontWeight:800, padding:"3px 10px", borderRadius:20, background:"transparent", border:"1px solid "+renk, color:renk, whiteSpace:"nowrap", cursor:"pointer", display:"inline-flex", alignItems:"center", gap:4, fontFamily:"inherit" }}>{bsp ? "MSK" : "BSP"} <span style={{ fontSize:8, opacity:0.7 }}>⇄</span></button>); })()}
           </div>
           {/* KUR */}
