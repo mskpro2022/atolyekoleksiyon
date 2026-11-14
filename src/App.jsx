@@ -26,7 +26,28 @@ function izinHassas(id) { const k = AKTIF_KULLANICI; if (!k || k.rol === "admin"
 function izinKesfet(id) { const k = AKTIF_KULLANICI; if (!k || k.rol === "admin") return true; if (k.rol === "usta") return false; if (id === "karlilik" && !izinHassas("karlilik")) return false; return (k.kesfet||[]).includes(id); }
 function ilkIzinliSayfa() { const k = AKTIF_KULLANICI; if (k && k.rol === "usta") return "ustatakip"; for (const [id] of SAYFA_LISTESI) if (izinSayfa(id)) return id; return "koleksiyonlar"; }
 const adminOturum = () => !!(AKTIF_KULLANICI && AKTIF_KULLANICI.rol === "admin"); // admin: Karlılık/Muhasebe/Personel şifresi sorulmaz (sunucu da hesabı tanır)
-async function kullaniciCikis() { try { await supabase.auth.signOut(); } catch {} try { localStorage.removeItem("atolye_oturum"); localStorage.removeItem("atolye_gecici"); sessionStorage.removeItem("atolye_gecici_ok"); } catch {} window.location.reload(); }
+// ═══ EKİP ETKİNLİĞİ — giriş / sayfa / aktif dakika kaydı (sadece admin raporda görür) ═══
+let AKT_SAYFA = "", AKT_SON_ETKI = Date.now(), AKT_ONIZLEME = false;
+function aktiviteYaz(tip, sayfa) {
+  try {
+    if (AKT_ONIZLEME || !AKTIF_KULLANICI) return Promise.resolve();
+    return supabase.from("kullanici_aktivite").insert({ tip, sayfa: sayfa || null, sirket: AKTIF_SIRKET_ONEK === "bsp2_" ? "bsp" : "msk", cihaz: vitrinCihazIdAl() }).then(() => {}, () => {});
+  } catch { return Promise.resolve(); }
+}
+function AktiviteIzleyici({ sayfa, kTab }) {
+  const etiket = sayfa === "analiz" ? "analiz/" + kTab : sayfa;
+  useEffect(() => { AKT_SAYFA = etiket; aktiviteYaz("sayfa", etiket); }, [etiket]);
+  useEffect(() => {
+    const dokun = () => { AKT_SON_ETKI = Date.now(); };
+    const olaylar = ["pointerdown", "keydown", "scroll", "touchstart"];
+    olaylar.forEach(e => window.addEventListener(e, dokun, { passive:true, capture:true }));
+    // Sayfa açık ve son 2 dakikada bir şeye dokunulduysa dakikada bir "aktif" işareti atar
+    const t = setInterval(() => { if (document.visibilityState === "visible" && Date.now() - AKT_SON_ETKI < 120000) aktiviteYaz("nabiz", AKT_SAYFA); }, 60000);
+    return () => { olaylar.forEach(e => window.removeEventListener(e, dokun, { capture:true })); clearInterval(t); };
+  }, []);
+  return null;
+}
+async function kullaniciCikis() { try { await Promise.race([aktiviteYaz("cikis", AKT_SAYFA), new Promise(r => setTimeout(r, 1200))]); } catch {} try { await supabase.auth.signOut(); } catch {} try { localStorage.removeItem("atolye_oturum"); localStorage.removeItem("atolye_gecici"); sessionStorage.removeItem("atolye_gecici_ok"); } catch {} window.location.reload(); }
 // ═══ GLOBAL SIFIRLAMA — Vite'ın varsayılan #root kısıtını (max-width:1280px, padding:2rem) ezer ═══
 // Dosya yüklenirken BİR KEZ çalışır, TÜM ekranları kapsar (giriş, seçim, vitrin, ana sistem)
 if (typeof document !== "undefined" && !document.getElementById("atolye-global-reset")) {
@@ -8459,6 +8480,7 @@ function GirisEkrani({ onGiris }) {
             style={{ width:15, height:15, accentColor:T.text, cursor:"pointer", margin:0 }}/>
           <span style={{ fontSize:12, color:T.sub }}>Beni hatırla</span>
         </label>
+        <div style={{ fontSize:10, color:T.dim, marginTop:22, lineHeight:1.5 }}>Giriş ve kullanım kayıtları (giriş saati, ziyaret edilen bölümler, yapılan işlemler) işletme güvenliği için tutulur.</div>
       </div>
     </div>
   );
@@ -8530,8 +8552,114 @@ function UstaTakip({ T, siparisler, profil }) {
   );
 }
 
+// ═══ EKİP ETKİNLİĞİ RAPORU — sadece admin (Keşfet › Ekip) ═══
+const AKT_SAYFA_AD = { koleksiyonlar:"Koleksiyonlar", modeller:"Modeller", konfirmasyon:"Konfirmasyon", siparisler:"Siparişler", musteriler:"Müşteriler", kasa:"Kasa & Muhasebe", personel:"Personel", analiz:"Keşfet", ayarlar:"Ayarlar", ustatakip:"Sipariş Takip", iadeler:"İadeler", vitrin:"Vitrin", muhasebe:"Muhasebe", radar:"Trend Radar" };
+const aktSayfaAd = (s) => { if (!s) return "—"; const [a, b] = String(s).split("/"); const ad = AKT_SAYFA_AD[a] || a; const alt = b ? (KESFET_LISTESI.find(x => x[0] === b) || (b === "ekip" ? [0,"Ekip"] : [0,b]))[1] : ""; return alt ? ad + " · " + alt : ad; };
+const aktSure = (dk) => { dk = Math.round(dk || 0); if (dk < 60) return dk + " dk"; return Math.floor(dk/60) + " sa " + String(dk % 60).padStart(2, "0") + " dk"; };
+const aktSaat = (iso) => iso ? new Date(iso).toLocaleTimeString("tr-TR", { hour:"2-digit", minute:"2-digit" }) : "—";
+function EkipEtkinligi({ T }) {
+  const [donem, setDonem] = useState("bugun");
+  const [liste, setListe] = useState(null);
+  const [hata, setHata] = useState("");
+  const [acik, setAcik] = useState(null);
+  const [detay, setDetay] = useState(null);
+  const aralik = () => {
+    const n = new Date(), g0 = new Date(n.getFullYear(), n.getMonth(), n.getDate());
+    if (donem === "bugun") return [g0, new Date(g0.getTime() + 864e5)];
+    if (donem === "dun") return [new Date(g0.getTime() - 864e5), g0];
+    if (donem === "7gun") return [new Date(g0.getTime() - 6*864e5), new Date(g0.getTime() + 864e5)];
+    if (donem === "bu_ay") return [new Date(n.getFullYear(), n.getMonth(), 1), new Date(n.getFullYear(), n.getMonth() + 1, 1)];
+    return [new Date(n.getFullYear(), n.getMonth() - 1, 1), new Date(n.getFullYear(), n.getMonth(), 1)];
+  };
+  const yukle = async () => {
+    setListe(null); setHata(""); setAcik(null); setDetay(null);
+    const [b, e] = aralik();
+    const { data, error } = await supabase.rpc("ekip_ozet", { p_bas: b.toISOString(), p_bit: e.toISOString() });
+    if (error) { setHata(error.message === "yetkisiz" ? "Bu rapor sadece admin içindir" : error.message); setListe([]); return; }
+    setListe(data || []);
+  };
+  useEffect(() => { yukle(); }, [donem]);
+  const ac = async (k) => {
+    if (acik === k.user_id) { setAcik(null); setDetay(null); return; }
+    setAcik(k.user_id); setDetay(null);
+    const [b, e] = aralik();
+    const { data, error } = await supabase.rpc("ekip_detay", { p_user: k.user_id, p_bas: b.toISOString(), p_bit: e.toISOString() });
+    if (error) { setHata(error.message); return; }
+    setDetay(data);
+  };
+  const L = liste || [];
+  const giren = L.filter(k => k.giris > 0 || k.aktif_dk > 0).length;
+  const topAktif = L.reduce((a,k) => a + (k.aktif_dk||0), 0), topMd = L.reduce((a,k) => a + (k.mesai_disi_dk||0), 0), topIslem = L.reduce((a,k) => a + (k.islem||0), 0);
+  const kart = { background:T.card, border:"1px solid "+T.border, borderRadius:14, padding:"12px 14px" };
+  const etk = { fontSize:10, letterSpacing:".8px", color:T.sub, fontWeight:700, textTransform:"uppercase", marginBottom:4 };
+  const chipB = (id, l) => <button key={id} onClick={()=>setDonem(id)} style={{ background:donem===id?"var(--goldtext)":"transparent", color:donem===id?(T.bg2||"#14130f"):T.sub, border:"1px solid "+(donem===id?"var(--goldtext)":T.border), borderRadius:14, padding:"6px 13px", fontSize:12, fontWeight:donem===id?700:500, cursor:"pointer", whiteSpace:"nowrap", flex:"0 0 auto" }}>{l}</button>;
+  const sec = acik ? L.find(k => k.user_id === acik) : null;
+  const tekGun = donem === "bugun" || donem === "dun";
+  return (
+    <div>
+      <div style={{ fontSize:12, color:T.sub, marginBottom:10 }}>Kim ne zaman girdi, nerelerde dolaştı, ne yaptı · Mesai: Pzt–Cmt 08:30 – 18:30 (dışı "mesai dışı" sayılır)</div>
+      <div style={{ display:"flex", gap:6, overflowX:"auto", marginBottom:12, scrollbarWidth:"none" }}>{[["bugun","Bugün"],["dun","Dün"],["7gun","Son 7 gün"],["bu_ay","Bu ay"],["gecen_ay","Geçen ay"]].map(([id,l]) => chipB(id,l))}</div>
+      {hata && <div style={{ fontSize:12, color:"#ef8a7a", marginBottom:10 }}>{hata}</div>}
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))", gap:10, marginBottom:12 }}>
+        <div style={kart}><div style={etk}>Giren</div><b style={{ fontSize:22, color:T.text }}>{giren} / {L.length}</b></div>
+        <div style={kart}><div style={etk}>Toplam aktif süre</div><b style={{ fontSize:22, color:T.text }}>{aktSure(topAktif)}</b></div>
+        <div style={kart}><div style={etk}>Mesai dışı</div><b style={{ fontSize:22, color:topMd>0?"#ef9a5a":T.text }}>{aktSure(topMd)}</b></div>
+        <div style={kart}><div style={etk}>Yapılan işlem</div><b style={{ fontSize:22, color:T.text }}>{topIslem}</b></div>
+      </div>
+      {liste === null && <div style={{ fontSize:13, color:T.sub, padding:"20px 0" }}>Yükleniyor…</div>}
+      {liste && <div style={{ ...kart, padding:0, overflowX:"auto" }}>
+        <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12.5, minWidth:640 }}>
+          <thead><tr>{["KİŞİ","GİRİŞ","İLK – SON HAREKET","AKTİF SÜRE","EN ÇOK KULLANDIĞI","İŞLEM","DURUM"].map(h => <th key={h} style={{ textAlign:"left", fontSize:10, letterSpacing:".8px", color:T.sub, padding:"10px 12px", borderBottom:"1px solid "+T.border, whiteSpace:"nowrap" }}>{h}</th>)}</tr></thead>
+          <tbody>{L.map(k => { const yok = !k.ilk; return (
+            <tr key={k.user_id} onClick={()=>ac(k)} style={{ cursor:"pointer", background:acik===k.user_id?"rgba(var(--vurgu-rgb),0.07)":"transparent", opacity:k.aktif?1:0.5 }}>
+              <td style={{ padding:"10px 12px", borderBottom:"1px solid "+T.border, color:T.text, fontWeight:700, whiteSpace:"nowrap" }}>{k.ad} {acik===k.user_id ? "▴" : "▾"}</td>
+              <td style={{ padding:"10px 12px", borderBottom:"1px solid "+T.border, color:T.text }}>{k.giris}</td>
+              <td style={{ padding:"10px 12px", borderBottom:"1px solid "+T.border, color:T.text, whiteSpace:"nowrap" }}>{yok ? "—" : aktSaat(k.ilk)+" – "+aktSaat(k.son)}</td>
+              <td style={{ padding:"10px 12px", borderBottom:"1px solid "+T.border, color:T.text, whiteSpace:"nowrap" }}>{aktSure(k.aktif_dk)}</td>
+              <td style={{ padding:"10px 12px", borderBottom:"1px solid "+T.border, color:T.text }}>{aktSayfaAd(k.en_cok)}</td>
+              <td style={{ padding:"10px 12px", borderBottom:"1px solid "+T.border, color:T.text }}>{k.islem}</td>
+              <td style={{ padding:"10px 12px", borderBottom:"1px solid "+T.border, whiteSpace:"nowrap" }}>{yok ? <span style={{ fontSize:10, padding:"2px 8px", borderRadius:8, background:"rgba(128,128,128,.18)", color:T.sub }}>Giriş yok</span>
+                : k.mesai_disi_dk > 0 ? <span style={{ fontSize:10, padding:"2px 8px", borderRadius:8, background:"rgba(239,154,90,.2)", color:"#ef9a5a" }}>Mesai dışı {aktSure(k.mesai_disi_dk)}</span>
+                : <span style={{ fontSize:10, padding:"2px 8px", borderRadius:8, background:"rgba(95,174,110,.18)", color:"#5fae6e" }}>Mesai içi</span>}</td>
+            </tr>); })}</tbody>
+        </table>
+      </div>}
+      {sec && <div style={{ ...kart, marginTop:10 }}>
+        <div style={{ fontSize:10, letterSpacing:1, color:"var(--goldtext)", fontWeight:700, marginBottom:10 }}>{String(sec.ad).toUpperCase()} · DETAY</div>
+        {!detay && <div style={{ fontSize:12, color:T.sub }}>Yükleniyor…</div>}
+        {detay && <div>
+          {tekGun && (detay.dilimler||[]).length > 0 && (() => {
+            const m = {}; detay.dilimler.forEach(d => { m[d.dilim.slice(11)] = d; });
+            const seg = []; for (let h = 6; h < 24; h++) for (let q = 0; q < 6; q++) { const key = String(h).padStart(2,"0")+":"+String(q*10).padStart(2,"0"); seg.push(m[key] ? (m[key].md ? "#ef9a5a" : "#e8c872") : "rgba(128,128,128,.18)"); }
+            return <div style={{ marginBottom:12 }}>
+              <div style={{ display:"flex", justifyContent:"space-between", fontSize:10, color:T.dim }}>{[6,8,10,12,14,16,18,20,22].map(h => <span key={h}>{String(h).padStart(2,"0")}:00</span>)}</div>
+              <div style={{ display:"flex", height:20, borderRadius:6, overflow:"hidden", marginTop:3, gap:1 }}>{seg.map((c,i) => <i key={i} style={{ flex:1, background:c }}/>)}</div>
+              <div style={{ fontSize:10, color:T.dim, marginTop:4 }}>Sarı: mesai içi aktif · Turuncu: mesai dışı aktif · Gri: boşta/kapalı</div>
+            </div>; })()}
+          {!tekGun && (detay.gunler||[]).length > 0 && <div style={{ marginBottom:12, overflowX:"auto" }}><table style={{ width:"100%", fontSize:12, borderCollapse:"collapse", minWidth:480 }}>
+            <thead><tr>{["GÜN","GİRİŞ","İLK – SON","AKTİF","MESAİ DIŞI","İŞLEM"].map(h => <th key={h} style={{ textAlign:"left", fontSize:10, color:T.sub, padding:"6px 8px", borderBottom:"1px solid "+T.border }}>{h}</th>)}</tr></thead>
+            <tbody>{detay.gunler.map(g => <tr key={g.gun}><td style={{ padding:"6px 8px", color:T.text }}>{new Date(g.gun+"T12:00:00").toLocaleDateString("tr-TR",{day:"2-digit",month:"short",weekday:"short"})}</td><td style={{ padding:"6px 8px", color:T.text }}>{g.giris}</td><td style={{ padding:"6px 8px", color:T.text }}>{aktSaat(g.ilk)} – {aktSaat(g.son)}</td><td style={{ padding:"6px 8px", color:T.text }}>{aktSure(g.aktif_dk)}</td><td style={{ padding:"6px 8px", color:g.mesai_disi_dk>0?"#ef9a5a":T.text }}>{aktSure(g.mesai_disi_dk)}</td><td style={{ padding:"6px 8px", color:T.text }}>{g.islem}</td></tr>)}</tbody></table></div>}
+          <div style={{ display:"flex", gap:24, flexWrap:"wrap" }}>
+            <div style={{ flex:"1 1 260px" }}>
+              <div style={etk}>Nerelerde</div>
+              {(detay.sayfalar||[]).length === 0 && <div style={{ fontSize:12, color:T.sub }}>Kayıt yok</div>}
+              {(() => { const mx = Math.max(1, ...(detay.sayfalar||[]).map(x=>x.dk)); return (detay.sayfalar||[]).map(x => <div key={x.sayfa} style={{ display:"flex", alignItems:"center", gap:8, fontSize:12, margin:"5px 0" }}><span style={{ width:130, color:T.text, flex:"0 0 auto" }}>{aktSayfaAd(x.sayfa)}</span><i style={{ display:"block", height:8, borderRadius:4, background:"var(--goldtext)", width:Math.max(4, Math.round(x.dk/mx*120)) }}/><span style={{ color:T.sub }}>{aktSure(x.dk)}</span></div>); })()}
+            </div>
+            <div style={{ flex:"1 1 260px" }}>
+              <div style={etk}>Ne yaptı</div>
+              {(detay.islemler||[]).length === 0 && <div style={{ fontSize:12, color:T.sub }}>Bu dönemde kayıtlı işlem yok</div>}
+              {(detay.islemler||[]).slice(0,40).map((x,i) => <div key={i} style={{ display:"flex", gap:10, fontSize:12, padding:"4px 0", borderBottom:"1px solid "+T.border, color:T.text }}><span style={{ color:T.dim, flex:"0 0 auto", width:tekGun?44:96 }}>{tekGun ? aktSaat(x.zaman) : new Date(x.zaman).toLocaleDateString("tr-TR",{day:"2-digit",month:"short"})+" "+aktSaat(x.zaman)}</span><span>{x.tur} {x.islem === "ekle" ? "eklendi" : x.islem === "sil" ? "silindi" : x.islem === "düzenle" ? "düzenlendi" : x.islem} · {x.detay}</span></div>)}
+            </div>
+          </div>
+        </div>}
+      </div>}
+      <div style={{ fontSize:11, color:T.dim, marginTop:12 }}>Aktif süre: sayfa açıkken ve son 2 dakikada dokunma/tuş olduğu dakikalar. Rakamlar yaklaşık değerdir. Kayıtlar 180 gün saklanır.</div>
+    </div>
+  );
+}
+
 // ═══ KULLANICI YÖNETİMİ — Ayarlar içinde, sadece admin ═══
-function KullaniciYonetimi({ T }) {
+function KullaniciYonetimi({ T, onOnizle }) {
   const [liste, setListe] = useState(null);
   const [hata, setHata] = useState("");
   const [form, setForm] = useState(null); // { yeni, user_id, kullanici_adi, ad, sifre, rol, sirketler, sayfalar, kesfet, hassas, aktif }
@@ -8585,8 +8713,13 @@ function KullaniciYonetimi({ T }) {
           <div style={{ width:36, height:36, borderRadius:"50%", background:"rgba(var(--vurgu-rgb),0.15)", color:"var(--goldtext)", display:"flex", alignItems:"center", justifyContent:"center", fontWeight:700 }}>{(k.ad||k.kullanici_adi||"?").charAt(0).toUpperCase()}</div>
           <div style={{ flex:1, minWidth:0 }}>
             <div style={{ fontSize:14, fontWeight:700, color:T.text }}>{k.ad || k.kullanici_adi} <span style={{ fontSize:10, fontWeight:700, padding:"2px 8px", borderRadius:8, marginLeft:4, background:k.aktif?"rgba(95,174,110,0.18)":"rgba(232,90,79,0.18)", color:k.aktif?"#5fae6e":"#e85a4f" }}>{k.aktif?"Aktif":"Pasif"}</span></div>
-            <div style={{ fontSize:11, color:T.sub, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{k.eposta || k.kullanici_adi} · {sirketYaz(k)} · {ozet(k)}</div>
+            <div style={{ fontSize:11, color:T.sub, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{k.eposta || k.kullanici_adi} · {sirketYaz(k)}</div>
+            <div style={{ display:"flex", gap:3, flexWrap:"wrap", marginTop:6 }}>
+              {k.rol === "usta" ? <span style={{ fontSize:9, padding:"2px 7px", borderRadius:7, background:"rgba(var(--vurgu-rgb),0.16)", color:"var(--goldtext)" }}>Sipariş Takip</span>
+                : SAYFA_LISTESI.map(([id,l]) => { const ok = k.rol === "admin" || (k.sayfalar||[]).includes(id); return <span key={id} style={{ fontSize:9, padding:"2px 7px", borderRadius:7, background:ok?"rgba(var(--vurgu-rgb),0.16)":"transparent", color:ok?"var(--goldtext)":T.dim, border:ok?"1px solid transparent":"1px solid "+T.border, textDecoration:ok?"none":"line-through" }}>{l}</span>; })}
+            </div>
           </div>
+          {k.rol !== "admin" && onOnizle && <button onClick={(e)=>{ e.stopPropagation(); onOnizle(k); }} style={{ flex:"0 0 auto", background:"transparent", border:"1px solid var(--goldtext)", color:"var(--goldtext)", borderRadius:9, padding:"6px 11px", fontSize:11, fontWeight:700, cursor:"pointer" }}>👁 Önizle</button>}
           <span style={{ color:T.sub }}>›</span>
         </div>))}
       {form && (
@@ -8618,6 +8751,25 @@ function KullaniciYonetimi({ T }) {
           </>}
           {form.rol === "usta" && <div style={{ fontSize:12, color:T.sub, marginTop:12 }}>Usta sadece "Sipariş Takip" ekranını görür: açık siparişler, model fotoğrafları ve aşamalar. Fiyat, kâr ve milyem yoktur, hiçbir şeyi değiştiremez.</div>}
           {form.rol === "admin" && <div style={{ fontSize:12, color:T.sub, marginTop:12 }}>Admin her yeri görür ve kullanıcıları yönetir.</div>}
+          {(() => {
+            const rol = form.rol;
+            const nav = rol === "usta" ? [["ustatakip","Sipariş Takip",true]] : SAYFA_LISTESI.map(([id,l]) => [id, l, rol === "admin" || form.sayfalar.includes(id)]);
+            const analizAcik = rol === "admin" || form.sayfalar.includes("analiz");
+            const kes = rol === "admin" ? KESFET_LISTESI.map(x=>x[1]).concat(["Ekip"]) : KESFET_LISTESI.filter(([id]) => form.kesfet.includes(id) && (id !== "karlilik" || form.hassas.includes("karlilik"))).map(x=>x[1]);
+            const kar = rol === "admin" || (rol === "kullanici" && form.hassas.includes("karlilik"));
+            const satir = (a, b, iyi) => <div style={{ display:"flex", justifyContent:"space-between", gap:10, fontSize:12, padding:"6px 0", borderBottom:"1px solid "+T.border }}><span style={{ color:T.sub }}>{a}</span><b style={{ color:iyi===true?"#5fae6e":iyi===false?"#ef8a7a":T.text, textAlign:"right" }}>{b}</b></div>;
+            return (
+              <div style={{ marginTop:16, background:"rgba(var(--vurgu-rgb),0.05)", border:"1px solid "+T.border, borderRadius:12, padding:"12px 14px" }}>
+                <div style={{ fontSize:10, fontWeight:700, letterSpacing:1, color:"var(--goldtext)", marginBottom:8 }}>ÖNİZLEME · {(form.ad || form.kullanici_adi || "Bu kullanıcı").toUpperCase()} BUNLARI GÖRÜR</div>
+                <div style={{ display:"flex", gap:4, flexWrap:"wrap", marginBottom:8 }}>{nav.map(([id,l,ok]) => <span key={id} style={{ fontSize:11, padding:"4px 10px", borderRadius:8, border:"1px solid "+(ok?"var(--goldtext)":T.border), color:ok?"var(--goldtext)":T.dim, background:ok?"rgba(var(--vurgu-rgb),0.14)":"transparent", textDecoration:ok?"none":"line-through", opacity:ok?1:0.6 }}>{l}</span>)}</div>
+                {satir("Şirketler", form.sirketler.map(x=>x.toUpperCase()).join(" + ") || "—")}
+                {rol !== "usta" && analizAcik && satir("Keşfet sekmeleri", kes.join(", ") || "Hiçbiri")}
+                {satir("Kâr / karlılık rakamları", rol === "usta" ? "Görmez" : kar ? "Görür" : "Görmez", kar)}
+                {satir("Şifre sorulan yerler", rol === "admin" ? "Sorulmaz" : rol === "usta" ? "Bu alanlara hiç giremez" : "Karlılık / Muhasebe şifresini girer")}
+                {satir("Ekip etkinliği raporu", rol === "admin" ? "Görür" : "Görmez", rol === "admin")}
+              </div>
+            );
+          })()}
           {!form.yeni && <div style={{ marginTop:14 }}>{chip(form.aktif, form.aktif ? "Hesap aktif" : "Hesap pasif (giriş kapalı)", ()=>setForm({...form, aktif:!form.aktif}))}</div>}
           <div style={{ display:"flex", gap:8, marginTop:16 }}>
             <button onClick={kaydet} disabled={bekle} style={{ flex:1, background:T.text, color:T.bg2, border:"none", borderRadius:10, padding:"11px", fontSize:14, fontWeight:700, cursor:"pointer", opacity:bekle?0.6:1 }}>{bekle ? "Kaydediliyor…" : "Kaydet"}</button>
@@ -11106,8 +11258,12 @@ export default function Root() {
 
   const [profil, setProfil] = useState(null);       // giriş yapan kullanıcının app_kullanici satırı
   const [oturumKontrol, setOturumKontrol] = useState(true);
-  AKTIF_KULLANICI = profil;
-  if (profil && profil.rol === "admin") RP_ACIK = true; // admin için Karlılık kapısı açık
+  const [onizle, setOnizle] = useState(null);          // admin "Önizle": başka kullanıcının görünümü (veri/şifre değişmez)
+  const efektif = onizle || profil;
+  AKTIF_KULLANICI = efektif;
+  AKT_ONIZLEME = !!onizle;
+  if (efektif && efektif.rol === "admin") RP_ACIK = true; // admin için Karlılık kapısı açık
+  else if (onizle) { RP_ACIK = false; if (MSK_PERS_SIFRE === "admin-oturumu") MSK_PERS_SIFRE = ""; } // önizlemede şifre kapıları gerçek kullanıcı gibi davranır
   const giris = !!profil;
   useEffect(() => {
     let iptal = false;
@@ -11146,14 +11302,16 @@ export default function Root() {
   const [sirket, setSirket] = useState(false);   // şirket seçildi mi
   const [sirketKey, setSirketKey] = useState(0); // şirket değişince Atolye'yi yeniden mount eder
   useEffect(() => { atolyeIkonKur(""); }, []);
+  // Oturum başına bir kez "giriş" kaydı (sekme/tarayıcı oturumu başına)
+  useEffect(() => { if (!profil) return; try { if (!sessionStorage.getItem("atolye_akt_giris")) { sessionStorage.setItem("atolye_akt_giris", "1"); aktiviteYaz("giris", ""); } } catch {} }, [profil]);
   if (oturumKontrol) return <div style={{ minHeight:"100vh", background:otoTemaHesapla().bg2 }} />;
   if (!giris) return <GirisEkrani onGiris={(p)=>setProfil(p)} />;
   if (!secim) return <SecimEkrani onKatalog={()=>setSecim(true)} />;
   if (!sirket) return <SirketSecimEkrani izinli={profil.sirketler} onSec={()=>{ setSirketKey(k=>k+1); setSirket(true); }} />;
-  return <Atolye key={sirketKey} onSirketDegis={()=>setSirket(false)} />;
+  return <Atolye key={sirketKey} onSirketDegis={()=>setSirket(false)} onOnizle={(k)=>setOnizle(k)} onizlemeAdi={onizle ? (onizle.ad || onizle.kullanici_adi) : ""} onOnizleCik={()=>setOnizle(null)} />;
 }
 
-function Atolye({ onSirketDegis }) {
+function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
   // Varsayılan: OTOMATİK (hiç seçim yapılmamışsa). Sadece elle sabit tema seçilmişse ("manuel") o kullanılır.
   const [yaziTipi, setYaziTipiH] = useState(() => { try { return localStorage.getItem("atolye_yazi_tipi")==="segoe" ? "segoe" : "eski"; } catch { return "eski"; } });
   const setYaziTipi = (k) => { setYaziTipiH(k); try { localStorage.setItem("atolye_yazi_tipi", k); } catch {} };
@@ -11316,7 +11474,7 @@ function Atolye({ onSirketDegis }) {
   const [mc,      setMc]         = useState("0.030");
 
   const [sayfa,     setSayfa]     = useState(()=>ilkIzinliSayfa());
-  useEffect(() => { if (!izinSayfa(sayfa)) setSayfa(ilkIzinliSayfa()); }, [sayfa]);
+  useEffect(() => { if (!izinSayfa(sayfa)) setSayfa(ilkIzinliSayfa()); }, [sayfa, AKTIF_KULLANICI && AKTIF_KULLANICI.user_id]);
   // Kasa ve Muhasebe tek sekmede birleşti: eski "muhasebe" sayfasına gelen her yönlendirme Kasa & Muhasebe › Muhasebe bölümüne gider
   useEffect(() => { if (sayfa === "muhasebe") { setSayfa("kasa"); setKasaSayfa("g_muh"); } }, [sayfa]);
   const [aktifKol,  setAktifKol]  = useState(null);
@@ -11470,7 +11628,7 @@ function Atolye({ onSirketDegis }) {
   const [analizAyB, setAnalizAyB] = useState(()=>new Date().getMonth());
   const [csTum, setCsTum] = useState(false); // Çok satan: false = seçili dönem, true = tüm zamanlar
   const [kTab, setKTab] = useState("genel");        // Keşfet ana sekmesi: genel/uretim/musteri/modeller/vitrin/iade
-  useEffect(() => { if (sayfa === "analiz" && !izinKesfet(kTab)) { const f = ["genel","uretim","musteri","modeller","vitrin","iade","karlilik"].find(izinKesfet); if (f) setKTab(f); } }, [sayfa, kTab]);
+  useEffect(() => { if (sayfa === "analiz" && !izinKesfet(kTab)) { const f = ["genel","uretim","musteri","modeller","vitrin","iade","karlilik"].find(izinKesfet); if (f) setKTab(f); } }, [sayfa, kTab, AKTIF_KULLANICI && AKTIF_KULLANICI.user_id]);
   const [kDrill, setKDrill] = useState(null);         // Keşfet derine inme: {tip:"asama"|"gecik"|"mus", id}
   const [kDrillSek, setKDrillSek] = useState("sip");
   const [kGrafik, setKGrafik] = useState("kg");
@@ -13055,6 +13213,11 @@ function Atolye({ onSirketDegis }) {
         </div>
       )}
 
+      <AktiviteIzleyici sayfa={sayfa} kTab={kTab} />
+      {onizlemeAdi && <div style={{ position:"sticky", top:0, zIndex:9000, background:"#e8c872", color:"#14130f", padding:"9px 14px", display:"flex", justifyContent:"space-between", alignItems:"center", gap:10, fontSize:13, fontWeight:700 }}>
+        <span>👁 Önizleme: {onizlemeAdi} olarak görüyorsun (veri ve şifreler değişmez)</span>
+        <button onClick={onOnizleCik} style={{ background:"#14130f", color:"#e8c872", border:"none", borderRadius:8, padding:"6px 14px", fontWeight:700, fontSize:12, cursor:"pointer" }}>Çık</button>
+      </div>}
       {/* SAĞLIK UYARI BANDI — eksik okuma tespit edilince */}
       {saglikUyari && (
         <div style={{ background:"#e85a4f", color:"#fff", padding:"10px 16px", display:"flex", alignItems:"center", justifyContent:"space-between", gap:12, flexWrap:"wrap", fontSize:13, fontWeight:600, position:"sticky", top:0, zIndex:9999 }}>
@@ -16425,10 +16588,11 @@ function Atolye({ onSirketDegis }) {
 @media(max-width:900px){.kx-kp{grid-template-columns:1fr 1fr}.kx-kp .kx-hero{grid-column:1/-1}.kx-r2,.kx-r3{grid-template-columns:1fr}.kx-g4{grid-template-columns:1fr 1fr!important}.kx-g2{grid-template-columns:1fr!important}.kx-dash>div{grid-template-columns:repeat(auto-fit,minmax(130px,1fr))!important}}
 @media(max-width:700px){.kx-dr .pn{left:0;right:0;top:70px;bottom:0;width:auto;border-radius:20px 20px 0 0;box-shadow:0 -12px 32px rgba(0,0,0,.5)}}`}</style>
             <div className="kx-tabs">
-              {[["genel","Genel"],["uretim","Üretim"],["musteri","Müşteri"],["modeller","Modeller"],["vitrin","Vitrin"],["iade","İade"],...(AKTIF_SIRKET_ONEK===""?[["karlilik","Karlılık raporu"]]:[])].filter(([id]) => izinKesfet(id)).map(([id,l]) => (
+              {[["genel","Genel"],["uretim","Üretim"],["musteri","Müşteri"],["modeller","Modeller"],["vitrin","Vitrin"],["iade","İade"],...(AKTIF_SIRKET_ONEK===""?[["karlilik","Karlılık raporu"]]:[]),["ekip","Ekip"]].filter(([id]) => izinKesfet(id)).map(([id,l]) => (
                 <button key={id} onClick={()=>setKTab(id)} style={{ background:kTab===id?"var(--goldtext)":"rgba(var(--vurgu-rgb),0.06)", color:kTab===id?(T.bg2||"#14130f"):T.sub, border:"none", borderRadius:16, padding:"7px 15px", fontSize:12, fontWeight:600, cursor:"pointer" }}>{l}</button>
               ))}
             </div>
+            {kTab==="ekip" && izinKesfet("ekip") && <EkipEtkinligi T={T} />}
             {kTab==="karlilik" && AKTIF_SIRKET_ONEK==="" && izinKesfet("karlilik") && (() => {
               const [kb, ke] = analizDonem==="ozel" ? [0, 8.64e15] : kxDonemAralik(analizDonem, analizYil, analizAyA, analizAyB);
               const lst = [...siparisler].reverse().filter(x => x.tarih >= kb && x.tarih <= ke);
@@ -17591,7 +17755,7 @@ function Atolye({ onSirketDegis }) {
 
             {/* KULLANICILAR — sadece admin */}
             {AKTIF_KULLANICI && AKTIF_KULLANICI.rol==="admin" && <Akordiyon baslik="👥 Kullanıcılar" T={T}>
-            <KullaniciYonetimi T={T}/>
+            <KullaniciYonetimi T={T} onOnizle={onOnizle}/>
             </Akordiyon>}
 
             {/* ŞİFRE DEĞİŞTİR */}
