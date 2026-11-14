@@ -9508,7 +9508,7 @@ function VitrinModu({ kod, onizleme }) {
             const sure = Math.max(30, ogeler.length * 4);
             return (
               <div style={{ padding:"14px 0 6px" }}>
-                <style>{".vs-mq{overflow:hidden;padding:16px 0;margin:-16px 0;-webkit-mask-image:linear-gradient(90deg,transparent,#000 5%,#000 95%,transparent);mask-image:linear-gradient(90deg,transparent,#000 5%,#000 95%,transparent)}.vs-tr{display:flex;gap:12px;width:max-content;animation:vsKay linear infinite}.vs-mq:hover .vs-tr{animation-play-state:paused}@keyframes vsKay{to{transform:translateX(-50%)}}.vs-t{position:relative;width:220px;flex:none;aspect-ratio:5/4;border-radius:14px;overflow:hidden;background:#ededed;cursor:pointer;transition:transform .25s ease,box-shadow .25s ease}.vs-t:hover{transform:scale(1.14);box-shadow:0 14px 34px rgba(0,0,0,.3);z-index:3}@media(max-width:640px){.vs-t{width:132px}.vs-t span{font-size:9px!important;padding:2px 7px!important}}@media(prefers-reduced-motion:reduce){.vs-tr{animation:none!important}.vs-mq{overflow-x:auto}}"}</style>
+                <style>{".vs-mq{overflow:hidden;padding:16px 0;margin:-16px 0;-webkit-mask-image:linear-gradient(90deg,transparent,#000 5%,#000 95%,transparent);mask-image:linear-gradient(90deg,transparent,#000 5%,#000 95%,transparent)}.vs-tr{display:flex;gap:12px;width:max-content;animation:vsKay linear infinite}.vs-mq:hover .vs-tr{animation-play-state:paused}@keyframes vsKay{to{transform:translateX(-50%)}}.vs-t{position:relative;width:220px;flex:none;aspect-ratio:5/4;border-radius:14px;overflow:hidden;background:#ededed;cursor:pointer;transition:transform .25s ease,box-shadow .25s ease}.vs-t:hover{transform:scale(1.14);box-shadow:0 14px 34px rgba(0,0,0,.3);z-index:3}@media(max-width:640px){.vs-t{width:132px}.vs-t span{font-size:8px!important;padding:1px 6px!important}}@media(prefers-reduced-motion:reduce){.vs-tr{animation:none!important}.vs-mq{overflow-x:auto}}"}</style>
                 <div style={{ padding:"0 28px 8px", display:"flex", alignItems:"baseline", gap:10 }}>
                   <span style={{ fontSize:16, fontWeight:600, color:"var(--vt1)", letterSpacing:"-0.01em" }}>Yeni modeller</span>
                   <span style={{ fontSize:12, color:"var(--vt2)" }}>{yeniler.length} yeni</span>
@@ -9520,8 +9520,8 @@ function VitrinModu({ kod, onizleme }) {
                       return (
                         <div key={m.id + "_" + i} className="vs-t" title={m.kod}
                           onClick={() => { setDetayModel(m); if (vitrinMusteri && !onizleme) vitrinAktiviteKaydetGuvenli(vitrinMusteri.kod, vitrinMusteri.onek, "model", kolAdi, m.kod, m.ad); }}>
-                          <img src={m.foto} alt="" style={{ position:"absolute", top:"8.5%", left:"8.5%", width:"83%", height:"83%", ...FOTO_KENAR_SOLUK, objectFit:"cover" }}/>
-                          <span style={{ position:"absolute", top:8, left:8, background:"var(--vurgu)", color:"#1d1d1f", fontSize:10, fontWeight:700, padding:"3px 9px", borderRadius:980 }}>YENİ</span>
+                          <img src={m.foto} alt="" style={{ position:"absolute", top:"4%", left:"4%", width:"92%", height:"92%", ...FOTO_KENAR_SOLUK, objectFit:"cover" }}/>
+                          <span style={{ position:"absolute", top:6, left:6, background:"var(--vurgu)", color:"#1d1d1f", fontSize:9, fontWeight:700, padding:"2px 7px", borderRadius:980 }}>YENİ</span>
                           <span style={{ position:"absolute", bottom:6, right:8, fontSize:10, fontWeight:600, color:"#6e6e73" }}>{m.kod}</span>
                         </div>
                       );
@@ -9543,24 +9543,25 @@ function VitrinModu({ kod, onizleme }) {
               return (
               <div key={k.id} onClick={()=>kolAc(k)} className="vm-card"
                 style={{ borderRadius:14, overflow:"hidden", background:"rgba(var(--voverlay-rgb),0.04)", cursor:"pointer", position:"relative", ...(satirH ? { display:"flex", flexDirection:"column", minHeight:0 } : {}), border: secildi ? "2px solid var(--vurgu)" : (yeniSay>0 ? "1.5px solid rgba(var(--vurgu-rgb),0.4)" : "1.5px solid transparent") }}>
-                {/* KATALOG SEÇİM BUTONU — sıra numarası */}
-                <button onClick={(e)=>{ e.stopPropagation(); setSeciliKlasorler(p => secildi ? p.filter(x=>x!==k.id) : [...p, k.id]); }}
-                  style={{ position:"absolute", top: yogun?5:10, left: yogun?5:10, zIndex:4, minWidth: yogun?17:30, height: yogun?17:30, borderRadius:"50%", background: secildi?"var(--vurgu)":"rgba(255,255,255,0.92)", border: secildi?"none":"1px solid rgba(0,0,0,0.1)", color: secildi?"#fff":"var(--vt2)", fontSize: yogun?10:14, fontWeight:800, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", boxShadow:"0 2px 8px rgba(0,0,0,0.25)", padding:"0 8px" }}>
-                  {secildi ? (sira+1) : "+"}
-                </button>
                 {yeniSay > 0 && (
-                  <div style={{ position:"absolute", top: yogun?6:10, right: yogun?6:10, zIndex:3, background:"var(--vurgu)", color:"#1d1d1f", fontSize: yogun?9:11, fontWeight:700, padding: yogun?"2px 7px":"4px 11px", borderRadius:980, boxShadow:"0 2px 8px rgba(0,0,0,0.3)" }}>{yeniSay} yeni</div>
+                  <div style={{ position:"absolute", top: yogun?5:7, left: yogun?5:7, zIndex:3, background:"var(--vurgu)", color:"#1d1d1f", fontSize: yogun?8:9.5, fontWeight:700, padding: yogun?"1px 6px":"2px 8px", borderRadius:980, boxShadow:"0 1px 5px rgba(0,0,0,0.3)", lineHeight:1.3 }}>{yeniSay} yeni</div>
                 )}
-                <div style={{ ...(satirH ? { flex:"1 1 0", minHeight:0 } : { aspectRatio:"4/3" }), background:"#f7f7f8", display:"grid", gridTemplateColumns:"1fr 1fr", gridTemplateRows:"1fr 1fr", gap:1 }}>
+                <div style={{ ...(satirH ? { flex:"1 1 0", minHeight:0 } : { aspectRatio: mobilKol ? (kolEf === 1 ? "4/3" : "1/1") : "5/4" }), background:"#f7f7f8", display:"grid", gridTemplateColumns:"1fr 1fr", gridTemplateRows:"1fr 1fr", gap:1 }}>
                   {kapaklar.length > 0 ? [0,1,2,3].map(i => (
                     <div key={i} style={{ overflow:"hidden", background:"#f0f0f0" }}>
                       {kapaklar[i] ? <img src={kapaklar[i]} alt="" style={{ width:"100%", height:"100%", objectFit:"cover", display:"block" }}/> : <div style={{ width:"100%", height:"100%", background:"#eee" }}/>}
                     </div>
                   )) : <div style={{ gridColumn:"1/-1", gridRow:"1/-1", display:"flex", alignItems:"center", justifyContent:"center", color:"#d2d2d7", fontSize:32 }}>◇</div>}
                 </div>
-                <div style={{ padding: yogun ? "7px 9px 9px" : genisKart ? "14px 18px" : "11px 13px", flexShrink:0 }}>
-                  <div style={{ fontSize: yogun ? 12 : genisKart ? 18 : 15, fontWeight:500, color:"var(--vt1)", letterSpacing:"-0.01em", lineHeight:1.2 }}>{urunCevir(k.ad)}</div>
-                  <div style={{ fontSize: yogun ? 10 : genisKart ? 13 : 11, color:"var(--vt2)", marginTop:3 }}>{kolModelleri.length} model</div>
+                <div style={{ padding: yogun ? "5px 6px 6px 8px" : genisKart ? "12px 14px 12px 18px" : "8px 8px 9px 12px", flexShrink:0, display:"flex", alignItems:"center", justifyContent:"space-between", gap:6 }}>
+                  <div style={{ minWidth:0 }}>
+                    <div style={{ fontSize: yogun ? 11 : genisKart ? 17 : 14, fontWeight:500, color:"var(--vt1)", letterSpacing:"-0.01em", lineHeight:1.2 }}>{urunCevir(k.ad)}</div>
+                    <div style={{ fontSize: yogun ? 9.5 : genisKart ? 13 : 11, color:"var(--vt2)", marginTop:2 }}>{kolModelleri.length} model</div>
+                  </div>
+                  <button onClick={(e)=>{ e.stopPropagation(); setSeciliKlasorler(p => secildi ? p.filter(x=>x!==k.id) : [...p, k.id]); }}
+                    style={{ flex:"0 0 auto", alignSelf:"flex-end", minWidth: yogun?18:28, height: yogun?18:28, borderRadius:"50%", background: secildi?"var(--vurgu)":"rgba(255,255,255,0.92)", border: secildi?"none":"1px solid rgba(0,0,0,0.1)", color: secildi?"#fff":"var(--vt2)", fontSize: yogun?10:14, fontWeight:800, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", boxShadow:"0 1px 5px rgba(0,0,0,0.25)", padding:"0 6px" }}>
+                    {secildi ? (sira+1) : "+"}
+                  </button>
                 </div>
               </div>
               );
