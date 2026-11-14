@@ -11015,6 +11015,7 @@ function Atolye({ onSirketDegis }) {
   const [sipTarih1,setSipTarih1]= useState("");
   const [sipTarih2,setSipTarih2]= useState("");
   const [sipMetal,setSipMetal]= useState("altin");
+  const [sipFiltAcik,setSipFiltAcik]= useState(false); // mobil filtre çekmecesi
   const [sipAyAcik,setSipAyAcik]= useState([]);
   const [sipRapor,setSipRapor]= useState(false);
   const [sipTamAcik,setSipTamAcik]= useState({}); // Aylar görünümü: ay anahtarı → "Tamamlanan" bölümü açık mı
@@ -13920,7 +13921,7 @@ function Atolye({ onSirketDegis }) {
     const sekmeKeys = sirKeys.filter(k => k===bk || gorunen.includes(k) || liste.some(s=>planAy(s)===k));
     return (
       <div>
-      <div style={{ display:"flex", gap:6, flexWrap:"wrap", alignItems:"center", marginBottom:12 }}>
+      <div className="sm-ay" style={{ display:"flex", gap:6, flexWrap:"wrap", alignItems:"center", marginBottom:12 }}>
         {sekmeKeys.map(k => {
           const sk = liste.filter(s=>planAy(s)===k);
           const gec = sk.some(s=>!bitti(s) && ozet(s).gecikti);
@@ -14043,28 +14044,37 @@ function Atolye({ onSirketDegis }) {
   })();
   return (
     <div style={{ animation:"fadein .3s" }}>
-      <style>{`.sp-drawer .sp-back{display:none!important}.sp-wrap{display:grid;grid-template-columns:370px 1fr;gap:14px;align-items:start}.sp-back{display:none}.sp-list{position:sticky;top:8px;max-height:calc(100vh - 150px);overflow:auto}@media(max-width:900px){.sp-wrap{grid-template-columns:1fr}.sp-wrap.sp-sec .sp-list{display:none}.sp-wrap:not(.sp-sec) .sp-det{display:none}.sp-back{display:inline-block}.sp-list{position:static;max-height:none}.sp-kalem{flex-wrap:wrap}}`}</style>
-      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10, flexWrap:"wrap", gap:8 }}>
+      <style>{`.sp-drawer .sp-back{display:none!important}.sp-wrap{display:grid;grid-template-columns:370px 1fr;gap:14px;align-items:start}.sp-back{display:none}.sp-list{position:sticky;top:8px;max-height:calc(100vh - 150px);overflow:auto}@media(max-width:900px){.sp-wrap{grid-template-columns:1fr}.sp-wrap.sp-sec .sp-list{display:none}.sp-wrap:not(.sp-sec) .sp-det{display:none}.sp-back{display:inline-block}.sp-list{position:static;max-height:none}.sp-kalem{flex-wrap:wrap}}.sm-fbtn,.sm-only,.sm-sheet-bar{display:none}.sm-ctl,.sm-filt{display:contents}@media(max-width:700px){.sm-fbtn{display:inline-block}.sm-ctl{display:flex!important;flex-wrap:wrap;gap:6px;width:100%}.sm-ctl .sm-search{width:100%!important;flex:1 1 100%;box-sizing:border-box;padding:10px 12px!important;font-size:14px!important}.sm-ctl .sm-rapor{flex:1 1 0;text-align:center;padding:10px 8px!important}.sm-ctl .sm-seg{flex:2 1 0}.sm-ctl .sm-seg button{flex:1;padding:10px 8px!important}.sm-filt{display:none!important}.sm-filt.ac{display:flex!important;flex-direction:column;gap:10px;position:fixed;left:0;right:0;bottom:0;z-index:960;background:var(--bg2,#1c1a16);color:inherit;border-top:1px solid rgba(var(--vurgu-rgb),0.4);border-radius:16px 16px 0 0;padding:16px 16px 20px;max-height:80vh;overflow:auto;box-shadow:0 -12px 32px rgba(0,0,0,.35)}.sm-filt.ac input,.sm-filt.ac select{width:100%!important;max-width:none!important;box-sizing:border-box;padding:10px!important;font-size:14px!important}.sm-filt.ac .sm-dash{display:none}.sm-filt.ac .sm-sheet-bar{display:flex;gap:8px}.sm-filt.ac .sm-sheet-bar button{flex:1;padding:11px!important;font-size:14px!important}.sm-filt.ac .sm-only{display:block}.sm-metal-orj{display:none!important}.sm-back{position:fixed;inset:0;z-index:955;background:rgba(0,0,0,.45)}.sm-asama{display:flex!important;overflow-x:auto;gap:6px!important;padding-bottom:6px!important;-webkit-overflow-scrolling:touch}.sm-asama>button{flex:0 0 auto;min-width:92px}.sm-asama .sm-gr{display:none}.sm-asama>button.on .sm-gr{display:block}.sm-asama-ipucu{display:none}.sm-ay{flex-wrap:nowrap!important;overflow-x:auto}.sm-ay>*{flex:0 0 auto}.sm-kpi{flex-wrap:nowrap!important;gap:6px!important;overflow-x:auto}.sm-kpi>div{padding:5px 9px!important;flex:0 0 auto}}`}</style>
+      <div className="sm-head" style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10, flexWrap:"wrap", gap:8 }}>
         <h2 style={{ margin:0, fontSize:18, fontWeight:600, color:"var(--goldtext)" }}>Siparişler <span style={{ fontSize:13, color:"#7a6f5a", fontWeight:600 }}>({liste.length}/{siparisler.length})</span></h2>
-        <div style={{ display:"flex", gap:6, alignItems:"center", flexWrap:"wrap" }}>
-          <input value={sipMusF} onChange={e=>setSipMusF(e.target.value)} placeholder="🔍 Sipariş no, PO, müşteri, model ara…" style={{ ...IS, width:250, padding:"7px 10px", fontSize:12 }}/>
+        <button className="sm-fbtn" onClick={()=>setSipFiltAcik(true)} style={{ ...GH, fontSize:12, padding:"8px 12px", borderColor:(sipMus||sipTarih1||sipTarih2||sipMetal!=="altin")?"rgba(var(--vurgu-rgb),0.7)":undefined }}>⚙ Filtre{(sipMus||sipTarih1||sipTarih2||sipMetal!=="altin")?" •":""}</button>
+        <div className="sm-ctl" style={{ display:"flex", gap:6, alignItems:"center", flexWrap:"wrap" }}>
+          <input className="sm-search" value={sipMusF} onChange={e=>setSipMusF(e.target.value)} placeholder="🔍 Sipariş no, PO, müşteri, model ara…" style={{ ...IS, width:250, padding:"7px 10px", fontSize:12 }}/>
+          {sipFiltAcik && <div className="sm-back" onClick={()=>setSipFiltAcik(false)}/>}
+          <div className={"sm-filt"+(sipFiltAcik?" ac":"")}>
+          <div className="sm-only" style={{ fontSize:15, fontWeight:600, color:"var(--goldtext)" }}>Filtre</div>
           <input type="date" value={sipTarih1} onChange={e=>setSipTarih1(e.target.value)} style={{ ...IS, width:130, padding:"7px 8px", fontSize:12 }}/>
-          <span style={{ color:"#665d4a" }}>—</span>
+          <span className="sm-dash" style={{ color:"#665d4a" }}>—</span>
           <input type="date" value={sipTarih2} onChange={e=>setSipTarih2(e.target.value)} style={{ ...IS, width:130, padding:"7px 8px", fontSize:12 }}/>
           <select value={sipMus} onChange={e=>setSipMus(e.target.value)} title="Müşteriye göre filtrele" style={{ ...IS, width:"auto", maxWidth:220, padding:"7px 8px", fontSize:12, fontWeight:sipMus?600:400, borderColor:sipMus?"rgba(var(--vurgu-rgb),0.6)":undefined }}>
             <option value="">👤 Tüm müşteriler</option>
             {musSecenekleri.map(m=><option key={m} value={m}>{m}</option>)}
           </select>
           {(sipMusF||sipMus||sipTarih1||sipTarih2||!tumuF) && <button onClick={()=>{setSipMusF("");setSipMus("");setSipTarih1("");setSipTarih2("");setSipFiltre("tumu");}} style={{ ...RD, fontSize:12, padding:"7px 10px" }}>Temizle</button>}
-          {liste.length>0 && AKTIF_SIRKET_ONEK==="" && <button onClick={()=>setSipRapor(true)} style={{ background:"linear-gradient(135deg,#0a84ff,#0968cc)", border:"none", borderRadius:9, padding:"8px 12px", color:"#fff", fontSize:12, fontWeight:600, cursor:"pointer" }}>📊 Rapor</button>}
-          {liste.length>0 && AKTIF_SIRKET_ONEK!=="" && <button onClick={()=>downloadPDF(buildSipListeRaporuHTML(liste, altinKgUSD, madenCarpan), "siparis-listesi-raporu")} style={{ background:"linear-gradient(135deg,#0a84ff,#0968cc)", border:"none", borderRadius:9, padding:"8px 12px", color:"#fff", fontSize:12, fontWeight:600, cursor:"pointer" }}>📊 Rapor PDF</button>}
+          <div className="sm-only"><div style={{ fontSize:11, fontWeight:600, color:"#7a6f5a", letterSpacing:.6, marginBottom:4 }}>METAL</div>
+            <div style={{ display:"flex", border:"1px solid rgba(var(--vurgu-rgb),0.3)", borderRadius:9, overflow:"hidden" }}>{[["tumu","Tümü"],["altin","🥇 Altın"],["gumus","🥈 Gümüş 925"]].map(([id,l])=><button key={id} onClick={()=>setSipMetal(id)} style={{ flex:1, background:sipMetal===id?"rgba(var(--vurgu-rgb),0.25)":"transparent", border:"none", padding:"10px 8px", color:sipMetal===id?GOLD:"#998a6e", fontSize:13, fontWeight:600, cursor:"pointer" }}>{l}</button>)}</div></div>
+          <button className="sm-only" onClick={()=>{ setSipYeni(false); try{localStorage.setItem("sipYeni","0");}catch(e){} }} style={{ ...GH, fontSize:12, padding:"10px" }}>Eski görünüm</button>
+          <div className="sm-sheet-bar"><button onClick={()=>{setSipMusF("");setSipMus("");setSipTarih1("");setSipTarih2("");setSipFiltre("tumu");}} style={{ ...RD }}>Temizle</button><button onClick={()=>setSipFiltAcik(false)} style={{ ...GH, borderColor:"rgba(var(--vurgu-rgb),0.6)", color:GOLD, fontWeight:600 }}>Uygula</button></div>
+          </div>
+          {liste.length>0 && AKTIF_SIRKET_ONEK==="" && <button className="sm-rapor" onClick={()=>setSipRapor(true)} style={{ background:"linear-gradient(135deg,#0a84ff,#0968cc)", border:"none", borderRadius:9, padding:"8px 12px", color:"#fff", fontSize:12, fontWeight:600, cursor:"pointer" }}>📊 Rapor</button>}
+          {liste.length>0 && AKTIF_SIRKET_ONEK!=="" && <button className="sm-rapor" onClick={()=>downloadPDF(buildSipListeRaporuHTML(liste, altinKgUSD, madenCarpan), "siparis-listesi-raporu")} style={{ background:"linear-gradient(135deg,#0a84ff,#0968cc)", border:"none", borderRadius:9, padding:"8px 12px", color:"#fff", fontSize:12, fontWeight:600, cursor:"pointer" }}>📊 Rapor PDF</button>}
           {sipRapor && AKTIF_SIRKET_ONEK==="" && <KarlilikRaporuEkrani T={T} GH={GH} siparisler={liste} tumSip={siparisler} usdTry={altinSon?.usdTry || null} altinKgUSD={altinKgUSD} mc={madenCarpan}
             onKapat={()=>setSipRapor(false)}
             onPdf={()=>downloadPDF(buildSipListeRaporuHTML(liste, altinKgUSD, madenCarpan), "siparis-listesi-raporu")}
             onAc={(sp)=>setSipDrawer(sp.id)}
             onModel={(k)=>{ const mm=modeller.find(x=>x.id===k.id)||modeller.find(x=>k.kod&&x.kod===k.kod); if (mm) openEM(mm); }} />}
-          <div style={{ display:"flex", border:"1px solid rgba(var(--vurgu-rgb),0.3)", borderRadius:9, overflow:"hidden" }}>{[["aylar","📅 Aylar"],["liste","☰ Liste"]].map(([id,l])=><button key={id} onClick={()=>{ setSipGorunum(id); try{localStorage.setItem("sipGorunum",id);}catch(e){} }} style={{ background:sipGorunum===id?"rgba(var(--vurgu-rgb),0.25)":"transparent", border:"none", padding:"7px 12px", color:sipGorunum===id?GOLD:"#998a6e", fontSize:12, fontWeight:600, cursor:"pointer" }}>{l}</button>)}</div>
-          <button onClick={()=>{ setSipYeni(false); try{localStorage.setItem("sipYeni","0");}catch(e){} }} style={{ ...GH, fontSize:11, padding:"7px 10px" }}>Eski görünüm</button>
+          <div className="sm-seg" style={{ display:"flex", border:"1px solid rgba(var(--vurgu-rgb),0.3)", borderRadius:9, overflow:"hidden" }}>{[["aylar","📅 Aylar"],["liste","☰ Liste"]].map(([id,l])=><button key={id} onClick={()=>{ setSipGorunum(id); try{localStorage.setItem("sipGorunum",id);}catch(e){} }} style={{ background:sipGorunum===id?"rgba(var(--vurgu-rgb),0.25)":"transparent", border:"none", padding:"7px 12px", color:sipGorunum===id?GOLD:"#998a6e", fontSize:12, fontWeight:600, cursor:"pointer" }}>{l}</button>)}</div>
+          <button className="sm-metal-orj" onClick={()=>{ setSipYeni(false); try{localStorage.setItem("sipYeni","0");}catch(e){} }} style={{ ...GH, fontSize:11, padding:"7px 10px" }}>Eski görünüm</button>
         </div>
       </div>
       {siparisler.length>0 && (() => {
@@ -14094,18 +14104,18 @@ function Atolye({ onSirketDegis }) {
         const ac = id => { if (aylarModu) setSipDrawer(id); else setSipSecId(id); };
         return (
           <div style={{ marginBottom:12 }}>
-            <div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap", marginBottom:8 }}>
+            <div className="sm-metal-orj" style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap", marginBottom:8 }}>
               <span style={{ fontSize:11, fontWeight:600, color:"#7a6f5a", letterSpacing:.6 }}>METAL:</span>
               <div style={{ display:"flex", border:"1px solid rgba(var(--vurgu-rgb),0.3)", borderRadius:9, overflow:"hidden" }}>{[["tumu","Tümü"],["altin","🥇 Altın"],["gumus","🥈 Gümüş 925"]].map(([id,l])=><button key={id} onClick={()=>setSipMetal(id)} style={{ background:sipMetal===id?"rgba(var(--vurgu-rgb),0.25)":"transparent", border:"none", padding:"6px 12px", color:sipMetal===id?GOLD:"#998a6e", fontSize:12, fontWeight:600, cursor:"pointer" }}>{l}</button>)}</div>
             </div>
-            <div style={{ fontSize:11, fontWeight:600, color:"#7a6f5a", letterSpacing:.6, marginBottom:6 }}>ÜRETİM AŞAMALARI <span style={{ fontWeight:600, opacity:.8 }}>· tıkla, hangi ürünler orada gör</span></div>
-            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(98px, 1fr))", gap:6, paddingBottom:4 }}>
+            <div style={{ fontSize:11, fontWeight:600, color:"#7a6f5a", letterSpacing:.6, marginBottom:6 }}>ÜRETİM AŞAMALARI <span className="sm-asama-ipucu" style={{ fontWeight:600, opacity:.8 }}>· tıkla, hangi ürünler orada gör</span></div>
+            <div className="sm-asama" style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(98px, 1fr))", gap:6, paddingBottom:4 }}>
               {(() => {
                 const kutu = (key, label, col, sayi, birim, alt, on, tikla, sonuk) => (
-                  <button key={key} onClick={tikla} style={{ minWidth:0, textAlign:"left", cursor:"pointer", background:on?col+"18":"transparent", border:"1px solid "+(on?col+"77":T.border), borderRadius:9, padding:"6px 10px", opacity:sonuk?0.5:1 }}>
+                  <button key={key} className={on?"on":""} onClick={tikla} style={{ minWidth:0, textAlign:"left", cursor:"pointer", background:on?col+"18":"transparent", border:"1px solid "+(on?col+"77":T.border), borderRadius:9, padding:"6px 10px", opacity:sonuk?0.5:1 }}>
                     <div style={{ minWidth:0 }}><span style={{ display:"inline-block", maxWidth:"100%", fontSize:11, fontWeight:600, color:"#998a6e", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis", paddingBottom:2, borderBottom:"2px solid "+col, verticalAlign:"top" }}>{label}</span></div>
                     <div style={{ fontSize:17, fontWeight:600, color:T.text, lineHeight:1.25, marginTop:2 }}>{sayi}<span style={{ fontSize:10, fontWeight:500, color:"#998a6e" }}> {birim}</span></div>
-                    {alt ? <div style={{ fontSize:10, color:"#998a6e" }}>{alt}</div> : null}
+                    {alt ? <div className="sm-gr" style={{ fontSize:10, color:"#998a6e" }}>{alt}</div> : null}
                   </button>
                 );
                 return [
@@ -14160,7 +14170,7 @@ function Atolye({ onSirketDegis }) {
         const kt = (e,d,c) => <div style={{ background:T.card, border:"1px solid "+T.border, borderRadius:10, padding:"7px 13px" }}><div style={{ fontSize:10, color:"#7a6f5a", fontWeight:600, textTransform:"uppercase", letterSpacing:.5 }}>{e}</div><div style={{ fontSize:15, fontWeight:600, color:c }}>{d}</div></div>;
         if (!siparisler.length) return null;
         return (
-          <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginBottom:12 }}>
+          <div className="sm-kpi" style={{ display:"flex", gap:8, flexWrap:"wrap", marginBottom:12 }}>
             {kt("Teslimi geçen", gec.length+" sipariş · "+fN(gecGr,1)+" gr"+(gecGum>0?" + 🥈 "+fN(gecGum,1):""), gec.length?"#e85a4f":"#6abf69")}
             {kt("Zamanında teslim", yuzde===null?"—":"%"+yuzde+" ("+zamaninda.length+"/"+bitenler.length+")", yuzde===null?"#998a6e":(yuzde>=80?"#6abf69":"#e8833a"))}
           </div>
