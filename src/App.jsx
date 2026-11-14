@@ -779,15 +779,17 @@ function downloadPDF(html, filename) {
 
 // Sıralama: SADECE koddaki rakam (sayısal)
 // Sipariş arama — müşteri adı/kodu, sipariş no (SIP-…), PO, model kodu/adı, açıklama, not, tarih; birden çok kelime hepsi eşleşmeli
+function altNorm(x) { return String(x == null ? "" : x).toLowerCase().replace(/İ/g, "i").replace(/ı/g, "i").replace(/[\s\-._\/]+/g, ""); }
 function sipAramaUyar(s, qRaw) {
   const q = String(qRaw || "").toLowerCase().trim(); if (!q) return true;
   const tr = (x) => String(x == null ? "" : x).toLowerCase().replace(/İ/g, "i").replace(/ı/g, "i");
   const t = s.tarih ? new Date(s.tarih) : null;
   const po = (String(s.aciklama || "").match(/PO\s*(\d+)/i) || [])[1] || "";
-  const hay = tr([s.musteri, s.musKod, s.musEtiket, s.siparisNo, po ? "PO " + po : "", s.aciklama, s.not, s.notlar,
+  const kodAlan = [s.musEtiket, s.musAltHam, s.siparisNo, s.musKod].filter(Boolean).map(altNorm);
+  const hay = tr([s.musteri, s.musKod, s.musEtiket, s.musAltHam, s.siparisNo, po ? "PO " + po : "", s.aciklama, s.not, s.notlar,
     t ? "SIP-" + t.getFullYear() + "-" + String(s.tarih).slice(-5) : "", t ? t.toLocaleDateString("tr-TR") : "",
     ...(s.kalemler || []).map(k => [k.kod, k.ad, k.model, k.not, k.aciklama].filter(Boolean).join(" "))].filter(Boolean).join(" "));
-  return tr(q).split(/\s+/).every(w => hay.includes(w));
+  return tr(q).split(/\s+/).every(w => hay.includes(w) || (altNorm(w).length >= 2 && kodAlan.some(k => k.includes(altNorm(w)))));
 }
 
 // Konfirmasyon / Sipariş kalem sıralaması — ortak (ekran + PDF aynı fonksiyonu kullanır)
@@ -965,6 +967,9 @@ function psFaborBaslik(sayfa) {
     return s ? s.s : "";
   };
   const ayarM = it.map(x => x.s.match(/^(\d{1,2})\s*K\s*\((\d{3})\)/i)).find(Boolean);
+  // Müşteri Kodu (firmanın kendi müşterisine verdiği kod): ayar hücresiyle aynı satırda, onun solunda
+  const ayarOge = it.find(x => /^(\d{1,2})\s*K\s*\((\d{3})\)/i.test(x.s));
+  const musKod = ayarOge ? it.filter(x => x !== ayarOge && Math.abs(x.y - ayarOge.y) < 4 && x.x < ayarOge.x - 2).sort((a, b) => a.x - b.x).map(x => x.s).join(" ").trim() : "";
   const tarihler = it.filter(x => /^\d{1,2}\.\d{1,2}\.\d{4}$/.test(x.s)).sort((a, b) => a.x - b.x).map(x => x.s);
   // "Sorumlu" satırında isimden sonra yazılan genel not (örn. "DÜŞÜK AYAR LAK KORUMA YAPALIM")
   let genelNot = "";
@@ -975,6 +980,7 @@ function psFaborBaslik(sayfa) {
   }
   return {
     referans: sagindaki(/^Referans/i, 260),
+    musKod,
     po: sagindaki(/^PO\(Sip/i, 150),
     listeGram: sagindaki(/^Liste Gram/i, 150),
     ayar: ayarM ? ayarM[1] + "K" : "",
@@ -1250,6 +1256,7 @@ function psTabloBaslikBilgi(sayfa) {
   const dM = (damga || "").match(/(\d{1,2})\s*K/i);
   return {
     referans: sag(/^SİPARİŞ NO$|^SIPARIS NO$/),
+    musKod: sag(/^SİPARİŞ NO$|^SIPARIS NO$/), // Excel PDF'inde "Sipariş No" = firmanın kendi müşteri/sipariş kodu
     ayar: dM ? dM[1] + "K" : (ayarM ? ayarM[1] + "K" : ""),
     teslimTarihi: sag(/^TESLİM TARİHİ$|^TESLIM TARIHI$/),
     genelNot: "",
@@ -4106,7 +4113,7 @@ function KarlilikRaporuEkrani({ T, GH, siparisler: siparislerHam, tumSip, usdTry
     if (karGrup && x.grup!==karGrup) return false;
     if (musF && (x.s.musKod||x.s.musteri||"İsimsiz")!==musF) return false;
     if (modelF && !x.kalemler.some(c=>(c.k.kod||c.k.id)===modelF)) return false;
-    if (q) { const hay = [x.s.musKod,x.s.musteri,x.s.siparisNo,x.po,x.s.musEtiket,x.s.aciklama,...x.kalemler.map(c=>c.k.kod)].filter(Boolean).join(" ").toLowerCase(); if (!hay.includes(q)) return false; }
+    if (q) { const hay = [x.s.musKod,x.s.musteri,x.s.siparisNo,x.po,x.s.musEtiket,x.s.musAltHam,x.s.aciklama,...x.kalemler.map(c=>c.k.kod)].filter(Boolean).join(" ").toLowerCase(); const qn = altNorm(q); if (!hay.includes(q) && !(qn.length >= 2 && [x.s.musEtiket,x.s.musAltHam,x.s.siparisNo,x.s.musKod].filter(Boolean).some(k => altNorm(k).includes(qn)))) return false; }
     return true;
   });
   const deger = { tarih:x=>x.s.tarih||0, musteri:x=>String(x.s.musKod||x.s.musteri||""), adet:x=>x.adet, gram:x=>x.gram, kar:x=>x.kar, mly:x=>x.mly, gider:x=>gSip.get(x.s.id)||0, net:x=>x.kar-(gSip.get(x.s.id)||0) };
@@ -11595,6 +11602,10 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
   const [bekAra, setBekAra] = useState("");
   const [bekOneri, setBekOneri] = useState({ yukleniyor: false, liste: [], mesaj: "" });
   const [konfMus,        setKonfMus]        = useState("");
+  const [konfAltKod,     setKonfAltKod]     = useState(""); // müşterinin müşteri kodu / takma adı (PSEV…) — PDF'ten gelir
+  const [konfAltHam,     setKonfAltHam]     = useState(""); // PDF'te yazan ham kod (FY FR1…)
+  const [altKodHarita,   setAltKodHarita]   = useState({}); // ham kod → takma ad (öğrenilir)
+  useEffect(() => { ld("v7altkodmap", {}).then(m => setAltKodHarita(m && typeof m === "object" ? m : {})); }, []);
   const [konfSipAciklama, setKonfSipAciklama] = useState(""); // sipariş geneli açıklama
   const [konfTeslim,     setKonfTeslim]     = useState("");
   const [acikSiparisler, setAcikSiparisler] = useState({});
@@ -11660,6 +11671,7 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
       if (d && Array.isArray(d.liste) && d.liste.length) {
         setKonfList(d.liste || []);
         setKonfMus(d.mus || "");
+        setKonfAltKod(d.altkod || ""); setKonfAltHam(d.altham || "");
         setKonfTeslim(d.teslim || "");
         setKonfSipAciklama(d.aciklama || "");
         setKonfAyar(d.ayar || "14K");
@@ -11683,14 +11695,14 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
         sv("v7konfdraft", { liste: [] });
       } else {
         sv("v7konfdraft", {
-          liste: konfList, mus: konfMus, teslim: konfTeslim, aciklama: konfSipAciklama,
+          liste: konfList, mus: konfMus, altkod: konfAltKod, altham: konfAltHam, teslim: konfTeslim, aciklama: konfSipAciklama,
           ayar: konfAyar, ayarlar: konfAyarlar, renkler: konfRenkler, adet: konfAdet,
           not: konfNot, boylar: konfBoylar, fiyatlar: konfFiyatlar, sira: konfSira, bekleyen: konfBekleyen,
         });
       }
     }, 800);
     return () => clearTimeout(zamanlayici);
-  }, [konfTaslikYuklendi, konfList, konfMus, konfTeslim, konfSipAciklama, konfAyar, konfAyarlar, konfRenkler, konfAdet, konfNot, konfBoylar, konfFiyatlar, konfSira, konfBekleyen]);
+  }, [konfTaslikYuklendi, konfList, konfMus, konfAltKod, konfAltHam, konfTeslim, konfSipAciklama, konfAyar, konfAyarlar, konfRenkler, konfAdet, konfNot, konfBoylar, konfFiyatlar, konfSira, konfBekleyen]);
 
   // Kol form
   const [fkAd, setFkAd] = useState("");
@@ -12927,6 +12939,10 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
       setKonfBekleyen(p => [...p, ...bk]);
     }
     if (baslik && baslik.ayar && AYARLAR.some(x=>x.id===baslik.ayar)) setKonfAyar(baslik.ayar);
+    if (AKTIF_SIRKET_ONEK !== "bsp2_" && baslik && baslik.musKod && String(baslik.musKod).trim()) { // sadece MSK: firmanın müşteri kodu → alt kod
+      const ham = String(baslik.musKod).trim().replace(/\s+/g, " ");
+      setKonfAltHam(ham); setKonfAltKod(altKodHarita[altNorm(ham)] || ham);
+    }
     if (baslik && baslik.teslimTarihi) {
       const mt = String(baslik.teslimTarihi).match(/(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{4})/);
       if (mt) setKonfTeslim(mt[3] + "-" + mt[2].padStart(2, "0") + "-" + mt[1].padStart(2, "0"));
@@ -13037,7 +13053,11 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
       svMus(yeniMusteriler);
     }
     const musKod = yeniMusteriler[musAd];
-    const yeni = { id: uid(), musteri: musAd, musKod, tarih: Date.now(), teslimTarihi: konfTeslim||"", aciklama: konfSipAciklama.trim(), altinKgUSD, mc: madenCarpan, kalemler: konfKalemler, sira: konfSira, gelir: kTop.gelir, maliyet: kTop.maliyet, kar: kTop.kar };
+    const altEt = konfAltKod.trim().toUpperCase();
+    if (konfAltHam && altEt && altNorm(altEt) !== altNorm(konfAltHam)) { // PDF kodu için takma ad öğren (FY FR1 → PSEV)
+      const yh = { ...altKodHarita, [altNorm(konfAltHam)]: altEt }; setAltKodHarita(yh); sv("v7altkodmap", yh);
+    }
+    const yeni = { id: uid(), musteri: musAd, musKod, ...(altEt ? { musEtiket: altEt } : {}), ...(konfAltHam ? { musAltHam: konfAltHam } : {}), tarih: Date.now(), teslimTarihi: konfTeslim||"", aciklama: konfSipAciklama.trim(), altinKgUSD, mc: madenCarpan, kalemler: konfKalemler, sira: konfSira, gelir: kTop.gelir, maliyet: kTop.maliyet, kar: kTop.kar };
     svS([...siparisler, yeni]);
     islemKaydet(AKTIF_SIRKET_ONEK, "ekle", "sipariş", (musAd || "") + " · " + (konfKalemler?.length || 0) + " kalem");
     svMUpsert(modeller.filter(m => konfKalemler.find(x => x.id === m.id)).map(m => ({ ...m, satisSayisi: (m.satisSayisi||0)+1 })));
@@ -13055,7 +13075,7 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
       });
       svKasa({ ...kasa, musteriModelFiyat: yeniFiyatHafiza });
     }
-    setKonfList([]); setKonfAyarlar({}); setKonfRenkler({}); setKonfAdet({}); setKonfNot({}); setKonfFiyatlar({}); setKonfBoylar({}); setKonfMus(""); setKonfTeslim(""); setKonfAyar("14K"); setKonfSipAciklama("");
+    setKonfList([]); setKonfAyarlar({}); setKonfRenkler({}); setKonfAdet({}); setKonfNot({}); setKonfFiyatlar({}); setKonfBoylar({}); setKonfMus(""); setKonfAltKod(""); setKonfAltHam(""); setKonfTeslim(""); setKonfAyar("14K"); setKonfSipAciklama("");
     sv("v7konfdraft", { liste: [] });
     alert("Siparis kaydedildi!");
   };
@@ -13234,12 +13254,11 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
 
       {/* HEADER */}
       <div className="am-hd" style={{ padding:"14px 14px 10px", background:T.header, borderBottom:"1px solid "+T.headerBorder }}>
-        <style>{".am-ozet{display:none}@media(max-width:700px){.am-nav{flex-wrap:nowrap!important;overflow-x:auto;flex:0 0 100%!important;width:100%;scrollbar-width:none;-webkit-overflow-scrolling:touch;padding:6px 6px 2px 0}.am-nav::-webkit-scrollbar{display:none}.am-nav>button{flex:none!important;font-size:12px!important;padding:7px 14px!important;border-radius:99px!important;white-space:nowrap}.am-ozet{display:flex!important;flex:1 1 100%;align-items:center;justify-content:space-between;gap:8px;cursor:pointer}.am-detay{display:flex!important;flex-wrap:wrap;gap:8px;align-items:center;flex:1 1 100%}.am-kur.kapali .am-detay{display:none!important}}@media(min-width:701px){.am-hd{padding:0 28px!important}.am-row{margin:0!important;align-items:stretch!important;display:grid!important;grid-template-columns:1fr auto 1fr}.am-sirket{display:none!important}.am-sirket-x{justify-self:end;align-self:center;font-size:12px!important;padding:5px 14px!important}.am-h1{font-size:19px!important;font-weight:800!important;letter-spacing:.3px}.am-nav>.am-nb{background:transparent!important;border-color:transparent!important;border-radius:0!important;font-size:15px!important;font-weight:600!important;padding:18px 17px!important}.am-nav{flex:none;justify-content:center}.am-nav>.am-nb.am-on{box-shadow:inset 0 -2px 0 currentColor}.am-kur{margin:0 -28px!important;border-radius:0!important;border-width:1px 0 0 0!important;padding:3px 28px!important;min-height:36px;box-sizing:border-box;gap:4px 22px!important}.am-kur .am-grp{gap:8px!important}.am-kur .am-chips{gap:22px!important;margin-left:14px;padding-left:22px;border-left:1px solid rgba(128,128,128,.38);align-items:center!important}.am-kur .am-mly{gap:8px!important}.am-kur .am-mly,.am-kur .am-has,.am-kur .am-min{border-left:1px solid rgba(128,128,128,.38)!important;padding-left:22px!important;line-height:20px}.am-kur .am-chip{gap:8px!important}.am-kur input{line-height:1.2!important}.am-kur button{padding:3px 10px!important;line-height:1.3!important}.am-kur .am-arac{padding:3px 12px!important}.am-kur .am-gizle{display:none!important}.am-kur .am-et{font-size:13px!important;font-weight:500!important}.am-kur .am-chip{flex-direction:row!important;align-items:baseline!important;background:transparent!important;border:none!important;padding:0!important;min-width:0!important;gap:6px!important}.am-kur .am-ce{font-size:11px!important;letter-spacing:.06em!important;font-weight:600!important}.am-kur .am-cd{font-size:14px!important}.am-kur .am-ca{display:none!important}.am-kur .am-chip:first-child .am-ca{display:inline!important;font-size:11px!important}.am-kur input{background:transparent!important;border:none!important;border-bottom:1px dashed rgba(var(--vurgu-rgb),.55)!important;border-radius:0!important;width:72px!important;font-size:14px!important;padding:2px 4px!important;color:var(--goldtext)!important}.am-kur .am-has{font-size:14px!important}.am-kur .am-min{font-size:13px!important}.am-kur button{font-size:12px!important}.am-kur .am-arac{font-size:13px!important}}.am-alt{display:none}.am-sirket{display:none!important}@media(max-width:700px){.am-nav{display:none!important}.am-alt{display:flex!important}body::after{content:'';display:block;height:84px}}@media(min-width:701px){.am-bas{display:none!important}.am-hl::after{content:' = '}.am-arac-m:not(.ac){display:none!important}}@media(max-width:700px){.am-arac{display:none!important}.am-kur .am-gizle{display:none!important}.am-detay{flex-direction:column!important;align-items:stretch!important;flex-wrap:nowrap!important;gap:0!important}.am-bas{display:block;grid-column:1/-1;font-size:10px;font-weight:700;letter-spacing:.08em;color:#8a7d64;padding:12px 0 2px}.am-b1{order:-2}.am-grp{display:grid!important;grid-template-columns:1fr auto auto;align-items:center;gap:0 12px!important;width:100%}.am-grp>.am-et{font-size:14px!important;font-weight:500!important;padding:10px 0}.am-grp>input,.am-mly input{background:transparent!important;border:none!important;border-bottom:1px dashed rgba(var(--vurgu-rgb),.55)!important;border-radius:0!important;width:84px!important;text-align:right!important;font-size:16px!important;font-weight:800!important;padding:2px 4px!important;color:var(--goldtext)!important}.am-grp>button{padding:6px 10px!important;font-size:12px!important}.am-grp>span:not(.am-et){grid-column:1/-1}.am-chips{grid-column:1/-1;order:-1;display:flex!important;flex-direction:column!important;gap:0!important;width:100%}.am-chip{flex-direction:row!important;justify-content:space-between;align-items:center!important;background:transparent!important;border:none!important;border-radius:0!important;border-bottom:1px solid rgba(128,128,128,.22)!important;padding:11px 0!important;min-width:0!important}.am-chip .am-ce{font-size:14px!important;letter-spacing:0!important;font-weight:500!important}.am-chip .am-cd{font-size:15px!important}.am-chip .am-ca{display:none!important}.am-mly{display:flex!important;justify-content:space-between;align-items:center;border-bottom:1px solid rgba(128,128,128,.22);padding:8px 0}.am-mly .am-et{font-size:14px!important;font-weight:500!important}.am-has{display:flex!important;justify-content:space-between;font-size:14px!important;padding:11px 0;border-bottom:1px solid rgba(128,128,128,.22)}.am-hl{color:#8a7d64;font-weight:500}.am-hv{font-weight:800}.am-min{display:block!important;font-size:13px!important;padding:11px 0;border-bottom:1px solid rgba(128,128,128,.22)}.am-tools{margin-left:0!important;width:100%;display:block!important}.am-arac-m{display:flex!important;position:static!important;flex-direction:column!important;background:transparent!important;border:none!important;box-shadow:none!important;padding:12px 0 2px!important;min-width:0!important;gap:8px!important}.am-detay .am-arac-m>button{border:1px solid rgba(128,128,128,.3)!important;text-align:center!important;padding:11px 12px!important;border-radius:10px!important}.am-ovl{display:none!important}}.am-arac-m>button{width:100%;text-align:left!important;font-size:13px!important;background:transparent!important;border:none!important;padding:10px 12px!important;border-radius:8px!important}.am-arac-m>button:hover{background:rgba(var(--vurgu-rgb),.1)!important}"}</style>
+        <style>{".am-ozet{display:none}@media(max-width:700px){.am-nav{flex-wrap:nowrap!important;overflow-x:auto;flex:0 0 100%!important;width:100%;scrollbar-width:none;-webkit-overflow-scrolling:touch;padding:6px 6px 2px 0}.am-nav::-webkit-scrollbar{display:none}.am-nav>button{flex:none!important;font-size:12px!important;padding:7px 14px!important;border-radius:99px!important;white-space:nowrap}.am-ozet{display:flex!important;flex:1 1 100%;align-items:center;justify-content:space-between;gap:8px;cursor:pointer}.am-detay{display:flex!important;flex-wrap:wrap;gap:8px;align-items:center;flex:1 1 100%}.am-kur.kapali .am-detay{display:none!important}}@media(min-width:701px){.am-hd{padding:0 28px!important}.am-row{margin:0!important;align-items:stretch!important;display:grid!important;grid-template-columns:1fr auto 1fr}.am-sirket{justify-self:end;align-self:center;font-size:12px!important;padding:5px 14px!important}.am-h1{font-size:19px!important;font-weight:800!important;letter-spacing:.3px}.am-nav>.am-nb{background:transparent!important;border-color:transparent!important;border-radius:0!important;font-size:15px!important;font-weight:600!important;padding:18px 17px!important}.am-nav{flex:none;justify-content:center}.am-nav>.am-nb.am-on{box-shadow:inset 0 -2px 0 currentColor}.am-kur{margin:0 -28px!important;border-radius:0!important;border-width:1px 0 0 0!important;padding:3px 28px!important;min-height:36px;box-sizing:border-box;gap:4px 22px!important}.am-kur .am-grp{gap:8px!important}.am-kur .am-chips{gap:22px!important;margin-left:14px;padding-left:22px;border-left:1px solid rgba(128,128,128,.38);align-items:center!important}.am-kur .am-mly{gap:8px!important}.am-kur .am-mly,.am-kur .am-has,.am-kur .am-min{border-left:1px solid rgba(128,128,128,.38)!important;padding-left:22px!important;line-height:20px}.am-kur .am-chip{gap:8px!important}.am-kur input{line-height:1.2!important}.am-kur button{padding:3px 10px!important;line-height:1.3!important}.am-kur .am-arac{padding:3px 12px!important}.am-kur .am-gizle{display:none!important}.am-kur .am-et{font-size:13px!important;font-weight:500!important}.am-kur .am-chip{flex-direction:row!important;align-items:baseline!important;background:transparent!important;border:none!important;padding:0!important;min-width:0!important;gap:6px!important}.am-kur .am-ce{font-size:11px!important;letter-spacing:.06em!important;font-weight:600!important}.am-kur .am-cd{font-size:14px!important}.am-kur .am-ca{display:none!important}.am-kur .am-chip:first-child .am-ca{display:inline!important;font-size:11px!important}.am-kur input{background:transparent!important;border:none!important;border-bottom:1px dashed rgba(var(--vurgu-rgb),.55)!important;border-radius:0!important;width:72px!important;font-size:14px!important;padding:2px 4px!important;color:var(--goldtext)!important}.am-kur .am-has{font-size:14px!important}.am-kur .am-min{font-size:13px!important}.am-kur button{font-size:12px!important}.am-kur .am-arac{font-size:13px!important}}.am-alt{display:none}@media(max-width:700px){.am-nav{display:none!important}.am-alt{display:flex!important}body::after{content:'';display:block;height:84px}}@media(min-width:701px){.am-bas{display:none!important}.am-hl::after{content:' = '}.am-arac-m:not(.ac){display:none!important}}@media(max-width:700px){.am-arac{display:none!important}.am-kur .am-gizle{display:none!important}.am-detay{flex-direction:column!important;align-items:stretch!important;flex-wrap:nowrap!important;gap:0!important}.am-bas{display:block;grid-column:1/-1;font-size:10px;font-weight:700;letter-spacing:.08em;color:#8a7d64;padding:12px 0 2px}.am-b1{order:-2}.am-grp{display:grid!important;grid-template-columns:1fr auto auto;align-items:center;gap:0 12px!important;width:100%}.am-grp>.am-et{font-size:14px!important;font-weight:500!important;padding:10px 0}.am-grp>input,.am-mly input{background:transparent!important;border:none!important;border-bottom:1px dashed rgba(var(--vurgu-rgb),.55)!important;border-radius:0!important;width:84px!important;text-align:right!important;font-size:16px!important;font-weight:800!important;padding:2px 4px!important;color:var(--goldtext)!important}.am-grp>button{padding:6px 10px!important;font-size:12px!important}.am-grp>span:not(.am-et){grid-column:1/-1}.am-chips{grid-column:1/-1;order:-1;display:flex!important;flex-direction:column!important;gap:0!important;width:100%}.am-chip{flex-direction:row!important;justify-content:space-between;align-items:center!important;background:transparent!important;border:none!important;border-radius:0!important;border-bottom:1px solid rgba(128,128,128,.22)!important;padding:11px 0!important;min-width:0!important}.am-chip .am-ce{font-size:14px!important;letter-spacing:0!important;font-weight:500!important}.am-chip .am-cd{font-size:15px!important}.am-chip .am-ca{display:none!important}.am-mly{display:flex!important;justify-content:space-between;align-items:center;border-bottom:1px solid rgba(128,128,128,.22);padding:8px 0}.am-mly .am-et{font-size:14px!important;font-weight:500!important}.am-has{display:flex!important;justify-content:space-between;font-size:14px!important;padding:11px 0;border-bottom:1px solid rgba(128,128,128,.22)}.am-hl{color:#8a7d64;font-weight:500}.am-hv{font-weight:800}.am-min{display:block!important;font-size:13px!important;padding:11px 0;border-bottom:1px solid rgba(128,128,128,.22)}.am-tools{margin-left:0!important;width:100%;display:block!important}.am-arac-m{display:flex!important;position:static!important;flex-direction:column!important;background:transparent!important;border:none!important;box-shadow:none!important;padding:12px 0 2px!important;min-width:0!important;gap:8px!important}.am-detay .am-arac-m>button{border:1px solid rgba(128,128,128,.3)!important;text-align:center!important;padding:11px 12px!important;border-radius:10px!important}.am-ovl{display:none!important}}.am-arac-m>button{width:100%;text-align:left!important;font-size:13px!important;background:transparent!important;border:none!important;padding:10px 12px!important;border-radius:8px!important}.am-arac-m>button:hover{background:rgba(var(--vurgu-rgb),.1)!important}"}</style>
         <div style={{ width:"100%" }}>
           <div className="am-row" style={{ display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:8, marginBottom:10 }}>
             <h1 className="am-h1" style={{ margin:0, fontSize:"clamp(13px,2vw,18px)", fontWeight:700, color:GOLD, display:"flex", alignItems:"center", gap:8 }}>
-              {(() => { const iz = (AKTIF_KULLANICI && AKTIF_KULLANICI.rol !== "admin") ? (AKTIF_KULLANICI.sirketler || []) : ["msk","bsp"]; const bsp = AKTIF_SIRKET_ONEK === "bsp2_"; const L = [["msk","MSK",!bsp],["bsp","BSP",bsp]].filter(x => iz.includes(x[0]) || (x[0]==="msk" && !bsp) || (x[0]==="bsp" && bsp));
-                return L.map((x,i) => (<Fragment key={x[0]}>{i>0 && <span style={{ color:T.border, fontWeight:400 }}>–</span>}<button onClick={()=>{ if (onSirketDegis) onSirketDegis(); }} title="Şirket değiştir" style={{ background:"transparent", border:"none", padding:"2px 2px", cursor:"pointer", fontFamily:"inherit", fontSize:"inherit", fontWeight:800, letterSpacing:".04em", color:x[2] ? (bsp ? "#a78bfa" : GOLD) : T.sub, opacity:x[2]?1:.55 }}>{x[1]}</button></Fragment>)); })()}
+              <span style={{ fontWeight:800, letterSpacing:".04em", color: AKTIF_SIRKET_ONEK==="bsp2_" ? "#a78bfa" : GOLD }}>{AKTIF_SIRKET_ONEK==="bsp2_" ? "BSP" : "MSK"}</span>
             </h1>
             <div className="am-nav" style={{ display:"flex", gap:3, flexWrap:"wrap" }}>
               {(AKTIF_KULLANICI && AKTIF_KULLANICI.rol==="usta" ? ["ustatakip"] : ["koleksiyonlar","modeller","konfirmasyon","siparisler","musteriler","kasa","personel","analiz","ayarlar"].filter(izinSayfa)).map(n => { // İadeler → Keşfet içine taşındı, Trend Radar gizlendi (sayfa kodu duruyor)
@@ -13260,7 +13279,8 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
                 );
               })}
             </div>
-            <button className="am-sirket" onClick={()=>{ if (onSirketDegis) onSirketDegis(); }} title="Şirket değiştir" style={{ fontSize:9, fontWeight:800, padding:"3px 10px", borderRadius:20, background: AKTIF_SIRKET_ONEK==="bsp2_" ? "rgba(167,139,250,0.15)" : "rgba(var(--vurgu-rgb),0.15)", border:"1px solid "+(AKTIF_SIRKET_ONEK==="bsp2_" ? "rgba(167,139,250,0.4)" : "rgba(var(--vurgu-rgb),0.4)"), color: AKTIF_SIRKET_ONEK==="bsp2_" ? "#a78bfa" : GOLD, whiteSpace:"nowrap", cursor:"pointer", display:"inline-flex", alignItems:"center", gap:4 }}>{AKTIF_SIRKET_ONEK==="bsp2_" ? "✨ BSP" : "💎 MSK"} <span style={{ fontSize:8, opacity:0.7 }}>⇄</span></button>
+            {(() => { const bsp = AKTIF_SIRKET_ONEK === "bsp2_"; const digeri = bsp ? "msk" : "bsp"; const iz = (AKTIF_KULLANICI && AKTIF_KULLANICI.rol !== "admin") ? (AKTIF_KULLANICI.sirketler || []) : ["msk","bsp"]; if (!iz.includes(digeri)) return null; const renk = bsp ? GOLD : "#a78bfa";
+              return (<button className="am-sirket" onClick={()=>{ if (onSirketDegis) onSirketDegis(); }} title={(bsp ? "MSK" : "BSP") + " şirketine geç"} style={{ fontSize:9, fontWeight:800, padding:"3px 10px", borderRadius:20, background:"transparent", border:"1px solid "+renk, color:renk, whiteSpace:"nowrap", cursor:"pointer", display:"inline-flex", alignItems:"center", gap:4, fontFamily:"inherit" }}>{bsp ? "MSK" : "BSP"} <span style={{ fontSize:8, opacity:0.7 }}>⇄</span></button>); })()}
           </div>
           {/* KUR */}
           <div className={"am-kur" + (altinAcik ? "" : " kapali")} style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap", background:T.card, border:"1px solid "+T.border, borderRadius:10, padding:"7px 12px" }}>
@@ -13904,6 +13924,10 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
                     ))}
                   </datalist>
                 </div>
+                <input value={konfAltKod} onChange={e=>setKonfAltKod(e.target.value.toUpperCase())} placeholder="Alt kod (PSEV…)" title={konfAltHam ? "PDF'te yazan kod: " + konfAltHam : "Müşterinin müşteri kodu / takma adı"} list="konfaltkod-list" style={{ ...IS, width:110, padding:"5px 8px", fontSize:11 }} />
+                <datalist id="konfaltkod-list">
+                  {[...new Set([...Object.values(altKodHarita), ...siparisler.map(x => x.musEtiket)].filter(Boolean))].sort((a,b)=>String(a).localeCompare(String(b),"tr")).map(v => <option key={v} value={v} />)}
+                </datalist>
                 <input type="date" value={konfTeslim} onChange={e=>setKonfTeslim(e.target.value)} style={{ ...IS, width:130, padding:"5px 8px", fontSize:11 }} />
                 <input value={konfSipAciklama} onChange={e=>setKonfSipAciklama(e.target.value)} placeholder="Sipariş açıklaması..." style={{ ...IS, width:180, padding:"5px 8px", fontSize:11 }} />
                 <select value={konfSira} onChange={e=>konfSiraDegistir(e.target.value)} title="Listeyi sırala" style={{ ...IS, width:"auto", padding:"5px 8px", fontSize:10 }}>
@@ -14451,7 +14475,7 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
               { l:"📄 Fiyatlı PDF", f:()=>downloadPDF(buildKonfHTML(s,s.altinKgUSD||altinKgUSD,s.mc||madenCarpan,true,modeller,sipSira),(s.musteri||"siparis")+"-fiyatli") },
               { l:"📄 Fiyatsız PDF", f:()=>downloadPDF(buildKonfHTML(s,s.altinKgUSD||altinKgUSD,s.mc||madenCarpan,false,modeller,sipSira),(s.musteri||"siparis")+"-fiyatsiz") },
               AKTIF_SIRKET_ONEK!=="bsp2_" && s.durumGecmisi?.length>0 && { l:"📊 Zaman çizelgesi", f:()=>setCizelgeModal(s.id) },
-              { l:"🏷 Müşteri alt kodu (PSEV…)", f:()=>{ const n = window.prompt("Müşteri alt kodu (örn. PSEV, PSM). Boş bırakırsan silinir:", s.musEtiket||""); if (n===null) return; svS(siparisler.map(sp=>sp.id===s.id?{...sp,musEtiket:n.trim().toUpperCase()}:sp)); } },
+              { l:"🏷 Müşteri alt kodu (PSEV…)", f:()=>{ const n = window.prompt("Müşteri alt kodu (örn. PSEV, PSM). Boş bırakırsan silinir:", s.musEtiket||""); if (n===null) return; const et = n.trim().toUpperCase(); if (s.musAltHam && et && altNorm(et) !== altNorm(s.musAltHam)) { const yh = { ...altKodHarita, [altNorm(s.musAltHam)]: et }; setAltKodHarita(yh); sv("v7altkodmap", yh); } svS(siparisler.map(sp=>sp.id===s.id?{...sp,musEtiket:et}:sp)); } },
               { l:"⧉ Kopyala → konfirmasyona", f:()=>konfKopyala(s) },
               { l:"↩ Konfirmasyona geri al / düzenle", f:()=>konfDuzenle(s), c:"#e8833a" },
               { l:"🗑 Siparişi sil", f:()=>setDelOnay({ type:"siparis", id:s.id }), c:"#e85a4f" },
