@@ -9986,12 +9986,34 @@ function VitrinModu({ kod, onizleme }) {
           </div>
         );
         const sekme = (id, yazi, adet) => (
-          <button key={id} onClick={()=>setSipFiltre(id)} style={{ background:"transparent", border:"none", borderBottom:"2px solid "+(sipFiltre===id ? "var(--vt1)" : "transparent"), color: sipFiltre===id ? "var(--vt1)" : "var(--vt2)", padding:"10px 2px", marginRight:22, fontSize:14, fontWeight: sipFiltre===id ? 600 : 500, cursor:"pointer" }}>{yazi}<span style={{ marginLeft:6, fontSize:12, color:"var(--vt3)", fontWeight:500 }}>{adet}</span></button>
+          <button key={id} onClick={()=>setSipFiltre(id)} style={{ background: sipFiltre===id ? "var(--vt1)" : "rgba(var(--voverlay-rgb),0.07)", border:"none", color: sipFiltre===id ? "var(--vb)" : "var(--vt2)", padding:"8px 14px", borderRadius:980, fontSize:13, fontWeight: sipFiltre===id ? 600 : 500, cursor:"pointer", whiteSpace:"nowrap", flexShrink:0 }}>{yazi}<span style={{ marginLeft:6, fontSize:12, opacity:0.65, fontWeight:500 }}>{adet}</span></button>
         );
         const dugme = { background:"transparent", border:"1px solid rgba(var(--voverlay-rgb),0.18)", borderRadius:8, padding:"7px 14px", color:"var(--vt1)", fontSize:13, fontWeight:500, cursor:"pointer" };
+        // Özet: iptaller hariç; yüzde = hazır model / toplam model
+        const ist = (() => {
+          let top = 0, haz = 0, ur = 0, bk = 0, sipN = 0, onayli = 0, teslimS = 0, uretimS = 0;
+          liste.forEach(sp => {
+            const c = sinif(sp); if (c === "iptal") return;
+            sipN++; if (c !== "bekliyor") onayli++; if (c === "teslim") teslimS++; if (c === "islemde") uretimS++;
+            (sp.kalemler || []).forEach(k => {
+              const a = adimNo(k.durum); if (a < 0) return;
+              top++;
+              if (c === "bekliyor") { bk++; return; }
+              if (a >= 2) haz++; else ur++;
+            });
+          });
+          const yz = (n, d) => d ? Math.round(100 * n / d) : 0;
+          return { top, haz, ur, bk, sipN, onayli, teslimS, uretimS, yuzde: yz(haz, top), onayYz: yz(onayli, sipN), teslimYz: yz(teslimS, sipN) };
+        })();
+        const spCss = `.sp-cards{display:grid;grid-template-columns:1fr;gap:12px}.sp-cards>div{margin-bottom:0!important}.sp-tabs{scrollbar-width:none}.sp-tabs::-webkit-scrollbar{display:none}
+.sp-main{display:block}.sp-side{margin:8px 0 14px}
+.sp-tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:10px}
+@media(min-width:1000px){.sp-in{max-width:1120px!important}.sp-main{display:grid;grid-template-columns:290px 1fr;gap:26px;align-items:start}.sp-side{position:sticky;top:16px;margin:6px 0 0}.sp-tiles{grid-template-columns:1fr 1fr}.sp-cards{grid-template-columns:1fr 1fr;align-items:start}.sp-cards>.sp-acik{grid-column:1/-1}}
+@media(max-width:700px){.sp-pad{padding-left:16px!important;padding-right:16px!important}}`;
         return (
         <div style={{ position:"fixed", inset:0, zIndex:111, background:"var(--vb)", overflow:"auto", color:"var(--vt1)", letterSpacing:"-0.005em" }}>
-          <div style={{ maxWidth:920, margin:"0 auto", padding:"0 22px 80px" }}>
+          <div className="sp-in" style={{ maxWidth:920, margin:"0 auto", padding:"0 22px 80px" }}>
+            <style>{spCss}</style>
             <div style={{ display:"flex", alignItems:"center", padding:"22px 0 6px", gap:12 }}>
               <button onClick={()=>setSipListeAcik(false)} style={{ ...dugme, borderRadius:980, padding:"7px 14px" }}>‹ {ce("geri")}</button>
               <div style={{ flex:1 }}/>
@@ -10002,6 +10024,35 @@ function VitrinModu({ kod, onizleme }) {
               {vitrinMusteri && <div style={{ fontSize:14, color:"var(--vt2)", marginTop:8 }}>{t3("Müşteri kodu","Customer code","Código de cliente")} · <span style={{ color:"var(--vt1)", fontWeight:600 }}>{vitrinMusteri.kod}</span></div>}
             </div>
 
+            <div className="sp-main">
+            {Array.isArray(sipListe) && ist.sipN > 0 && (
+              <div className="sp-side">
+                <div style={{ background:"var(--vt1)", color:"var(--vb)", borderRadius:18, padding:"16px 18px 15px" }}>
+                  <div style={{ fontSize:12, opacity:0.7 }}>{t3("Hazır modeller","Models ready","Modelos listos")}</div>
+                  <div style={{ fontSize:38, fontWeight:700, letterSpacing:"-0.03em", lineHeight:1.15 }}>%{ist.yuzde}<span style={{ fontSize:13, fontWeight:500, opacity:0.7, marginLeft:8, letterSpacing:0 }}>{ist.haz} / {ist.top} {t3("model hazır","models ready","modelos listos")}</span></div>
+                  <div style={{ display:"flex", height:9, borderRadius:5, overflow:"hidden", gap:2, margin:"12px 0 9px", background:"rgba(128,128,128,0.25)" }}>
+                    <div style={{ width:(ist.top?100*ist.haz/ist.top:0)+"%", background:"#3fbf7a" }}/>
+                    <div style={{ width:(ist.top?100*ist.ur/ist.top:0)+"%", background:"#e3b341" }}/>
+                    <div style={{ width:(ist.top?100*ist.bk/ist.top:0)+"%", background:"rgba(128,128,128,0.45)" }}/>
+                  </div>
+                  <div style={{ display:"flex", gap:12, flexWrap:"wrap", fontSize:11, opacity:0.9 }}>
+                    <span><i style={{ display:"inline-block", width:8, height:8, borderRadius:"50%", background:"#3fbf7a", marginRight:4 }}/>{t3("Hazır","Ready","Listo")} {ist.haz}</span>
+                    <span><i style={{ display:"inline-block", width:8, height:8, borderRadius:"50%", background:"#e3b341", marginRight:4 }}/>{t3("Üretimde","In production","En producción")} {ist.ur}</span>
+                    <span><i style={{ display:"inline-block", width:8, height:8, borderRadius:"50%", background:"rgba(128,128,128,0.6)", marginRight:4 }}/>{t3("Onay bekliyor","Awaiting approval","Pendiente")} {ist.bk}</span>
+                  </div>
+                </div>
+                <div className="sp-tiles">
+                  {[[t3("Sipariş","Orders","Pedidos"), ist.sipN, ""], [t3("Onaylı","Approved","Aprobados"), ist.onayli, "%"+ist.onayYz], [t3("Üretimde","In production","En producción"), ist.uretimS, ""], [t3("Teslim","Delivered","Entregados"), ist.teslimS, "%"+ist.teslimYz]].map(([l, n, y], i) => (
+                    <div key={i} style={{ background:"var(--vcard)", border:"1px solid rgba(var(--voverlay-rgb),0.09)", borderRadius:14, padding:"10px 10px 9px" }}>
+                      <div style={{ fontSize:10, color:"var(--vt3)" }}>{l}</div>
+                      <div style={{ fontSize:20, fontWeight:700, marginTop:2 }}>{n}</div>
+                      {y && <div style={{ fontSize:10, color:YESIL, fontWeight:600 }}>{y}</div>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            <div className="sp-list">
             {Array.isArray(sipListe) && sipListe.length > 0 && (
               <div style={{ position:"relative", margin:"6px 0 0" }}>
                 <input value={sipAra} onChange={e=>setSipAra(e.target.value)} placeholder={t3("Sipariş numarası / PO / model kodu ara…","Search order no. / PO / model code…","Buscar nº de pedido / PO / modelo…")} style={{ width:"100%", boxSizing:"border-box", padding:"12px 40px 12px 16px", fontSize:15, borderRadius:980, border:"1px solid rgba(var(--voverlay-rgb),0.18)", background:"transparent", color:"var(--vt1)", outline:"none" }}/>
@@ -10012,7 +10063,7 @@ function VitrinModu({ kod, onizleme }) {
             {sipListe === "hata" && <div style={{ padding:"60px 0", textAlign:"center", color:KIRMIZI }}>{t3("Siparişler yüklenemedi. Lütfen tekrar deneyin.","Orders could not be loaded. Please try again.","No se pudieron cargar los pedidos.")}</div>}
 
             {Array.isArray(sipListe) && liste.length > 0 && (
-              <div style={{ display:"flex", flexWrap:"wrap", borderBottom:"1px solid rgba(var(--voverlay-rgb),0.1)", margin:"14px 0 22px" }}>
+              <div className="sp-tabs" style={{ display:"flex", gap:8, overflowX:"auto", margin:"14px 0 16px", paddingBottom:2 }}>
                 {sekme("tumu", t3("Tümü","All","Todos"), liste.length)}
                 {sekme("acik", t3("Devam eden","In progress","En curso"), sayim.bekliyor + sayim.islemde)}
                 {sekme("teslim", t3("Teslim edilen","Delivered","Entregados"), sayim.teslim)}
@@ -10022,6 +10073,7 @@ function VitrinModu({ kod, onizleme }) {
             {Array.isArray(sipListe) && liste.length === 0 && <div style={{ padding:"90px 0", textAlign:"center", color:"var(--vt2)", fontSize:15 }}>{t3("Henüz siparişiniz yok.","You have no orders yet.","Aún no tiene pedidos.")}</div>}
             {Array.isArray(sipListe) && liste.length > 0 && gorunen.length === 0 && <div style={{ padding:"60px 0", textAlign:"center", color:"var(--vt3)", fontSize:14 }}>{t3("Bu görünümde sipariş yok.","No orders in this view.","No hay pedidos en esta vista.")}</div>}
 
+            <div className="sp-cards">
             {gorunen.map((sp) => {
               const sirNo = liste.length - liste.indexOf(sp);
               const kalemler = sp.kalemler || [];
@@ -10030,7 +10082,10 @@ function VitrinModu({ kod, onizleme }) {
               const adimlar = kalemler.map(k => adimNo(k.durum)).filter(x => x >= 0);
               const genelAdim = adimlar.length ? Math.min(...adimlar) : 0;
               const teslimSay = adimlar.filter(x => x === SON).length;
-              const acik = sipKapali[sp.id] === undefined ? (c === "bekliyor" || c === "islemde") : !sipKapali[sp.id];
+              const acik = sipKapali[sp.id] === undefined ? false : !sipKapali[sp.id];
+              const yuzdeK = c === "iptal" ? 0 : c === "bekliyor" ? 0 : c === "teslim" ? 100 : (() => { const a = kalemler.map(k => adimNo(k.durum)).filter(x => x >= 0); return a.length ? Math.round(100 * a.reduce((t, x) => t + x, 0) / (SON * a.length)) : 0; })();
+              const rozet = c === "iptal" ? t3("İptal","Cancelled","Cancelado") : c === "bekliyor" ? t3("Onay bekliyor","Awaiting approval","Pendiente") : c === "teslim" ? t3("Teslim edildi","Delivered","Entregado") : t3("Üretimde","In production","En producción");
+              const rozetRenk = c === "iptal" ? KIRMIZI : c === "bekliyor" ? SARI : YESIL;
               const baslik = c === "bekliyor" ? t3("Onayınız bekleniyor","Awaiting approval","Pendiente de aprobación")
                 : c === "teslim" ? t3("Teslim edildi","Delivered","Entregado")
                 : c === "iptal" ? (sp.onayDurum === "red" ? t3("Sipariş reddedildi","Order declined","Pedido rechazado") : t3("Sipariş iptal edildi","Order cancelled","Pedido cancelado"))
@@ -10040,18 +10095,24 @@ function VitrinModu({ kod, onizleme }) {
                 : (c === "islemde" || c === "teslim") && sp.teslimTarihi ? t3("Teslim tarihi","Delivery date","Fecha de entrega") + " · " + tarihYaz(new Date(sp.teslimTarihi).getTime()) + (c === "islemde" && !bspS ? (() => { const g = Math.ceil((new Date(sp.teslimTarihi).getTime() - Date.now())/86400000); return g > 0 ? " · " + g + " " + t3("gün kaldı","days left","días restantes") : g === 0 ? " · " + t3("bugün","today","hoy") : " · " + (-g) + " " + t3("gün gecikti","days late","días de retraso"); })() : "")
                 : c === "iptal" && sp.redNot ? sp.redNot : "";
               return (
-              <div key={sp.id} style={{ background:"var(--vcard)", border:"1px solid rgba(var(--voverlay-rgb),0.09)", borderRadius:18, marginBottom:18, overflow:"hidden", opacity: c==="iptal" ? 0.85 : 1 }}>
-                <div onClick={()=>setSipKapali(p=>({ ...p, [sp.id]: acik }))} style={{ padding:"22px 26px 20px", cursor:"pointer" }}>
+              <div key={sp.id} className={acik ? "sp-acik" : ""} style={{ background:"var(--vcard)", border:"1px solid rgba(var(--voverlay-rgb),0.09)", borderRadius:18, marginBottom:18, overflow:"hidden", opacity: c==="iptal" ? 0.85 : 1 }}>
+                <div onClick={()=>setSipKapali(p=>({ ...p, [sp.id]: acik }))} style={{ padding:"16px 18px 14px", cursor:"pointer" }}>
                   <div style={{ display:"flex", alignItems:"flex-start", gap:12 }}>
                     <div style={{ flex:1, minWidth:0 }}>
-                      <div style={{ fontSize:12, color:"var(--vt3)", fontWeight:500, marginBottom:6 }}>{t3("Sipariş","Order","Pedido")} {sp.siparisNo ? <b style={{ color:"var(--vt1)" }}>{sp.siparisNo}</b> : "#"+sirNo}{(String(sp.aciklama||"").match(/PO\s*(\d+)/i)||[])[1] ? " · PO "+String(sp.aciklama).match(/PO\s*(\d+)/i)[1] : ""} · {tarihYaz(sp.tarih, true)}</div>
-                      <div style={{ fontSize:24, fontWeight:700, letterSpacing:"-0.02em", color:baslikRenk, lineHeight:1.15 }}>{baslik}</div>
+                      <div style={{ fontSize:12, color:"var(--vt3)", fontWeight:500, marginBottom:4 }}>{t3("Sipariş","Order","Pedido")} {sp.siparisNo ? <b style={{ color:"var(--vt1)" }}>{sp.siparisNo}</b> : "#"+sirNo}{(String(sp.aciklama||"").match(/PO\s*(\d+)/i)||[])[1] ? " · PO "+String(sp.aciklama).match(/PO\s*(\d+)/i)[1] : ""} · {tarihYaz(sp.tarih, true)}</div>
+                      <div style={{ fontSize:18, fontWeight:700, letterSpacing:"-0.02em", color:baslikRenk, lineHeight:1.2 }}>{baslik}</div>
                       {altYazi && <div style={{ fontSize:14, color:"var(--vt2)", marginTop:6, lineHeight:1.4 }}>{altYazi}</div>}
                     </div>
-                    <div style={{ fontSize:13, color:"var(--vt3)", whiteSpace:"nowrap", paddingTop:2 }}>{acik ? "▲" : "▼"}</div>
+                    <div style={{ display:"flex", alignItems:"center", gap:8, flexShrink:0 }}><span style={{ fontSize:11, fontWeight:700, padding:"3px 10px", borderRadius:10, color:rozetRenk, background:"rgba(var(--voverlay-rgb),0.06)", border:"1px solid "+rozetRenk+"55", whiteSpace:"nowrap" }}>{rozet}</span><span style={{ fontSize:11, color:"var(--vt3)" }}>{acik ? "▲" : "▼"}</span></div>
                   </div>
-                  {(c === "islemde" || c === "teslim") && (
-                    <div style={{ marginTop:22 }}>
+                  {c !== "iptal" && (
+                    <div style={{ display:"flex", alignItems:"center", gap:10, marginTop:12 }}>
+                      <div style={{ flex:1, height:7, borderRadius:4, background:"rgba(var(--voverlay-rgb),0.1)", overflow:"hidden" }}><div style={{ width:yuzdeK+"%", height:"100%", background:YESIL, borderRadius:4 }}/></div>
+                      <span style={{ fontSize:12, fontWeight:700, minWidth:34, textAlign:"right" }}>%{yuzdeK}</span>
+                    </div>
+                  )}
+                  {acik && (c === "islemde" || c === "teslim") && (
+                    <div style={{ marginTop:18 }}>
                       <Adimlar adim={c === "teslim" ? SON : genelAdim} buyuk/>
                       {c === "islemde" && kalemler.length > 1 && teslimSay > 0 && <div style={{ fontSize:12, color:"var(--vt3)", marginTop:12 }}>{teslimSay} / {kalemler.length} {t3("model teslim edildi","models delivered","modelos entregados")}</div>}
                     </div>
@@ -10059,8 +10120,8 @@ function VitrinModu({ kod, onizleme }) {
                 </div>
 
                 {!acik && (
-                  <div style={{ padding:"0 26px 20px", display:"flex", gap:8, alignItems:"center" }}>
-                    {kalemler.filter(k=>k.foto).slice(0,7).map((k,i)=>(<div key={i} style={{ width:46, height:46, borderRadius:9, overflow:"hidden", background:"#f3f3f3", flexShrink:0 }}><img src={k.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"contain", transform:"scale(1.2)" }}/></div>))}
+                  <div style={{ padding:"0 18px 16px", display:"flex", gap:6, alignItems:"center", flexWrap:"wrap" }}>
+                    {kalemler.filter(k=>k.foto).slice(0,5).map((k,i)=>(<div key={i} style={{ width:46, height:46, borderRadius:9, overflow:"hidden", background:"#f3f3f3", flexShrink:0 }}><img src={k.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"contain", transform:"scale(1.2)" }}/></div>))}
                     <div style={{ fontSize:12, color:"var(--vt3)", marginLeft:4 }}>{kalemler.length} {t3("model","models","modelos")} · {toplamAdet} {ce("adet")}</div>
                     {bspS && c !== "iptal" && (
                       <div style={{ marginLeft:"auto", display:"flex", gap:8, flexWrap:"wrap", justifyContent:"flex-end" }}>
@@ -10110,6 +10171,9 @@ function VitrinModu({ kod, onizleme }) {
               </div>
               );
             })}
+            </div>
+            </div>
+            </div>
           </div>
 
           {sipOzet && (() => {
