@@ -10020,19 +10020,28 @@ function VitrinModu({ kod, onizleme }) {
         // Özet: iptaller hariç; yüzde = hazır model / toplam model
         const ist = (() => {
           let top = 0, haz = 0, ur = 0, bk = 0, sipN = 0, onayli = 0, teslimS = 0, uretimS = 0;
+          let topG = 0, hazG = 0, urG = 0, bkG = 0;
+          const A = { sip:0, on:0, ur:0, te:0 }, G = { sip:0, on:0, ur:0, te:0 };
           liste.forEach(sp => {
             const c = sinif(sp); if (c === "iptal") return;
             sipN++; if (c !== "bekliyor") onayli++; if (c === "teslim") teslimS++; if (c === "islemde") uretimS++;
             (sp.kalemler || []).forEach(k => {
               const a = adimNo(k.durum); if (a < 0) return;
-              top++;
-              if (c === "bekliyor") { bk++; return; }
-              if (a >= 2) haz++; else ur++;
+              const ad = Number(k.adet) || 1, gr = bspS ? 0 : kalemGram(k) * ad;
+              top++; topG += gr;
+              A.sip += ad; G.sip += gr;
+              if (c !== "bekliyor") { A.on += ad; G.on += gr; }
+              if (c === "islemde") { A.ur += ad; G.ur += gr; }
+              if (c === "teslim") { A.te += ad; G.te += gr; }
+              if (c === "bekliyor") { bk++; bkG += gr; return; }
+              if (a >= 2) { haz++; hazG += gr; } else { ur++; urG += gr; }
             });
           });
           const yz = (n, d) => d ? Math.round(100 * n / d) : 0;
-          return { top, haz, ur, bk, sipN, onayli, teslimS, uretimS, yuzde: yz(haz, top), onayYz: yz(onayli, sipN), teslimYz: yz(teslimS, sipN) };
+          const gramMod = !bspS && topG > 0;   // MSK: ilerleme gramaja göre; BSP'de gram müşteriye gösterilmez
+          return { top, haz, ur, bk, sipN, onayli, teslimS, uretimS, topG, hazG, urG, bkG, A, G, gramMod, yuzde: gramMod ? yz(hazG, topG) : yz(haz, top), onayYz: yz(onayli, sipN), teslimYz: yz(teslimS, sipN) };
         })();
+        const kgYaz = (g) => g >= 1000 ? (g/1000).toLocaleString(loc, { minimumFractionDigits: 1, maximumFractionDigits: g >= 10000 ? 1 : 2 }) + " kg" : Math.round(g).toLocaleString(loc) + " gr";
         const spCss = `.sp-cards{display:grid;grid-template-columns:1fr;gap:12px}.sp-cards>div{margin-bottom:0!important}.sp-tabs{scrollbar-width:none}.sp-tabs::-webkit-scrollbar{display:none}
 .sp-strip{display:contents}.sp-kod,.sp-all{display:none}
 .sp-main{display:block}.sp-side{margin:8px 0 14px}
@@ -10061,25 +10070,26 @@ function VitrinModu({ kod, onizleme }) {
             {Array.isArray(sipListe) && ist.sipN > 0 && (
               <div className="sp-side">
                 <div style={{ background:"var(--vt1)", color:"var(--vb)", borderRadius:18, padding:"16px 18px 15px" }}>
-                  <div style={{ fontSize:12, opacity:0.7 }}>{t3("Hazır modeller","Models ready","Modelos listos")}</div>
-                  <div style={{ fontSize:38, fontWeight:700, letterSpacing:"-0.03em", lineHeight:1.15 }}>%{ist.yuzde}<span style={{ fontSize:13, fontWeight:500, opacity:0.7, marginLeft:8, letterSpacing:0 }}>{ist.haz} / {ist.top} {t3("model hazır","models ready","modelos listos")}</span></div>
+                  <div style={{ fontSize:12, opacity:0.7 }}>{ist.gramMod ? t3("Hazır (gramaja göre)","Ready (by weight)","Listo (por peso)") : t3("Hazır modeller","Models ready","Modelos listos")}</div>
+                  <div style={{ fontSize:38, fontWeight:700, letterSpacing:"-0.03em", lineHeight:1.15 }}>%{ist.yuzde}<span style={{ fontSize:13, fontWeight:500, opacity:0.7, marginLeft:8, letterSpacing:0 }}>{ist.gramMod ? kgYaz(ist.hazG) + " / " + kgYaz(ist.topG) + " " + t3("hazır","ready","listo") : ist.haz + " / " + ist.top + " " + t3("model hazır","models ready","modelos listos")}</span></div>
                   <div style={{ display:"flex", height:9, borderRadius:5, overflow:"hidden", gap:2, margin:"12px 0 9px", background:"rgba(128,128,128,0.25)" }}>
-                    <div style={{ width:(ist.top?100*ist.haz/ist.top:0)+"%", background:"#3fbf7a" }}/>
-                    <div style={{ width:(ist.top?100*ist.ur/ist.top:0)+"%", background:"#e3b341" }}/>
-                    <div style={{ width:(ist.top?100*ist.bk/ist.top:0)+"%", background:"rgba(128,128,128,0.45)" }}/>
+                    <div style={{ width:(ist.gramMod ? (ist.topG?100*ist.hazG/ist.topG:0) : (ist.top?100*ist.haz/ist.top:0))+"%", background:"#3fbf7a" }}/>
+                    <div style={{ width:(ist.gramMod ? (ist.topG?100*ist.urG/ist.topG:0) : (ist.top?100*ist.ur/ist.top:0))+"%", background:"#e3b341" }}/>
+                    <div style={{ width:(ist.gramMod ? (ist.topG?100*ist.bkG/ist.topG:0) : (ist.top?100*ist.bk/ist.top:0))+"%", background:"rgba(128,128,128,0.45)" }}/>
                   </div>
                   <div style={{ display:"flex", gap:12, flexWrap:"wrap", fontSize:11, opacity:0.9 }}>
-                    <span><i style={{ display:"inline-block", width:8, height:8, borderRadius:"50%", background:"#3fbf7a", marginRight:4 }}/>{t3("Hazır","Ready","Listo")} {ist.haz}</span>
-                    <span><i style={{ display:"inline-block", width:8, height:8, borderRadius:"50%", background:"#e3b341", marginRight:4 }}/>{t3("Üretimde","In production","En producción")} {ist.ur}</span>
-                    <span><i style={{ display:"inline-block", width:8, height:8, borderRadius:"50%", background:"rgba(128,128,128,0.6)", marginRight:4 }}/>{t3("Onay bekliyor","Awaiting approval","Pendiente")} {ist.bk}</span>
+                    <span><i style={{ display:"inline-block", width:8, height:8, borderRadius:"50%", background:"#3fbf7a", marginRight:4 }}/>{t3("Hazır","Ready","Listo")} {ist.gramMod ? kgYaz(ist.hazG) : ist.haz}</span>
+                    <span><i style={{ display:"inline-block", width:8, height:8, borderRadius:"50%", background:"#e3b341", marginRight:4 }}/>{t3("Üretimde","In production","En producción")} {ist.gramMod ? kgYaz(ist.urG) : ist.ur}</span>
+                    <span><i style={{ display:"inline-block", width:8, height:8, borderRadius:"50%", background:"rgba(128,128,128,0.6)", marginRight:4 }}/>{t3("Onay bekliyor","Awaiting approval","Pendiente")} {ist.gramMod ? kgYaz(ist.bkG) : ist.bk}</span>
                   </div>
                 </div>
                 <div className="sp-tiles">
-                  {[[t3("Sipariş","Orders","Pedidos"), ist.sipN, ""], [t3("Onaylı","Approved","Aprobados"), ist.onayli, "%"+ist.onayYz], [t3("Üretimde","In production","En producción"), ist.uretimS, ""], [t3("Teslim","Delivered","Entregados"), ist.teslimS, "%"+ist.teslimYz]].map(([l, n, y], i) => (
+                  {[[t3("Sipariş","Orders","Pedidos"), ist.sipN, "", ist.A.sip, ist.G.sip], [t3("Onaylı","Approved","Aprobados"), ist.onayli, "%"+ist.onayYz, ist.A.on, ist.G.on], [t3("Üretimde","In production","En producción"), ist.uretimS, "", ist.A.ur, ist.G.ur], [t3("Teslim","Delivered","Entregados"), ist.teslimS, "%"+ist.teslimYz, ist.A.te, ist.G.te]].map(([l, n, y, ta, tg], i) => (
                     <div key={i} style={{ background:"var(--vcard)", border:"1px solid rgba(var(--voverlay-rgb),0.09)", borderRadius:14, padding:"10px 10px 9px" }}>
                       <div style={{ fontSize:10, color:"var(--vt3)" }}>{l}</div>
                       <div style={{ fontSize:20, fontWeight:700, marginTop:2 }}>{n}</div>
                       {y && <div style={{ fontSize:10, color:YESIL, fontWeight:600 }}>{y}</div>}
+                      <div style={{ fontSize:11, color:"var(--vt2)", marginTop:3, lineHeight:1.35 }}>{ta.toLocaleString(loc)} {ce("adet")}{!bspS && tg > 0 ? <><br/>{kgYaz(tg)}</> : null}</div>
                     </div>
                   ))}
                 </div>
@@ -11267,6 +11277,10 @@ function Atolye({ onSirketDegis }) {
   const [analizTarih1,setAnalizTarih1]= useState("");
   const [analizTarih2,setAnalizTarih2]= useState("");
   const [analizDonem, setAnalizDonem] = useState("bu_ay"); // bu_ay, gecen_ay, 3ay, 6ay, yil, ozel
+  const [kTab, setKTab] = useState("genel");        // Keşfet ana sekmesi: genel/uretim/musteri/modeller/vitrin/iade
+  const [kDrill, setKDrill] = useState(null);         // Keşfet derine inme: {tip:"asama"|"gecik"|"mus", id}
+  const [kDrillSek, setKDrillSek] = useState("sip");
+  const [kGrafik, setKGrafik] = useState("kg");
   const [kesfetSekme, setKesfetSekme] = useState("yeni"); // yeni, coksatan, arizali, karli
   const [musAra, setMusAra] = useState("");
   const [editMusteri, setEditMusteri] = useState(null); // {ad, kod} düzenleme
@@ -12879,9 +12893,9 @@ function Atolye({ onSirketDegis }) {
               <button onClick={()=>{ if (onSirketDegis) onSirketDegis(); }} title="Şirket değiştir" style={{ fontSize:9, fontWeight:800, padding:"3px 10px", borderRadius:20, background: AKTIF_SIRKET_ONEK==="bsp2_" ? "rgba(167,139,250,0.15)" : "rgba(var(--vurgu-rgb),0.15)", border:"1px solid "+(AKTIF_SIRKET_ONEK==="bsp2_" ? "rgba(167,139,250,0.4)" : "rgba(var(--vurgu-rgb),0.4)"), color: AKTIF_SIRKET_ONEK==="bsp2_" ? "#a78bfa" : GOLD, whiteSpace:"nowrap", cursor:"pointer", display:"inline-flex", alignItems:"center", gap:4 }}>{AKTIF_SIRKET_ONEK==="bsp2_" ? "✨ BSP" : "💎 MSK"} <span style={{ fontSize:8, opacity:0.7 }}>⇄</span></button>
             </h1>
             <div className="am-nav" style={{ display:"flex", gap:3, flexWrap:"wrap" }}>
-              {["koleksiyonlar","modeller","konfirmasyon","siparisler","iadeler","musteriler","kasa","personel","analiz","radar","ayarlar"].map(n => {
+              {["koleksiyonlar","modeller","konfirmasyon","siparisler","musteriler","kasa","personel","analiz","ayarlar"].map(n => { // İadeler → Keşfet içine taşındı, Trend Radar gizlendi (sayfa kodu duruyor)
                 let badgeSayi = 0;
-                if (n === "iadeler") {
+                if (n === "analiz") {
                   siparisler.forEach(s => {
                     Object.values(s.kalemIade||{}).forEach(v => badgeSayi += (v||0)>0?1:0);
                     Object.values(s.kalemTamir||{}).forEach(v => badgeSayi += (v||0)>0?1:0);
@@ -12889,10 +12903,10 @@ function Atolye({ onSirketDegis }) {
                 }
                 return (
                 <button key={n} onClick={() => { setSayfa(n); if (n==="koleksiyonlar") { setAktifKol(null); setAcikUstKol(null); } }}
-                  style={{ ...GH, color:sayfa===n?T.gold:T.sub, background:sayfa===n?T.btnBg:"transparent", borderColor:sayfa===n?T.btnBorder:T.border, fontSize:9, padding:"5px 9px", position:"relative" }}>
+                  style={{ ...GH, color:(sayfa===n||(n==="analiz"&&sayfa==="iadeler"))?T.gold:T.sub, background:(sayfa===n||(n==="analiz"&&sayfa==="iadeler"))?T.btnBg:"transparent", borderColor:(sayfa===n||(n==="analiz"&&sayfa==="iadeler"))?T.btnBorder:T.border, fontSize:9, padding:"5px 9px", position:"relative" }}>
                   {{"koleksiyonlar":"Koleksiyonlar","modeller":"Modeller","konfirmasyon":"Konfirmasyon","siparisler":"Siparişler","iadeler":"İadeler","musteriler":"Müşteriler","vitrin":"🛍 Vitrin","kasa":"Kasa & Muhasebe","muhasebe":"Muhasebe","personel":"Personel","analiz":"Keşfet","radar":"📡 Trend Radar","ayarlar":"Ayarlar"}[n]||n.charAt(0).toUpperCase()+n.slice(1)}
                   {n==="konfirmasyon" && konfList.length>0 && <span style={{ position:"absolute", top:-4, right:-4, background:GOLD, color:DARK, width:13, height:13, borderRadius:7, fontSize:7, fontWeight:800, display:"flex", alignItems:"center", justifyContent:"center" }}>{konfList.length}</span>}
-                  {n==="iadeler" && badgeSayi>0 && <span style={{ position:"absolute", top:-4, right:-4, background:"#a78bfa", color:"#fff", width:13, height:13, borderRadius:7, fontSize:7, fontWeight:800, display:"flex", alignItems:"center", justifyContent:"center" }}>{badgeSayi}</span>}
+                  {n==="analiz" && badgeSayi>0 && <span style={{ position:"absolute", top:-4, right:-4, background:"#a78bfa", color:"#fff", width:13, height:13, borderRadius:7, fontSize:7, fontWeight:800, display:"flex", alignItems:"center", justifyContent:"center" }}>{badgeSayi}</span>}
                 </button>
                 );
               })}
@@ -14867,8 +14881,9 @@ function Atolye({ onSirketDegis }) {
           
           return (
             <div style={{ animation:"fadein .3s" }}>
-              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
-                <h2 style={{ margin:0, fontSize:15, fontWeight:700, color:"var(--goldtext)" }}>İade & Tamir Kayıtları</h2>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14, gap:10 }}>
+                <button onClick={()=>{ setSayfa("analiz"); setKTab("iade"); }} style={{ ...GH, fontSize:11, padding:"5px 12px" }}>‹ Keşfet</button>
+                <h2 style={{ margin:0, fontSize:15, fontWeight:700, color:"var(--goldtext)", marginRight:"auto" }}>İade & Tamir Kayıtları</h2>
               </div>
 
               {/* İade Bölümü */}
@@ -16172,9 +16187,9 @@ function Atolye({ onSirketDegis }) {
 
         {/* ANALİZ */}
         {sayfa==="analiz" && (
-          <div style={{ animation:"fadein .3s" }}>
+          <div className={"kx-root kx-t-"+kTab} style={{ animation:"fadein .3s" }}>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14, flexWrap:"wrap", gap:6 }}>
-              <h2 style={{ margin:0, fontSize:14, fontWeight:700, color:T.text }}>Kesfet</h2>
+              <h2 style={{ margin:0, fontSize:16, fontWeight:700, color:T.text }}>Keşfet</h2>
               <div style={{ display:"flex", gap:6, alignItems:"center" }}>
                 {[{id:"bu_ay",l:"Bu Ay"},{id:"gecen_ay",l:"Geçen Ay"},{id:"3ay",l:"3 Ay"},{id:"yil",l:"Bu Yıl"}].map(d => (
                   <button key={d.id} onClick={()=>setAnalizDonem(d.id)} style={{ background:analizDonem===d.id?"rgba(var(--vurgu-rgb),0.18)":"rgba(var(--vurgu-rgb),0.04)", border:"1px solid", borderColor:analizDonem===d.id?"rgba(var(--vurgu-rgb),0.4)":"rgba(var(--vurgu-rgb),0.1)", borderRadius:6, padding:"4px 10px", color:analizDonem===d.id?GOLD:"#7a6f5a", fontSize:9, fontWeight:analizDonem===d.id?700:400, cursor:"pointer" }}>{d.l}</button>
@@ -16183,9 +16198,224 @@ function Atolye({ onSirketDegis }) {
               </div>
             </div>
 
+            {/* ═══ KEŞFET — sekmeler + GENEL DASHBOARD ═══ */}
+            <style>{`.kx-tabs{display:flex;gap:6px;overflow-x:auto;margin:0 0 12px;padding-bottom:2px;scrollbar-width:none}.kx-tabs::-webkit-scrollbar{display:none}.kx-tabs button{flex:0 0 auto;white-space:nowrap}
+.kx-root:not(.kx-t-genel) .kx-s-genel,.kx-root:not(.kx-t-uretim) .kx-s-uretim,.kx-root:not(.kx-t-musteri) .kx-s-musteri,.kx-root:not(.kx-t-modeller) .kx-s-modeller,.kx-root:not(.kx-t-vitrin) .kx-s-vitrin,.kx-root:not(.kx-t-iade) .kx-s-iade{display:none!important}
+.kx-alt{grid-template-columns:repeat(auto-fit,minmax(280px,1fr))!important}
+.kx-kp{display:grid;grid-template-columns:1.4fr repeat(4,1fr);gap:12px;margin-bottom:12px}.kx-r2{display:grid;grid-template-columns:2fr 1fr;gap:12px;margin-bottom:12px}.kx-r3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.kx-click{cursor:pointer;transition:transform .12s,border-color .12s}.kx-click:hover{border-color:rgba(var(--vurgu-rgb),0.45)!important}.kx-click:active{transform:scale(.99)}
+.kx-dr{position:fixed;inset:0;z-index:940}.kx-dr .bk{position:absolute;inset:0;background:rgba(0,0,0,.55)}.kx-dr .pn{position:absolute;right:0;top:0;bottom:0;width:min(440px,100vw);overflow:auto;padding:18px 20px 30px;box-shadow:-14px 0 34px rgba(0,0,0,.5)}
+@media(max-width:900px){.kx-kp{grid-template-columns:1fr 1fr}.kx-kp .kx-hero{grid-column:1/-1}.kx-r2,.kx-r3{grid-template-columns:1fr}.kx-g4{grid-template-columns:1fr 1fr!important}.kx-g2{grid-template-columns:1fr!important}.kx-dash>div{grid-template-columns:repeat(auto-fit,minmax(130px,1fr))!important}}
+@media(max-width:700px){.kx-dr .pn{left:0;right:0;top:70px;bottom:0;width:auto;border-radius:20px 20px 0 0;box-shadow:0 -12px 32px rgba(0,0,0,.5)}}`}</style>
+            <div className="kx-tabs">
+              {[["genel","Genel"],["uretim","Üretim"],["musteri","Müşteri"],["modeller","Modeller"],["vitrin","Vitrin"],["iade","İade"]].map(([id,l]) => (
+                <button key={id} onClick={()=>setKTab(id)} style={{ background:kTab===id?"var(--goldtext)":"rgba(var(--vurgu-rgb),0.06)", color:kTab===id?(T.bg2||"#14130f"):T.sub, border:"none", borderRadius:16, padding:"7px 15px", fontSize:12, fontWeight:600, cursor:"pointer" }}>{l}</button>
+              ))}
+            </div>
+            <div className="kx-s-genel">
+            {kTab==="genel" && (() => {
+              const BITD = ["tamam","teslim"];
+              const MSKM = AKTIF_SIRKET_ONEK !== "bsp2_";
+              const ayKey = (t) => { const d = new Date(t); return d.getFullYear()*12 + d.getMonth(); };
+              const buAy = ayKey(Date.now());
+              const AY = ["Oca","Şub","Mar","Nis","May","Haz","Tem","Ağu","Eyl","Eki","Kas","Ara"];
+              const bugun = new Date(); const bugun0 = new Date(bugun.getFullYear(), bugun.getMonth(), bugun.getDate()).getTime();
+              const aylar = {}; for (let i = 5; i >= 0; i--) aylar[buAy-i] = { kg:0, adet:0, sip:0, kar:0 };
+              const asama = {}; durumSecenekleri().forEach(d => { asama[d.id] = { adet:0, gram:0 }; });
+              const musPay = {}; const gecikListe = [];
+              let aktifN = 0, yeniN = 0, gecikN = 0, gecikG = 0, bitenT = 0, zamaninda = 0, bekKar = 0, bekleyenOnay = 0, iadeN = 0;
+              siparisler.forEach(s => {
+                if (s.onayDurum === "red" || s.onayDurum === "iptal") return;
+                if (s.onayDurum === "bekliyor") bekleyenOnay++;
+                const kd = s.kalemDurumlar || {};
+                let sg = 0, sa = 0, sk = 0, acikG = 0, hepsiBitti = true;
+                (s.kalemler||[]).forEach(k => {
+                  const hc = hesapla(k, k.secilenAyar||k.refAyar, s.altinKgUSD||altinKgUSD, s.mc||madenCarpan);
+                  const d0 = kd[k.id] || k.durum || "baslanmadi"; const dur = d0 === "cizimde" ? "baslanmadi" : d0;
+                  const hu = ((s.kalemHurda)||{})[k.id]||0, ia = ((s.kalemIade)||{})[k.id]||0, ta = ((s.kalemTamir)||{})[k.id]||0;
+                  if (ia > 0) iadeN++; if (ta > 0) iadeN++;
+                  const net = Math.max(0, (k.adet||1) - hu - ia - ta); const gr = hc.mamulGram * net;
+                  sg += gr; sa += net; sk += hc.karHas * net;
+                  if (dur === "hurda") return;
+                  if (!BITD.includes(dur)) { hepsiBitti = false; acikG += gr; }
+                  if (s.onayDurum !== "bekliyor" && asama[dur]) { asama[dur].adet += net; asama[dur].gram += gr; }
+                });
+                const k0 = ayKey(s.tarih || 0);
+                if (aylar[k0]) { aylar[k0].kg += sg/1000; aylar[k0].adet += sa; aylar[k0].sip++; aylar[k0].kar += sk; }
+                const teslimT = s.teslimTarihi ? new Date(s.teslimTarihi).getTime() : 0;
+                if (s.onayDurum === "bekliyor") return;
+                if (!hepsiBitti) {
+                  aktifN++; if (k0 === buAy) yeniN++; bekKar += sk;
+                  const mk = s.musKod || s.musteri || "?"; musPay[mk] = (musPay[mk]||0) + acikG;
+                  if (teslimT && teslimT < bugun0) { gecikN++; gecikG += acikG; gecikListe.push({ s, gun: Math.ceil((bugun0 - teslimT)/86400000), g: acikG }); }
+                } else if (teslimT) {
+                  const son = (s.durumGecmisi||[]).slice(-1)[0]; const bt = son ? son.tarih : 0;
+                  if (bt) { bitenT++; if (bt <= teslimT + 86399999) zamaninda++; }
+                }
+              });
+              gecikListe.sort((a,b) => b.gun - a.gun);
+              const buKg = aylar[buAy].kg, oncekiKg = aylar[buAy-1].kg;
+              const dKg = oncekiKg > 0 ? Math.round((buKg - oncekiKg)/oncekiKg*100) : null;
+              const zamYz = bitenT > 0 ? Math.round(zamaninda/bitenT*100) : null;
+              const maxA = Math.max(1, ...Object.values(asama).map(x => x.adet));
+              const grafikAlan = kGrafik === "kar" && !MSKM ? "kg" : kGrafik;
+              const gv = (a) => grafikAlan === "kg" ? a.kg : grafikAlan === "adet" ? a.adet : grafikAlan === "sip" ? a.sip : a.kar;
+              const gMax = Math.max(0.0001, ...Object.values(aylar).map(gv));
+              const fG = (v) => grafikAlan === "kg" ? fN(v,1) : grafikAlan === "kar" ? fN(v,1) : String(Math.round(v));
+              const musSira = Object.entries(musPay).sort((a,b) => b[1]-a[1]).slice(0,4); const musMax = musSira[0] ? musSira[0][1] : 1;
+              const enCok = [...modeller].filter(m => (m.satisSayisi||0) > 0).sort((a,b) => (b.satisSayisi||0)-(a.satisSayisi||0)).slice(0,3);
+              const kart = { background:"rgba(var(--vurgu-rgb),0.04)", border:"1px solid "+T.border, borderRadius:16, padding:"14px 16px" };
+              const etk = { fontSize:10, color:T.sub, fontWeight:700, letterSpacing:".05em", textTransform:"uppercase" };
+              const KPI = ({ l, v, alt, renk, onClick, hero }) => (
+                <div onClick={onClick} className={(onClick ? "kx-click " : "") + (hero ? "kx-hero" : "")} style={{ ...kart, ...(hero ? { background:"linear-gradient(135deg, rgba(var(--vurgu-rgb),0.16), rgba(var(--vurgu-rgb),0.04))", borderColor:"rgba(var(--vurgu-rgb),0.35)" } : {}) }}>
+                  <div style={etk}>{l}</div>
+                  <div style={{ fontSize:hero?30:26, fontWeight:800, color:renk||T.text, letterSpacing:"-0.02em", marginTop:4, lineHeight:1.1 }}>{v}</div>
+                  {alt && <div style={{ fontSize:11, marginTop:4, fontWeight:600, color:alt.c || T.sub }}>{alt.t}</div>}
+                </div>
+              );
+              const drillAc = (o) => { setKDrill(o); setKDrillSek("sip"); };
+              // ── Drill-down verisi ──
+              let satirlar = null, drillBaslik = "";
+              if (kDrill) {
+                satirlar = [];
+                siparisler.forEach(s => {
+                  if (s.onayDurum === "red" || s.onayDurum === "iptal" || s.onayDurum === "bekliyor") return;
+                  const kd = s.kalemDurumlar || {};
+                  const teslimT = s.teslimTarihi ? new Date(s.teslimTarihi).getTime() : 0;
+                  const hepsi = (s.kalemler||[]).every(k => { const d = kd[k.id]||k.durum||"baslanmadi"; return BITD.includes(d) || d === "hurda"; });
+                  (s.kalemler||[]).forEach(k => {
+                    const d0 = kd[k.id]||k.durum||"baslanmadi"; const dur = d0 === "cizimde" ? "baslanmadi" : d0;
+                    if (dur === "hurda") return;
+                    const hu = ((s.kalemHurda)||{})[k.id]||0, ia = ((s.kalemIade)||{})[k.id]||0, ta = ((s.kalemTamir)||{})[k.id]||0;
+                    const net = Math.max(0,(k.adet||1)-hu-ia-ta); const hc = hesapla(k, k.secilenAyar||k.refAyar, s.altinKgUSD||altinKgUSD, s.mc||madenCarpan);
+                    let ok = false;
+                    if (kDrill.tip === "asama") ok = dur === kDrill.id;
+                    else if (kDrill.tip === "gecik") ok = !hepsi && !BITD.includes(dur) && !!teslimT && teslimT < bugun0;
+                    else if (kDrill.tip === "mus") ok = !hepsi && !BITD.includes(dur) && (s.musKod || s.musteri || "?") === kDrill.id;
+                    if (ok) satirlar.push({ s, k, net, gr: hc.mamulGram * net, teslimT });
+                  });
+                });
+                drillBaslik = kDrill.tip === "asama" ? ((durumSecenekleri().find(d => d.id === kDrill.id)||{}).l || kDrill.id) : kDrill.tip === "gecik" ? "Geciken siparişler" : kDrill.id;
+              }
+              const grupla = (anahtar) => { const m = {}; (satirlar||[]).forEach(r => { const a = anahtar(r); if (!m[a.id]) m[a.id] = { ...a, adet:0, gr:0, sip:new Set() }; m[a.id].adet += r.net; m[a.id].gr += r.gr; m[a.id].sip.add(r.s.id); }); return Object.values(m).sort((a,b) => b.gr - a.gr); };
+              return (
+                <div>
+                  <div className="kx-kp">
+                    <KPI hero l="Bu ay sipariş (kg)" v={<>{fN(buKg,1)}<span style={{ fontSize:13, fontWeight:500, color:T.sub, marginLeft:4 }}>kg</span></>} alt={dKg === null ? { t:"geçen ay veri yok" } : { t:(dKg >= 0 ? "▲ " : "▼ ")+Math.abs(dKg)+"% geçen aya göre", c:dKg >= 0 ? "#6abf69" : "#e85a4f" }}/>
+                    <KPI l="Aktif sipariş" v={aktifN} alt={{ t:yeniN+" bu ay yeni", c:"#6abf69" }} onClick={()=>{ setSayfa("siparisler"); setSipFiltre("aktif"); }}/>
+                    <KPI l="Geciken" v={gecikN} renk={gecikN>0?"#e85a4f":undefined} alt={{ t:fN(gecikG/1000,1)+" kg bekliyor", c:gecikN>0?"#e85a4f":T.sub }} onClick={gecikN>0 ? ()=>drillAc({ tip:"gecik" }) : undefined}/>
+                    <KPI l="Zamanında teslim" v={zamYz === null ? "—" : "%"+zamYz} alt={{ t:bitenT > 0 ? zamaninda+" / "+bitenT+" teslim" : "veri yok" }}/>
+                    {MSKM ? <KPI l="Bekleyen kâr" v={fN(bekKar,1)+" has"} alt={{ t:"aktif siparişlerde" }}/> : <KPI l="Onay bekleyen" v={bekleyenOnay} alt={{ t:"müşteri siparişi" }}/>}
+                  </div>
+                  <div className="kx-r2">
+                    <div style={kart}>
+                      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10, gap:8, flexWrap:"wrap" }}>
+                        <b style={{ fontSize:13, color:T.text }}>Aylık sipariş</b>
+                        <div style={{ display:"flex", gap:4 }}>
+                          {[["kg","kg"],["adet","adet"],["sip","sipariş"]].concat(MSKM ? [["kar","kâr (has)"]] : []).map(([id,l]) => (
+                            <button key={id} onClick={()=>setKGrafik(id)} style={{ background:grafikAlan===id?"var(--goldtext)":"rgba(var(--vurgu-rgb),0.07)", color:grafikAlan===id?(T.bg2||"#14130f"):T.sub, border:"none", borderRadius:8, padding:"4px 10px", fontSize:10, fontWeight:700, cursor:"pointer" }}>{l}</button>
+                          ))}
+                        </div>
+                      </div>
+                      <div style={{ display:"flex", alignItems:"flex-end", gap:10, height:150 }}>
+                        {Object.entries(aylar).map(([k, a]) => { const v = gv(a), cur = Number(k) === buAy; return (
+                          <div key={k} style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"flex-end", height:"100%", gap:4, minWidth:0 }}>
+                            <span style={{ fontSize:10, fontWeight:700, color:cur?T.text:T.sub }}>{fG(v)}</span>
+                            <div style={{ width:"100%", height:Math.max(3, v/gMax*100)+"%", background:cur?"var(--goldtext)":"rgba(var(--vurgu-rgb),0.28)", borderRadius:"6px 6px 0 0", transition:"height .3s" }}/>
+                            <span style={{ fontSize:10, color:T.sub }}>{AY[Number(k)%12]}</span>
+                          </div>); })}
+                      </div>
+                    </div>
+                    <div style={kart}>
+                      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6 }}><b style={{ fontSize:13, color:T.text }}>Üretim hattı</b><span style={{ fontSize:10, color:T.sub }}>dokun → detay</span></div>
+                      {durumSecenekleri().map(d => { const a = asama[d.id]; return (
+                        <div key={d.id} onClick={a.adet > 0 ? ()=>drillAc({ tip:"asama", id:d.id }) : undefined} className={a.adet > 0 ? "kx-click" : ""} style={{ display:"flex", alignItems:"center", gap:8, padding:"5px 4px", borderRadius:8 }}>
+                          <span style={{ width:84, fontSize:11, color:T.sub, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{durumEtiket(d)}</span>
+                          <div style={{ flex:1, height:16, background:"rgba(var(--vurgu-rgb),0.07)", borderRadius:6, overflow:"hidden" }}><div style={{ width:(a.adet/maxA*100)+"%", height:"100%", background:d.c, borderRadius:6 }}/></div>
+                          <b style={{ width:40, textAlign:"right", fontSize:12, color:T.text }}>{a.adet}</b>
+                        </div>); })}
+                    </div>
+                  </div>
+                  <div className="kx-r3">
+                    <div style={kart}>
+                      <div style={{ display:"flex", justifyContent:"space-between", marginBottom:8 }}><b style={{ fontSize:13, color:T.text }}>Dikkat gerektirenler</b></div>
+                      <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:8 }}>
+                        {gecikN > 0 && <span onClick={()=>drillAc({ tip:"gecik" })} className="kx-click" style={{ fontSize:11, fontWeight:700, padding:"4px 10px", borderRadius:10, background:"rgba(232,90,79,0.15)", color:"#e85a4f", border:"1px solid transparent" }}>{gecikN} gecikmiş</span>}
+                        {bekleyenOnay > 0 && <span onClick={()=>{ setSayfa("siparisler"); }} className="kx-click" style={{ fontSize:11, fontWeight:700, padding:"4px 10px", borderRadius:10, background:"rgba(212,160,23,0.15)", color:"#d4a017", border:"1px solid transparent" }}>{bekleyenOnay} onay bekliyor</span>}
+                        {iadeN > 0 && <span onClick={()=>{ setKTab("iade"); }} className="kx-click" style={{ fontSize:11, fontWeight:700, padding:"4px 10px", borderRadius:10, background:"rgba(167,139,250,0.15)", color:"#a78bfa", border:"1px solid transparent" }}>{iadeN} iade/tamir</span>}
+                        {gecikN === 0 && bekleyenOnay === 0 && iadeN === 0 && <span style={{ fontSize:12, color:"#6abf69" }}>✓ Dikkat gerektiren yok</span>}
+                      </div>
+                      {gecikListe.slice(0,3).map(g => (
+                        <div key={g.s.id} onClick={()=>{ setSayfa("siparisler"); setSipSecId(g.s.id); setSipDrawer(g.s.id); }} className="kx-click" style={{ display:"flex", justifyContent:"space-between", gap:8, padding:"7px 0", borderTop:"1px solid "+T.border }}>
+                          <div style={{ minWidth:0 }}><div style={{ fontSize:12, fontWeight:700, color:T.text, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{g.s.musKod || g.s.musteri || "?"} · {g.s.siparisNo || ""}</div><div style={{ fontSize:10, color:"#e85a4f" }}>{g.gun} gün gecikti</div></div>
+                          <div style={{ fontSize:12, fontWeight:700, color:T.text, whiteSpace:"nowrap" }}>{fN(g.g,0)} gr</div>
+                        </div>))}
+                    </div>
+                    <div style={kart}>
+                      <div style={{ display:"flex", justifyContent:"space-between", marginBottom:8 }}><b style={{ fontSize:13, color:T.text }}>En çok satan modeller</b><a onClick={()=>{ setKTab("modeller"); setKesfetSekme("coksatan"); }} style={{ fontSize:11, color:"var(--goldtext)", fontWeight:600, cursor:"pointer" }}>Tümü ›</a></div>
+                      {enCok.length === 0 && <div style={{ fontSize:12, color:T.sub }}>Henüz satış verisi yok</div>}
+                      {enCok.map((m,i) => (
+                        <div key={m.id} onClick={()=>openEM(m)} className="kx-click" style={{ display:"flex", alignItems:"center", gap:10, padding:"6px 0", borderTop:i?"1px solid "+T.border:"none" }}>
+                          <span style={{ width:14, fontSize:12, color:T.dim, fontWeight:700 }}>{i+1}</span>
+                          <div style={{ width:40, height:40, borderRadius:9, overflow:"hidden", background:"#f0f0f0", flexShrink:0 }}>{m.foto ? <img loading="lazy" decoding="async" src={m.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }}/> : null}</div>
+                          <div style={{ minWidth:0, flex:1 }}><div style={{ fontSize:13, fontWeight:700, color:T.text }}>{m.kod}</div><div style={{ fontSize:10, color:T.sub }}>{m.refAyar}</div></div>
+                          <b style={{ fontSize:13, color:"#6abf69" }}>{m.satisSayisi}×</b>
+                        </div>))}
+                    </div>
+                    <div style={kart}>
+                      <div style={{ marginBottom:8 }}><b style={{ fontSize:13, color:T.text }}>Müşteri payı (aktif kg)</b></div>
+                      {musSira.length === 0 && <div style={{ fontSize:12, color:T.sub }}>Aktif sipariş yok</div>}
+                      {musSira.map(([ad, g]) => (
+                        <div key={ad} onClick={()=>drillAc({ tip:"mus", id:ad })} className="kx-click" style={{ display:"flex", alignItems:"center", gap:8, padding:"5px 4px", borderRadius:8 }}>
+                          <span style={{ width:86, fontSize:11, color:T.sub, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{ad}</span>
+                          <div style={{ flex:1, height:16, background:"rgba(var(--vurgu-rgb),0.07)", borderRadius:6, overflow:"hidden" }}><div style={{ width:(g/musMax*100)+"%", height:"100%", background:"var(--goldtext)", opacity:.8, borderRadius:6 }}/></div>
+                          <b style={{ width:44, textAlign:"right", fontSize:12, color:T.text }}>{fN(g/1000,1)}</b>
+                        </div>))}
+                    </div>
+                  </div>
+                  {kDrill && (
+                    <div className="kx-dr">
+                      <div className="bk" onClick={()=>setKDrill(null)}/>
+                      <div className="pn" style={{ background:T.bg2||T.card, color:T.text, borderLeft:"1px solid "+T.border }}>
+                        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:8 }}>
+                          <b style={{ fontSize:19 }}>{drillBaslik}</b>
+                          <button onClick={()=>setKDrill(null)} style={{ ...GH, fontSize:12, padding:"4px 11px" }}>✕</button>
+                        </div>
+                        <div style={{ fontSize:12, color:T.sub, margin:"4px 0 10px" }}>{satirlar.reduce((t,r)=>t+r.net,0)} adet · {new Set(satirlar.map(r=>r.s.id)).size} sipariş · {fN(satirlar.reduce((t,r)=>t+r.gr,0)/1000,2)} kg</div>
+                        <div style={{ display:"flex", background:"rgba(var(--vurgu-rgb),0.07)", borderRadius:10, padding:3, marginBottom:10 }}>
+                          {[["sip","Siparişler"],["mus","Müşteriler"],["mod","Modeller"]].map(([id,l]) => (
+                            <button key={id} onClick={()=>setKDrillSek(id)} style={{ flex:1, background:kDrillSek===id?"var(--goldtext)":"transparent", color:kDrillSek===id?(T.bg2||"#14130f"):T.sub, border:"none", borderRadius:8, padding:"7px 0", fontSize:12, fontWeight:kDrillSek===id?700:500, cursor:"pointer" }}>{l}</button>
+                          ))}
+                        </div>
+                        {satirlar.length === 0 && <div style={{ padding:"30px 0", textAlign:"center", color:T.sub, fontSize:13 }}>Kayıt yok</div>}
+                        {kDrillSek === "sip" && grupla(r => ({ id:r.s.id, s:r.s, ad:(r.s.musKod || r.s.musteri || "?")+" · "+(r.s.siparisNo||""), alt:r.teslimT ? ("Teslim "+new Date(r.teslimT).toLocaleDateString("tr-TR")+(r.teslimT < bugun0 ? " · "+Math.ceil((bugun0-r.teslimT)/86400000)+" gün gecikti" : "")) : "teslim tarihi yok", gec:r.teslimT && r.teslimT < bugun0 })).map(g => (
+                          <div key={g.id} onClick={()=>{ setKDrill(null); setSayfa("siparisler"); setSipSecId(g.s.id); setSipDrawer(g.s.id); }} className="kx-click" style={{ padding:"10px 0", borderBottom:"1px solid "+T.border }}>
+                            <div style={{ display:"flex", justifyContent:"space-between", gap:8, fontSize:13, fontWeight:700 }}><span>{g.ad}</span><span>{fN(g.gr,0)} gr</span></div>
+                            <div style={{ fontSize:11, color:g.gec?"#e85a4f":T.sub, marginTop:2 }}>{g.adet} adet · {g.alt}</div>
+                          </div>))}
+                        {kDrillSek === "mus" && grupla(r => ({ id:r.s.musKod || r.s.musteri || "?", ad:r.s.musKod || r.s.musteri || "?" })).map(g => (
+                          <div key={g.id} style={{ padding:"10px 0", borderBottom:"1px solid "+T.border }}>
+                            <div style={{ display:"flex", justifyContent:"space-between", fontSize:13, fontWeight:700 }}><span>{g.ad}</span><span>{fN(g.gr,0)} gr</span></div>
+                            <div style={{ fontSize:11, color:T.sub, marginTop:2 }}>{g.adet} adet · {g.sip.size} sipariş</div>
+                          </div>))}
+                        {kDrillSek === "mod" && grupla(r => ({ id:r.k.kod || r.k.id, ad:r.k.kod || r.k.ad || "?", foto:r.k.foto, k:r.k })).map(g => (
+                          <div key={g.id} onClick={()=>{ const mm = modeller.find(x=>x.id===g.k.id) || modeller.find(x=>g.k.kod && x.kod===g.k.kod); if (mm) openEM(mm); }} className="kx-click" style={{ display:"flex", alignItems:"center", gap:10, padding:"8px 0", borderBottom:"1px solid "+T.border }}>
+                            <div style={{ width:44, height:44, borderRadius:9, overflow:"hidden", background:"#f0f0f0", flexShrink:0 }}>{g.foto ? <img loading="lazy" decoding="async" src={g.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }}/> : null}</div>
+                            <div style={{ flex:1, minWidth:0 }}><div style={{ fontSize:13, fontWeight:700 }}>{g.ad}</div><div style={{ fontSize:11, color:T.sub }}>{g.adet} adet · {g.sip.size} sipariş</div></div>
+                            <b style={{ fontSize:13 }}>{fN(g.gr,0)} gr</b>
+                          </div>))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+            </div>
+
             {/* ── VİTRİN ANALİZİ — müşteriler neye baktı ── */}
+            {kTab==="vitrin" && !(vitrinAnalizVeri && vitrinAnalizVeri.toplamModel > 0) && <div style={{ padding:"40px 0", textAlign:"center", color:T.sub, fontSize:13 }}>Henüz vitrin ziyareti yok.</div>}
             {vitrinAnalizVeri && vitrinAnalizVeri.toplamModel > 0 && (
-              <div style={{ background:T.card, border:"1px solid "+T.border, borderRadius:14, padding:"16px 18px", marginBottom:16 }}>
+              <div className="kx-s-vitrin" style={{ background:T.card, border:"1px solid "+T.border, borderRadius:14, padding:"16px 18px", marginBottom:16 }}>
                 <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:4, flexWrap:"wrap", gap:8 }}>
                   <div style={{ fontSize:10, fontWeight:700, color:T.sub, letterSpacing:"0.05em", textTransform:"uppercase" }}>🛍 Vitrin Analizi — Müşteriler Neye Baktı</div>
                   <div style={{ display:"flex", gap:12, alignItems:"center" }}>
@@ -16279,7 +16509,7 @@ function Atolye({ onSirketDegis }) {
               const tamGram = Object.values(analiz.aylikKar).reduce((s,d)=>s+d.gram,0);
 
               return (
-                <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:8, marginBottom:14 }}>
+                <div className="kx-s-uretim kx-g4" style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:8, marginBottom:14 }}>
                   {[
                     { lbl:"Aktif Üretim", val:aktifSip.length+" sipariş", sub:fN(aktifGram,1)+" gr üretimde", c:"#5b9bd5", bc:"rgba(91,155,213,0.3)", nav:"aktif" },
                     { lbl:"Dönemde Tamamlanan", val:analiz.siparisSayisi+" sipariş", sub:fN(tamGram,1)+" gr · "+fN(analiz.tKar,2)+" has kâr", c:"#6abf69", bc:"rgba(106,191,105,0.3)" },
@@ -16297,7 +16527,7 @@ function Atolye({ onSirketDegis }) {
             })()}
 
             {/* ── ORTA: AŞAMA DAĞILIMI + GECİKENLER ── */}
-            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:14 }}>
+            <div className="kx-s-uretim kx-g2" style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:14 }}>
               {/* Aşama dağılımı */}
               {(() => {
                 const aktifSip = siparisler.filter(s => {
@@ -16360,7 +16590,7 @@ function Atolye({ onSirketDegis }) {
             </div>
 
             {/* ── ALT: DÖKÜMCÜ + MÜŞTERİ ALACAK + HURDA/İADE ── */}
-            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:10 }}>
+            <div className="kx-alt" style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:10 }}>
 
               {/* Dökümcü */}
               {(() => {
@@ -16379,7 +16609,7 @@ function Atolye({ onSirketDegis }) {
                   return acc;
                 },0);
                 return (
-                  <div onClick={()=>{ setSayfa("kasa"); setKasaSayfa("g_ab"); setAbSub("dokumcu"); }} style={{ background:"rgba(232,131,58,0.02)", border:"1px solid rgba(232,131,58,0.1)", borderRadius:12, padding:"12px 16px", cursor:"pointer" }}>
+                  <div className="kx-s-uretim" onClick={()=>{ setSayfa("kasa"); setKasaSayfa("g_ab"); setAbSub("dokumcu"); }} style={{ background:"rgba(232,131,58,0.02)", border:"1px solid rgba(232,131,58,0.1)", borderRadius:12, padding:"12px 16px", cursor:"pointer" }}>
                     <div style={{ fontSize:10, fontWeight:700, color:"#e8833a", marginBottom:10 }}>Dökümcü <span style={{ fontSize:8, color:"#5b9bd5", marginLeft:4 }}>→ Git</span></div>
                     <div style={{ fontSize:20, fontWeight:800, color:"#e8833a", marginBottom:2 }}>{fN(dokumBorc,3)} has</div>
                     <div style={{ fontSize:9, color:"#665d4a", marginBottom:10 }}>{altinKgUSD>0?"≈"+fUSD(dokumBorc*(altinKgUSD/1000))+" bekleyen borç":""}</div>
@@ -16407,7 +16637,7 @@ function Atolye({ onSirketDegis }) {
                 const topBakiye = sirali.reduce((s,[,d])=>s+(d.borc-d.odenen),0);
                 const maxB = sirali[0] ? sirali[0][1].borc - sirali[0][1].odenen : 1;
                 return (
-                  <div style={{ background:"rgba(var(--vurgu-rgb),0.02)", border:"1px solid rgba(var(--vurgu-rgb),0.08)", borderRadius:12, padding:"12px 16px" }}>
+                  <div className="kx-s-musteri" style={{ background:"rgba(var(--vurgu-rgb),0.02)", border:"1px solid rgba(var(--vurgu-rgb),0.08)", borderRadius:12, padding:"12px 16px" }}>
                     <div style={{ fontSize:10, fontWeight:700, color:GOLD, marginBottom:10 }}>Müşteri Alacakları</div>
                     {sirali.map(([mus,d],i) => {
                       const bakiye = d.borc-d.odenen;
@@ -16444,7 +16674,7 @@ function Atolye({ onSirketDegis }) {
                 const enCokHurda = Object.entries(hurdaModeller).sort((a,b)=>b[1]-a[1]).slice(0,2);
                 const enCokIade  = Object.entries(iadeModeller).sort((a,b)=>b[1]-a[1]).slice(0,2);
                 return (
-                  <div onClick={()=>setSayfa("iadeler")} style={{ background:"rgba(232,90,79,0.02)", border:"1px solid rgba(232,90,79,0.08)", borderRadius:12, padding:"12px 16px", cursor:"pointer" }}>
+                  <div className="kx-s-iade" onClick={()=>setSayfa("iadeler")} style={{ background:"rgba(232,90,79,0.02)", border:"1px solid rgba(232,90,79,0.08)", borderRadius:12, padding:"12px 16px", cursor:"pointer" }}>
                     <div style={{ fontSize:10, fontWeight:700, color:"#e85a4f", marginBottom:10 }}>Hurda & İade <span style={{ fontSize:8, color:"#5b9bd5", marginLeft:4 }}>→ Git</span></div>
                     <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:10 }}>
                       <div style={{ textAlign:"center", padding:"8px", background:"rgba(232,90,79,0.06)", borderRadius:8, border:"1px solid rgba(232,90,79,0.15)" }}>
@@ -16496,7 +16726,7 @@ function Atolye({ onSirketDegis }) {
                 </div>
               );
               return (
-                <div style={{ marginTop:14 }}>
+                <div className="kx-s-uretim kx-dash" style={{ marginTop:14 }}>
                   {/* KG / GRAM satırı */}
                   <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:8, marginBottom:8 }}>
                     {kart("Toplam Sipariş", fN(toplamGram/1000,3)+" kg", fN(toplamGram,1)+" gr", "#5b9bd5")}
@@ -16522,7 +16752,7 @@ function Atolye({ onSirketDegis }) {
             })()}
 
             {/* ── SEKMELİ MODEL PANELİ ── */}
-            <div style={{ background:"rgba(255,255,255,0.02)", border:"1px solid rgba(255,255,255,0.06)", borderRadius:12, padding:"12px 16px", marginTop:14 }}>
+            <div className="kx-s-modeller" style={{ background:"rgba(255,255,255,0.02)", border:"1px solid rgba(255,255,255,0.06)", borderRadius:12, padding:"12px 16px", marginTop:14 }}>
               {/* Sekme butonları */}
               <div style={{ display:"flex", gap:5, marginBottom:12, flexWrap:"wrap" }}>
                 {[
@@ -16534,6 +16764,7 @@ function Atolye({ onSirketDegis }) {
                 ].filter(t => !(AKTIF_SIRKET_ONEK === "bsp2_" && (t.id==="karli" || t.id==="kazandiran"))).map(t => (
                   <button key={t.id} onClick={()=>setKesfetSekme(t.id)} style={{ background:kesfetSekme===t.id?t.c+"22":"rgba(255,255,255,0.03)", border:"1px solid "+(kesfetSekme===t.id?t.c+"66":"rgba(255,255,255,0.08)"), borderRadius:7, padding:"5px 12px", color:kesfetSekme===t.id?t.c:"#7a6f5a", fontSize:10, fontWeight:kesfetSekme===t.id?700:400, cursor:"pointer" }}>{t.l}</button>
                 ))}
+
               </div>
 
               {/* İçerik — 2 sütunlu liste */}
