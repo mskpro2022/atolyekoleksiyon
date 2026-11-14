@@ -13405,14 +13405,14 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
         return (<>
           {mobMenuAcik && diger.length>0 && (<div className="am-alt" style={{ position:"fixed", inset:0, zIndex:70, flexDirection:"column", justifyContent:"flex-end" }}>
             <div onClick={()=>setMobMenuAcik(false)} style={{ position:"absolute", inset:0, background:"rgba(0,0,0,.55)" }} />
-            <div style={{ position:"relative", background:T.card, borderTop:"1px solid "+T.border, borderRadius:"20px 20px 0 0", padding:"10px 16px calc(86px + env(safe-area-inset-bottom,0px))" }}>
+            <div style={{ position:"relative", backgroundColor:T.bg2, backgroundImage:"linear-gradient("+T.card+","+T.card+")", borderTop:"1px solid "+T.border, borderRadius:"20px 20px 0 0", padding:"10px 16px calc(86px + env(safe-area-inset-bottom,0px))" }}>
               <div style={{ width:38, height:4, borderRadius:2, background:T.border, margin:"0 auto 14px" }} />
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
                 {diger.map(n => (<button key={n} onClick={()=>git(n)} style={{ position:"relative", textAlign:"left", padding:"18px 14px", borderRadius:12, background:T.bg2||"transparent", border:"1px solid "+(aktifS(n)?T.gold:T.border), color:aktifS(n)?T.gold:T.text, fontSize:15, fontWeight:600, cursor:"pointer", fontFamily:"inherit" }}>{AD[n]}{rozet(n)>0 && <span style={{ marginLeft:8, background:GOLD, color:DARK, borderRadius:8, fontSize:10, fontWeight:800, padding:"1px 6px" }}>{rozet(n)}</span>}</button>))}
               </div>
             </div>
           </div>)}
-          <div className="am-alt" style={{ position:"fixed", left:0, right:0, bottom:0, zIndex:75, background:T.header, borderTop:"1px solid "+T.headerBorder, padding:"0 6px calc(8px + env(safe-area-inset-bottom,0px))" }}>
+          <div className="am-alt" style={{ position:"fixed", left:0, right:0, bottom:0, zIndex:75, backgroundColor:T.bg2, backgroundImage:"linear-gradient("+T.header+","+T.header+")", borderTop:"1px solid "+T.headerBorder, padding:"0 6px calc(8px + env(safe-area-inset-bottom,0px))" }}>
             {ana.map(n => sekme(n, AD[n], aktifS(n), ()=>git(n), rozet(n)))}
             {diger.length>0 && sekme("__menu", "Menü", mobMenuAcik||digerAktif, ()=>setMobMenuAcik(v=>!v), digerRozet)}
           </div>
