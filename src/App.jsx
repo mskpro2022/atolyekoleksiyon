@@ -4896,7 +4896,7 @@ function PersonelSayfa({ T, GH: GH0, IS, usdTry, siparisler, hasUsd }) {
 .pers-t input,.pers-t select{width:100%!important;box-sizing:border-box}
 }
 @media(min-width:901px){
-.pers-root{display:grid;grid-template-columns:220px minmax(0,1180px);column-gap:36px;align-items:start;justify-content:start}
+.pers-root{display:grid;grid-template-columns:220px minmax(0,1280px);column-gap:36px;align-items:start;justify-content:center}
 .pers-hd{grid-column:1;grid-row:1;flex-direction:column!important;align-items:flex-start!important;gap:14px!important;margin-bottom:12px!important}
 .pers-sek{grid-column:1;grid-row:2;flex-direction:column!important;flex-wrap:nowrap!important;border-bottom:none!important;margin-bottom:0!important;gap:2px!important;position:sticky;top:12px}
 .pers-sek button{text-align:left!important;border-bottom:none!important;border-radius:10px!important;padding:10px 12px!important;margin:0!important;font-size:14px!important}
@@ -15848,7 +15848,7 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
 .km-it{display:block;width:100%;text-align:left;background:transparent;border:none;padding:8px 12px;border-radius:9px;font-size:13.5px;font-weight:500;color:${T.sub};cursor:pointer;font-family:inherit}
 .km-it.on{font-weight:700;color:${T.text};background:rgba(128,128,128,.14);box-shadow:inset 2px 0 0 ${T.text}}
 .km-it.yk{opacity:.45;cursor:default}.km-it.yk::after{content:' · yakında';font-size:11px}
-@media(min-width:901px){.km-root{display:grid;grid-template-columns:230px minmax(0,1340px);column-gap:34px;align-items:start;justify-content:start}.km-root>.km-side{grid-column:1;grid-row:1 / span 400;position:sticky;top:10px;max-height:calc(100vh - 20px);overflow-y:auto;scrollbar-width:thin;margin-bottom:0}.km-root>:not(.km-side){grid-column:2;min-width:0}}
+@media(min-width:901px){.km-root{display:grid;grid-template-columns:230px minmax(0,1340px);column-gap:34px;align-items:start;justify-content:center}.km-root>.km-side{grid-column:1;grid-row:1 / span 400;position:sticky;top:10px;max-height:calc(100vh - 20px);overflow-y:auto;scrollbar-width:thin;margin-bottom:0}.km-root>:not(.km-side){grid-column:2;min-width:0}}
 @media(max-width:900px){.km-list{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;padding-bottom:4px;align-items:center}.km-list::-webkit-scrollbar{display:none}.km-gr{flex:none;padding:0 2px 0 10px;font-size:9.5px}.km-it{flex:none;width:auto;white-space:nowrap;border:1px solid ${T.border};border-radius:99px;padding:7px 13px;font-size:12.5px}.km-it.on{box-shadow:none;border-color:${T.text}}.km-it.yk{display:none}.km-yeni{width:auto;display:inline-block;margin-bottom:10px}}`}</style>
                     <div className="km-bas">Kasa & Muhasebe</div>
                     <div className="km-alt">MSK · stok, cari, kasa ve raporlar</div>
