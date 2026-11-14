@@ -11261,6 +11261,7 @@ function Atolye({ onSirketDegis }) {
   const [sipSurukle, setSipSurukle] = useState("");
   const [sipHedefAy, setSipHedefAy] = useState("");
   const [sipDrawer, setSipDrawer] = useState("");
+  const [sipTab, setSipTab] = useState("kal"); // telefon: sipariş detayı sekmesi (kal / asm / ozt)
   const [sipYeni, setSipYeni] = useState(()=>{ try { return localStorage.getItem("sipYeni")!=="0"; } catch(e) { return true; } });
   const [analizMusF,  setAnalizMusF]  = useState("");
   const [analizTarih1,setAnalizTarih1]= useState("");
@@ -14021,7 +14022,7 @@ function Atolye({ onSirketDegis }) {
       </div>
     );
     return (
-      <div>
+      <div className={"sp-dt sp-tab-"+sipTab}>
         <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", gap:10, flexWrap:"wrap", marginBottom:12 }}>
           <div style={{ minWidth:0 }}>
             <button className="sp-back" onClick={()=>setSipSecId("")} style={{ background:"transparent", border:"none", color:"#7a6f5a", fontSize:12, cursor:"pointer", padding:0, marginBottom:6 }}>← Liste</button>
@@ -14051,21 +14052,22 @@ function Atolye({ onSirketDegis }) {
             ])}
           </div>
         </div>
-        {s.onayDurum==="red" && s.redNot && <div style={{ marginBottom:10, fontSize:12, color:"#e85a4f" }}>Red notu: {s.redNot}</div>}
-        {s.aciklama && <div style={{ marginBottom:10, fontSize:12, color:"#5b9bd5", fontStyle:"italic" }}>📝 {s.aciklama}</div>}
-        <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginBottom:12 }}>
+        <div className="sp-tabbar">{[["kal","Kalemler "+(s.kalemler||[]).length],["asm","Aşamalar"],["ozt","Özet"]].map(([id,l]) => (<button key={id} onClick={()=>setSipTab(id)} className={sipTab===id?"on":""}>{l}</button>))}</div>
+        {s.onayDurum==="red" && s.redNot && <div className="sp-s-ozt" style={{ marginBottom:10, fontSize:12, color:"#e85a4f" }}>Red notu: {s.redNot}</div>}
+        {s.aciklama && <div className="sp-s-ozt" style={{ marginBottom:10, fontSize:12, color:"#5b9bd5", fontStyle:"italic" }}>📝 {s.aciklama}</div>}
+        <div className="sp-s-ozt" style={{ display:"flex", gap:8, flexWrap:"wrap", marginBottom:12 }}>
           {stat("Kalem", o.aktif+" · "+o.adet+" adet")}
           {stat("Liste gramı", fN(o.gram,2)+" gr")}
           {stat("Sipariş tarihi", new Date(s.tarih).toLocaleDateString("tr-TR"))}
           {stat("Teslim", s.teslimTarihi?new Date(s.teslimTarihi).toLocaleDateString("tr-TR"):"—","#e8833a")}
           {stat("İlerleme", "%"+o.pct+" ("+o.tam+"/"+o.aktif+")", o.pct===100?"#6abf69":GOLD)}
         </div>
-        <div style={{ display:"flex", gap:6, flexWrap:"wrap", alignItems:"center", marginBottom:12 }}><span style={{ fontSize:11, color:"#7a6f5a", fontWeight:600 }}>AYAR:</span>{Object.entries(o.ayarlar).sort((a,b)=>b[1]-a[1]).map(([a,g])=><span key={a} style={{ fontSize:13, fontWeight:600, color:GOLD, background:"rgba(var(--vurgu-rgb),0.14)", borderRadius:8, padding:"3px 10px" }}>{a} · {fN(g,2)} gr</span>)}</div>
+        <div className="sp-s-ozt" style={{ display:"flex", gap:6, flexWrap:"wrap", alignItems:"center", marginBottom:12 }}><span style={{ fontSize:11, color:"#7a6f5a", fontWeight:600 }}>AYAR:</span>{Object.entries(o.ayarlar).sort((a,b)=>b[1]-a[1]).map(([a,g])=><span key={a} style={{ fontSize:13, fontWeight:600, color:GOLD, background:"rgba(var(--vurgu-rgb),0.14)", borderRadius:8, padding:"3px 10px" }}>{a} · {fN(g,2)} gr</span>)}</div>
         {s.durumGecmisi?.length>0 && (() => {
           const st = durumSecenekleri(); const kdd = s.kalemDurumlar||{};
           const idx = Math.max(0, st.findIndex(d=>d.id===o.enYaygin));
           return (
-            <div style={{ marginBottom:14, padding:"10px 10px 8px", background:"rgba(var(--vurgu-rgb),0.03)", border:"1px solid rgba(var(--vurgu-rgb),0.1)", borderRadius:12 }}>
+            <div className="sp-s-asm" style={{ marginBottom:14, padding:"10px 10px 8px", background:"rgba(var(--vurgu-rgb),0.03)", border:"1px solid rgba(var(--vurgu-rgb),0.1)", borderRadius:12 }}>
               <div style={{ fontSize:10, color:"#7a6f5a", fontWeight:600, letterSpacing:.6, marginBottom:8 }}>ÜRETİM ŞERİDİ <span style={{ fontWeight:600 }}>· aşamaya tıkla = tüm kalemleri oraya al</span></div>
               <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(92px, 1fr))", gap:5 }}>
                 {st.map((d,i) => {
@@ -14084,6 +14086,7 @@ function Atolye({ onSirketDegis }) {
             </div>
           );
         })()}
+        <div className="sp-s-kal">
         <div style={{ display:"flex", justifyContent:"flex-end", marginBottom:6 }}>
           <select value={sipSira} onChange={e=>setSipSira(e.target.value)} title="Kalem sıralaması (görünüm + PDF)" style={{ ...IS, width:"auto", padding:"5px 8px", fontSize:11 }}>
             {KONF_SIRA_SECENEKLERI.map(o=><option key={o.id} value={o.id}>↕ {o.l}</option>)}
@@ -14124,6 +14127,7 @@ function Atolye({ onSirketDegis }) {
               </div>
             );
           })}
+        </div>
         </div>
       </div>
     );
@@ -14242,6 +14246,16 @@ function Atolye({ onSirketDegis }) {
                           </div>
                           <span style={{ flexShrink:0 }}>{rozet(c.l, c.c)}</span>
                         </div>
+                        {(() => { const fl = (s.kalemler||[]).filter(k=>k.foto); const ilk = fl.slice(0,3); const kalan = (s.kalemler||[]).length - ilk.length; if (!ilk.length) return null; return (
+                          <div style={{ marginTop:10 }}>
+                            <div style={{ display:"grid", gridTemplateColumns:"repeat(3, minmax(0,1fr))", gap:8 }}>
+                              {ilk.map(k => (<div key={k.id} onClick={e=>{ const mm = modeller.find(x=>x.id===k.id) || modeller.find(x=>k.kod && x.kod===k.kod); if (mm) { e.stopPropagation(); openEM(mm); } }} style={{ textAlign:"center", minWidth:0 }}>
+                                <div style={{ aspectRatio:"1", borderRadius:12, overflow:"hidden", background:"#f0f0f0" }}><img loading="lazy" decoding="async" src={k.foto} alt="" style={{ width:"100%", height:"100%", objectFit:"cover", display:"block" }}/></div>
+                                <div style={{ fontSize:11, fontWeight:600, marginTop:3, opacity:0.75, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{k.kod}</div>
+                              </div>))}
+                            </div>
+                            {kalan > 0 && <div style={{ fontSize:12, marginTop:6, opacity:0.7 }}><b>+{kalan}</b> model daha</div>}
+                          </div>); })()}
                         {(() => { const kdm = s.kalemDurumlar||{}; const kl = s.kalemler||[]; const uretim = kl.filter(k => { const d = kdm[k.id]||k.durum||"baslanmadi"; return !["baslanmadi","tamam","teslim","hurda"].includes(d); }).length; const pu = o.aktif>0 ? Math.min(100-o.pct, Math.round(uretim/o.aktif*100)) : 0; return (
                           <div style={{ display:"flex", height:6, borderRadius:3, overflow:"hidden", background:"rgba(128,128,128,0.22)", margin:"10px 0 7px" }}>
                             <div style={{ width:o.pct+"%", background:"#5fae6e" }}/><div style={{ width:pu+"%", background:"#d4a017", opacity:0.85 }}/>
@@ -14290,7 +14304,7 @@ function Atolye({ onSirketDegis }) {
   })();
   return (
     <div style={{ animation:"fadein .3s" }}>
-      <style>{`.sp-drawer .sp-back{display:none!important}.sp-wrap{display:grid;grid-template-columns:370px 1fr;gap:14px;align-items:start}.sp-back{display:none}.sp-list{position:sticky;top:8px;max-height:calc(100vh - 150px);overflow:auto}@media(max-width:900px){.sp-wrap{grid-template-columns:1fr}.sp-wrap.sp-sec .sp-list{display:none}.sp-wrap:not(.sp-sec) .sp-det{display:none}.sp-back{display:inline-block}.sp-list{position:static;max-height:none}.sp-kalem{flex-wrap:wrap}}.sm-fbtn,.sm-only,.sm-sheet-bar{display:none}.sm-ctl,.sm-filt{display:contents}@media(max-width:700px){.sm-fbtn{display:inline-block}.sm-ctl{display:flex!important;flex-wrap:wrap;gap:6px;width:100%}.sm-ctl .sm-search{width:100%!important;flex:1 1 100%;box-sizing:border-box;padding:10px 12px!important;font-size:14px!important}.sm-ctl .sm-rapor{flex:1 1 0;text-align:center;padding:10px 8px!important}.sm-ctl .sm-seg{flex:2 1 0}.sm-ctl .sm-seg button{flex:1;padding:10px 8px!important}.sm-filt{display:none!important}.sm-filt.ac{display:flex!important;flex-direction:column;gap:10px;position:fixed;left:0;right:0;bottom:0;z-index:960;background:var(--bg2,#1c1a16);color:inherit;border-top:1px solid rgba(var(--vurgu-rgb),0.4);border-radius:16px 16px 0 0;padding:16px 16px 20px;max-height:80vh;overflow:auto;box-shadow:0 -12px 32px rgba(0,0,0,.35)}.sm-filt.ac input,.sm-filt.ac select{width:100%!important;max-width:none!important;box-sizing:border-box;padding:10px!important;font-size:14px!important}.sm-filt.ac .sm-dash{display:none}.sm-filt.ac .sm-sheet-bar{display:flex;gap:8px}.sm-filt.ac .sm-sheet-bar button{flex:1;padding:11px!important;font-size:14px!important}.sm-filt.ac .sm-only{display:block}.sm-metal-orj{display:none!important}.sm-back{position:fixed;inset:0;z-index:955;background:rgba(0,0,0,.45)}.sm-asama{display:flex!important;overflow-x:auto;gap:6px!important;padding-bottom:6px!important;-webkit-overflow-scrolling:touch}.sm-asama>button{flex:0 0 auto;min-width:92px}.sm-asama .sm-gr{display:none}.sm-asama>button.on .sm-gr{display:block}.sm-asama-ipucu{display:none}.sm-ay{flex-wrap:nowrap!important;overflow-x:auto}.sm-ay>*{flex:0 0 auto}.sm-kpi{flex-wrap:nowrap!important;gap:6px!important;overflow-x:auto}.sm-kpi>div{padding:5px 9px!important;flex:0 0 auto}}`}</style>
+      <style>{`.sp-tabbar{display:none}.sp-drawer .sp-back{display:none!important}@media(max-width:700px){.sp-drawer>.sp-panel{left:0!important;right:0!important;bottom:0!important;top:44px!important;width:auto!important;border-left:none!important;border-radius:18px 18px 0 0;box-shadow:0 -12px 32px rgba(0,0,0,.35)!important;padding:12px 12px 24px!important}.sp-tabbar{display:flex;gap:2px;border-bottom:1px solid rgba(128,128,128,.25);margin:0 0 12px}.sp-tabbar button{background:transparent;border:none;border-bottom:2px solid transparent;color:#998a6e;font-size:13px;font-weight:600;padding:9px 12px;cursor:pointer}.sp-tabbar button.on{color:inherit;border-bottom-color:currentColor}.sp-dt.sp-tab-kal .sp-s-ozt,.sp-dt.sp-tab-kal .sp-s-asm,.sp-dt.sp-tab-asm .sp-s-ozt,.sp-dt.sp-tab-asm .sp-s-kal,.sp-dt.sp-tab-ozt .sp-s-asm,.sp-dt.sp-tab-ozt .sp-s-kal{display:none!important}.sp-s-kal>div:last-child{grid-template-columns:minmax(0,1fr)!important}}.sp-wrap{display:grid;grid-template-columns:370px 1fr;gap:14px;align-items:start}.sp-back{display:none}.sp-list{position:sticky;top:8px;max-height:calc(100vh - 150px);overflow:auto}@media(max-width:900px){.sp-wrap{grid-template-columns:1fr}.sp-wrap.sp-sec .sp-list{display:none}.sp-wrap:not(.sp-sec) .sp-det{display:none}.sp-back{display:inline-block}.sp-list{position:static;max-height:none}.sp-kalem{flex-wrap:wrap}}.sm-fbtn,.sm-only,.sm-sheet-bar{display:none}.sm-ctl,.sm-filt{display:contents}@media(max-width:700px){.sm-fbtn{display:inline-block}.sm-ctl{display:flex!important;flex-wrap:wrap;gap:6px;width:100%}.sm-ctl .sm-search{width:100%!important;flex:1 1 100%;box-sizing:border-box;padding:10px 12px!important;font-size:14px!important}.sm-ctl .sm-rapor{flex:1 1 0;text-align:center;padding:10px 8px!important}.sm-ctl .sm-seg{flex:2 1 0}.sm-ctl .sm-seg button{flex:1;padding:10px 8px!important}.sm-filt{display:none!important}.sm-filt.ac{display:flex!important;flex-direction:column;gap:10px;position:fixed;left:0;right:0;bottom:0;z-index:960;background:var(--bg2,#1c1a16);color:inherit;border-top:1px solid rgba(var(--vurgu-rgb),0.4);border-radius:16px 16px 0 0;padding:16px 16px 20px;max-height:80vh;overflow:auto;box-shadow:0 -12px 32px rgba(0,0,0,.35)}.sm-filt.ac input,.sm-filt.ac select{width:100%!important;max-width:none!important;box-sizing:border-box;padding:10px!important;font-size:14px!important}.sm-filt.ac .sm-dash{display:none}.sm-filt.ac .sm-sheet-bar{display:flex;gap:8px}.sm-filt.ac .sm-sheet-bar button{flex:1;padding:11px!important;font-size:14px!important}.sm-filt.ac .sm-only{display:block}.sm-metal-orj{display:none!important}.sm-back{position:fixed;inset:0;z-index:955;background:rgba(0,0,0,.45)}.sm-asama{display:flex!important;overflow-x:auto;gap:6px!important;padding-bottom:6px!important;-webkit-overflow-scrolling:touch}.sm-asama>button{flex:0 0 auto;min-width:92px}.sm-asama .sm-gr{display:none}.sm-asama>button.on .sm-gr{display:block}.sm-asama-ipucu{display:none}.sm-ay{flex-wrap:nowrap!important;overflow-x:auto}.sm-ay>*{flex:0 0 auto}.sm-kpi{flex-wrap:nowrap!important;gap:6px!important;overflow-x:auto}.sm-kpi>div{padding:5px 9px!important;flex:0 0 auto}}`}</style>
       <div className="sm-head" style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10, flexWrap:"wrap", gap:8 }}>
         <h2 style={{ margin:0, fontSize:18, fontWeight:600, color:"var(--goldtext)" }}>Siparişler <span style={{ fontSize:13, color:"#7a6f5a", fontWeight:600 }}>({liste.length}/{siparisler.length})</span></h2>
         <button className="sm-fbtn" onClick={()=>setSipFiltAcik(true)} style={{ ...GH, fontSize:12, padding:"8px 12px", borderColor:(sipMus||sipTarih1||sipTarih2||sipMetal!=="altin")?"rgba(var(--vurgu-rgb),0.7)":undefined }}>⚙ Filtre{(sipMus||sipTarih1||sipTarih2||sipMetal!=="altin")?" •":""}</button>
@@ -14427,7 +14441,7 @@ function Atolye({ onSirketDegis }) {
       {(aylarModu||sipRapor) && sec && (
         <div className="sp-drawer" style={{ position:"fixed", inset:0, zIndex:sipRapor?950:60 }}>
           <div onClick={()=>setSipDrawer("")} style={{ position:"absolute", inset:0, background:"rgba(0,0,0,0.35)" }}/>
-          <div style={{ position:"absolute", top:0, right:0, bottom:0, width:"min(max(640px,50vw),100vw)", overflowY:"auto", background:T.bg2||T.card, color:T.text, borderLeft:"1px solid "+T.border, boxShadow:"-12px 0 32px rgba(0,0,0,0.25)", padding:16 }}>
+          <div className="sp-panel" style={{ position:"absolute", top:0, right:0, bottom:0, width:"min(max(640px,50vw),100vw)", overflowY:"auto", background:T.bg2||T.card, color:T.text, borderLeft:"1px solid "+T.border, boxShadow:"-12px 0 32px rgba(0,0,0,0.25)", padding:16 }}>
             <button onClick={()=>setSipDrawer("")} style={{ ...GH, fontSize:12, padding:"6px 12px", marginBottom:10 }}>✕ Kapat</button>
             {detay}
           </div>
