@@ -5622,6 +5622,60 @@ function RpTasNot({ T, tas, aylar }) {
     {tas.ytd !== null && <> Yıl başından {rpAyAd(tas.ytdAy)} mizanına kadar taş geliri: <b style={{ color:T.text }}>{rpF(tas.ytd,1)} has</b>.</>}
   </div>);
 }
+// ═══ MİZANLA DENGE KONTROLÜ — raporlardan (satış, gider) hesaplanan yıl içi rakamlar ile mizandaki hesap hareketleri yan yana ═══
+// Mizanda gelir/gider hesapları kapamalarla sıfırlandığı için bakiye değil yıl içi HAREKET kullanılır (gelirde alacak, giderde borç).
+function RpMizanDenge({ T, v, miz }) {
+  if (!miz || !miz.kur || !miz.kur.HAS) return null;
+  const b = String(miz.bit).match(/(\d\d)\/(\d\d)\/(\d\d)/), a = String(miz.bas).match(/(\d\d)\/(\d\d)\/(\d\d)/); if (!b || !a) return null;
+  const bas = "20"+a[3]+"-"+a[2]+"-"+a[1], bit = "20"+b[3]+"-"+b[2]+"-"+b[1];
+  const cev = (r, t) => r[2]==="HAS" ? t : r[2]==="TL" ? t/miz.kur.HAS : (t*(miz.kur[r[2]]||0))/miz.kur.HAS;
+  const sat = (kod) => miz.satirlar.find(x=>x[0]===kod);
+  const mh = (kod, kol) => { const r = sat(kod); return r ? cev(r, Number(r[kol])||0) : 0; };   // has'a çevrilmiş hareket (3=borç, 4=alacak, 5=bakiye)
+  const mham = (kod, kol) => { const r = sat(kod); return r ? Number(r[kol])||0 : 0; };          // hesabın kendi biriminde
+  const don = (s) => s[0] >= bas && s[0] <= bit;
+  const ss = v.satislar.filter(don), gumus = (s) => /GÜMÜŞ|GUMUS/i.test(String(s[2]));
+  const kap = rpKapanisTurleri(v.giderler);
+  const gg = v.giderler.filter(s => don(s) && !kap.has(s[1]));
+  const top = (l, i) => l.reduce((t, s) => t + (Number(s[i])||0), 0);
+  const hasUsd = miz.kur.USD ? miz.kur.HAS/miz.kur.USD : 0;
+  const rIsc = top(ss.filter(s=>!gumus(s)), 4), rGumIscHas = top(ss.filter(gumus), 4), rMaden = top(ss, 6);
+  const rGider = top(gg.filter(s=>!rpTasTuru(s[1])), 5), rTasGider = top(gg.filter(s=>rpTasTuru(s[1])), 5);
+  const mTas = mh("602 001 04", 4) + mh("600 001 04", 4);
+  const mGider = mh("710", 3) + mh("740", 3) + mh("760", 3);
+  const acik = ["600","602","610","621","622","649","659","710","740","760"].reduce((t, k) => t + mh(k, 5), 0); // son kapamadan sonra açık kalan (borç +)
+  const mSonuc = -mh("570", 5) - acik;
+  const S = [
+    ["Altın satış (has gr)", top(ss.filter(s=>!gumus(s)), 3), mh("600 001 01", 4), "600 001 01 alacak"],
+    ["Altın işçilik (has)", rIsc, mh("600 001 02", 4), "600 001 02 alacak"],
+    ["Gümüş işçilik (USD)", rGumIscHas*hasUsd, mham("600 001 03 02", 4), "600 001 03 02 alacak"],
+    ["Maden kâr / zarar (has)", rMaden, mh("649", 4) - mh("659", 3), "649 alacak − 659 borç"],
+    ["Giderler (has)", rGider + rTasGider, mGider, "710 + 740 + 760 borç"],
+    ["Taş geliri (has)", null, mTas, "602 001 04 + 600 001 04 alacak"],
+    ["Yıl sonucu (has)", rIsc + rGumIscHas + rMaden + mTas - rGider - rTasGider, mSonuc, "570 bakiye + açık dönem"],
+  ];
+  const YESIL = T.id==="beyaz" ? "#1f7a4d" : "#6abf69", TUR = T.id==="beyaz" ? "#b8641c" : "#e0954a";
+  const th = { textAlign:"right", fontSize:11, color:T.sub, fontWeight:600, padding:"7px 10px", borderBottom:"1px solid "+T.border, whiteSpace:"nowrap" };
+  const td = { textAlign:"right", fontSize:13, padding:"9px 10px", borderBottom:"1px solid "+T.border, fontVariantNumeric:"tabular-nums", whiteSpace:"nowrap" };
+  return (
+    <RpKart T={T} baslik={"MİZANLA DENGE KONTROLÜ · "+miz.bas+" – "+miz.bit}>
+      <div style={{ overflowX:"auto" }}>
+        <table style={{ width:"100%", borderCollapse:"collapse", minWidth:520 }}>
+          <thead><tr><th style={{ ...th, textAlign:"left" }}>Kalem</th><th style={th}>Raporlardan</th><th style={th}>Mizandan</th><th style={th}>Fark</th><th style={{ ...th, textAlign:"left" }}>Durum</th></tr></thead>
+          <tbody>{S.map(([ad, r, m, kaynak]) => { const fark = r === null ? null : r - m; const tutar = fark !== null && (Math.abs(fark) < 1 || Math.abs(fark) <= Math.abs(m) * 0.01); return (
+            <tr key={ad}>
+              <td style={{ ...td, textAlign:"left" }}>{ad}<div style={{ fontSize:11, color:T.sub }}>{kaynak}</div></td>
+              <td style={td}>{r === null ? "—" : rpF(r,1)}</td><td style={td}>{rpF(m,1)}</td>
+              <td style={{ ...td, color: fark === null ? T.sub : tutar ? T.sub : TUR, fontWeight:600 }}>{fark === null ? "—" : (fark > 0 ? "+" : "") + rpF(fark,1)}</td>
+              <td style={{ ...td, textAlign:"left", color: fark === null ? T.sub : tutar ? YESIL : TUR, fontWeight:600 }}>{fark === null ? "yalnız mizanda" : tutar ? "tutuyor" : "fark var"}</td>
+            </tr>); })}</tbody>
+        </table>
+      </div>
+      <div style={{ fontSize:11.5, color:T.sub, marginTop:10, lineHeight:1.6 }}>
+        Raporlar: satış ve gider raporlarının {miz.bas} – {miz.bit} arasındaki satırları (kapanış aktarımları hariç). Mizan: aynı dönemin hesap hareketi; kapamalar bakiyeyi sıfırladığı için bakiye değil hareket kullanılır. "Tutuyor" = fark 1 has'tan ya da %1'den küçük.
+      </div>
+    </RpKart>
+  );
+}
 function RpSutun({ T, veri, renk=RP_RENK[0], birim="", yuk=130, onSec, renk2, ad, ad2 }) {
   const cift = veri.some(x=>x.v2!==undefined && x.v2!==null); // çift sütun: v2 = gelir, v = gider
   const mx = Math.max(1e-9, ...veri.map(x=>Math.max(Math.abs(x.v), cift ? Math.abs(x.v2||0) : 0)));
@@ -6141,6 +6195,7 @@ function RaporKarlilik({ T, GH }) {
             <RpKpi T={T} ad="NET TAŞ SONUCU (HAS)" deger={hes?rpF(netTas,1):"—"} renk={hes?renk(netTas):undefined} alt={hes?"Taş geliri − taş giderleri":"Mizan yüklenince görünür"}/>
             <RpKpi T={T} ad="KABA FARK (HAS)" deger={rpF(tum.sonuc,1)} renk={renk(tum.sonuc)} alt="İşçilik + maden − masraf"/>
           </div>
+          <RpMizanDenge T={T} v={v} miz={kayit}/>
           <RpKart T={T} baslik="AYLIK TABLO (HAS)">
             <div style={{ overflowX:"auto" }}>
               <table style={{ width:"100%", borderCollapse:"collapse", minWidth:480 }}>
