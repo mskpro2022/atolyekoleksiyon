@@ -18,7 +18,7 @@ async function atolyeAuthGiris() {
 const kullaniciEposta = (u) => String(u||"").trim().toLowerCase().replace(/[^a-z0-9._-]/g,"") + "@atolyekoleksiyon.internal";
 const SAYFA_LISTESI = [["koleksiyonlar","Koleksiyonlar"],["modeller","Modeller"],["konfirmasyon","Konfirmasyon"],["siparisler","Siparişler"],["musteriler","Müşteriler"],["kasa","Kasa & Muhasebe"],["personel","Personel"],["analiz","Keşfet"],["ayarlar","Ayarlar"]];
 const KESFET_LISTESI = [["genel","Genel"],["uretim","Üretim"],["musteri","Müşteri"],["modeller","Modeller"],["vitrin","Vitrin"],["iade","İade"],["karlilik","Karlılık raporu"]];
-const HASSAS_LISTESI = [["karlilik","Karlılık / kâr rakamları (Keşfet)"],["bsppersonel","BSP Personel — şifre sorulmasın"],["kasaislem","MSK Kasa işlemleri — satış, iade, tahsilat, ödeme girişi (şifre sorulmaz)"],["ozsermaye","MSK Net durum, öz sermaye ve bilanço"]];
+const HASSAS_LISTESI = [["karlilik","Karlılık / kâr rakamları (Keşfet)"],["bsppersonel","Personel — şifre sorulmasın (MSK ve BSP)"],["kasaislem","MSK Kasa işlemleri — satış, iade, tahsilat, ödeme girişi (şifre sorulmaz)"],["ozsermaye","MSK Net durum, öz sermaye ve bilanço"]];
 const SAYFA_ESLE = { iadeler:"analiz", radar:"analiz", vitrin:"koleksiyonlar", muhasebe:"kasa" };
 let AKTIF_KULLANICI = null; // Root her render'da günceller; admin = her yer açık
 function izinSayfa(id) { const k = AKTIF_KULLANICI; if (!k || k.rol === "admin") return true; if (k.rol === "usta") return id === "ustatakip"; if (id === "ustatakip") return false; return (k.sayfalar||[]).includes(SAYFA_ESLE[id] || id); }
@@ -4478,7 +4478,7 @@ function KarlilikRaporuEkrani({ T, GH, siparisler: siparislerHam, tumSip, usdTry
 }
 
 function RpKapi({ T, GH, children, baslik }) {
-  const muaf = baslik === "Personel" && AKTIF_SIRKET_ONEK === "bsp2_" && izinHassas("bsppersonel");
+  const muaf = baslik === "Personel" && izinHassas("bsppersonel"); // Personel şifresinden muaf kullanıcı (MSK ve BSP)
   const [durum, setDurum] = useState(RP_ACIK || muaf ? "acik" : "yukleniyor");
   const [kayitli, setKayitli] = useState(null);
   const [a, setA] = useState(""); const [b, setB] = useState(""); const [hata, setHata] = useState("");
