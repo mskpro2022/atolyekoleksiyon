@@ -8314,7 +8314,7 @@ function buildKonfHTML(siparis, altinKgUSD, mc, fiyatli, modeller, siraModu) {
   const kompakt = kisa.length >= 5;
   let no = 0;
 
-  let h = "<!DOCTYPE html><html><head><meta charset='utf-8'><title>" + (([siparis.musKod || siparis.musteri, siparis.siparisNo].filter(Boolean).join(" - ") || (_sirketKisa + " Siparis")).replace(/[<>&"]/g, " ") + (fiyatli ? " (Fiyatli)" : " (Fiyatsiz)")) + "</title><style>" + css + "</style></head><body><div class='wrap'>";
+  let h = "<!DOCTYPE html><html><head><meta charset='utf-8'><title>" + String(sipNo || (_sirketKisa + " Siparis")).replace(/[<>&"]/g, " ") + "</title><style>" + css + "</style></head><body><div class='wrap'>";
   h += "<div class='top'><div class='logo'>" + _sirketKisa + "<small>" + _sirketAlt + "</small></div><div class='dn'><em>" + (fiyatli ? "Sipariş Formu" : "İç Konfirmasyon") + "</em><b>" + sipNo + "</b>" + tarihUz(siparis.tarih) + "</div></div>";
   if (siparis.aciklama) h += "<div class='not'><h4>⚠ SİPARİŞ NOTU</h4><p>" + esc(siparis.aciklama) + "</p></div>";
   h += "<div class='meta'><div><span>Müşteri</span><b>" + esc(siparis.musKod || siparis.musteri || "—") + "</b></div><div><span>Ayar</span><b>" + esc(ayarLabel) + "</b></div><div><span>Kalem / Adet</span><b>" + rows.length + " / " + tAdet + "</b></div><div><span>Teslim</span><b style='font-size:12px;margin-top:4px'>" + (siparis.teslimTarihi ? tarihUz(siparis.teslimTarihi) : "—") + "</b></div></div>";
