@@ -12316,6 +12316,9 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
   const [ekParcalar, setEkParcalar] = useState([]); // ek parça kataloğu: [{id, tur, kod, gram, ayar, taslar, tasGram, tasKarDus}]
   const [ekModal, setEkModal] = useState(false);
   const [kolMenu, setKolMenu] = useState(null); // koleksiyon kartındaki ⋯ menüsü
+  const [delYaz, setDelYaz] = useState(""); // koleksiyon silerken yazılacak onay metni
+  useEffect(() => { setDelYaz(""); }, [delOnay]);
+  const yoneticiMi = !AKTIF_KULLANICI || AKTIF_KULLANICI.rol === "admin";
   const [ekForm, setEkForm] = useState(null);
   useEffect(() => { ld("v7ekparca", []).then(l => setEkParcalar(Array.isArray(l) ? l : [])); }, []);
   useEffect(() => { if (ekModal) ld("v7ekparca", []).then(l => { if (Array.isArray(l)) setEkParcalar(l); }); }, [ekModal]);
@@ -13232,6 +13235,7 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
   };
 
   const delKol = id => {
+    if (!yoneticiMi) { setDelOnay(null); alert("Koleksiyonu sadece yönetici silebilir."); return; }
     const koldakiModelSayi = modeller.filter(m => m.ki === id).length;
     if (koldakiModelSayi > 0) {
       if (!confirm("Bu koleksiyonda " + koldakiModelSayi + " model var.\n\nKoleksiyon silinince içindeki modeller de SİLİNECEK!\n\nDevam etmek istiyor musunuz?")) {
@@ -14291,8 +14295,8 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
                               {!kol.ust && it("Alt koleksiyon ekle", () => { rkf(); setFkUst(kol.id); setEditK(null); setShowKM(true); })}
                               {it("Katalog PDF · 3 sütun", () => { setKatalogKol(kol); setKatalogSiraliModeller([]); setKatalogSutun(3); setKatalogAyar("14K"); setKatalogSiralaModal(true); })}
                               {it("Katalog PDF · 4 sütun", () => { setKatalogKol(kol); setKatalogSiraliModeller([]); setKatalogSutun(4); setKatalogAyar("14K"); setKatalogSiralaModal(true); })}
-                              <div style={{ height:1, background:T.border, margin:"4px 6px" }}/>
-                              {it("Koleksiyonu sil…", () => setDelOnay({ type:"kol", id:kol.id }), "#e85a4f")}
+                              {yoneticiMi && <div style={{ height:1, background:T.border, margin:"4px 6px" }}/>}
+                              {yoneticiMi && it("Koleksiyonu sil…", () => setDelOnay({ type:"kol", id:kol.id }), "#e85a4f")}
                             </>;
                           })()}
                         </div>
@@ -20936,12 +20940,24 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
       </Modal>
 
       {/* SİLME ONAY */}
-      <Modal open={!!delOnay} onClose={()=>setDelOnay(null)} title="Silme Onayi" T={T}>
-        <p style={{ color:"#998a6e", fontSize:13, marginBottom:18 }}>Bu ogeyi silmek istediginize emin misiniz?</p>
-        <div style={{ display:"flex", gap:10 }}>
-          <button onClick={()=>setDelOnay(null)} style={{ ...GH, flex:1 }}>Iptal</button>
-          <button onClick={()=>{ if(delOnay.type==="kol") delKol(delOnay.id); else if(delOnay.type==="mod") delMod(delOnay.id); else delSip(delOnay.id); }} style={{ flex:1, padding:"10px", background:"linear-gradient(135deg,#e85a4f,#c94040)", border:"none", borderRadius:10, color:"#fff", fontSize:13, fontWeight:700, cursor:"pointer" }}>Evet, Sil</button>
-        </div>
+      <Modal open={!!delOnay} onClose={()=>setDelOnay(null)} title={delOnay && delOnay.type==="kol" ? "Koleksiyonu sil" : "Silme Onayi"} T={T}>
+        {(() => {
+          const kolSil = delOnay && delOnay.type === "kol";
+          const hedef = kolSil ? kollar.find(k => k.id === delOnay.id) : null;
+          const mSay = kolSil ? modeller.filter(m => m.ki === delOnay.id).length : 0;
+          const eslesti = !kolSil || (hedef && delYaz.trim().toLocaleLowerCase("tr") === String(hedef.ad || "").trim().toLocaleLowerCase("tr"));
+          return <>
+            {kolSil ? <div style={{ fontSize:13, color:T.text, lineHeight:1.6, marginBottom:14 }}>
+              <b>{hedef ? hedef.ad : "Koleksiyon"}</b> silinecek{mSay > 0 ? <> ve içindeki <b style={{ color:"#e85a4f" }}>{mSay} model</b> de silinecek.</> : "."}
+              <div style={{ marginTop:10, color:T.sub, fontSize:12 }}>Onaylamak için koleksiyonun adını aynen yazın:</div>
+              <input value={delYaz} onChange={e => setDelYaz(e.target.value)} placeholder={hedef ? hedef.ad : ""} autoFocus style={{ ...IS, marginTop:6 }}/>
+            </div> : <p style={{ color:"#998a6e", fontSize:13, marginBottom:18 }}>Bu ogeyi silmek istediginize emin misiniz?</p>}
+            <div style={{ display:"flex", gap:10 }}>
+              <button onClick={()=>setDelOnay(null)} style={{ ...GH, flex:1 }}>Iptal</button>
+              <button disabled={!eslesti} onClick={()=>{ if(delOnay.type==="kol") delKol(delOnay.id); else if(delOnay.type==="mod") delMod(delOnay.id); else delSip(delOnay.id); }} style={{ flex:1, padding:"10px", background:"linear-gradient(135deg,#e85a4f,#c94040)", border:"none", borderRadius:10, color:"#fff", fontSize:13, fontWeight:700, cursor:eslesti?"pointer":"not-allowed", opacity:eslesti?1:0.35 }}>Evet, Sil</button>
+            </div>
+          </>;
+        })()}
       </Modal>
     </div>
   );
