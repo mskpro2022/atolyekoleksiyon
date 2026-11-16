@@ -14260,16 +14260,18 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
                 const ft = km.filter(m => m.foto).slice(0,4);
                 return (
                   <div key={kol.id} onClick={() => { if (altlar.length > 0) { setAcikUstKol(kol.id); return; } setAktifKol(kol); setSayfa("modeller"); setFiltre("all"); setEtiketF(""); setArama(""); setSirala("kod_yeni"); }}
-                    style={{ position:"relative", aspectRatio:"1 / 1", background:"#0b0b0c", border:"1px solid rgba(255,255,255,0.08)", borderRadius:18, overflow:"hidden", cursor:"pointer", transition:"all .3s ease", animation:"cardin .4s ease "+(i*.05)+"s both", boxShadow:"0 2px 16px rgba(0,0,0,0.15)" }}
-                    onMouseOver={e => { e.currentTarget.style.boxShadow="0 8px 32px rgba(0,0,0,0.25)"; e.currentTarget.style.transform="translateY(-4px)"; e.currentTarget.style.borderColor="rgba(255,255,255,0.15)"; }}
-                    onMouseOut={e  => { e.currentTarget.style.boxShadow="0 2px 16px rgba(0,0,0,0.15)"; e.currentTarget.style.transform="none"; e.currentTarget.style.borderColor="rgba(255,255,255,0.08)"; }}>
-                    {/* FOTOĞRAF ALANI — tam kart */}
-                    <div style={{ position:"absolute", inset:0, display:"grid", gridTemplateColumns:"1fr 1fr", gridTemplateRows:"1fr 1fr", gap:2, background:"#0b0b0c" }}>
-                      {[0,1,2,3].map(x => (
-                        <div key={x} style={{ overflow:"hidden", background:"#f3f3f3" }}>
-                          {ft[x] ? <div className="model-foto-wrap" style={{ width:"100%", height:"100%", overflow:"hidden", background:"#f3f3f3" }}><img src={ft[x].foto} alt="" style={{ width:"100%", height:"100%", objectFit:"contain", objectPosition:"center center", display:"block" }}/></div> : <div style={{ width:"100%", height:"100%", display:"flex", alignItems:"center", justifyContent:"center", color:"rgba(0,0,0,0.12)", fontSize:18 }}>◇</div>}
-                        </div>
-                      ))}
+                    style={{ position:"relative", cursor:"pointer", transition:"all .3s ease", animation:"cardin .4s ease "+(i*.05)+"s both" }}
+                    onMouseOver={e => { e.currentTarget.style.transform="translateY(-3px)"; }}
+                    onMouseOut={e  => { e.currentTarget.style.transform="none"; }}>
+                    <div style={{ position:"relative" }}>
+                    <div style={{ position:"relative", aspectRatio:"1.2 / 1", borderRadius:14, overflow:"hidden", background:"#0b0b0c" }}>
+                      <div style={{ position:"absolute", inset:0, display:"grid", gridTemplateColumns:"1fr 1fr", gridTemplateRows:"1fr 1fr", gap:2 }}>
+                        {[0,1,2,3].map(x => (
+                          <div key={x} style={{ overflow:"hidden", background:"#f3f3f3" }}>
+                            {ft[x] ? <div className="model-foto-wrap" style={{ width:"100%", height:"100%", overflow:"hidden", background:"#f3f3f3" }}><img src={ft[x].foto} alt="" style={{ width:"100%", height:"100%", objectFit:"contain", objectPosition:"center center", display:"block" }}/></div> : <div style={{ width:"100%", height:"100%", display:"flex", alignItems:"center", justifyContent:"center", color:"rgba(0,0,0,0.12)", fontSize:18 }}>◇</div>}
+                          </div>
+                        ))}
+                      </div>
                     </div>
                     {/* KOD ROZETİ */}
                     {kol.on && <span style={{ position:"absolute", top:12, left:12, background:"rgba(15,15,16,0.72)", backdropFilter:"blur(6px)", color:"#fff", padding:"4px 10px", borderRadius:8, fontSize:10, fontWeight:700, letterSpacing:"0.1em", zIndex:2 }}>{kol.on}</span>}
@@ -14293,7 +14295,7 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
                         </div>
                       </>}
                     </div>
-                    {/* YAZILAR — görselin üstünde */}
+                    </div>
                     {(() => {
                       const gramlar14 = km.filter(m => Number(m.gram) > 0).map(m => gramDonustur(Number(m.gram), m.refAyar||"14K", "14K", Number(m.tasGram)||0));
                       const ortGram14 = gramlar14.length > 0 ? gramlar14.reduce((a,x)=>a+x,0)/gramlar14.length : 0;
@@ -14303,9 +14305,12 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
                         ortMly = milyemler.length > 0 ? milyemler.reduce((a,x)=>a+x,0)/milyemler.length : 0;
                       }
                       return (
-                        <div style={{ position:"absolute", left:0, right:0, bottom:0, padding:"56px 18px 16px", background:"linear-gradient(to top, rgba(8,8,9,0.92), rgba(8,8,9,0.55) 55%, transparent)", zIndex:1, pointerEvents:"none" }}>
-                          <div style={{ fontSize:19, fontWeight:700, color:"#fff", lineHeight:1.2 }}>{kol.ad}</div>
-                          <div style={{ fontSize:13, color:"#e8e1d0", marginTop:4 }}>{km.length} model{altlar.length > 0 ? " · " + altlar.length + " alt koleksiyon" : ""}{ortGram14 > 0 ? " · " + fN(ortGram14,2) + " gr" : ""}{ortMly > 0 ? " · " + fN(ortMly,3) + " mly" : ""}</div>
+                        <div style={{ padding:"11px 2px 2px" }}>
+                          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", gap:10 }}>
+                            <div style={{ fontSize:16, fontWeight:700, color:T.text, lineHeight:1.25 }}>{kol.ad}</div>
+                            <div style={{ fontSize:13, color:T.text, whiteSpace:"nowrap" }}>{km.length}{altlar.length > 0 ? " · " + altlar.length + " alt" : ""}</div>
+                          </div>
+                          {(ortGram14 > 0 || ortMly > 0) && <div style={{ fontSize:13, color:T.text, marginTop:3 }}>{ortGram14 > 0 && <><b>{fN(ortGram14,2)}</b> gr</>}{ortGram14 > 0 && ortMly > 0 ? " · " : ""}{ortMly > 0 && <><b>{fN(ortMly,3)}</b> mly</>}</div>}
                         </div>
                       );
                     })()}
