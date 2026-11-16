@@ -12236,6 +12236,14 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
     return () => { if (ro) ro.disconnect(); clearInterval(iv); window.removeEventListener("resize", olc); };
   }, []);
   const ayarDonus = useRef("koleksiyonlar"); // Model ayarları'ndan geri dönülecek sayfa
+  const [altKodModal, setAltKodModal] = useState(false);
+  // Sipariş alt kodu (müşterinin müşteri kodu / takma adı) — tek siparişte düzenle; PDF kodu varsa takma adı öğren
+  const altKodDuzenle = (s) => { const n = window.prompt("Müşteri alt kodu (örn. PSEV, PSM). Boş bırakırsan silinir:", s.musEtiket||""); if (n===null) return; const et = n.trim().toUpperCase(); if (s.musAltHam && et && altNorm(et) !== altNorm(s.musAltHam)) { const yh = { ...altKodHarita, [altNorm(s.musAltHam)]: et }; setAltKodHarita(yh); sv("v7altkodmap", yh); } svS(siparisler.map(sp=>sp.id===s.id?{...sp,musEtiket:et}:sp)); };
+  // Bir alt kodu bütün siparişlerde yeniden adlandır / birleştir / kaldır (yeni boşsa kaldırılır); öğrenilmiş PDF eşleşmeleri de güncellenir
+  const altKodTopluDegis = (eski, yeni) => { const e = altNorm(eski), y = String(yeni||"").trim().toUpperCase();
+    svS(siparisler.map(sp => altNorm(sp.musEtiket) === e && sp.musEtiket ? { ...sp, musEtiket: y } : sp));
+    const yh = {}; Object.keys(altKodHarita).forEach(k => { const v = altKodHarita[k]; if (altNorm(v) === e) { if (y) yh[k] = y; } else yh[k] = v; }); setAltKodHarita(yh); sv("v7altkodmap", yh); };
+  const altKodEslesmeYaz = (hamNorm, takma) => { const yh = { ...altKodHarita }; const t = String(takma||"").trim().toUpperCase(); if (t) yh[hamNorm] = t; else delete yh[hamNorm]; setAltKodHarita(yh); sv("v7altkodmap", yh); };
   const [hesapAcik, setHesapAcik] = useState(false); const [sifreModal, setSifreModal] = useState(false);
   const [araclarAcik, setAraclarAcik] = useState(false);
   // Açılır menüler (Araçlar, Hesap) dışarı tıklanınca kapanır — üst bar bulanık/sabit olduğu için ekran kaplayan katman bar dışına taşamıyor
@@ -14207,6 +14215,57 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
         </div>
       </div>
 
+      {/* SİPARİŞ ALT KODLARI — liste, yeniden adlandır / birleştir / kaldır, PDF kodu eşleşmeleri */}
+      {altKodModal && (() => {
+        const say = {}; siparisler.forEach(sp => { if (sp.musEtiket) { const k = String(sp.musEtiket); (say[k] || (say[k] = { n:0, mus:new Set() })).n++; if (sp.musKod || sp.musteri) say[k].mus.add(sp.musKod || sp.musteri); } });
+        const kodlar = Object.keys(say).sort((a,b)=>a.localeCompare(b,"tr"));
+        const esler = Object.keys(altKodHarita).sort();
+        const hamAd = (hn) => { const sp = siparisler.find(x => x.musAltHam && altNorm(x.musAltHam) === hn); return sp ? sp.musAltHam : hn.toUpperCase(); };
+        const td = { padding:"9px 10px", borderTop:"1px solid "+T.border, fontSize:13, verticalAlign:"middle" };
+        const th = { padding:"7px 10px", fontSize:11, color:T.sub, fontWeight:600, textAlign:"left" };
+        const kd = { ...GH, fontSize:11.5, padding:"4px 10px", marginLeft:6 };
+        return (
+          <div onClick={()=>setAltKodModal(false)} style={{ position:"fixed", inset:0, zIndex:9000, background:"rgba(0,0,0,.6)", display:"flex", alignItems:"flex-start", justifyContent:"center", padding:"7vh 14px", overflowY:"auto" }}>
+            <div onClick={e=>e.stopPropagation()} style={{ background:T.bg2, border:"1px solid "+T.border, borderRadius:16, padding:20, width:"100%", maxWidth:680, color:T.text }}>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6 }}><b style={{ fontSize:16 }}>Sipariş alt kodları</b><button onClick={()=>setAltKodModal(false)} style={{ ...GH, padding:"4px 12px" }}>Kapat</button></div>
+              <div style={{ fontSize:12.5, color:T.sub, lineHeight:1.6, marginBottom:12 }}>Alt kod, müşterinin kendi müşterisine verdiği koddur (PSEV gibi). Yeniden adlandırma o kodu taşıyan bütün siparişlere uygulanır; var olan başka bir kodun adını yazarsan ikisi birleşir. Tek bir siparişin alt kodunu değiştirmek için sipariş üzerindeki mor etikete tıkla.</div>
+              <div style={{ border:"1px solid "+T.border, borderRadius:12, overflow:"hidden" }}>
+                <table style={{ width:"100%", borderCollapse:"collapse" }}>
+                  <thead><tr style={{ background:"rgba(128,128,128,.08)" }}><th style={th}>Alt kod</th><th style={th}>Sipariş</th><th style={th}>Müşteri</th><th style={{ ...th, textAlign:"right" }}></th></tr></thead>
+                  <tbody>
+                    {kodlar.length === 0 && <tr><td colSpan={4} style={{ ...td, textAlign:"center", color:T.sub, padding:22 }}>Henüz alt kodu olan sipariş yok.</td></tr>}
+                    {kodlar.map(k => (<tr key={k}>
+                      <td style={{ ...td, fontWeight:700, color:"#a78bfa" }}>{k}</td>
+                      <td style={td}>{say[k].n}</td>
+                      <td style={{ ...td, color:T.sub, fontSize:12 }}>{[...say[k].mus].slice(0,3).join(", ")}{say[k].mus.size > 3 ? " +" + (say[k].mus.size - 3) : ""}</td>
+                      <td style={{ ...td, textAlign:"right", whiteSpace:"nowrap" }}>
+                        <button style={kd} onClick={()=>{ setAltKodModal(false); setSayfa("siparisler"); setSipMusF(k); }}>Siparişleri göster</button>
+                        <button style={kd} onClick={()=>{ const n = window.prompt("\"" + k + "\" için yeni ad (" + say[k].n + " siparişe uygulanır):", k); if (n === null) return; const y = n.trim().toUpperCase(); if (!y || altNorm(y) === altNorm(k) && y === k) return; if (say[y] && !window.confirm("\"" + y + "\" zaten var. İkisi birleştirilsin mi?")) return; altKodTopluDegis(k, y); }}>Yeniden adlandır</button>
+                        <button style={{ ...kd, color:T.danger || "#e85a4f" }} onClick={()=>{ if (window.confirm("\"" + k + "\" alt kodu " + say[k].n + " siparişten kaldırılsın mı? Siparişler silinmez.")) altKodTopluDegis(k, ""); }}>Kaldır</button>
+                      </td></tr>))}
+                  </tbody>
+                </table>
+              </div>
+              <div style={{ fontSize:13, fontWeight:700, margin:"18px 0 4px" }}>PDF kodu eşleşmeleri</div>
+              <div style={{ fontSize:12.5, color:T.sub, lineHeight:1.6, marginBottom:8 }}>PDF'ten sipariş yüklerken soldaki kod okunursa alt kod kutusuna sağdaki ad yazılır.</div>
+              <div style={{ border:"1px solid "+T.border, borderRadius:12, overflow:"hidden" }}>
+                <table style={{ width:"100%", borderCollapse:"collapse" }}>
+                  <thead><tr style={{ background:"rgba(128,128,128,.08)" }}><th style={th}>PDF'te yazan kod</th><th style={th}>Alt kod olarak yazılır</th><th style={{ ...th, textAlign:"right" }}><button style={{ ...kd, marginLeft:0 }} onClick={()=>{ const h = window.prompt("PDF'te yazan kod (örn. FY FR1):"); if (!h || !h.trim()) return; const t = window.prompt("Bu kod için alt kod (örn. PSEV):"); if (!t || !t.trim()) return; altKodEslesmeYaz(altNorm(h), t); }}>+ Eşleşme</button></th></tr></thead>
+                  <tbody>
+                    {esler.length === 0 && <tr><td colSpan={3} style={{ ...td, textAlign:"center", color:T.sub, padding:22 }}>Kayıtlı eşleşme yok.</td></tr>}
+                    {esler.map(hn => (<tr key={hn}>
+                      <td style={td}>{hamAd(hn)}</td>
+                      <td style={{ ...td, fontWeight:700, color:"#a78bfa" }}>{altKodHarita[hn]}</td>
+                      <td style={{ ...td, textAlign:"right", whiteSpace:"nowrap" }}>
+                        <button style={kd} onClick={()=>{ const n = window.prompt("\"" + hamAd(hn) + "\" için alt kod:", altKodHarita[hn]); if (n === null || !n.trim()) return; altKodEslesmeYaz(hn, n); }}>Değiştir</button>
+                        <button style={{ ...kd, color:T.danger || "#e85a4f" }} onClick={()=>{ if (window.confirm("Bu eşleşme silinsin mi? Mevcut siparişler değişmez.")) altKodEslesmeYaz(hn, ""); }}>Sil</button>
+                      </td></tr>))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>);
+      })()}
       {/* Hesap menüsü › Şifre değiştir (üst barın dışında: sabit bar içindeki pencere ekrana yayılamaz) */}
       {sifreModal && (<div onClick={()=>setSifreModal(false)} style={{ position:"fixed", inset:0, zIndex:9000, background:"rgba(0,0,0,.6)", display:"flex", alignItems:"flex-start", justifyContent:"center", padding:"12vh 14px" }}>
               <div onClick={e=>e.stopPropagation()} style={{ background:T.bg2, border:"1px solid "+T.border, borderRadius:16, padding:20, width:"100%", maxWidth:380 }}>
@@ -15245,7 +15304,7 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
   const poBul = (s) => { const m = String(s.aciklama||"").match(/PO\s*(\d+)/i); return m ? m[1] : ""; };
   const kodlar = (s) => (<>
     {s.siparisNo && kodKutu(s.siparisNo, "#5b9bd5")}
-    {s.musEtiket && kodKutu(s.musEtiket, "#a78bfa")}
+    {s.musEtiket && <span title="Alt kodu düzenle" onClick={(e)=>{ e.stopPropagation(); altKodDuzenle(s); }} style={{ cursor:"pointer" }}>{kodKutu(s.musEtiket, "#a78bfa")}</span>}
     {poBul(s) && kodKutu("PO "+poBul(s), "#998a6e")}
   </>);
   const rozet = (txt, c) => <span style={{ fontSize:11, fontWeight:600, color:c, background:c+"22", border:"1px solid "+c+"55", borderRadius:980, padding:"2px 9px", whiteSpace:"nowrap" }}>{txt}</span>;
@@ -15284,7 +15343,7 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
               { l:"📄 Fiyatlı PDF", f:()=>downloadPDF(buildKonfHTML(s,s.altinKgUSD||altinKgUSD,s.mc||madenCarpan,true,modeller,sipSira),(s.musteri||"siparis")+"-fiyatli") },
               { l:"📄 Fiyatsız PDF", f:()=>downloadPDF(buildKonfHTML(s,s.altinKgUSD||altinKgUSD,s.mc||madenCarpan,false,modeller,sipSira),(s.musteri||"siparis")+"-fiyatsiz") },
               AKTIF_SIRKET_ONEK!=="bsp2_" && s.durumGecmisi?.length>0 && { l:"📊 Zaman çizelgesi", f:()=>setCizelgeModal(s.id) },
-              { l:"🏷 Müşteri alt kodu (PSEV…)", f:()=>{ const n = window.prompt("Müşteri alt kodu (örn. PSEV, PSM). Boş bırakırsan silinir:", s.musEtiket||""); if (n===null) return; const et = n.trim().toUpperCase(); if (s.musAltHam && et && altNorm(et) !== altNorm(s.musAltHam)) { const yh = { ...altKodHarita, [altNorm(s.musAltHam)]: et }; setAltKodHarita(yh); sv("v7altkodmap", yh); } svS(siparisler.map(sp=>sp.id===s.id?{...sp,musEtiket:et}:sp)); } },
+              { l:"🏷 Müşteri alt kodu (PSEV…)", f:()=>altKodDuzenle(s) },
               { l:"⧉ Kopyala → konfirmasyona", f:()=>konfKopyala(s) },
               { l:"↩ Konfirmasyona geri al / düzenle", f:()=>konfDuzenle(s), c:"#e8833a" },
               { l:"🗑 Siparişi sil", f:()=>setDelOnay({ type:"siparis", id:s.id }), c:"#e85a4f" },
@@ -15511,7 +15570,7 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
                           {(poBul(s)||s.siparisNo) && <span style={kutuS({ minWidth:0, overflow:"hidden", textOverflow:"ellipsis", display:"block" })}>{poBul(s)?"PO "+poBul(s):s.siparisNo}</span>}
                           {poBul(s) && s.siparisNo && <span style={kutuS({ flexShrink:0, opacity:.8 })}>{s.siparisNo}</span>}
                           {Object.keys(o.ayarlar).map(a=><span key={a} title={a+" · "+fN(o.ayarlar[a],1)+" gr"} style={kutuS({ fontWeight:700, flexShrink:0, color:ayarRenk(a), borderColor:ayarRenk(a) })}>{a==="925"?"925":a}</span>)}
-                          {s.musEtiket && <span style={kutuS({ flexShrink:0 })}>{s.musEtiket}</span>}
+                          {s.musEtiket && <span title="Alt kodu düzenle" onClick={(e)=>{ e.stopPropagation(); altKodDuzenle(s); }} style={kutuS({ flexShrink:0, cursor:"pointer" })}>{s.musEtiket}</span>}
                           {(o.altin>0.0001 || o.gumus<=0) && <span style={kutuS({ fontSize:15, fontWeight:600, padding:"2px 9px", flexShrink:0, borderColor:gramRenk(o.altin)+"66", color:"color-mix(in srgb, "+gramRenk(o.altin)+" 40%, "+_yazi+")" })}>{fN(o.altin,1)} gr</span>}{o.gumus>0 && <span style={kutuS({ fontSize:15, fontWeight:600, padding:"2px 9px", flexShrink:0, borderColor:ayarRenk("925"), color:ayarRenk("925") })}>{fN(o.gumus,1)} gr 925</span>}
                           <span style={kutuS({ fontSize:13.2, flexShrink:0 })}>{o.adet} adet</span>
                         </span>
@@ -15549,6 +15608,7 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
         <button className="sm-fbtn" onClick={()=>setSipFiltAcik(true)} style={{ ...GH, fontSize:12, padding:"8px 12px", borderColor:(sipMus||sipTarih1||sipTarih2||sipMetal!=="altin")?"rgba(var(--vurgu-rgb),0.7)":undefined }}>⚙ Filtre{(sipMus||sipTarih1||sipTarih2||sipMetal!=="altin")?" •":""}</button>
         <div className="sm-ctl" style={{ display:"flex", gap:6, alignItems:"center", flexWrap:"wrap" }}>
           <input className="sm-search" value={sipMusF} onChange={e=>setSipMusF(e.target.value)} placeholder="🔍 Sipariş no, PO, müşteri, model ara…" style={{ ...IS, width:250, padding:"7px 10px", fontSize:12 }}/>
+          <button onClick={()=>setAltKodModal(true)} style={{ ...GH, fontSize:12, padding:"8px 12px" }}>Alt kodlar</button>
           {sipFiltAcik && <div className="sm-back" onClick={()=>setSipFiltAcik(false)}/>}
           <div className={"sm-filt"+(sipFiltAcik?" ac":"")}>
           <div className="sm-only" style={{ fontSize:15, fontWeight:600, color:"var(--goldtext)" }}>Filtre</div>
