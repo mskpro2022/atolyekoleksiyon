@@ -8231,11 +8231,12 @@ function buildKonfHTML(siparis, altinKgUSD, mc, fiyatli, modeller, siraModu) {
     ".meta div{flex:1;padding:9px 14px;border-right:1px solid #e6eaef}.meta div:last-child{border:none}",
     ".meta span{font-size:7.5px;letter-spacing:.16em;color:#8a94a3;text-transform:uppercase}.meta b{display:block;font-size:14px;margin-top:2px;color:#0f1923}",
     ".sec{margin:14px 34px 0;font-size:8px;letter-spacing:.24em;color:#8a94a3;border-bottom:1px solid #0f1923;padding-bottom:4px;text-transform:uppercase}",
-    ".it{display:grid;grid-template-columns:14px 190px 1fr 130px;gap:10px;padding:18px 34px;border-bottom:1px solid #e6eaef;break-inside:avoid;page-break-inside:avoid}",
-    ".no{font-size:10px;color:#a2abb8;padding-top:4px;margin-left:-8px}",
+    ".it{display:grid;grid-template-columns:190px 1fr;gap:16px;padding:18px 34px;border-bottom:1px solid #e6eaef;break-inside:avoid;page-break-inside:avoid}",
+    ".n{font-size:10px;color:#a2abb8;letter-spacing:.1em;margin-right:8px;font-weight:600;vertical-align:middle}",
+".strip{display:flex;margin-top:10px;border:1px solid #e3e7ec;border-radius:6px;break-inside:avoid}.strip div{flex:1;padding:6px 10px;border-right:1px solid #e9edf1}.strip div:last-child{border:none}.strip span{font-size:7.5px;letter-spacing:.14em;color:#8a94a3;display:block;text-transform:uppercase}.strip b{font-size:14px;color:#0f1923}",
     ".ph{background:#f5f6f8;border:1px solid #e0e3e8;border-radius:4px;display:flex;align-items:center;justify-content:center;overflow:hidden}",
     ".ph img{width:100%;height:100%;object-fit:contain;display:block}",
-    ".it .ph{width:190px;height:190px;margin-right:6px}",
+    ".it .ph{width:190px;height:190px}",
     ".k{font-size:21px;font-weight:800;letter-spacing:.02em;color:#0f1923}",
     ".ad{font-size:10px;letter-spacing:.12em;color:#8a94a3;text-transform:uppercase;margin:2px 0 7px}",
     ".mad{font-size:11px;color:#4a5568;margin:-3px 0 6px}",
@@ -8244,8 +8245,7 @@ function buildKonfHTML(siparis, altinKgUSD, mc, fiyatli, modeller, siraModu) {
     ".ek{margin-top:7px;background:#fff8e6;border:1px solid #ecd9a3;border-radius:5px;padding:6px 9px;font-size:11px;line-height:1.55;color:#3a3220}.ek b{letter-spacing:.05em;color:#6b4e00}",
     ".tas{margin-top:8px;font-size:10.5px;color:#2a3340;background:#f4f7fb;border-left:3px solid #2d6cdf;padding:6px 9px;line-height:1.6}",
     ".tas .l{font-size:8px;letter-spacing:.16em;color:#7a8594;text-transform:uppercase}.tas .gl{font-size:9px;font-weight:700;color:#4a5568;margin-top:3px}.tas .t{font-weight:700;color:#2d6cdf;margin-top:3px}",
-    ".sg{text-align:right;border-left:1px solid #eef1f4;padding-left:10px}.sg span{display:block;font-size:7.5px;letter-spacing:.14em;color:#8a94a3;margin-top:9px;text-transform:uppercase}.sg span:first-child{margin-top:0}.sg b{font-size:17px;color:#0f1923}.sg small{display:block;font-size:8px;color:#8a94a3}",
-    ".g{display:grid;grid-template-columns:1fr 1fr;margin:0 34px}",
+        ".g{display:grid;grid-template-columns:1fr 1fr;margin:0 34px}",
     ".c{display:grid;grid-template-columns:116px 1fr;gap:12px;padding:14px 10px 14px 0;border-bottom:1px solid #e6eaef;break-inside:avoid;page-break-inside:avoid}",
     ".c:nth-child(even){padding-left:14px;padding-right:0;border-left:1px solid #eef1f4}",
     ".c .ph{width:116px;height:116px}.c .k{font-size:16px}.c .ad{font-size:8.5px;margin:1px 0 5px}.c .rn{font-size:10.5px;padding:2px 0 2px 7px;border-left-width:3px}",
@@ -8258,7 +8258,7 @@ function buildKonfHTML(siparis, altinKgUSD, mc, fiyatli, modeller, siraModu) {
     ".wp{height:150px;width:100%}.wp img{object-fit:cover}",
     ".wf{display:flex;gap:14px;margin-top:9px;align-items:flex-start}.wf .lft{flex:1}.wf .tas{margin:0;min-width:230px}",
     ".tagb{display:inline-block;font-size:8px;letter-spacing:.18em;border:1px solid #0f1923;padding:2px 7px;margin-right:8px;vertical-align:middle;color:#0f1923}",
-    ".kol{display:grid;grid-template-columns:230px 1fr 130px;gap:18px;padding:16px 34px;border-bottom:1px solid #e6eaef;break-inside:avoid;page-break-inside:avoid}",
+    ".kol{display:grid;grid-template-columns:230px 1fr;gap:18px;padding:16px 34px;border-bottom:1px solid #e6eaef;break-inside:avoid;page-break-inside:avoid}",
     ".kol .ph{width:230px;height:200px}",
     ".tot{display:flex;justify-content:flex-end;gap:38px;padding:16px 34px;border-top:2px solid #0f1923;margin-top:2px;break-inside:avoid}.tot span{font-size:7.5px;letter-spacing:.16em;color:#8a94a3;display:block;text-transform:uppercase}.tot b{font-size:20px;color:#0f1923}.tot .s b{font-size:14px}",
     ".ft{display:flex;justify-content:space-between;padding:10px 34px 18px;font-size:9px;color:#8a94a3;align-items:flex-end;break-inside:avoid}",
@@ -8300,11 +8300,12 @@ function buildKonfHTML(siparis, altinKgUSD, mc, fiyatli, modeller, siraModu) {
   const iscBirim = (r) => r.isMilyem ? (r.iscilikDolar || 0).toFixed(3) + " mly/gr" : fUSD(r.iscilikDolar || 0) + "/gr";
   const foto = (r) => r.foto ? "<img src='" + r.foto + "'/>" : "";
   const meta = (r) => esc(TIP_ETIKET[r.kategori] || r.kategori || "") + (r.kategori ? " · " : "") + esc(r.renk || "Sari") + " · " + r.adet + " adet";
-  const ortak = (r) => "<div class='k'>" + esc(r.kod || "—") + "</div><div class='ad'>" + meta(r) + "</div>" + (r.ad ? "<div class='mad'>" + esc(r.ad) + "</div>" : "") + (r.sipNot ? "<div class='rn'>" + esc(r.sipNot) + "</div>" : "") + boyHtml(r) + ekKutu(r) + tasGrup(r);
+  const ortak = (r, sn) => "<div class='k'>" + (sn ? "<span class='n'>" + sn + "</span>" : "") + esc(r.kod || "—") + "</div><div class='ad'>" + meta(r) + "</div>" + (r.ad ? "<div class='mad'>" + esc(r.ad) + "</div>" : "") + (r.sipNot ? "<div class='rn'>" + esc(r.sipNot) + "</div>" : "") + boyHtml(r) + ekKutu(r) + tasGrup(r);
   const statlar = (r) => {
-    let s = "<span>Birim</span><b>" + gramStr(r.hc.mamulGram) + "</b><span>Toplam</span><b>" + gramStr(r.hc.mamulGram * r.adet) + "</b>";
-    if (fiyatli && r.iscilikTop > 0) s += "<span>İşçilik / br</span><b style='font-size:12px'>" + iscBirim(r) + "</b><span>İşçilik toplam</span><b>" + fUSD(r.iscilikTop) + "</b><small>" + r.iscilikTopHas.toFixed(4) + " has</small>";
-    return s;
+    let s = "<div class='strip'><div><span>Birim</span><b>" + gramStr(r.hc.mamulGram) + "</b></div><div><span>Toplam</span><b>" + gramStr(r.hc.mamulGram * r.adet) + "</b></div>";
+    if (Number(r.tasGram) > 0) s += "<div><span>Taş</span><b>" + fN(r.tasGram, 4) + " gr</b></div>";
+    if (fiyatli && r.iscilikTop > 0) s += "<div><span>İşçilik / br</span><b>" + iscBirim(r) + "</b></div><div><span>İşçilik toplam</span><b>" + fUSD(r.iscilikTop) + "</b></div>";
+    return s + "</div>";
   };
 
   const kat = (r) => String(r.kategori || "").trim().toLowerCase();
@@ -8329,7 +8330,7 @@ function buildKonfHTML(siparis, altinKgUSD, mc, fiyatli, modeller, siraModu) {
   } else {
     kisa.forEach(r => {
       no++;
-      h += "<div class='it'><div class='no'>" + String(no).padStart(2, "0") + "</div><div class='ph'>" + foto(r) + "</div><div>" + ortak(r) + "</div><div class='sg'>" + statlar(r) + "</div></div>";
+      h += "<div class='it'><div class='ph'>" + foto(r) + "</div><div>" + ortak(r, String(no).padStart(2, "0")) + statlar(r) + "</div></div>";
     });
   }
   if (uzun.length) {
@@ -8337,7 +8338,7 @@ function buildKonfHTML(siparis, altinKgUSD, mc, fiyatli, modeller, siraModu) {
     uzun.forEach(r => {
       no++;
       if (kat(r) === "kolye") {
-        h += "<div class='kol'><div class='ph'>" + foto(r) + "</div><div>" + ortak(r) + "</div><div class='sg'>" + statlar(r) + "</div></div>";
+        h += "<div class='kol'><div class='ph'>" + foto(r) + "</div><div>" + ortak(r, String(no).padStart(2, "0")) + statlar(r) + "</div></div>";
       } else {
         h += "<div class='w'><div class='wh'><div class='l'><span class='k'>" + esc(r.kod || "—") + "</span><span><span class='tagb'>BİLEKLİK</span><span class='ad'>" + esc(r.renk || "Sari") + " · " + r.adet + " adet" + (r.ad ? " · " + esc(r.ad) : "") + "</span></span></div><div class='r'><div><span>Birim</span><b>" + gramStr(r.hc.mamulGram) + "</b></div><div><span>Toplam</span><b>" + gramStr(r.hc.mamulGram * r.adet) + "</b></div>" + (fiyatli && r.iscilikTop > 0 ? "<div><span>İşçilik</span><b>" + fUSD(r.iscilikTop) + "</b></div>" : "") + "</div></div>";
         if (r.foto) h += "<div class='ph wp'>" + foto(r) + "</div>";
