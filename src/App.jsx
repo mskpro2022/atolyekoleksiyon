@@ -14260,74 +14260,55 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
                 const ft = km.filter(m => m.foto).slice(0,4);
                 return (
                   <div key={kol.id} onClick={() => { if (altlar.length > 0) { setAcikUstKol(kol.id); return; } setAktifKol(kol); setSayfa("modeller"); setFiltre("all"); setEtiketF(""); setArama(""); setSirala("kod_yeni"); }}
-                    style={{ background:"rgba(255,255,255,0.06)", backdropFilter:"blur(10px)", border:"1px solid rgba(255,255,255,0.08)", borderRadius:20, overflow:"hidden", cursor:"pointer", transition:"all .3s ease", animation:"cardin .4s ease "+(i*.05)+"s both", boxShadow:"0 2px 16px rgba(0,0,0,0.15)" }}
+                    style={{ position:"relative", aspectRatio:"1 / 1", background:"#0b0b0c", border:"1px solid rgba(255,255,255,0.08)", borderRadius:18, overflow:"hidden", cursor:"pointer", transition:"all .3s ease", animation:"cardin .4s ease "+(i*.05)+"s both", boxShadow:"0 2px 16px rgba(0,0,0,0.15)" }}
                     onMouseOver={e => { e.currentTarget.style.boxShadow="0 8px 32px rgba(0,0,0,0.25)"; e.currentTarget.style.transform="translateY(-4px)"; e.currentTarget.style.borderColor="rgba(255,255,255,0.15)"; }}
                     onMouseOut={e  => { e.currentTarget.style.boxShadow="0 2px 16px rgba(0,0,0,0.15)"; e.currentTarget.style.transform="none"; e.currentTarget.style.borderColor="rgba(255,255,255,0.08)"; }}>
-                    {/* FOTOĞRAF ALANI */}
-                    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", height:250, background:"#f3f3f3", borderRadius:"20px 20px 0 0", overflow:"hidden" }}>
+                    {/* FOTOĞRAF ALANI — tam kart */}
+                    <div style={{ position:"absolute", inset:0, display:"grid", gridTemplateColumns:"1fr 1fr", gridTemplateRows:"1fr 1fr", gap:2, background:"#0b0b0c" }}>
                       {[0,1,2,3].map(x => (
-                        <div key={x} style={{ overflow:"hidden", borderRight:x%2===0?"1px solid rgba(255,255,255,0.04)":"none", borderBottom:x<2?"1px solid rgba(255,255,255,0.04)":"none" }}>
-                          {ft[x] ? <div className="model-foto-wrap" style={{ width:"100%", height:"100%", overflow:"hidden", background:"#f3f3f3" }}><img src={ft[x].foto} alt="" style={{ width:"100%", height:"100%", objectFit:"contain", objectPosition:"center center", display:"block" }}/></div> : <div style={{ width:"100%", height:"100%", display:"flex", alignItems:"center", justifyContent:"center", color:"rgba(255,255,255,0.06)", fontSize:18 }}>◇</div>}
+                        <div key={x} style={{ overflow:"hidden", background:"#f3f3f3" }}>
+                          {ft[x] ? <div className="model-foto-wrap" style={{ width:"100%", height:"100%", overflow:"hidden", background:"#f3f3f3" }}><img src={ft[x].foto} alt="" style={{ width:"100%", height:"100%", objectFit:"contain", objectPosition:"center center", display:"block" }}/></div> : <div style={{ width:"100%", height:"100%", display:"flex", alignItems:"center", justifyContent:"center", color:"rgba(0,0,0,0.12)", fontSize:18 }}>◇</div>}
                         </div>
                       ))}
                     </div>
-                    {/* BİLGİ ALANI */}
-                    <div style={{ padding:"12px 14px 14px" }}>
-                      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
-                        <h3 style={{ margin:0, fontSize:13, fontWeight:700, color:T.text, letterSpacing:"0.02em" }}>{kol.ad}</h3>
-                        {kol.on && <span style={{ background:"rgba(var(--vurgu-rgb),0.12)", color:GOLD, padding:"2px 8px", borderRadius:8, fontSize:8, fontWeight:700, letterSpacing:"0.05em" }}>{kol.on}</span>}
-                      </div>
-                      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-end" }}>
-                        <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
-                          <span style={{ fontSize:10, color:T.sub, fontWeight:500 }}>{km.length} model{altlar.length > 0 ? " · " + altlar.length + " alt koleksiyon" : ""}</span>
-                          {altinKgUSD > 0 && km.length > 0 && (() => {
-                            // Ortalama ürün gramı — her modelin gramı 14K'ya çevrilip ortalaması alınır (gramı olmayan set vb. hariç)
-                            const gramlar14 = km.filter(m => Number(m.gram) > 0).map(m => gramDonustur(Number(m.gram), m.refAyar||"14K", "14K", Number(m.tasGram)||0));
-                            const ortGram14 = gramlar14.length > 0 ? gramlar14.reduce((s,x)=>s+x,0)/gramlar14.length : 0;
-                            const milyemler = km.map(m => {
-                              const h = hesapla(m, m.refAyar, altinKgUSD, madenCarpan);
-                              return h.mamulGram > 0 ? h.karHas / h.mamulGram : 0;
-                            }).filter(x => x > 0);
-                            const ortMly = milyemler.length > 0 ? milyemler.reduce((s,x)=>s+x,0)/milyemler.length : 0;
-                            const minMly = milyemler.length > 0 ? Math.min(...milyemler) : 0;
-                            const maxMly = milyemler.length > 0 ? Math.max(...milyemler) : 0;
-                            return (
-                              <div style={{ display:"flex", flexDirection:"column", gap:3 }}>
-                                <div style={{ display:"flex", gap:4, alignItems:"center" }}>
-                                  <span style={{ fontSize:8, color:T.dim }}>Ort. ürün gramı:</span>
-                                  <span style={{ fontSize:10, color:"#5b9bd5", fontWeight:800 }}>{fN(ortGram14,2)} gr</span>
-                                  <span style={{ fontSize:7, color:T.dim }}>(14K)</span>
-                                </div>
-                                {AKTIF_SIRKET_ONEK !== "bsp2_" && <div style={{ display:"flex", gap:4, alignItems:"center" }}>
-                                  <span style={{ fontSize:8, color:T.dim }}>Ort. karlılık:</span>
-                                  <span style={{ fontSize:10, color:GOLD, fontWeight:800 }}>{fN(ortMly,3)}</span>
-                                  <span style={{ fontSize:7, color:T.dim }}>mly/gr ({fN(minMly,3)}–{fN(maxMly,3)})</span>
-                                </div>}
-                              </div>
-                            );
+                    {/* KOD ROZETİ */}
+                    {kol.on && <span style={{ position:"absolute", top:12, left:12, background:"rgba(15,15,16,0.72)", backdropFilter:"blur(6px)", color:"#fff", padding:"4px 10px", borderRadius:8, fontSize:10, fontWeight:700, letterSpacing:"0.1em", zIndex:2 }}>{kol.on}</span>}
+                    {/* ⋯ MENÜSÜ */}
+                    <div style={{ position:"absolute", top:12, right:12, zIndex:3 }} onClick={e => e.stopPropagation()}>
+                      <button onClick={() => setKolMenu(kolMenu===kol.id ? null : kol.id)} title="İşlemler" style={{ width:34, height:34, borderRadius:"50%", background:"rgba(15,15,16,0.72)", backdropFilter:"blur(6px)", border:"none", color:"#fff", fontSize:17, fontWeight:800, cursor:"pointer", lineHeight:1, letterSpacing:1, display:"flex", alignItems:"center", justifyContent:"center" }}>⋯</button>
+                      {kolMenu===kol.id && <>
+                        <div onClick={() => setKolMenu(null)} style={{ position:"fixed", inset:0, zIndex:40 }}/>
+                        <div style={{ position:"absolute", right:0, top:"calc(100% + 6px)", zIndex:41, minWidth:190, background:T.bg2, border:"1px solid "+T.border, borderRadius:10, padding:4, boxShadow:"0 8px 24px rgba(0,0,0,0.4)" }}>
+                          {(() => {
+                            const it = (label, fn, renk) => <button key={label} onClick={() => { setKolMenu(null); fn(); }} style={{ display:"block", width:"100%", textAlign:"left", background:"none", border:"none", borderRadius:6, padding:"8px 11px", color:renk || T.text, fontSize:12, fontWeight:600, cursor:"pointer" }}>{label}</button>;
+                            return <>
+                              {it("Düzenle", () => openEK(kol))}
+                              {!kol.ust && it("Alt koleksiyon ekle", () => { rkf(); setFkUst(kol.id); setEditK(null); setShowKM(true); })}
+                              {it("Katalog PDF · 3 sütun", () => { setKatalogKol(kol); setKatalogSiraliModeller([]); setKatalogSutun(3); setKatalogAyar("14K"); setKatalogSiralaModal(true); })}
+                              {it("Katalog PDF · 4 sütun", () => { setKatalogKol(kol); setKatalogSiraliModeller([]); setKatalogSutun(4); setKatalogAyar("14K"); setKatalogSiralaModal(true); })}
+                              <div style={{ height:1, background:T.border, margin:"4px 6px" }}/>
+                              {it("Koleksiyonu sil…", () => setDelOnay({ type:"kol", id:kol.id }), "#e85a4f")}
+                            </>;
                           })()}
                         </div>
-                        <div style={{ position:"relative" }} onClick={e => e.stopPropagation()}>
-                          <button onClick={() => setKolMenu(kolMenu===kol.id ? null : kol.id)} title="İşlemler" style={{ background:"rgba(var(--vurgu-rgb),0.06)", border:"1px solid rgba(var(--vurgu-rgb),0.14)", borderRadius:9, padding:"6px 12px", color:"inherit", fontSize:16, fontWeight:800, cursor:"pointer", lineHeight:1, letterSpacing:1 }}>⋯</button>
-                          {kolMenu===kol.id && <>
-                            <div onClick={() => setKolMenu(null)} style={{ position:"fixed", inset:0, zIndex:40 }}/>
-                            <div style={{ position:"absolute", right:0, bottom:"calc(100% + 6px)", zIndex:41, minWidth:190, background:T.bg2, border:"1px solid "+T.border, borderRadius:10, padding:4, boxShadow:"0 8px 24px rgba(0,0,0,0.4)" }}>
-                              {(() => {
-                                const it = (label, fn, renk) => <button key={label} onClick={() => { setKolMenu(null); fn(); }} style={{ display:"block", width:"100%", textAlign:"left", background:"none", border:"none", borderRadius:6, padding:"8px 11px", color:renk || T.text, fontSize:12, fontWeight:600, cursor:"pointer" }}>{label}</button>;
-                                return <>
-                                  {it("Düzenle", () => openEK(kol))}
-                                  {!kol.ust && it("Alt koleksiyon ekle", () => { rkf(); setFkUst(kol.id); setEditK(null); setShowKM(true); })}
-                                  {it("Katalog PDF · 3 sütun", () => { setKatalogKol(kol); setKatalogSiraliModeller([]); setKatalogSutun(3); setKatalogAyar("14K"); setKatalogSiralaModal(true); })}
-                                  {it("Katalog PDF · 4 sütun", () => { setKatalogKol(kol); setKatalogSiraliModeller([]); setKatalogSutun(4); setKatalogAyar("14K"); setKatalogSiralaModal(true); })}
-                                  <div style={{ height:1, background:T.border, margin:"4px 6px" }}/>
-                                  {it("Koleksiyonu sil…", () => setDelOnay({ type:"kol", id:kol.id }), "#e85a4f")}
-                                </>;
-                              })()}
-                            </div>
-                          </>}
-                        </div>
-                      </div>
+                      </>}
                     </div>
+                    {/* YAZILAR — görselin üstünde */}
+                    {(() => {
+                      const gramlar14 = km.filter(m => Number(m.gram) > 0).map(m => gramDonustur(Number(m.gram), m.refAyar||"14K", "14K", Number(m.tasGram)||0));
+                      const ortGram14 = gramlar14.length > 0 ? gramlar14.reduce((a,x)=>a+x,0)/gramlar14.length : 0;
+                      let ortMly = 0;
+                      if (AKTIF_SIRKET_ONEK !== "bsp2_" && altinKgUSD > 0 && km.length > 0) {
+                        const milyemler = km.map(m => { const h = hesapla(m, m.refAyar, altinKgUSD, madenCarpan); return h.mamulGram > 0 ? h.karHas / h.mamulGram : 0; }).filter(x => x > 0);
+                        ortMly = milyemler.length > 0 ? milyemler.reduce((a,x)=>a+x,0)/milyemler.length : 0;
+                      }
+                      return (
+                        <div style={{ position:"absolute", left:0, right:0, bottom:0, padding:"56px 18px 16px", background:"linear-gradient(to top, rgba(8,8,9,0.92), rgba(8,8,9,0.55) 55%, transparent)", zIndex:1, pointerEvents:"none" }}>
+                          <div style={{ fontSize:19, fontWeight:700, color:"#fff", lineHeight:1.2 }}>{kol.ad}</div>
+                          <div style={{ fontSize:13, color:"#e8e1d0", marginTop:4 }}>{km.length} model{altlar.length > 0 ? " · " + altlar.length + " alt koleksiyon" : ""}{ortGram14 > 0 ? " · " + fN(ortGram14,2) + " gr" : ""}{ortMly > 0 ? " · " + fN(ortMly,3) + " mly" : ""}</div>
+                        </div>
+                      );
+                    })()}
                   </div>
                 );
               })}
