@@ -983,7 +983,17 @@ function psFaborBaslik(sayfa) {
   const so = it.find(x => /^Sorumlu$/i.test(x.s));
   if (so) {
     const ayni = it.filter(x => Math.abs(x.y - so.y) < 4 && x.x > so.x + 5).sort((a, b) => a.x - b.x);
-    if (ayni.length > 1) genelNot = ayni.slice(1).map(x => x.s).join(" ");
+    if (ayni.length > 1) {
+      // Not birden çok satıra yayılabilir: Sorumlu satırının biraz üstü ve altı da aynı sütundan alınır
+      const nx = ayni[1].x - 2;
+      const blok = it.filter(x => x.x >= nx && Math.abs(x.y - so.y) <= 14 && !/^(Referans|PO\(Sip|Liste Gram|İşemri|Müşteri)/i.test(x.s));
+      const satirlar = [];
+      blok.sort((a, b) => a.y - b.y).forEach(x => {
+        const son = satirlar[satirlar.length - 1];
+        if (son && Math.abs(son.y - x.y) < 4) son.o.push(x); else satirlar.push({ y: x.y, o: [x] });
+      });
+      genelNot = satirlar.map(r => r.o.sort((a, b) => a.x - b.x).map(x => x.s).join(" ")).join(" ").replace(/\s+/g, " ").trim();
+    }
   }
   return {
     referans: sagindaki(/^Referans/i, 260),
@@ -8278,12 +8288,12 @@ function buildKonfHTML(siparis, altinKgUSD, mc, fiyatli, modeller, siraModu) {
 
   // BİLGİ BAR
   h += "<div class='info-bar'>";
-  h += "<div class='info-cell'><div class='info-lbl'>Musteri</div><div class='info-val'>" + (siparis.musKod||"—") + "</div><div class='info-sub'>" + (siparis.musteri||"") + "</div></div>";
+  h += "<div class='info-cell'><div class='info-lbl'>Musteri</div><div class='info-val'>" + (siparis.musKod||siparis.musteri||"—") + "</div><div class='info-sub'>&nbsp;</div></div>"; // yalnız müşteri kodu (kod yoksa ad)
   h += "<div class='info-cell'><div class='info-lbl'>Ayar</div><div class='info-val'>" + ayarLabel + "</div><div class='info-sub'>" + (ayarLabel==="925"?"Gumus":"Altin") + "</div></div>";
   h += "<div class='info-cell'><div class='info-lbl'>Kalem / Adet</div><div class='info-val'>" + rows.length + " / " + tAdet + "</div><div class='info-sub'>model / parca</div></div>";
   h += "<div class='info-cell'><div class='info-lbl'>Teslim</div><div class='info-val' style='font-size:11px'>" + (siparis.teslimTarihi ? new Date(siparis.teslimTarihi).toLocaleDateString("tr-TR",{day:"2-digit",month:"long",year:"numeric"}) : "—") + "</div><div class='info-sub'>&nbsp;</div></div>";
   h += "</div>";
-  if (siparis.aciklama) h += "<div style='margin:0 0 12px;padding:8px 12px;background:#f8f8f8;border-left:3px solid #0a84ff;border-radius:4px;font-size:11px;color:#444'><b>Açıklama:</b> " + siparis.aciklama + "</div>";
+  if (siparis.aciklama) h += "<div style='margin:0 0 12px;padding:8px 12px;background:#f8f8f8;border-left:3px solid #d92d20;border-radius:4px;font-size:11px;color:#c01810;font-weight:600'><b>Açıklama:</b> " + siparis.aciklama + "</div>";
 
   // TABLO BAŞLIK
   h += "<div class='tbl-wrap'><table><thead><tr>";
@@ -8439,7 +8449,8 @@ function buildKonfHTML(siparis, altinKgUSD, mc, fiyatli, modeller, siraModu) {
 
   // FOOTER
   h += "<div class='footer'><div class='footer-left'>" + _sirketTam + " &nbsp;·&nbsp; " + new Date().toLocaleDateString("tr-TR") + " &nbsp;·&nbsp; " + sipNo + "</div>";
-  h += "<div class='footer-sig'><div class='sig-box'><div class='sig-line'></div><div class='sig-lbl'>Hazirlayan</div></div>";
+  const _hazir = String(siparis.hazirlayan || (AKTIF_KULLANICI && (AKTIF_KULLANICI.ad || AKTIF_KULLANICI.kullanici_adi)) || "").toLocaleUpperCase("tr").replace(/[<>&]/g, "");
+  h += "<div class='footer-sig'><div class='sig-box'><div class='sig-line' style='width:auto;min-width:90px;padding:0 6px;display:flex;align-items:flex-end;justify-content:center;font-size:9px;font-weight:700;color:#1a2433;white-space:nowrap;line-height:1.6'>" + _hazir + "</div><div class='sig-lbl'>Hazirlayan</div></div>";
   h += "<div class='sig-box'><div class='sig-line'></div><div class='sig-lbl'>Musteri Onayi</div></div></div></div>";
   h += "</div><button class='noprint pb' onclick='window.print()'>Yazdir / PDF</button></body></html>";
   return h;
@@ -13852,7 +13863,7 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
     if (konfAltHam && altEt && altNorm(altEt) !== altNorm(konfAltHam)) { // PDF kodu için takma ad öğren (FY FR1 → PSEV)
       const yh = { ...altKodHarita, [altNorm(konfAltHam)]: altEt }; setAltKodHarita(yh); sv("v7altkodmap", yh);
     }
-    const yeni = { id: uid(), musteri: musAd, musKod, ...(altEt ? { musEtiket: altEt } : {}), ...(konfAltHam ? { musAltHam: konfAltHam } : {}), tarih: Date.now(), teslimTarihi: konfTeslim||"", aciklama: konfSipAciklama.trim(), altinKgUSD, mc: madenCarpan, kalemler: konfKalemler, sira: konfSira, gelir: kTop.gelir, maliyet: kTop.maliyet, kar: kTop.kar };
+    const yeni = { id: uid(), hazirlayan: (AKTIF_KULLANICI && (AKTIF_KULLANICI.ad || AKTIF_KULLANICI.kullanici_adi)) || "", musteri: musAd, musKod, ...(altEt ? { musEtiket: altEt } : {}), ...(konfAltHam ? { musAltHam: konfAltHam } : {}), tarih: Date.now(), teslimTarihi: konfTeslim||"", aciklama: konfSipAciklama.trim(), altinKgUSD, mc: madenCarpan, kalemler: konfKalemler, sira: konfSira, gelir: kTop.gelir, maliyet: kTop.maliyet, kar: kTop.kar };
     svS([...siparisler, yeni]);
     islemKaydet(AKTIF_SIRKET_ONEK, "ekle", "sipariş", (musAd || "") + " · " + (konfKalemler?.length || 0) + " kalem");
     svMUpsert(modeller.filter(m => konfKalemler.find(x => x.id === m.id)).map(m => ({ ...m, satisSayisi: (m.satisSayisi||0)+1 })));
@@ -15352,7 +15363,7 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
         </div>
         <div className="sp-tabbar">{[["kal","Kalemler "+(s.kalemler||[]).length],["asm","Aşamalar"],["ozt","Özet"]].map(([id,l]) => (<button key={id} onClick={()=>setSipTab(id)} className={sipTab===id?"on":""}>{l}</button>))}</div>
         {s.onayDurum==="red" && s.redNot && <div className="sp-s-ozt" style={{ marginBottom:10, fontSize:12, color:"#e85a4f" }}>Red notu: {s.redNot}</div>}
-        {s.aciklama && <div className="sp-s-ozt" style={{ marginBottom:10, fontSize:12, color:"#5b9bd5", fontStyle:"italic" }}>📝 {s.aciklama}</div>}
+        {s.aciklama && <div className="sp-s-ozt" style={{ marginBottom:10, fontSize:12.5, color:"#ff453a", fontWeight:600 }}>{s.aciklama}</div>}
         <div className="sp-s-ozt" style={{ display:"flex", gap:8, flexWrap:"wrap", marginBottom:12 }}>
           {stat("Kalem", o.aktif+" · "+o.adet+" adet")}
           {stat("Liste gramı", fN(o.gram,2)+" gr")}
@@ -15585,6 +15596,7 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
                           </select>
                         </span>
                       </div>
+                      {s.aciklama && <div title={s.aciklama} style={{ marginTop:7, fontSize:12.1, lineHeight:"16px", color:"#ff453a", fontWeight:600, display:"-webkit-box", WebkitLineClamp:2, WebkitBoxOrient:"vertical", overflow:"hidden" }}>{s.aciklama}</div>}
                       </div>
 
                       {fotolar.length>0 && <div className="sm-oc-eski" style={{ display:"grid", gridTemplateColumns:"repeat(4, minmax(0,1fr))", gap:5, marginTop:8 }}>{fotolar.map((k,ix)=><div key={k.id} title={(k.kod||"")+" "+(k.ad||"")+" — model kartını aç"} onClick={e=>{ const mm=modeller.find(x=>x.id===k.id) || modeller.find(x=>k.kod && x.kod===k.kod); if (mm) { e.stopPropagation(); openEM(mm); } }} style={{ position:"relative", aspectRatio:"1 / 1", borderRadius:8, overflow:"hidden", background:"rgba(0,0,0,0.06)", cursor:"zoom-in" }}><img loading="lazy" decoding="async" src={k.foto} alt="" draggable={false} style={{ width:"100%", height:"100%", objectFit:"cover", display:"block" }}/>{ix===7 && fotoHepsi.length>8 && <div style={{ position:"absolute", inset:0, background:"rgba(0,0,0,0.5)", color:"#fff", fontSize:15, fontWeight:600, display:"flex", alignItems:"center", justifyContent:"center" }}>+{fotoHepsi.length-7}</div>}</div>)}</div>}
@@ -15895,7 +15907,7 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
                             <span style={{ fontSize:9, color:"#998a6e" }}>{toplamKalem} kalem</span>
                             <span style={{ fontSize:9, color:"#5b9bd5", fontWeight:700 }}>{fN((s.kalemler||[]).reduce((acc,k)=>{const hc=hesapla(k,k.secilenAyar||k.refAyar,s.altinKgUSD,s.mc);const du=((s.kalemHurda)||{})[k.id]||0;const ia=((s.kalemIade)||{})[k.id]||0;const ta=((s.kalemTamir)||{})[k.id]||0;const net=Math.max(0,(k.adet||1)-du-ia-ta);return acc+hc.mamulGram*net;},0),2)} gr</span>
                             {s.teslimTarihi && <span style={{ fontSize:9, color:"#e8833a", fontWeight:700 }}>Teslim: {new Date(s.teslimTarihi).toLocaleDateString("tr-TR")}</span>}
-                            {s.aciklama && <span style={{ fontSize:9, color:"#5b9bd5", fontStyle:"italic" }}>📝 {s.aciklama}</span>}
+                            {s.aciklama && <span style={{ fontSize:10, color:"#ff453a", fontWeight:600 }}>{s.aciklama}</span>}
                           </div>
                           <div style={{ display:"flex", gap:4, alignItems:"center" }} onClick={e=>e.stopPropagation()}>
                             {/* İşleme Al / Durum butonları */}
