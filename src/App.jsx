@@ -14260,11 +14260,11 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
                 const ft = km.filter(m => m.foto).slice(0,4);
                 return (
                   <div key={kol.id} onClick={() => { if (altlar.length > 0) { setAcikUstKol(kol.id); return; } setAktifKol(kol); setSayfa("modeller"); setFiltre("all"); setEtiketF(""); setArama(""); setSirala("kod_yeni"); }}
-                    style={{ position:"relative", cursor:"pointer", transition:"all .3s ease", animation:"cardin .4s ease "+(i*.05)+"s both" }}
+                    style={{ position:"relative", background:"#151516", border:"1px solid #232325", borderRadius:16, cursor:"pointer", transition:"all .3s ease", animation:"cardin .4s ease "+(i*.05)+"s both" }}
                     onMouseOver={e => { e.currentTarget.style.transform="translateY(-3px)"; }}
                     onMouseOut={e  => { e.currentTarget.style.transform="none"; }}>
                     <div style={{ position:"relative" }}>
-                    <div style={{ position:"relative", aspectRatio:"1.2 / 1", borderRadius:14, overflow:"hidden", background:"#0b0b0c" }}>
+                    <div style={{ position:"relative", aspectRatio:"1.18 / 1", borderRadius:"15px 15px 0 0", overflow:"hidden", background:"#0b0b0c" }}>
                       <div style={{ position:"absolute", inset:0, display:"grid", gridTemplateColumns:"1fr 1fr", gridTemplateRows:"1fr 1fr", gap:2 }}>
                         {[0,1,2,3].map(x => (
                           <div key={x} style={{ overflow:"hidden", background:"#f3f3f3" }}>
@@ -14297,20 +14297,25 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
                     </div>
                     </div>
                     {(() => {
-                      const gramlar14 = km.filter(m => Number(m.gram) > 0).map(m => gramDonustur(Number(m.gram), m.refAyar||"14K", "14K", Number(m.tasGram)||0));
+                      const kmE = km.map(m => ekliModel(m, ekParcalar));
+                      const gramlar14 = kmE.filter(m => Number(m.gram) > 0).map(m => gramDonustur(Number(m.gram), m.refAyar||"14K", "14K", Number(m.tasGram)||0));
                       const ortGram14 = gramlar14.length > 0 ? gramlar14.reduce((a,x)=>a+x,0)/gramlar14.length : 0;
                       let ortMly = 0;
                       if (AKTIF_SIRKET_ONEK !== "bsp2_" && altinKgUSD > 0 && km.length > 0) {
-                        const milyemler = km.map(m => { const h = hesapla(m, m.refAyar, altinKgUSD, madenCarpan); return h.mamulGram > 0 ? h.karHas / h.mamulGram : 0; }).filter(x => x > 0);
+                        // Net satış milyemi: (işçilik + taş geliri − maliyet − taş kesintisi) ÷ gram — hesapla().karHas maliyet düşülmüş değerdir
+                        const milyemler = kmE.map(m => { const h = hesapla(m, m.refAyar, altinKgUSD, madenCarpan); return h.mamulGram > 0 ? h.karHas / h.mamulGram : 0; }).filter(x => x > 0);
                         ortMly = milyemler.length > 0 ? milyemler.reduce((a,x)=>a+x,0)/milyemler.length : 0;
                       }
                       return (
-                        <div style={{ padding:"11px 2px 2px" }}>
-                          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", gap:10 }}>
-                            <div style={{ fontSize:16, fontWeight:700, color:T.text, lineHeight:1.25 }}>{kol.ad}</div>
-                            <div style={{ fontSize:13, color:T.text, whiteSpace:"nowrap" }}>{km.length}{altlar.length > 0 ? " · " + altlar.length + " alt" : ""}</div>
+                        <div style={{ padding:"14px 18px 16px", display:"flex", justifyContent:"space-between", alignItems:"flex-end", gap:10, color:"#f4efe4" }}>
+                          <div style={{ minWidth:0 }}>
+                            <div style={{ fontSize:17, fontWeight:700, lineHeight:1.25 }}>{kol.ad}</div>
+                            <div style={{ fontSize:13, color:"#cfc8b8", marginTop:3 }}>{km.length} model{altlar.length > 0 ? " · " + altlar.length + " alt koleksiyon" : ""}</div>
                           </div>
-                          {(ortGram14 > 0 || ortMly > 0) && <div style={{ fontSize:13, color:T.text, marginTop:3 }}>{ortGram14 > 0 && <><b>{fN(ortGram14,2)}</b> gr</>}{ortGram14 > 0 && ortMly > 0 ? " · " : ""}{ortMly > 0 && <><b>{fN(ortMly,3)}</b> mly</>}</div>}
+                          {(ortGram14 > 0 || ortMly > 0) && <div style={{ textAlign:"right", fontSize:13, lineHeight:1.55, whiteSpace:"nowrap" }}>
+                            {ortGram14 > 0 && <div><b>{fN(ortGram14,2)}</b> gr</div>}
+                            {ortMly > 0 && <div><b>{fN(ortMly,3)}</b> mly</div>}
+                          </div>}
                         </div>
                       );
                     })()}
