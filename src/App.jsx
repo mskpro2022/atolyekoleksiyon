@@ -12315,6 +12315,7 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
   useEffect(() => { ld("v7altkodmap", {}).then(m => setAltKodHarita(m && typeof m === "object" ? m : {})); }, []);
   const [ekParcalar, setEkParcalar] = useState([]); // ek parça kataloğu: [{id, tur, kod, gram, ayar, taslar, tasGram, tasKarDus}]
   const [ekModal, setEkModal] = useState(false);
+  const [kolMenu, setKolMenu] = useState(null); // koleksiyon kartındaki ⋯ menüsü
   const [ekForm, setEkForm] = useState(null);
   useEffect(() => { ld("v7ekparca", []).then(l => setEkParcalar(Array.isArray(l) ? l : [])); }, []);
   useEffect(() => { if (ekModal) ld("v7ekparca", []).then(l => { if (Array.isArray(l)) setEkParcalar(l); }); }, [ekModal]);
@@ -14306,12 +14307,24 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
                             );
                           })()}
                         </div>
-                        <div style={{ display:"flex", gap:4 }} onClick={e => e.stopPropagation()}>
-                          {!kol.ust && <button onClick={() => { rkf(); setFkUst(kol.id); setEditK(null); setShowKM(true); }} title="Bu kartin icine yeni alt koleksiyon (marka) ac" style={{ background:"rgba(106,191,105,0.08)", border:"1px solid rgba(106,191,105,0.2)", borderRadius:8, padding:"4px 8px", color:"#6abf69", fontSize:8, fontWeight:700, cursor:"pointer" }}>+ Alt</button>}
-                          <button onClick={() => openEK(kol)} style={{ background:"rgba(255,255,255,0.06)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:8, padding:"4px 10px", color:T.text, fontSize:8, fontWeight:600, cursor:"pointer", transition:"all .2s" }}>Edit</button>
-                          <button onClick={() => { setKatalogKol(kol); setKatalogSiraliModeller([]); setKatalogSutun(3); setKatalogAyar("14K"); setKatalogSiralaModal(true); }} style={{ background:"rgba(91,155,213,0.08)", border:"1px solid rgba(91,155,213,0.15)", borderRadius:8, padding:"4px 8px", color:"#5b9bd5", fontSize:8, fontWeight:700, cursor:"pointer" }}>PDF 3</button>
-                          <button onClick={() => { setKatalogKol(kol); setKatalogSiraliModeller([]); setKatalogSutun(4); setKatalogAyar("14K"); setKatalogSiralaModal(true); }} style={{ background:"rgba(167,139,250,0.08)", border:"1px solid rgba(167,139,250,0.15)", borderRadius:8, padding:"4px 8px", color:"#a78bfa", fontSize:8, fontWeight:700, cursor:"pointer" }}>PDF 4</button>
-                          <button onClick={() => setDelOnay({ type:"kol", id:kol.id })} style={{ background:"rgba(239,68,68,0.06)", border:"1px solid rgba(239,68,68,0.12)", borderRadius:8, padding:"4px 8px", color:"#ef4444", fontSize:8, fontWeight:600, cursor:"pointer" }}>Sil</button>
+                        <div style={{ position:"relative" }} onClick={e => e.stopPropagation()}>
+                          <button onClick={() => setKolMenu(kolMenu===kol.id ? null : kol.id)} title="İşlemler" style={{ background:"rgba(var(--vurgu-rgb),0.06)", border:"1px solid rgba(var(--vurgu-rgb),0.14)", borderRadius:9, padding:"6px 12px", color:"inherit", fontSize:16, fontWeight:800, cursor:"pointer", lineHeight:1, letterSpacing:1 }}>⋯</button>
+                          {kolMenu===kol.id && <>
+                            <div onClick={() => setKolMenu(null)} style={{ position:"fixed", inset:0, zIndex:40 }}/>
+                            <div style={{ position:"absolute", right:0, bottom:"calc(100% + 6px)", zIndex:41, minWidth:190, background:T.bg2, border:"1px solid "+T.border, borderRadius:10, padding:4, boxShadow:"0 8px 24px rgba(0,0,0,0.4)" }}>
+                              {(() => {
+                                const it = (label, fn, renk) => <button key={label} onClick={() => { setKolMenu(null); fn(); }} style={{ display:"block", width:"100%", textAlign:"left", background:"none", border:"none", borderRadius:6, padding:"8px 11px", color:renk || T.text, fontSize:12, fontWeight:600, cursor:"pointer" }}>{label}</button>;
+                                return <>
+                                  {it("Düzenle", () => openEK(kol))}
+                                  {!kol.ust && it("Alt koleksiyon ekle", () => { rkf(); setFkUst(kol.id); setEditK(null); setShowKM(true); })}
+                                  {it("Katalog PDF · 3 sütun", () => { setKatalogKol(kol); setKatalogSiraliModeller([]); setKatalogSutun(3); setKatalogAyar("14K"); setKatalogSiralaModal(true); })}
+                                  {it("Katalog PDF · 4 sütun", () => { setKatalogKol(kol); setKatalogSiraliModeller([]); setKatalogSutun(4); setKatalogAyar("14K"); setKatalogSiralaModal(true); })}
+                                  <div style={{ height:1, background:T.border, margin:"4px 6px" }}/>
+                                  {it("Koleksiyonu sil…", () => setDelOnay({ type:"kol", id:kol.id }), "#e85a4f")}
+                                </>;
+                              })()}
+                            </div>
+                          </>}
                         </div>
                       </div>
                     </div>
