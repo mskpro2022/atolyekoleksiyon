@@ -8226,7 +8226,7 @@ function buildKonfHTML(siparis, altinKgUSD, mc, fiyatli, modeller, siraModu) {
     ".top{display:flex;justify-content:space-between;align-items:center;padding:24px 34px 16px}",
     ".logo{font-size:26px;letter-spacing:.5em;font-weight:200;color:#0f1923}.logo small{display:block;font-size:8px;letter-spacing:.32em;color:#8a94a3;margin-top:3px;font-weight:400}",
     ".dn{text-align:right;font-size:10px;color:#8a94a3;line-height:1.6}.dn b{display:block;font-size:15px;color:#0f1923;letter-spacing:.06em}.dn em{font-style:normal;letter-spacing:.2em;font-size:9px;color:#0f1923;font-weight:700;text-transform:uppercase}",
-    ".not{background:#c8261b;color:#fff;padding:11px 34px}.not h4{font-size:8.5px;letter-spacing:.28em;opacity:.9;margin-bottom:4px}.not p{font-size:13px;font-weight:700;line-height:1.4}",
+    ".not{margin:2px 34px 0;border-left:3px solid #c8261b;padding:3px 0 3px 12px}.not h4{font-size:8px;letter-spacing:.24em;color:#c8261b;margin-bottom:2px;font-weight:700}.not p{font-size:11.5px;font-weight:600;line-height:1.45;color:#c8261b}",
     ".meta{display:flex;margin:16px 34px 4px;border:1px solid #dfe4ea;border-radius:6px}",
     ".meta div{flex:1;padding:9px 14px;border-right:1px solid #e6eaef}.meta div:last-child{border:none}",
     ".meta span{font-size:7.5px;letter-spacing:.16em;color:#8a94a3;text-transform:uppercase}.meta b{display:block;font-size:14px;margin-top:2px;color:#0f1923}",
