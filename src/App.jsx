@@ -15117,12 +15117,12 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
     const aktif = kl.length - hurda;
     const tam = kl.filter(k=>["tamam","teslim"].includes(kd[k.id]||k.durum||"baslanmadi")).length;
     const pct = aktif>0 ? Math.round(tam/aktif*100) : 0;
-    let gram = 0, kar = 0, gumus = 0; const ayarlar = {};
+    let gram = 0, kar = 0, gumus = 0, isc = 0, topMal = 0; const ayarlar = {};
     kl.forEach(k => {
       const hc = hesapla(k,k.secilenAyar||k.refAyar,s.altinKgUSD,s.mc);
       const du=((s.kalemHurda)||{})[k.id]||0, ia=((s.kalemIade)||{})[k.id]||0, ta=((s.kalemTamir)||{})[k.id]||0;
       const net = Math.max(0,(k.adet||1)-du-ia-ta);
-      gram += hc.mamulGram*net; kar += hc.karHas*net;
+      gram += hc.mamulGram*net; kar += hc.karHas*net; isc += (hc.iscilikUSD||0)*net; topMal += hc.topMaliyetHas*net;
       const ay = k.secilenAyar||k.refAyar||"?"; ayarlar[ay] = (ayarlar[ay]||0) + hc.mamulGram*net; if (ay==="925") gumus += hc.mamulGram*net;
     });
     const adet = kl.reduce((a,k)=>a+(k.adet||1),0);
@@ -15136,7 +15136,7 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
     const teslimT = s.teslimTarihi ? new Date(s.teslimTarihi).getTime() : 0;
     const kapali = s.onayDurum==="red" || s.onayDurum==="iptal" || (son && BIT.includes(son.durum));
     const gecikti = !!teslimT && teslimT < bugun0.getTime() && !kapali;
-    return { ayarlar, hurda, aktif, tam, pct, gram, gumus, altin:gram-gumus, kar, adet, enYaygin, sonraki, son, geciken, gecikti, teslimT };
+    return { ayarlar, hurda, aktif, tam, pct, gram, gumus, altin:gram-gumus, kar, isc, topMal, adet, enYaygin, sonraki, son, geciken, gecikti, teslimT };
   };
   function baslandiMi(s) { return (s.kalemler||[]).some(k => { const d0 = (s.kalemDurumlar||{})[k.id]||k.durum||"baslanmadi"; const dd = DURUMLAR.find(y=>y.id===d0); return !!dd && dd.s>=3; }); } // en az bir kalem Dökümde veya ilerisinde
   const grupNo = s => {
@@ -15155,6 +15155,14 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
     return { l:o?durumEtiket(o):son.durum, c:o?.c||"#998a6e" };
   };
   const isik = () => ({});
+  // Admin: liste/detayda işçilik $ ve kâr görünür (sadece MSK; BSP'de kâr gösterilmez)
+  const kfAdm = yoneticiMi && AKTIF_SIRKET_ONEK !== "bsp2_";
+  const kfUSD = v => "$" + Math.round(Number(v)||0).toLocaleString("tr-TR");
+  const kfOz = (s, o) => { // sipariş toplamı: satış milyemi = (kâr + maliyet) / gram — minimum: maliyet milyemi + MIN_MLY
+    const g = o.gram > 0 ? o.gram : 0;
+    const satis = g ? (o.kar + o.topMal) / g : 0, min = g ? o.topMal / g + MIN_MLY : MIN_MLY;
+    return { satis, min, dusuk: g > 0 && (o.kar / g) < MIN_MLY, has: !!s.altinKgUSD };
+  };
   const _tk = String(T.bg2||"").replace("#",""); const _acikTema = _tk.length>=6 && (parseInt(_tk.slice(0,2),16)+parseInt(_tk.slice(2,4),16)+parseInt(_tk.slice(4,6),16))/3 > 150;
   const _yazi = _acikTema ? T.text : "#fff";
   const _kenar = _acikTema ? T.border : "#444";
@@ -15319,6 +15327,8 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
           {stat("Sipariş tarihi", new Date(s.tarih).toLocaleDateString("tr-TR"))}
           {stat("Teslim", s.teslimTarihi?new Date(s.teslimTarihi).toLocaleDateString("tr-TR"):"—","#e8833a")}
           {stat("İlerleme", "%"+o.pct+" ("+o.tam+"/"+o.aktif+")", o.pct===100?"#6abf69":GOLD)}
+          {kfAdm && stat("İşçilik toplam", kfUSD(o.isc))}
+          {kfAdm && s.altinKgUSD > 0 && (() => { const z = kfOz(s, o); return stat("Kâr", <>{fN(o.kar,3)} has<div style={{ fontSize:11, fontWeight:600 }}>{fN(z.satis,3)} mly{z.dusuk ? " ⚠ min "+fN(z.min,3) : ""}</div></>, z.dusuk ? "#e85a4f" : "#6abf69"); })()}
         </div>
         <div className="sp-s-ozt" style={{ display:"flex", gap:6, flexWrap:"wrap", alignItems:"center", marginBottom:12 }}><span style={{ fontSize:11, color:"#7a6f5a", fontWeight:600 }}>AYAR:</span>{Object.entries(o.ayarlar).sort((a,b)=>b[1]-a[1]).map(([a,g])=><span key={a} style={{ fontSize:13, fontWeight:600, color:GOLD, background:"rgba(var(--vurgu-rgb),0.14)", borderRadius:8, padding:"3px 10px" }}>{a} · {fN(g,2)} gr</span>)}</div>
         {s.durumGecmisi?.length>0 && (() => {
@@ -15366,6 +15376,13 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
                   <div style={{ fontSize:13, fontWeight:600, color:"var(--goldtext)" }}><span onClick={()=>{ const mm=modeller.find(x=>x.id===k.id)||modeller.find(x=>k.kod&&x.kod===k.kod); if (mm) openEM(mm); }} title="Model kartını aç" style={{ color:GOLD, marginRight:6, cursor:"pointer", textDecoration:"underline dotted", textUnderlineOffset:3 }}>{k.kod||""}</span>{k.ad}{k.renk && <span style={{ color:"var(--gold)", marginLeft:8, fontSize:12 }}>{k.renk}</span>}</div>
                   <div style={{ fontSize:12, color:"#998a6e", marginTop:3 }}>{k.secilenAyar||k.refAyar} · {fN(k.gram||0)} gr{Number(k.tasKarDus)>0 && <span style={{ color:"#d4a017" }}> (kârdan −{fN(Number(k.tasKarDus))} gr)</span>} · <b style={{ color:"var(--goldtext)" }}>{k.adet||1} adet</b></div>
                   {k.sipNot && <div style={{ fontSize:12, color:"#ff453a", fontWeight:600, marginTop:3 }}>{k.sipNot}</div>}
+                  {kfAdm && (() => { const hc = hesapla(k, k.secilenAyar||k.refAyar, s.altinKgUSD, s.mc); const ad = k.adet||1;
+                    if (!(hc.mamulGram > 0)) return null;
+                    const grUSD = hc.iscilikUSD / hc.mamulGram, satisK = (hc.karHas + hc.topMaliyetHas) / hc.mamulGram, dus = hc.karUyari;
+                    return <div style={{ fontSize:11.5, marginTop:5, paddingTop:4, borderTop:"1px dashed rgba(var(--vurgu-rgb),0.18)", display:"flex", justifyContent:"space-between", gap:8, color:"#998a6e" }}>
+                      <span><b style={{ color:"var(--goldtext)" }}>${fN(grUSD,2)}</b>/gr · {ad} × {fN(hc.iscilikUSD,1)} = <b style={{ color:"var(--goldtext)" }}>{kfUSD(hc.iscilikUSD*ad)}</b></span>
+                      {s.altinKgUSD > 0 && <b style={{ color: dus ? "#e85a4f" : "#6abf69" }}>{fN(satisK,3)} mly{dus ? " ⚠" : ""}</b>}
+                    </div>; })()}
                   {(hA>0||iA>0||tA>0) && <div style={{ display:"flex", gap:5, marginTop:5, flexWrap:"wrap" }}>
                     {hA>0 && rozet("Hurda "+hA,"#e85a4f")}{iA>0 && rozet("İade "+iA,"#a78bfa")}{tA>0 && rozet("Tamir "+tA,"#5b9bd5")}
                   </div>}
@@ -15539,6 +15556,8 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
                       <div style={{ display:"flex", gap:9, flexWrap:"nowrap", marginTop:8, alignItems:"center" }}>
                         <span style={kutuS()}>Sip. {gTarihU(s.tarih)}</span>
                         <span style={kutuS({ color:gecikti?"#ff5a4d":_yazi, fontWeight:gecikti?600:400 })}>Teslim {s.teslimTarihi?gTarihU(teslimT):"—"}{gecikti && " ⚠"}</span>
+                        {kfAdm && (() => { const z = kfOz(s, o); const c = z.dusuk ? "#ff5a4d" : (_acikTema ? "#1f8a4c" : "#6abf69");
+                          return <span title={"Sipariş işçilik toplamı · kâr (has) · satış milyemi (maliyet dahil). Minimum "+fN(z.min,3)} style={{ minWidth:0, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", fontSize:12.1, lineHeight:"17px", color:_yazi }}><b>{kfUSD(o.isc)}</b>{z.has && <span style={{ color:c, fontWeight:600 }}> · {fN(o.kar,3)} has · {fN(z.satis,3)} mly{z.dusuk && " ⚠ min "+fN(z.min,3)}</span>}</span>; })()}
                         <span onClick={e=>e.stopPropagation()} style={kutuS({ marginLeft:"auto", padding:0, flexShrink:0 })}>
                           <select value={key} disabled={bitti(s)} onChange={e=>aya_tasi(s,e.target.value)} title={bitti(s)?"Tamamlanan sipariş taşınamaz":"Başka aya taşı (planlanan ay)"} style={{ ...IS, width:"auto", background:"transparent", border:"none", padding:"2px 6px", fontSize:12.1, lineHeight:"17px", color:_yazi }}>
                             {sirKeys.map(k2=><option key={k2} value={k2}>{ayAdi(k2)}</option>)}
