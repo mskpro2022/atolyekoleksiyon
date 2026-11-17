@@ -20817,6 +20817,29 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
               ) : null;
             })()}
 
+            {/* Ek parçaların taşları — SADECE OKUNUR (modele yazılmaz; düzenleme "Ek parçalar" ekranından). Sadece MSK */}
+            {AKTIF_SIRKET_ONEK !== "bsp2_" && fEkParca.length > 0 && (() => {
+              const em = ekliModel({ gram:0, refAyar:fRefAyar, tasGram:0, tasKarDus:0, taslar:[], ekParcaIds:fEkParca }, ekParcalar);
+              const snap = em.ekParcalar || []; if (!snap.length) return null;
+              const grupT = {}; (em.taslar || []).forEach(t => { (grupT[t.kaynak] = grupT[t.kaynak] || []).push(t); });
+              const grT = t => { const g = tasGramHesapla(t.sekil, t.tur, isNaN(Number(t.boyut)) ? t.boyut : Number(t.boyut), Number(t.adet)||1, ozelTaslar, tasGramOverride); return g > 0 ? g : (Number(t.gram)||0); };
+              const ownTl = (() => { const t = fTaslar.reduce((acc,x) => acc + grT(x), 0); return (fTaslar.length>0 && t>0) ? t : (Number(fTasGram)||0); })();
+              const ekTl = snap.reduce((a,e) => a + (Number(e.tasGram)||0), 0);
+              return (
+                <div style={{ marginBottom:8, padding:"6px 8px", background:"rgba(232,131,58,0.06)", border:"1px dashed rgba(232,131,58,0.35)", borderRadius:6 }}>
+                  <div style={{ fontSize:8, color:"#e8833a", fontWeight:700, marginBottom:4 }}>EK PARÇA TAŞLARI · salt okunur (siparişte modelin üstüne eklenir)</div>
+                  {snap.map(e => { const key = (e.tur || "Ek parça") + " " + e.kod; const ts = grupT[key] || [];
+                    return (
+                      <div key={e.id} style={{ marginBottom:4 }}>
+                        <div style={{ fontSize:9, fontWeight:700, color:T.text }}>{e.tur} {e.kod} <span style={{ color:T.sub, fontWeight:500 }}>· {fN(e.gram,3)} gr</span></div>
+                        {ts.length === 0 && <div style={{ fontSize:9, color:T.sub, marginLeft:8 }}>taşsız</div>}
+                        {ts.map((t,i) => <div key={i} style={{ fontSize:9, color:"#5b9bd5", marginLeft:8 }}>{t.sekil}{t.sekil==="ROUND"?" ("+t.tur+")":""} · {t.boyut}{t.sekil==="ROUND"?"mm":""} · {t.adet} adet <span style={{ color:"#6abf69" }}>= {grT(t).toFixed(4)}gr</span></div>)}
+                      </div>
+                    ); })}
+                  <div style={{ fontSize:9, color:"#6abf69", fontWeight:700, marginTop:4 }}>Toplam taş (model + ek parça): {ownTl.toFixed(4)} + {ekTl.toFixed(4)} = {(ownTl + ekTl).toFixed(4)} gr</div>
+                </div>
+              ); })()}
+
           {/* Yeni taş ekleme */}
           <div style={{ borderTop: fTaslar.length?"1px solid rgba(91,155,213,0.1)":"none", paddingTop: fTaslar.length?8:0 }}>
             <div style={{ fontSize:8, color:"#5b9bd5", fontWeight:700, marginBottom:6 }}>+ YENİ TAŞ EKLE</div>
@@ -20986,7 +21009,8 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
           const tl = (() => { const t = fTaslar.reduce((acc,x)=>{const gr=tasGramHesapla(x.sekil,x.tur,isNaN(Number(x.boyut))?x.boyut:Number(x.boyut),Number(x.adet)||1,ozelTaslar,tasGramOverride);return acc+(gr>0?gr:(Number(x.gram)||0));},0); return (fTaslar.length>0&&t>0)?t:(Number(fTasGram)||0); })();
           const mf = { gram:Number(fGram), refAyar:fRefAyar, tasGram:tl, tasKarDus:fTaslar.reduce((a,t)=>a+(Number(t.kd)||0),0), madenCarpan:Number(fMadenC)||0, iscilikDolar:Number(fIscilikDolar)||0, iscilikBirim:fIscilikBirim, iscilikAyarlar:fIscilikAyarlar, ekMaliyet:Number(fEkMaliyet)||0 };
           const kar = altinKgUSD>0;
-          const satirlar = ayarKarsilastir(mf, altinKgUSD, madenCarpan);
+          const mfE = (AKTIF_SIRKET_ONEK !== "bsp2_" && fEkParca.length) ? ekliModel({ ...mf, ekParcaIds:fEkParca }, ekParcalar) : mf; // MSK: ek parçanın gram/taşı hesaba girer (siparişteki hesapla aynı)
+          const satirlar = ayarKarsilastir(mfE, altinKgUSD, madenCarpan);
           const smGoster = kar && AKTIF_SIRKET_ONEK !== "bsp2_"; // düşük net kâr uyarısı — sadece MSK
           const kol = kar ? "34px 1.35fr .8fr .9fr .9fr 1.25fr .95fr 1fr" : "34px 1.3fr 1.2fr";
           const hucre = { fontSize:9, textAlign:"right" };
@@ -21020,7 +21044,7 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
               {smGoster && satirlar.filter(r => r.h.karUyari).map(r => (
                 <div key={"u"+r.ay} style={{ fontSize:9, fontWeight:700, color:"#e85a4f", marginTop:6 }}>⚠ {r.ay}: net kâr {fN(r.h.karMly,3)} mly (maliyet düşülmüş) — minimum {fN(MIN_MLY,3)}. Bu ayara daha yüksek işçilik girin.</div>
               ))}
-              <div style={{ fontSize:7, color:"#665d4a", marginTop:6 }}>Gram kârı = maliyet düşüldükten sonra net kâr (mly/gr). Maliyet = üretim maliyeti + ek maliyet. 1 kg'da adet = 1000 ÷ taşsız maden gramı (parantez: taş dahil mamul gramına göre). {!kar && "Kâr sütunları için altın fiyatını girin."}</div>
+              <div style={{ fontSize:7, color:"#665d4a", marginTop:6 }}>{mfE !== mf && mfE.ekParcalar ? "Ek parça dahil: +" + fN(mfE.gram - mf.gram, 3) + " gr, +" + fN(mfE.tasGram - mf.tasGram, 3) + " gr taş (" + mfE.ekParcalar.map(e => e.kod).join(", ") + "). " : ""}Gram kârı = maliyet düşüldükten sonra net kâr (mly/gr). Maliyet = üretim maliyeti + ek maliyet. 1 kg'da adet = 1000 ÷ taşsız maden gramı (parantez: taş dahil mamul gramına göre). {!kar && "Kâr sütunları için altın fiyatını girin."}</div>
             </div>
           );
         })()}
