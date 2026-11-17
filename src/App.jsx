@@ -13007,7 +13007,7 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
   }, [guvenliKaydet]);
 
   // ── Model kartında işçilik fiyatı değişince AÇIK siparişlere yansıt (sadece MSK) ──
-  // Kural: kalem fiyatı modelin ESKİ genel fiyatına eşitse güncellenir; müşteriye özel fiyat (müşteri hafızası ya da elle girilmiş farklı fiyat),
+  // Kural: müşteriye özel fiyatı OLMAYAN (müşteri hafızasında kaydı yok) açık kalemler modelin güncel fiyatını alır; müşteriye özel fiyatlı,
   // tamamlanan/teslim/hurda kalemler ve kapalı (red/iptal/tamamlanan) siparişler dokunulmaz.
   const fiyatAcikSiparislereYansit = (ciftler) => {
     if (AKTIF_SIRKET_ONEK === "bsp2_") return;
@@ -13025,11 +13025,11 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
         const st = (sp.kalemDurumlar||{})[k.id] || k.durum || "baslanmadi"; if (["tamam","teslim","hurda"].includes(st)) return k;
         const ay = k.secilenAyar || k.refAyar;
         const hm = hafiza[mus] && hafiza[mus][k.id]; if (hm && (hm.iscilikDolar !== undefined || hm[ay])) return k; // müşteriye özel fiyat
-        const eski = iscilikCoz(c.eski, ay, null, null), yeni = iscilikCoz(c.yeni, ay, null, null);
-        if (esit({ dolar:eski.dolar, birim:eski.birim }, { dolar:yeni.dolar, birim:yeni.birim })) return k; // bu ayarda fiyat değişmemiş
+        const yeni = iscilikCoz(c.yeni, ay, null, null);
         const a = (k.iscilikAyarlar||{})[ay];
         const kal = (a && a.dolar !== "" && a.dolar != null) ? { dolar:a.dolar, birim:a.birim||"dolar" } : { dolar:k.iscilikDolar, birim:k.iscilikBirim||"dolar" };
-        if (!esit(kal, { dolar:eski.dolar, birim:eski.birim })) return k; // elle girilmiş farklı fiyat → müşteriye özel say
+        if (esit(kal, { dolar:yeni.dolar, birim:yeni.birim })) return k; // zaten model fiyatında
+        // müşteriye özel fiyat müşteri hafızasında tutulur (yukarıda atlandı); geri kalan açık kalemler modelin GÜNCEL fiyatını izler (eski kalmış siparişler de düzelir)
         degisti = true; kalemSay++;
         return { ...k, iscilikDolar:yeni.dolar, iscilikBirim:yeni.birim, iscilikAyarlar:{ ...(k.iscilikAyarlar||{}), [ay]:{ dolar:yeni.dolar, birim:yeni.birim } } };
       });
@@ -15202,14 +15202,14 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
   const kfUygula = sp => {
     if (!kfDuz || !kfDuz.sid || kfDuz.sid !== sp.id) return sp;
     const raw = String(kfDuz.val).trim(); const v = Number(raw.replace(",", "."));
-    if (raw === "" || !isFinite(v) || v < 0) return sp;
+    if (raw === "" || raw === "-" || !isFinite(v)) return sp; // negatif değer geçerli (milyem altı satış)
     return { ...sp, kalemler:(sp.kalemler||[]).map(k => { if (k.id !== kfDuz.kid) return k; const ay = k.secilenAyar||k.refAyar; const birim = kfMevcut(k).birim; return { ...k, iscilikDolar:v, iscilikBirim:birim, iscilikAyarlar:{ ...(k.iscilikAyarlar||{}), [ay]:{ dolar:v, birim } } }; }) };
   };
   const kfMevcut = k => { const ay = k.secilenAyar||k.refAyar; const a = (k.iscilikAyarlar||{})[ay]; return (a && a.dolar !== "" && a.dolar != null) ? { dolar:a.dolar, birim:a.birim||"dolar" } : { dolar:k.iscilikDolar, birim:k.iscilikBirim||"dolar" }; };
   // Fiyatı siparişte hemen güncelle + müşteri hafızasına yaz; sonra genel (model) fiyatı da değiştirip değiştirmeyeceğini sor
   const kfFiyatKaydet = (s, k) => {
     const v = Number(String((kfDuz||{}).val).replace(",", "."));
-    if (!isFinite(v) || v < 0 || String((kfDuz||{}).val).trim() === "") { toastGoster("hata","Geçerli bir fiyat girin"); return; }
+    if (!isFinite(v) || String((kfDuz||{}).val).trim() === "" || String((kfDuz||{}).val).trim() === "-") { toastGoster("hata","Geçerli bir fiyat girin"); return; }
     const ay = k.secilenAyar||k.refAyar, birim = kfMevcut(k).birim;
     svS(siparisler.map(sp => sp.id !== s.id ? sp : { ...sp, kalemler:(sp.kalemler||[]).map(k2 => k2.id !== k.id ? k2 : { ...k2, iscilikDolar:v, iscilikBirim:birim, iscilikAyarlar:{ ...(k2.iscilikAyarlar||{}), [ay]:{ dolar:v, birim } } }) }));
     const mus = String(s.musteri||"").trim();
@@ -20937,7 +20937,7 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
                           <span style={{ fontSize:7, fontWeight:700, color: ozel?"#e8833a":"#8a7d64" }}>{ozel?"ÖZEL":(vr.std?"STANDART":"VARSAYILAN")}</span>
                         </div>
                         <input type="number" value={ozel?val.dolar:""} onChange={e=>kutuYaz(ay,e.target.value)} placeholder={vr.dolar} style={{ ...IS, width:"100%", boxSizing:"border-box", padding:"5px 6px", fontSize:12, fontWeight:700 }}/>
-                        <div style={{ fontSize:7, color:"#8a7d64", marginTop:2 }}>{birim==="milyem"?"milyem / gr":"$ / gr"}</div>
+                        <div onClick={()=>{ if (!ozel) return; setFIscilikAyarlar(p=>({ ...p, [ay]:{ ...p[ay], birim: birim==="milyem" ? "dolar" : "milyem" } })); }} title={ozel ? "Birimi değiştir ($ / gr ↔ milyem / gr)" : "Değer girince birim değiştirilebilir"} style={{ fontSize:7, color: ozel ? "#e8833a" : "#8a7d64", marginTop:2, cursor: ozel ? "pointer" : "default", textDecoration: ozel ? "underline dotted" : "none" }}>{birim==="milyem"?"milyem / gr":"$ / gr"}{ozel && " ⇄"}</div>
                       </div>
                     );
                   })}
