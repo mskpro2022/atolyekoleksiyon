@@ -12348,6 +12348,7 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
   const [delYaz, setDelYaz] = useState(""); // koleksiyon silerken yazılacak onay metni
   useEffect(() => { setDelYaz(""); }, [delOnay]);
   const yoneticiMi = !AKTIF_KULLANICI || AKTIF_KULLANICI.rol === "admin";
+  const [kfDuz, setKfDuz] = useState(null); // sipariş ürün kartında işçilik fiyatı düzenleme: { id, val }
   const [ekForm, setEkForm] = useState(null);
   useEffect(() => { ld("v7ekparca", []).then(l => setEkParcalar(Array.isArray(l) ? l : [])); }, []);
   useEffect(() => { if (ekModal) ld("v7ekparca", []).then(l => { if (Array.isArray(l)) setEkParcalar(l); }); }, [ekModal]);
@@ -15158,6 +15159,32 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
   // Admin: liste/detayda işçilik $ ve kâr görünür (sadece MSK; BSP'de kâr gösterilmez)
   const kfAdm = yoneticiMi && AKTIF_SIRKET_ONEK !== "bsp2_";
   const kfUSD = v => "$" + Math.round(Number(v)||0).toLocaleString("tr-TR");
+  const kfMevcut = k => { const ay = k.secilenAyar||k.refAyar; const a = (k.iscilikAyarlar||{})[ay]; return (a && a.dolar !== "" && a.dolar != null) ? { dolar:a.dolar, birim:a.birim||"dolar" } : { dolar:k.iscilikDolar, birim:k.iscilikBirim||"dolar" }; };
+  // Fiyatı siparişte hemen güncelle + müşteri hafızasına yaz; sonra genel (model) fiyatı da değiştirip değiştirmeyeceğini sor
+  const kfFiyatKaydet = (s, k) => {
+    const v = Number(String((kfDuz||{}).val).replace(",", "."));
+    if (!isFinite(v) || v < 0 || String((kfDuz||{}).val).trim() === "") { toastGoster("hata","Geçerli bir fiyat girin"); return; }
+    const ay = k.secilenAyar||k.refAyar, birim = kfMevcut(k).birim;
+    svS(siparisler.map(sp => sp.id !== s.id ? sp : { ...sp, kalemler:(sp.kalemler||[]).map(k2 => k2.id !== k.id ? k2 : { ...k2, iscilikDolar:v, iscilikBirim:birim, iscilikAyarlar:{ ...(k2.iscilikAyarlar||{}), [ay]:{ dolar:v, birim } } }) }));
+    const mus = String(s.musteri||"").trim();
+    if (mus) {
+      const h = { ...(kasa.musteriModelFiyat||{}) }; const mm = { ...(h[mus]||{}) };
+      const eski = mm[k.id]; const taban = (eski && eski.iscilikDolar === undefined) ? eski : {};
+      mm[k.id] = { ...taban, [ay]:{ iscilikDolar:v, iscilikBirim:birim } }; h[mus] = mm;
+      svKasa({ ...kasa, musteriModelFiyat:h });
+    }
+    setKfDuz(null);
+    islemKaydet(AKTIF_SIRKET_ONEK, "güncelle", "sipariş fiyatı", (mus||"") + " · " + (k.kod||k.ad||"") + " " + ay + " → " + v + (birim==="milyem"?" mly/gr":" $/gr"));
+    const birimYaz = birim==="milyem" ? " mly/gr" : " $/gr";
+    const mod = (modeller||[]).find(x => x.id === k.id);
+    let genel = false;
+    if (mod && window.confirm((k.kod||k.ad||"Model")+" · "+ay+" işçilik: "+v+birimYaz+"\n\nBu siparişte ve "+(mus||"bu müşterinin")+" sonraki siparişlerinde güncellendi.\n\nGenel fiyat (modelin "+ay+" işçiliği, tüm müşteriler) de değişsin mi?\n\nTamam = Evet, genel fiyat da değişsin\nİptal = Hayır, sadece bu müşteri")) {
+      svMUpsert([{ ...mod, iscilikAyarlar:{ ...(mod.iscilikAyarlar||{}), [ay]:{ dolar:String(v), birim } } }]);
+      islemKaydet(AKTIF_SIRKET_ONEK, "güncelle", "model işçilik", (k.kod||k.ad||"") + " " + ay + " → " + v + birimYaz);
+      genel = true;
+    }
+    toastGoster("ok", (k.kod||k.ad||"Ürün")+" "+ay+": "+v+birimYaz+(genel?" (genel fiyat da değişti)":" ("+(mus||"müşteri")+" için)"));
+  };
   const kfOz = (s, o) => { // sipariş toplamı: satış milyemi = (kâr + maliyet) / gram — minimum: maliyet milyemi + MIN_MLY
     const g = o.gram > 0 ? o.gram : 0;
     const satis = g ? (o.kar + o.topMal) / g : 0, min = g ? o.topMal / g + MIN_MLY : MIN_MLY;
@@ -15380,7 +15407,14 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
                     if (!(hc.mamulGram > 0)) return null;
                     const grUSD = hc.iscilikUSD / hc.mamulGram, satisK = (hc.karHas + hc.topMaliyetHas) / hc.mamulGram, dus = hc.karUyari;
                     return <div style={{ fontSize:11.5, marginTop:5, paddingTop:4, borderTop:"1px dashed rgba(var(--vurgu-rgb),0.18)", display:"flex", justifyContent:"space-between", gap:8, color:"#998a6e" }}>
-                      <span><b style={{ color:"var(--goldtext)" }}>${fN(grUSD,2)}</b>/gr · {ad} × {fN(hc.iscilikUSD,1)} = <b style={{ color:"var(--goldtext)" }}>{kfUSD(hc.iscilikUSD*ad)}</b></span>
+                      {kfDuz && kfDuz.id === s.id+"|"+k.id
+                        ? <span style={{ display:"flex", alignItems:"center", gap:6, flexWrap:"wrap" }}>
+                            <input type="number" step="any" autoFocus value={kfDuz.val} onChange={e=>setKfDuz({ ...kfDuz, val:e.target.value })} onKeyDown={e=>{ if (e.key==="Enter") kfFiyatKaydet(s,k); if (e.key==="Escape") setKfDuz(null); }} style={{ ...IS, width:84, padding:"3px 6px", fontSize:12, fontWeight:700 }}/>
+                            <span>{kfMevcut(k).birim==="milyem" ? "mly/gr" : "$/gr"}</span>
+                            <button onClick={()=>kfFiyatKaydet(s,k)} style={{ background:"transparent", border:"none", color:"#6abf69", fontWeight:700, fontSize:12, cursor:"pointer", padding:0 }}>Kaydet</button>
+                            <button onClick={()=>setKfDuz(null)} style={{ background:"transparent", border:"none", color:"#998a6e", fontSize:12, cursor:"pointer", padding:0 }}>Vazgeç</button>
+                          </span>
+                        : <span><b onClick={()=>setKfDuz({ id:s.id+"|"+k.id, val:String(kfMevcut(k).dolar ?? "") })} title="Fiyatı değiştir (müşteri bazlı; sonra genel fiyat sorulur)" style={{ color:"var(--goldtext)", cursor:"pointer", textDecoration:"underline dotted", textUnderlineOffset:3 }}>${fN(grUSD,2)}</b>/gr · {ad} × {fN(hc.iscilikUSD,1)} = <b style={{ color:"var(--goldtext)" }}>{kfUSD(hc.iscilikUSD*ad)}</b></span>}
                       {s.altinKgUSD > 0 && <b style={{ color: dus ? "#e85a4f" : "#6abf69" }}>{fN(satisK,3)} mly{dus ? " ⚠" : ""}</b>}
                     </div>; })()}
                   {(hA>0||iA>0||tA>0) && <div style={{ display:"flex", gap:5, marginTop:5, flexWrap:"wrap" }}>
