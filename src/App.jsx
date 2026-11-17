@@ -13006,6 +13006,43 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
     })();
   }, [guvenliKaydet]);
 
+  // ── Model kartında işçilik fiyatı değişince AÇIK siparişlere yansıt (sadece MSK) ──
+  // Kural: kalem fiyatı modelin ESKİ genel fiyatına eşitse güncellenir; müşteriye özel fiyat (müşteri hafızası ya da elle girilmiş farklı fiyat),
+  // tamamlanan/teslim/hurda kalemler ve kapalı (red/iptal/tamamlanan) siparişler dokunulmaz.
+  const fiyatAcikSiparislereYansit = (ciftler) => {
+    if (AKTIF_SIRKET_ONEK === "bsp2_") return;
+    const hafiza = (kasa && kasa.musteriModelFiyat) || {};
+    const esit = (a, b) => a && b && Math.abs((Number(a.dolar)||0) - (Number(b.dolar)||0)) < 1e-9 && (a.birim||"dolar") === (b.birim||"dolar");
+    const harita = new Map(); (ciftler||[]).forEach(c => { if (c && c.eski && c.yeni) harita.set(String(c.yeni.id), c); });
+    if (!harita.size) return;
+    let kalemSay = 0, sipSay = 0;
+    const yeniListe = (siparislerRefGuvenli.current || []).map(sp => {
+      if (sp.onayDurum === "red" || sp.onayDurum === "iptal") return sp;
+      const son = (sp.durumGecmisi||[]).slice(-1)[0]; if (son && ["tamam","teslim"].includes(son.durum)) return sp;
+      const mus = String(sp.musteri||"").trim(); let degisti = false;
+      const kl = (sp.kalemler||[]).map(k => {
+        const c = harita.get(String(k.id)); if (!c) return k;
+        const st = (sp.kalemDurumlar||{})[k.id] || k.durum || "baslanmadi"; if (["tamam","teslim","hurda"].includes(st)) return k;
+        const ay = k.secilenAyar || k.refAyar;
+        const hm = hafiza[mus] && hafiza[mus][k.id]; if (hm && (hm.iscilikDolar !== undefined || hm[ay])) return k; // müşteriye özel fiyat
+        const eski = iscilikCoz(c.eski, ay, null, null), yeni = iscilikCoz(c.yeni, ay, null, null);
+        if (esit({ dolar:eski.dolar, birim:eski.birim }, { dolar:yeni.dolar, birim:yeni.birim })) return k; // bu ayarda fiyat değişmemiş
+        const a = (k.iscilikAyarlar||{})[ay];
+        const kal = (a && a.dolar !== "" && a.dolar != null) ? { dolar:a.dolar, birim:a.birim||"dolar" } : { dolar:k.iscilikDolar, birim:k.iscilikBirim||"dolar" };
+        if (!esit(kal, { dolar:eski.dolar, birim:eski.birim })) return k; // elle girilmiş farklı fiyat → müşteriye özel say
+        degisti = true; kalemSay++;
+        return { ...k, iscilikDolar:yeni.dolar, iscilikBirim:yeni.birim, iscilikAyarlar:{ ...(k.iscilikAyarlar||{}), [ay]:{ dolar:yeni.dolar, birim:yeni.birim } } };
+      });
+      if (!degisti) return sp; sipSay++;
+      return { ...sp, kalemler:kl };
+    });
+    if (kalemSay > 0) {
+      svS(yeniListe);
+      islemKaydet(AKTIF_SIRKET_ONEK, "güncelle", "sipariş fiyatı", "Model fiyatı değişti → " + sipSay + " açık siparişte " + kalemSay + " kalem güncellendi");
+      toastGoster("ok", "Model fiyatı " + sipSay + " açık siparişe yansıtıldı (" + kalemSay + " kalem)");
+    }
+  };
+
   // ── Model kartındaki gram/taş gramı → AÇIK siparişlerin kalemlerine yansıt (fiyatlar sipariş/müşteri bazlı kalır, dokunulmaz) ──
   // Tamamlanan/teslim/hurda kalemler ve iptal/red siparişler değişmez. Önce sorar; reddedilen fark aynı oturumda tekrar sorulmaz.
   const modellerRefS = useRef([]); modellerRefS.current = modeller;
@@ -13347,6 +13384,7 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
           : [];
         svMUpsert([editliModel, ...digerDegisenler]);
         islemKaydet(AKTIF_SIRKET_ONEK, "düzenle", "model", (obj.kod || "") + " · " + (obj.ad || ""));
+        try { fiyatAcikSiparislereYansit([{ eski:editM, yeni:editliModel }, ...digerDegisenler.map(d => ({ eski:modeller.find(x => x.id === d.id), yeni:d }))]); } catch (e) { console.error("fiyat yansıtma:", e); }
         setTimeout(() => { try { gramFnRef.current && gramFnRef.current(); } catch (e) { console.error("gram senkron:", e); } }, 1500); // model gramı değiştiyse açık siparişleri güncellemeyi öner
       } else {
         const yeniId = uid();
@@ -15104,7 +15142,8 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
 (() => {
   const BIT = ["tamam","teslim","hurda"];
   const SON = s => (s.durumGecmisi||[]).slice(-1)[0];
-  const ozet = s => {
+  const ozet = s0 => {
+    const s = kfUygula(s0); // fiyat kutusu açıkken yazılan değer anında hesaba girer (kaydetmeden önizleme)
     const damga = durumSecenekleri().map(d=>d.id).join(",") + "|" + new Date().toDateString();
     const onb = SIP_OZET_ONB.get(s);
     if (onb && onb.damga===damga) return onb.v;
@@ -15159,6 +15198,13 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
   // Admin: liste/detayda işçilik $ ve kâr görünür (sadece MSK; BSP'de kâr gösterilmez)
   const kfAdm = yoneticiMi && AKTIF_SIRKET_ONEK !== "bsp2_";
   const kfUSD = v => "$" + Math.round(Number(v)||0).toLocaleString("tr-TR");
+  // Canlı önizleme: fiyat kutusuna yazılan değer, kaydedilmeden önce de sipariş özetine / listeye / ürün satırına yansır
+  const kfUygula = sp => {
+    if (!kfDuz || !kfDuz.sid || kfDuz.sid !== sp.id) return sp;
+    const raw = String(kfDuz.val).trim(); const v = Number(raw.replace(",", "."));
+    if (raw === "" || !isFinite(v) || v < 0) return sp;
+    return { ...sp, kalemler:(sp.kalemler||[]).map(k => { if (k.id !== kfDuz.kid) return k; const ay = k.secilenAyar||k.refAyar; const birim = kfMevcut(k).birim; return { ...k, iscilikDolar:v, iscilikBirim:birim, iscilikAyarlar:{ ...(k.iscilikAyarlar||{}), [ay]:{ dolar:v, birim } } }; }) };
+  };
   const kfMevcut = k => { const ay = k.secilenAyar||k.refAyar; const a = (k.iscilikAyarlar||{})[ay]; return (a && a.dolar !== "" && a.dolar != null) ? { dolar:a.dolar, birim:a.birim||"dolar" } : { dolar:k.iscilikDolar, birim:k.iscilikBirim||"dolar" }; };
   // Fiyatı siparişte hemen güncelle + müşteri hafızasına yaz; sonra genel (model) fiyatı da değiştirip değiştirmeyeceğini sor
   const kfFiyatKaydet = (s, k) => {
@@ -15305,7 +15351,7 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
   const rozet = (txt, c) => <span style={{ fontSize:11, fontWeight:600, color:c, background:c+"22", border:"1px solid "+c+"55", borderRadius:980, padding:"2px 9px", whiteSpace:"nowrap" }}>{txt}</span>;
   const detay = (() => {
     if (!sec) return <div style={{ color:"#665d4a", textAlign:"center", padding:"60px 20px", fontSize:13 }}>Sipariş seçin</div>;
-    const s = sec, o = ozet(s), c = chip(s), kd = s.kalemDurumlar||{};
+    const s = kfUygula(sec), o = ozet(s), c = chip(s), kd = s.kalemDurumlar||{};
     const islemeAlinabilir = !s.durumGecmisi?.length && s.onayDurum!=="red" && s.onayDurum!=="iptal";
     const topKarUSD = o.kar*((s.altinKgUSD||0)/1000);
     const stat = (e, d, col) => (
@@ -15414,7 +15460,7 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
                             <button onClick={()=>kfFiyatKaydet(s,k)} style={{ background:"transparent", border:"none", color:"#6abf69", fontWeight:700, fontSize:12, cursor:"pointer", padding:0 }}>Kaydet</button>
                             <button onClick={()=>setKfDuz(null)} style={{ background:"transparent", border:"none", color:"#998a6e", fontSize:12, cursor:"pointer", padding:0 }}>Vazgeç</button>
                           </span>
-                        : <span><b onClick={()=>setKfDuz({ id:s.id+"|"+k.id, val:String(kfMevcut(k).dolar ?? "") })} title="Fiyatı değiştir (müşteri bazlı; sonra genel fiyat sorulur)" style={{ color:"var(--goldtext)", cursor:"pointer", textDecoration:"underline dotted", textUnderlineOffset:3 }}>${fN(grUSD,2)}</b>/gr · {ad} × {fN(hc.iscilikUSD,1)} = <b style={{ color:"var(--goldtext)" }}>{kfUSD(hc.iscilikUSD*ad)}</b></span>}
+                        : <span><b onClick={()=>setKfDuz({ id:s.id+"|"+k.id, sid:s.id, kid:k.id, val:String(kfMevcut(k).dolar ?? "") })} title="Fiyatı değiştir (müşteri bazlı; sonra genel fiyat sorulur)" style={{ color:"var(--goldtext)", cursor:"pointer", textDecoration:"underline dotted", textUnderlineOffset:3 }}>${fN(grUSD,2)}</b>/gr · {ad} × {fN(hc.iscilikUSD,1)} = <b style={{ color:"var(--goldtext)" }}>{kfUSD(hc.iscilikUSD*ad)}</b></span>}
                       {s.altinKgUSD > 0 && <b style={{ color: dus ? "#e85a4f" : "#6abf69" }}>{fN(satisK,3)} mly{dus ? " ⚠" : ""}</b>}
                     </div>; })()}
                   {(hA>0||iA>0||tA>0) && <div style={{ display:"flex", gap:5, marginTop:5, flexWrap:"wrap" }}>
