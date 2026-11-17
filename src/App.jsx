@@ -15231,10 +15231,10 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
     }
     toastGoster("ok", (k.kod||k.ad||"Ürün")+" "+ay+": "+v+birimYaz+(genel?" (genel fiyat da değişti)":" ("+(mus||"müşteri")+" için)"));
   };
-  const kfOz = (s, o) => { // sipariş toplamı: satış milyemi = (kâr + maliyet) / gram — minimum: maliyet milyemi + MIN_MLY
+  const kfOz = (s, o) => { // sipariş toplamı: NET kâr milyemi (maliyet düşülmüş) = kâr / gram — minimum MIN_MLY
     const g = o.gram > 0 ? o.gram : 0;
-    const satis = g ? (o.kar + o.topMal) / g : 0, min = g ? o.topMal / g + MIN_MLY : MIN_MLY;
-    return { satis, min, dusuk: g > 0 && (o.kar / g) < MIN_MLY, has: !!s.altinKgUSD };
+    const net = g ? o.kar / g : 0;
+    return { net, min: MIN_MLY, dusuk: g > 0 && net < MIN_MLY, has: !!s.altinKgUSD };
   };
   const _tk = String(T.bg2||"").replace("#",""); const _acikTema = _tk.length>=6 && (parseInt(_tk.slice(0,2),16)+parseInt(_tk.slice(2,4),16)+parseInt(_tk.slice(4,6),16))/3 > 150;
   const _yazi = _acikTema ? T.text : "#fff";
@@ -15401,7 +15401,7 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
           {stat("Teslim", s.teslimTarihi?new Date(s.teslimTarihi).toLocaleDateString("tr-TR"):"—","#e8833a")}
           {stat("İlerleme", "%"+o.pct+" ("+o.tam+"/"+o.aktif+")", o.pct===100?"#6abf69":GOLD)}
           {kfAdm && stat("İşçilik toplam", kfUSD(o.isc))}
-          {kfAdm && s.altinKgUSD > 0 && (() => { const z = kfOz(s, o); return stat("Kâr", <>{fN(o.kar,3)} has<div style={{ fontSize:11, fontWeight:600 }}>{fN(z.satis,3)} mly{z.dusuk ? " ⚠ min "+fN(z.min,3) : ""}</div></>, z.dusuk ? "#e85a4f" : "#6abf69"); })()}
+          {kfAdm && s.altinKgUSD > 0 && (() => { const z = kfOz(s, o); return stat("Kâr", <>{fN(o.kar,3)} has<div style={{ fontSize:11, fontWeight:600 }}>{fN(z.net,3)} mly{z.dusuk ? " ⚠ min "+fN(z.min,3) : ""}</div></>, z.dusuk ? "#e85a4f" : "#6abf69"); })()}
         </div>
         <div className="sp-s-ozt" style={{ display:"flex", gap:6, flexWrap:"wrap", alignItems:"center", marginBottom:12 }}><span style={{ fontSize:11, color:"#7a6f5a", fontWeight:600 }}>AYAR:</span>{Object.entries(o.ayarlar).sort((a,b)=>b[1]-a[1]).map(([a,g])=><span key={a} style={{ fontSize:13, fontWeight:600, color:GOLD, background:"rgba(var(--vurgu-rgb),0.14)", borderRadius:8, padding:"3px 10px" }}>{a} · {fN(g,2)} gr</span>)}</div>
         {s.durumGecmisi?.length>0 && (() => {
@@ -15451,7 +15451,7 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
                   {k.sipNot && <div style={{ fontSize:12, color:"#ff453a", fontWeight:600, marginTop:3 }}>{k.sipNot}</div>}
                   {kfAdm && (() => { const hc = hesapla(k, k.secilenAyar||k.refAyar, s.altinKgUSD, s.mc); const ad = k.adet||1;
                     if (!(hc.mamulGram > 0)) return null;
-                    const grUSD = hc.iscilikUSD / hc.mamulGram, satisK = (hc.karHas + hc.topMaliyetHas) / hc.mamulGram, dus = hc.karUyari;
+                    const grUSD = hc.iscilikUSD / hc.mamulGram, satisK = hc.karMly, dus = hc.karUyari; // net kâr milyemi (maliyet düşülmüş)
                     return <div style={{ fontSize:11.5, marginTop:5, paddingTop:4, borderTop:"1px dashed rgba(var(--vurgu-rgb),0.18)", display:"flex", justifyContent:"space-between", gap:8, color:"#998a6e" }}>
                       {kfDuz && kfDuz.id === s.id+"|"+k.id
                         ? <span style={{ display:"flex", alignItems:"center", gap:6, flexWrap:"wrap" }}>
@@ -15637,7 +15637,7 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
                         <span style={kutuS()}>Sip. {gTarihU(s.tarih)}</span>
                         <span style={kutuS({ color:gecikti?"#ff5a4d":_yazi, fontWeight:gecikti?600:400 })}>Teslim {s.teslimTarihi?gTarihU(teslimT):"—"}{gecikti && " ⚠"}</span>
                         {kfAdm && (() => { const z = kfOz(s, o); const c = z.dusuk ? "#ff5a4d" : (_acikTema ? "#1f8a4c" : "#6abf69");
-                          return <span title={"Sipariş işçilik toplamı · kâr (has) · satış milyemi (maliyet dahil). Minimum "+fN(z.min,3)} style={{ minWidth:0, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", fontSize:12.1, lineHeight:"17px", color:_yazi }}><b>{kfUSD(o.isc)}</b>{z.has && <span style={{ color:c, fontWeight:600 }}> · {fN(o.kar,3)} has · {fN(z.satis,3)} mly{z.dusuk && " ⚠ min "+fN(z.min,3)}</span>}</span>; })()}
+                          return <span title={"Sipariş işçilik toplamı · net kâr (has) · net kâr milyemi (maliyet düşülmüş). Minimum "+fN(z.min,3)} style={{ minWidth:0, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", fontSize:12.1, lineHeight:"17px", color:_yazi }}><b>{kfUSD(o.isc)}</b>{z.has && <span style={{ color:c, fontWeight:600 }}> · {fN(o.kar,3)} has · {fN(z.net,3)} mly{z.dusuk && " ⚠ min "+fN(z.min,3)}</span>}</span>; })()}
                         <span onClick={e=>e.stopPropagation()} style={kutuS({ marginLeft:"auto", padding:0, flexShrink:0 })}>
                           <select value={key} disabled={bitti(s)} onChange={e=>aya_tasi(s,e.target.value)} title={bitti(s)?"Tamamlanan sipariş taşınamaz":"Başka aya taşı (planlanan ay)"} style={{ ...IS, width:"auto", background:"transparent", border:"none", padding:"2px 6px", fontSize:12.1, lineHeight:"17px", color:_yazi }}>
                             {sirKeys.map(k2=><option key={k2} value={k2}>{ayAdi(k2)}</option>)}
@@ -20987,10 +20987,8 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
           const mf = { gram:Number(fGram), refAyar:fRefAyar, tasGram:tl, tasKarDus:fTaslar.reduce((a,t)=>a+(Number(t.kd)||0),0), madenCarpan:Number(fMadenC)||0, iscilikDolar:Number(fIscilikDolar)||0, iscilikBirim:fIscilikBirim, iscilikAyarlar:fIscilikAyarlar, ekMaliyet:Number(fEkMaliyet)||0 };
           const kar = altinKgUSD>0;
           const satirlar = ayarKarsilastir(mf, altinKgUSD, madenCarpan);
-          const smGoster = kar && AKTIF_SIRKET_ONEK !== "bsp2_"; // satış milyemi (maliyet dahil) — sadece MSK
-          const satisMly = r => r.h.mamulGram > 0 ? (r.h.karHas + r.h.topMaliyetHas) / r.h.mamulGram : 0;
-          const minSatis = r => r.h.mamulGram > 0 ? r.h.topMaliyetHas / r.h.mamulGram + MIN_MLY : MIN_MLY;
-          const kol = kar ? (smGoster ? "34px 1.35fr .8fr .9fr .9fr 1.25fr .95fr .9fr 1fr" : "34px 1.35fr .8fr .9fr .9fr 1.25fr .95fr 1fr") : "34px 1.3fr 1.2fr";
+          const smGoster = kar && AKTIF_SIRKET_ONEK !== "bsp2_"; // düşük net kâr uyarısı — sadece MSK
+          const kol = kar ? "34px 1.35fr .8fr .9fr .9fr 1.25fr .95fr 1fr" : "34px 1.3fr 1.2fr";
           const hucre = { fontSize:9, textAlign:"right" };
           const bas = { ...hucre, fontSize:7, color:"#665d4a", fontWeight:700 };
           return (
@@ -21005,7 +21003,6 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
                 {kar && <div style={bas}>MALİYET HAS</div>}
                 {kar && <div style={bas}>ÜRÜN KÂRI</div>}
                 {kar && <div style={bas}>GRAM KÂRI</div>}
-                {smGoster && <div style={bas}>SATIŞ MLY</div>}
                 <div style={bas}>1 KG'DA ADET</div>
                 {satirlar.map(r => (
                   <Fragment key={r.ay}>
@@ -21016,15 +21013,14 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
                     {kar && <div style={{ ...hucre, color:"#e85a4f" }}>{fN(r.h.topMaliyetHas,3)}</div>}
                     {kar && <div style={{ ...hucre, fontWeight:800, color: r.kayip?"#e85a4f":"#6abf69" }}>{fN(r.h.karHas,3)}</div>}
                     {kar && <div style={{ ...hucre, color: r.h.karUyari?"#e85a4f":"#6abf69", fontWeight:700 }}>{fN(r.h.karMly,3)}</div>}
-                    {smGoster && <div style={{ ...hucre, fontWeight:800, color: r.h.karUyari?"#e85a4f":"#6abf69" }} title={"Maliyet dahil satış milyemi (maliyet + kâr). Minimum: "+fN(minSatis(r),3)}>{fN(satisMly(r),3)}{r.h.karUyari ? " ⚠" : ""}</div>}
                     <div style={{ ...hucre, color:T.text }} title={"Taşsız maden gramına göre: "+Math.round(r.adetMaden)+" adet · Taş dahil mamul gramına göre: "+Math.round(r.adetMamul)+" adet"}>{r.adetMaden>0 ? Math.round(r.adetMaden) : "—"} <span style={{ color:"#665d4a", fontSize:7 }}>({r.adetMamul>0 ? Math.round(r.adetMamul) : "—"})</span></div>
                   </Fragment>
                 ))}
               </div>
               {smGoster && satirlar.filter(r => r.h.karUyari).map(r => (
-                <div key={"u"+r.ay} style={{ fontSize:9, fontWeight:700, color:"#e85a4f", marginTop:6 }}>⚠ {r.ay}: satış milyemi {fN(satisMly(r),3)} — minimum {fN(minSatis(r),3)} (net kâr {fN(r.h.karMly,3)} &lt; {fN(MIN_MLY,3)}). Bu ayara daha yüksek işçilik girin.</div>
+                <div key={"u"+r.ay} style={{ fontSize:9, fontWeight:700, color:"#e85a4f", marginTop:6 }}>⚠ {r.ay}: net kâr {fN(r.h.karMly,3)} mly (maliyet düşülmüş) — minimum {fN(MIN_MLY,3)}. Bu ayara daha yüksek işçilik girin.</div>
               ))}
-              <div style={{ fontSize:7, color:"#665d4a", marginTop:6 }}>Satış mly = maliyet + kâr (taş dahil mamul gramı başına). Maliyet = üretim maliyeti + ek maliyet. 1 kg'da adet = 1000 ÷ taşsız maden gramı (parantez: taş dahil mamul gramına göre). {!kar && "Kâr sütunları için altın fiyatını girin."}</div>
+              <div style={{ fontSize:7, color:"#665d4a", marginTop:6 }}>Gram kârı = maliyet düşüldükten sonra net kâr (mly/gr). Maliyet = üretim maliyeti + ek maliyet. 1 kg'da adet = 1000 ÷ taşsız maden gramı (parantez: taş dahil mamul gramına göre). {!kar && "Kâr sütunları için altın fiyatını girin."}</div>
             </div>
           );
         })()}
