@@ -1704,7 +1704,31 @@ function psTemaAcik(T) {
   if (h) { const n = parseInt(h[1], 16); return (0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) > 150; }
   return !!T && T.id === "beyaz";
 }
-function PdfSiparisModal({ modeller, kollar, onKapat, onUygula, onModelDuzenle, T: Tprop }) {
+// ── Tekrar koruması: PDF'ten gelen Ref/PO, kayıtlı siparişlerin açıklamasındaki "PDF: Ref … · PO …" ile karşılaştırılır ──
+let PDF_DUP_ONAY = ""; // kullanıcı "yine de devam" dediyse kaydederken ikinci kez sormasın
+const psDupNorm = v => String(v || "").trim().toLowerCase().replace(/\s+/g, "");
+function psPdfAnahtar(aciklama) {
+  const a = String(aciklama || "");
+  const ref = (a.match(/Ref (.+?)(?= · |\s\|\s|$)/) || [])[1] || "";
+  const po = (a.match(/PO (.+?)(?= · |\s\|\s|$)/) || [])[1] || "";
+  return { ref: psDupNorm(ref), po: psDupNorm(po) };
+}
+function psTekrarSiparis(ref, po, liste) {
+  const r = psDupNorm(ref), p = psDupNorm(po);
+  if (!r && !p) return null;
+  return (liste || []).find(x => {
+    const k = psPdfAnahtar(x.aciklama);
+    if (!k.ref && !k.po) return false;
+    if (r && k.ref && r !== k.ref) return false;
+    if (p && k.po && p !== k.po) return false;
+    return (r && k.ref === r) || (p && k.po === p);
+  }) || null;
+}
+function psTekrarMetin(x) {
+  const t = x.tarih ? new Date(x.tarih).toLocaleDateString("tr-TR") : "";
+  return (x.musteri || "") + " · " + t + (x.hazirlayan ? " · " + x.hazirlayan : "") + " · " + ((x.kalemler || []).length) + " kalem";
+}
+function PdfSiparisModal({ modeller, kollar, kayitliSiparisler, onKapat, onUygula, onModelDuzenle, T: Tprop }) {
   // Aktif temaya uyar: zemin, yazı, çerçeve ve durum renkleri temadan gelir (açık temada koyu, koyu temada açık)
   const T = Tprop || _tema;
   const acik = psTemaAcik(T);
@@ -1950,6 +1974,11 @@ function PdfSiparisModal({ modeller, kollar, onKapat, onUygula, onModelDuzenle, 
 
   // Verilen satırları Konfirmasyon'a aktarır (bağlanmamış ve "yeni model" denmemiş satırlar atlanır)
   const aktarCalistir = async (liste, beklet) => {
+    const tekrar = psTekrarSiparis(baslik && baslik.referans, baslik && baslik.po, kayitliSiparisler);
+    if (tekrar) {
+      if (!window.confirm("⚠ Bu PDF daha önce yüklenmiş görünüyor.\n\nKayıtlı sipariş: " + psTekrarMetin(tekrar) + "\nRef: " + ((baslik && baslik.referans) || "-") + "   PO: " + ((baslik && baslik.po) || "-") + "\n\nYine de yeni bir sipariş olarak devam edilsin mi?\n(İptal = hiçbir şey eklenmez)")) return;
+      PDF_DUP_ONAY = psDupNorm(baslik && baslik.referans) + "|" + psDupNorm(baslik && baslik.po);
+    }
     setUygulaniyor(true);
     try {
       const kalemler = [];
@@ -13765,6 +13794,9 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
   const konfKaydet = () => {
     if (konfKalemler.length === 0) return;
     if (konfBekleyen.length > 0) { alert(konfBekleyen.length + " model hâlâ bekleniyor — önce 'Model bul' ile modeli bağlayın ya da kartı silin. Sipariş şimdilik kaydedilmedi."); return; }
+    { const ak = psPdfAnahtar(konfSipAciklama);
+      const tekrar = psTekrarSiparis(ak.ref, ak.po, siparisler);
+      if (tekrar && PDF_DUP_ONAY !== ak.ref + "|" + ak.po && !window.confirm("⚠ Aynı PDF (Ref/PO) ile daha önce sipariş kaydedilmiş.\n\nKayıtlı sipariş: " + psTekrarMetin(tekrar) + "\n\nYine de bir sipariş daha kaydedilsin mi?")) return; }
     const musAd = konfMus.trim() || "Isimsiz";
     let yeniMusteriler = { ...musteriler };
     if (!yeniMusteriler[musAd]) {
@@ -14693,7 +14725,7 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
         {/* KONFİRMASYON */}
         {sayfa==="konfirmasyon" && (
           <div style={{ animation:"fadein .3s" }}>
-            {pdfModal && <PdfSiparisModal modeller={modeller} kollar={kollar} onKapat={()=>setPdfModal(false)} onUygula={pdfSiparisUygula} onModelDuzenle={openEM} T={T}/>}
+            {pdfModal && <PdfSiparisModal modeller={modeller} kollar={kollar} kayitliSiparisler={siparisler} onKapat={()=>setPdfModal(false)} onUygula={pdfSiparisUygula} onModelDuzenle={openEM} T={T}/>}
             {/* Header */}
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12, flexWrap:"wrap", gap:6 }}>
               <h2 style={{ margin:0, fontSize:14, fontWeight:700, color:"var(--goldtext)" }}>Konfirmasyon</h2>
