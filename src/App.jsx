@@ -4391,7 +4391,7 @@ function KarlilikRaporuEkrani({ T, GH, siparisler: siparislerHam, tumSip, usdTry
           const yuzde = (m,id) => m.adet>0 ? (m.asamaA[id]||0)/m.adet*100 : 0;
           return (
             <div style={{ ...kart, padding:0, overflow:"hidden" }}>
-              <div style={{ padding:"14px 16px 6px", fontSize:16, fontWeight:600 }}>Müşteri bazlı özet <span style={{ fontSize:12, color:T.sub, fontWeight:400 }}>{musListe.length} müşteri · hurda/iade/tamir düşülmüş net · satıra tıkla: aşama detayı</span></div>
+              <div style={{ padding:"14px 16px 6px", fontSize:16, fontWeight:600 }}>Müşteri bazlı özet <span style={{ fontSize:12, color:T.sub, fontWeight:400 }}>{musListe.length} müşteri · hurda/iade/tamir düşülmüş net · mly: {fN(Number(mc)||0.03,3)} maliyet düşülmüş · satıra tıkla: aşama detayı</span></div>
               <div style={{ padding:"0 16px 10px", display:"flex", flexWrap:"wrap", gap:10, fontSize:11, color:T.sub }}>
                 {asamalar.map(d => <span key={d.id} style={{ display:"inline-flex", alignItems:"center", gap:4 }}><span style={{ width:9, height:9, borderRadius:3, background:d.c }}/>{d.l}</span>)}
               </div>
@@ -4450,7 +4450,7 @@ function KarlilikRaporuEkrani({ T, GH, siparisler: siparislerHam, tumSip, usdTry
               <div style={kart}><div style={etiket}>Net kalem</div><div style={{ fontSize:22, fontWeight:600 }}>{top.adet}</div></div>
               <div style={kart}><div style={etiket}>Net gram</div><div style={{ fontSize:22, fontWeight:600 }}>{fN(top.gram,1)} gr</div></div>
               <div style={kart}><div style={etiket}>Toplam kâr</div><div style={{ fontSize:20, fontWeight:600, color:RN.iyi }}>{fN(top.kar,3)} has</div>{top.usd>0 && <div style={{ fontSize:12, color:T.sub }}>≈ ${top.usd.toFixed(0)}</div>}</div>
-              <div style={kart}><div style={etiket}>Ort. karlılık</div><div style={{ fontSize:20, fontWeight:600, color:RN[grupBul(topMly)] }}>{fN(topMly,3)} mly</div></div>
+              <div style={kart}><div style={etiket}>Ort. karlılık</div><div style={{ fontSize:20, fontWeight:600, color:RN[grupBul(topMly)] }}>{fN(topMly,3)} mly</div><div style={{ fontSize:11, color:T.sub, marginTop:4 }}>net · {fN(Number(mc)||0.03,3)} maliyet milyemi düşülmüş</div></div>
             </div>
             {(() => {
               const topG = satirlar.reduce((a,x)=>a+(gSip.get(x.s.id)||0),0), topNet = top.kar - topG;
@@ -4559,7 +4559,7 @@ function KarlilikRaporuEkrani({ T, GH, siparisler: siparislerHam, tumSip, usdTry
           </div>
           <div style={{ flex:"1 1 640px", minWidth:0, ...kart, padding:0, overflow:"hidden" }}>
             <div style={{ padding:"14px 16px 10px", display:"flex", flexWrap:"wrap", gap:8, alignItems:"center" }}>
-              <div style={{ fontSize:16, fontWeight:600, marginRight:6 }}>Sipariş detayı <span style={{ fontSize:12, color:T.sub, fontWeight:400 }}>{gor.length}/{satirlar.length} · hurda/iade/tamir düşülmüş net</span></div>
+              <div style={{ fontSize:16, fontWeight:600, marginRight:6 }}>Sipariş detayı <span style={{ fontSize:12, color:T.sub, fontWeight:400 }}>{gor.length}/{satirlar.length} · hurda/iade/tamir düşülmüş net · Kâr ve mly/gr: {fN(Number(mc)||0.03,3)} maliyet milyemi düşülmüş</span></div>
               <input value={ara} onChange={e=>setAra(e.target.value)} placeholder="Müşteri, PO, sipariş no, model ara…" style={{ marginLeft:"auto", background:"transparent", border:"1px solid "+T.border, borderRadius:9, padding:"7px 10px", color:T.text, fontSize:12, width:240, outline:"none" }}/>
             </div>
             {filtreVar && <div style={{ padding:"0 16px 10px", display:"flex", gap:6, flexWrap:"wrap", alignItems:"center" }}>
@@ -14387,7 +14387,7 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
                       return (
                         <div style={{ padding:"13px 18px 15px", display:"flex", justifyContent:"space-between", alignItems:"baseline", gap:10, color:kYazi }}>
                           <div style={{ minWidth:0, fontSize:17, fontWeight:700, lineHeight:1.25 }}>{kol.ad}<span style={{ fontSize:13, fontWeight:400, color:kAlt, marginLeft:7 }}>{km.length}{altlar.length > 0 ? " · " + altlar.length + " alt" : ""}</span></div>
-                          {(ortGram14 > 0 || ortMly > 0) && <div style={{ fontSize:13, whiteSpace:"nowrap", opacity:0.9 }}>{ortGram14 > 0 && <><b style={{ fontWeight:600 }}>{fN(ortGram14,2)}</b> gr</>}{ortGram14 > 0 && ortMly > 0 ? " · " : ""}{ortMly > 0 && <><b style={{ fontWeight:600 }}>{fN(ortMly,3)}</b> mly</>}</div>}
+                          {(ortGram14 > 0 || ortMly > 0) && <div title="Ortalama net kâr milyemi — maliyet milyemi düşülmüş" style={{ fontSize:13, whiteSpace:"nowrap", opacity:0.9 }}>{ortGram14 > 0 && <><b style={{ fontWeight:600 }}>{fN(ortGram14,2)}</b> gr</>}{ortGram14 > 0 && ortMly > 0 ? " · " : ""}{ortMly > 0 && <><b style={{ fontWeight:600 }}>{fN(ortMly,3)}</b> mly</>}</div>}
                         </div>
                       );
                     })()}
@@ -15401,7 +15401,7 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
           {stat("Teslim", s.teslimTarihi?new Date(s.teslimTarihi).toLocaleDateString("tr-TR"):"—","#e8833a")}
           {stat("İlerleme", "%"+o.pct+" ("+o.tam+"/"+o.aktif+")", o.pct===100?"#6abf69":GOLD)}
           {kfAdm && stat("İşçilik toplam", kfUSD(o.isc))}
-          {kfAdm && s.altinKgUSD > 0 && (() => { const z = kfOz(s, o); return stat("Kâr", <>{fN(o.kar,3)} has<div style={{ fontSize:11, fontWeight:600 }}>{fN(z.net,3)} mly{z.dusuk ? " ⚠ min "+fN(z.min,3) : ""}</div></>, z.dusuk ? "#e85a4f" : "#6abf69"); })()}
+          {kfAdm && s.altinKgUSD > 0 && (() => { const z = kfOz(s, o); return stat("Kâr", <>{fN(o.kar,3)} has<div style={{ fontSize:11, fontWeight:600 }}>{fN(z.net,3)} mly{z.dusuk ? " ⚠ min "+fN(z.min,3) : ""}</div><div style={{ fontSize:10, fontWeight:500, color:"#7a6f5a", marginTop:2 }}>{fN(Number(s.mc||madenCarpan)||0.03,3)} maliyet düşülmüş</div></>, z.dusuk ? "#e85a4f" : "#6abf69"); })()}
         </div>
         <div className="sp-s-ozt" style={{ display:"flex", gap:6, flexWrap:"wrap", alignItems:"center", marginBottom:12 }}><span style={{ fontSize:11, color:"#7a6f5a", fontWeight:600 }}>AYAR:</span>{Object.entries(o.ayarlar).sort((a,b)=>b[1]-a[1]).map(([a,g])=><span key={a} style={{ fontSize:13, fontWeight:600, color:GOLD, background:"rgba(var(--vurgu-rgb),0.14)", borderRadius:8, padding:"3px 10px" }}>{a} · {fN(g,2)} gr</span>)}</div>
         {s.durumGecmisi?.length>0 && (() => {
