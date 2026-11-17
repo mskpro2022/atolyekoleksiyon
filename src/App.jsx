@@ -20888,7 +20888,10 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
           const mf = { gram:Number(fGram), refAyar:fRefAyar, tasGram:tl, tasKarDus:fTaslar.reduce((a,t)=>a+(Number(t.kd)||0),0), madenCarpan:Number(fMadenC)||0, iscilikDolar:Number(fIscilikDolar)||0, iscilikBirim:fIscilikBirim, iscilikAyarlar:fIscilikAyarlar, ekMaliyet:Number(fEkMaliyet)||0 };
           const kar = altinKgUSD>0;
           const satirlar = ayarKarsilastir(mf, altinKgUSD, madenCarpan);
-          const kol = kar ? "34px 1.35fr .8fr .9fr .9fr 1.25fr .95fr 1fr" : "34px 1.3fr 1.2fr";
+          const smGoster = kar && AKTIF_SIRKET_ONEK !== "bsp2_"; // satış milyemi (maliyet dahil) — sadece MSK
+          const satisMly = r => r.h.mamulGram > 0 ? (r.h.karHas + r.h.topMaliyetHas) / r.h.mamulGram : 0;
+          const minSatis = r => r.h.mamulGram > 0 ? r.h.topMaliyetHas / r.h.mamulGram + MIN_MLY : MIN_MLY;
+          const kol = kar ? (smGoster ? "34px 1.35fr .8fr .9fr .9fr 1.25fr .95fr .9fr 1fr" : "34px 1.35fr .8fr .9fr .9fr 1.25fr .95fr 1fr") : "34px 1.3fr 1.2fr";
           const hucre = { fontSize:9, textAlign:"right" };
           const bas = { ...hucre, fontSize:7, color:"#665d4a", fontWeight:700 };
           return (
@@ -20903,6 +20906,7 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
                 {kar && <div style={bas}>MALİYET HAS</div>}
                 {kar && <div style={bas}>ÜRÜN KÂRI</div>}
                 {kar && <div style={bas}>GRAM KÂRI</div>}
+                {smGoster && <div style={bas}>SATIŞ MLY</div>}
                 <div style={bas}>1 KG'DA ADET</div>
                 {satirlar.map(r => (
                   <Fragment key={r.ay}>
@@ -20913,11 +20917,15 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
                     {kar && <div style={{ ...hucre, color:"#e85a4f" }}>{fN(r.h.topMaliyetHas,3)}</div>}
                     {kar && <div style={{ ...hucre, fontWeight:800, color: r.kayip?"#e85a4f":"#6abf69" }}>{fN(r.h.karHas,3)}</div>}
                     {kar && <div style={{ ...hucre, color: r.h.karUyari?"#e85a4f":"#6abf69", fontWeight:700 }}>{fN(r.h.karMly,3)}</div>}
+                    {smGoster && <div style={{ ...hucre, fontWeight:800, color: r.h.karUyari?"#e85a4f":"#6abf69" }} title={"Maliyet dahil satış milyemi (maliyet + kâr). Minimum: "+fN(minSatis(r),3)}>{fN(satisMly(r),3)}{r.h.karUyari ? " ⚠" : ""}</div>}
                     <div style={{ ...hucre, color:T.text }} title={"Taşsız maden gramına göre: "+Math.round(r.adetMaden)+" adet · Taş dahil mamul gramına göre: "+Math.round(r.adetMamul)+" adet"}>{r.adetMaden>0 ? Math.round(r.adetMaden) : "—"} <span style={{ color:"#665d4a", fontSize:7 }}>({r.adetMamul>0 ? Math.round(r.adetMamul) : "—"})</span></div>
                   </Fragment>
                 ))}
               </div>
-              <div style={{ fontSize:7, color:"#665d4a", marginTop:6 }}>Maliyet = üretim maliyeti + ek maliyet. 1 kg'da adet = 1000 ÷ taşsız maden gramı (parantez: taş dahil mamul gramına göre). {!kar && "Kâr sütunları için altın fiyatını girin."}</div>
+              {smGoster && satirlar.filter(r => r.h.karUyari).map(r => (
+                <div key={"u"+r.ay} style={{ fontSize:9, fontWeight:700, color:"#e85a4f", marginTop:6 }}>⚠ {r.ay}: satış milyemi {fN(satisMly(r),3)} — minimum {fN(minSatis(r),3)} (net kâr {fN(r.h.karMly,3)} &lt; {fN(MIN_MLY,3)}). Bu ayara daha yüksek işçilik girin.</div>
+              ))}
+              <div style={{ fontSize:7, color:"#665d4a", marginTop:6 }}>Satış mly = maliyet + kâr (taş dahil mamul gramı başına). Maliyet = üretim maliyeti + ek maliyet. 1 kg'da adet = 1000 ÷ taşsız maden gramı (parantez: taş dahil mamul gramına göre). {!kar && "Kâr sütunları için altın fiyatını girin."}</div>
             </div>
           );
         })()}
