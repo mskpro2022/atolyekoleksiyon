@@ -8263,7 +8263,7 @@ function buildKonfHTML(siparis, altinKgUSD, mc, fiyatli, modeller, siraModu) {
     ".it{display:grid;grid-template-columns:190px 1fr;gap:16px;padding:18px 34px;border-bottom:1px solid #e6eaef;break-inside:avoid;page-break-inside:avoid}",
     ".n{font-size:10px;color:#a2abb8;letter-spacing:.1em;margin-right:8px;font-weight:600;vertical-align:middle}",
 ".strip{display:flex;margin-top:10px;border:1px solid #e3e7ec;border-radius:6px;break-inside:avoid}.strip div{flex:1;padding:6px 10px;border-right:1px solid #e9edf1}.strip div:last-child{border:none}.strip span{font-size:7.5px;letter-spacing:.14em;color:#8a94a3;display:block;text-transform:uppercase}.strip b{font-size:14px;color:#0f1923}",
-    ".ph{background:#f5f6f8;border:1px solid #e0e3e8;border-radius:4px;display:flex;align-items:center;justify-content:center;overflow:hidden}",
+    ".ph{background:#f3f3f3;border:1px solid #e0e3e8;border-radius:4px;display:flex;align-items:center;justify-content:center;overflow:hidden}",
     ".ph img{width:100%;height:100%;object-fit:contain;display:block}",
     ".it .ph{width:190px;height:190px}",
     ".k{font-size:21px;font-weight:800;letter-spacing:.02em;color:#0f1923}",
@@ -13150,7 +13150,13 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
   const [islemAlModal, setIslemAlModal] = useState(null); // { id, tarih, istenen }
   const islemeAlBaslat = (s) => {
     if (AKTIF_SIRKET_ONEK === "bsp2_") setIslemAlModal({ id: s.id, tarih: s.teslimTarihi || "", istenen: s.istenenTeslim ?? s.teslimTarihi ?? "" });
-    else sipDurumKaydet(s.id, siparisDurumHesapla(s));
+    else {
+      // MSK: işleme alınınca sipariş otomatik "Muma Taş" aşamasına geçer (henüz başlanmamış kalemler; ilerlemiş/hurda kalemlere dokunulmaz)
+      const kdNew = { ...(s.kalemDurumlar || {}) };
+      (s.kalemler || []).forEach(k => { const q = kdNew[k.id] || k.durum || "baslanmadi"; if (q === "baslanmadi" || q === "cizimde") kdNew[k.id] = "mum_tas"; });
+      svS(siparisler.map(sp => sp.id === s.id ? { ...sp, kalemDurumlar: kdNew } : sp));
+      sipDurumKaydet(s.id, siparisDurumHesapla({ ...s, kalemDurumlar: kdNew }));
+    }
   };
   const islemeAlOnayla = () => {
     const m = islemAlModal; if (!m || !m.tarih) return;
@@ -15804,13 +15810,13 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
                 );
                 return [
                   ...[["tumu","Tümü","#998a6e"]].map(([id,l,col])=>{ const f=filtreler.find(x=>x.id===id); return kutu(id,l,col,f?f.cnt:0,"sipariş","", !sipAsama && (id==="tumu"?tumuF:sipFiltre===id), ()=>{ setSipAsama(""); setSipFiltre(id); }, false); }),
-                  ...asamalar.map(d => { const l = say(d.id), adet = l.reduce((a,x)=>a+x.net,0), gr = l.reduce((a,x)=>a+x.gram,0), on = sipAsama===d.id; return kutu(d.id, durumEtiket(d), d.c, adet, "adet", l.length?fN(gr,0)+" gr":"", on, ()=>{ setSipFiltre("tumu"); setSipAsama(on?"":d.id); }, !l.length&&!on); }),
+                  ...asamalar.filter(d => !(d.id==="teslim" && AKTIF_SIRKET_ONEK!=="bsp2_")).map(d => { const l = say(d.id), adet = l.reduce((a,x)=>a+x.net,0), gr = l.reduce((a,x)=>a+x.gram,0), on = sipAsama===d.id; return kutu(d.id, durumEtiket(d), d.c, adet, "adet", l.length?fN(gr,0)+" gr":"", on, ()=>{ setSipFiltre("tumu"); setSipAsama(d.id); if (!on) setTimeout(()=>{ try { const el=document.getElementById("sip-asama-panel"); if (el) el.scrollIntoView({ block:"nearest", behavior:"smooth" }); } catch(e){} }, 60); }, !l.length&&!on); }),
                   ...[["teslimgecti","Teslimi geçen","#d9736b"]].map(([id,l,col])=>{ const f=filtreler.find(x=>x.id===id); const on=!sipAsama && sipFiltre===id; return kutu(id,l,col,f?f.cnt:0,"sipariş","", on, ()=>{ setSipAsama(""); setSipFiltre(on?"tumu":id); }, !(f&&f.cnt)&&!on); })
                 ];
               })()}
             </div>
             {sipAsama && sd && (
-              <div style={{ marginTop:8, background:T.card, border:"1px solid "+sd.c+"88", borderRadius:12, padding:12 }}>
+              <div id="sip-asama-panel" style={{ marginTop:8, background:T.card, border:"1px solid "+sd.c+"88", borderRadius:12, padding:12 }}>
                 <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
                   <span style={{ fontSize:14, fontWeight:600, color:sd.c }}>{durumEtiket(sd)} — {Object.keys(grup).length} sipariş · {secili.length} model</span>
                   <button onClick={()=>setSipAsama("")} style={{ ...GH, fontSize:11, padding:"4px 10px" }}>✕ Kapat</button>
