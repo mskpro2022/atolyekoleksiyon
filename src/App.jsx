@@ -15313,6 +15313,7 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
     if (sipMetal!=="tumu") { const oo=ozet(s); if (sipMetal==="gumus" ? oo.gumus<=0 : oo.altin<=0.0001) return false; }
     if (sipAsama) { if (s.onayDurum==="bekliyor"||s.onayDurum==="red"||s.onayDurum==="iptal") return false; const kd0=s.kalemDurumlar||{}; if (!(s.kalemler||[]).some(k=>{ const q0=kd0[k.id]||k.durum||"baslanmadi"; return (q0==="cizimde"?"baslanmadi":q0)===sipAsama; })) return false; }
     const son = SON(s);
+    if (tumuF && !sipAsama && !sipMusF && ["tamam","teslim"].includes(son?.durum)) return false; // Tümü: tamamlanan siparişler gizli (arama yapılınca bulunur)
     if (sipFiltre==="aktif") { if (!son||BIT.includes(son.durum)) return false; }
     if (sipFiltre==="baslanmadi") { if (s.durumGecmisi?.length || baslandiMi(s)) return false; }
     if (sipFiltre==="dokumde") { if (son?.durum!=="dokum") return false; }
@@ -15338,7 +15339,7 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
     toastGoster("ok", (s.musKod||s.musteri||"Sipariş")+" → "+ayAdi(key)+" (planlanan ay)");
   };
   const filtreler = [
-    { id:"tumu", l:"Tümü", cnt:siparisler.length },
+    { id:"tumu", l:"Tümü", cnt:siparisler.filter(s=>!["tamam","teslim"].includes(SON(s)?.durum)).length },
     { id:"aktif", l:"Aktif", cnt:siparisler.filter(s=>{const n=SON(s);return n&&!BIT.includes(n.durum);}).length },
     { id:"baslanmadi", l:"Başlanmadı", cnt:siparisler.filter(s=>!s.durumGecmisi?.length && !baslandiMi(s)).length },
     { id:"dokumde", l:"Dökümde", cnt:siparisler.filter(s=>SON(s)?.durum==="dokum").length },
