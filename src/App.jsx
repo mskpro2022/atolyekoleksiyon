@@ -1,6 +1,7 @@
 import { supabase, dbLoad, dbSave, fotoYukleStorage, yedekKaydet, yedekListesi, yedekGetir, bugunYedekVarMi, tabloModelleriSenkron, tabloModelleriToplu, tabloModelSil, tabloSiparisleriSenkron, tabloSiparisleriToplu, tabloSiparisSil, tabloMusterileriYaz, akilliModelOku, akilliSiparisOku, akilliMusteriOku, islemKaydet, islemGecmisiGetir, realtimeBaslat, tabloKoleksiyonlariYaz, tabloKasaYaz, akilliKoleksiyonOku, akilliKasaOku, tabloKoleksiyonlariOku, tabloKasaOku, saglikDenetimi, ekranSunucuFarki, toptanciKaydet, toptancilariGetir, toptanciSil, vitrinGecmisiGetir, vitrinEnCokBakilan, vitrinOzetGetir, vitrinAnaliz, vitrinGetirGuvenli, siparisOlusturGuvenli, siparislerimGetirGuvenli, siparisIptalGuvenli, siparisGuncelleGuvenli, siparisMusteriGizleGuvenli, vitrinAktiviteKaydetGuvenli, vitrinSupheliCihazlar, vitrinCevrimiciMusteriler, radarTrendleriOku, radarKaynaklariOku, radarKanitlariOku, radarTumKanitlariOku, radarTrendGuncelle, radarTrendSil, radarManuelKanitEkle } from "./supabase.js";
 import { useState, useEffect, useCallback, useMemo, useRef, Fragment } from "react";
 
+const SURUM_TARIH = "18 Kas 19:55"; // her yeni App.jsx tesliminde güncellenir — ekranın yenilendiğini anlamak için sağ üstte görünür
 const uid = () => "x" + Date.now() + Math.random().toString(36).substr(2, 5);
 // ═══ ÇALIŞAN AUTH OTURUMU — yerel şifre kontrolünün ardından gerçek Supabase Auth oturumu açar ═══
 // (RLS politikaları "authenticated" rolüne dayanacak; hesap Supabase Dashboard'da manuel oluşturuldu)
@@ -2473,7 +2474,7 @@ function rpSatisAyristir(rows){
     const r=rows[n]; const t=rpTarih(r[h["TARİH"]]); if(!t) continue;
     const grup=String(g(r,"ÜRÜN GRUBU")).trim();
     if(/GİDER VE GELİR/.test(rpUpper(grup))){ disarida++; continue; }
-    satirlar.push([t, String(g(r,"EVR.NO")).trim(), String(g(r,"ÜRÜN ADI")).trim(), Math.round(rpSayi(g(r,"HAS GR"))*10000)/10000, Math.round(rpSayi(g(r,"İSÇ.MLT"))*10000)/10000, Math.round(rpSayi(g(r,"TOP.MLT"))*100)/100, Math.round(rpSayi(g(r,"MADEN KAR"))*10000)/10000, String(g(r,"MUS.NO")).trim(), String(g(r,"MÜŞTERİ")).trim(), String(g(r,"BÖLGE")).trim(), grup]);
+    satirlar.push([t, String(g(r,"EVR.NO")).trim(), String(g(r,"ÜRÜN ADI")).trim(), Math.round(rpSayi(g(r,"HAS GR"))*10000)/10000, Math.round(rpSayi(g(r,"İSÇ.MLT"))*10000)/10000, Math.round(rpSayi(g(r,"TOP.MLT"))*100)/100, Math.round(rpSayi(g(r,"MADEN KAR"))*10000)/10000, String(g(r,"MUS.NO")).trim(), String(g(r,"MÜŞTERİ")).trim(), String(g(r,"BÖLGE")).trim(), grup, String(g(r,"EVRAK NOTU")).trim(), String(g(r,"ÜRÜN AÇK2")).trim()]);
   }
   return { satirlar, disarida };
 }
@@ -2483,9 +2484,13 @@ function rpSatirAnahtar(tur, s){
 }
 function rpBirlestir(tur, mevcut, yeni){
   const say={}; mevcut.forEach(s=>{ const k=rpSatirAnahtar(tur,s); say[k]=(say[k]||0)+1; });
-  const yeniSay={}; const eklenecek=[]; let atlanan=0;
-  yeni.forEach(s=>{ const k=rpSatirAnahtar(tur,s); yeniSay[k]=(yeniSay[k]||0)+1; if(yeniSay[k]>(say[k]||0)) eklenecek.push(s); else atlanan++; });
-  return { liste:[...mevcut,...eklenecek], eklenen:eklenecek.length, atlanan };
+  const yeniSay={}; const eklenecek=[]; let atlanan=0, guncellenen=0;
+  const liste0 = mevcut.slice();
+  yeni.forEach(s=>{ const k=rpSatirAnahtar(tur,s); yeniSay[k]=(yeniSay[k]||0)+1; if(yeniSay[k]>(say[k]||0)) eklenecek.push(s); else {
+    atlanan++;
+    if (tur==="s" && (s[11]||s[12])) { const ix = liste0.findIndex(m => !m[11] && !m[12] && rpSatirAnahtar(tur,m)===k); if (ix>=0) { liste0[ix] = [...liste0[ix].slice(0,11), s[11]||"", s[12]||""]; guncellenen++; } }
+  } });
+  return { liste:[...liste0,...eklenecek], eklenen:eklenecek.length, atlanan, guncellenen };
 }
 // Giderler: negatif net toplamlı türler hafta/dönem kapanış aktarımıdır (ör. "ATÖLYE GENEL GİDERLER", "ERİTME FİRE KAYBI"); gerçek gider değildir
 function rpKapanisTurleri(giderler){
@@ -2567,7 +2572,7 @@ async function rpYuklemeKaydet(tur, satirlar){
     const mevcut = await rpAyOku(tur, a);
     const r = rpBirlestir(tur, mevcut, aylar[a]);
     eklenen += r.eklenen; atlanan += r.atlanan;
-    if (r.eklenen > 0) await rpAyYaz(tur, a, r.liste);
+    if (r.eklenen > 0 || r.guncellenen > 0) await rpAyYaz(tur, a, r.liste);
     idx[tur] = { ...(idx[tur]||{}), [a]: r.liste.length };
   }
   await sv("v7rp_idx", idx);
@@ -12401,6 +12406,40 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
   const [delYaz, setDelYaz] = useState(""); // koleksiyon silerken yazılacak onay metni
   useEffect(() => { setDelYaz(""); }, [delOnay]);
   const yoneticiMi = !AKTIF_KULLANICI || AKTIF_KULLANICI.rol === "admin";
+  // ── Rhino satış eşleşmesi (MSK, admin): satış raporundaki EVRAK NOTU / ÜRÜN AÇK2 içinde bizim sipariş no'muz YA DA müşterinin sipariş no'su (Ref/PO) geçerse sipariş ile eşleşir ──
+  const [rhinoSat, setRhinoSat] = useState(null);
+  const [rhinoYenile, setRhinoYenile] = useState(0);
+  useEffect(() => {
+    if (AKTIF_SIRKET_ONEK !== "" || !yoneticiMi || sayfa !== "siparisler") return;
+    let iptal = false;
+    rpYukleHepsi().then(d => { if (!iptal) setRhinoSat((d && d.satislar) || []); }).catch(() => {});
+    return () => { iptal = true; };
+  }, [sayfa, rhinoYenile]);
+  const rhinoNorm = v => String(v || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+  const rhinoOzet = (sp) => {
+    if (!rhinoSat) return null;
+    const anah = [];
+    if (sp.siparisNo) anah.push(["bizim no", rhinoNorm(sp.siparisNo)]);
+    const ak = psPdfAnahtar(sp.aciklama);
+    if (ak.ref) anah.push(["müşteri Ref", rhinoNorm(ak.ref)]);
+    if (ak.po) anah.push(["müşteri PO", rhinoNorm(ak.po)]);
+    const keys = anah.filter(([, k]) => k.length >= 4);
+    const gumus = r => /GÜMÜŞ|GUMUS/i.test(String(r[2]));
+    const rows = keys.length ? rhinoSat.filter(r => { const t = rhinoNorm((r[11] || "") + " " + (r[12] || "")); return t && !gumus(r) && keys.some(([, k]) => t.includes(k)); }) : [];
+    const bulunan = [...new Set(rows.flatMap(r => { const t = rhinoNorm((r[11] || "") + " " + (r[12] || "")); return keys.filter(([, k]) => t.includes(k)).map(([ad]) => ad); }))];
+    const rhino = rows.reduce((a, r) => a + (Number(r[3]) || 0), 0);
+    const kd = sp.kalemDurumlar || {};
+    let beklenen = 0, tamAdet = 0;
+    (sp.kalemler || []).forEach(k => {
+      const ay = k.secilenAyar || k.refAyar; if (ay === "925") return;
+      const st = kd[k.id] || k.durum || "baslanmadi"; if (!["tamam", "teslim"].includes(st)) return;
+      const net = Math.max(0, (k.adet || 1) - ((sp.kalemHurda || {})[k.id] || 0) - ((sp.kalemIade || {})[k.id] || 0) - ((sp.kalemTamir || {})[k.id] || 0));
+      const o = (AYARLAR.find(a => a.id === ay) || { o: 0.585 }).o;
+      beklenen += hesapla(k, ay, sp.altinKgUSD, sp.mc).mamulGram * o * net; tamAdet += net;
+    });
+    const evrak = [...new Set(rows.map(r => r[1]))];
+    return { rows, rhino, beklenen, tamAdet, evrak, bulunan, anahtarVar: keys.length > 0 };
+  };
   const [kfDuz, setKfDuz] = useState(null); // sipariş ürün kartında işçilik fiyatı düzenleme: { id, val }
   const [ekForm, setEkForm] = useState(null);
   useEffect(() => { ld("v7ekparca", []).then(l => setEkParcalar(Array.isArray(l) ? l : [])); }, []);
@@ -15461,6 +15500,10 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
           {stat("Teslim", s.teslimTarihi?new Date(s.teslimTarihi).toLocaleDateString("tr-TR"):"—","#e8833a")}
           {stat("İlerleme", "%"+o.pct+" ("+o.tam+"/"+o.aktif+")", o.pct===100?"#6abf69":GOLD)}
           {kfAdm && stat("İşçilik toplam", kfUSD(o.isc))}
+          {kfAdm && (() => { const z = rhinoOzet(s); if (!z) return null; if (!z.rows.length && !(z.tamAdet > 0)) return null;
+            if (!z.rows.length) return stat("Rhino satış", <><div style={{ fontSize:13, fontWeight:600 }}>satışta görünmüyor</div><div style={{ fontSize:10, fontWeight:500, color:"#7a6f5a", marginTop:2 }}>{z.tamAdet} adet tamamlandı · beklenen {fN(z.beklenen,2)} has{z.anahtarVar ? "" : " · sipariş no yok"}</div></>, "#e8833a");
+            const fark = z.rhino - z.beklenen, oran = z.beklenen > 0 ? Math.abs(fark) / z.beklenen : 1, uyuyor = z.beklenen > 0 && oran <= 0.05;
+            return stat("Rhino satış", <><div style={{ fontSize:13, fontWeight:600 }}>{uyuyor ? "✓ eşleşti" : "⚠ fark"} · {fN(z.rhino,2)} has</div><div style={{ fontSize:10, fontWeight:500, color:"#7a6f5a", marginTop:2 }}>beklenen {fN(z.beklenen,2)} has{z.beklenen > 0 ? " · fark "+(fark>=0?"+":"")+fN(fark,2) : " (tamamlanan kalem yok)"}</div><div style={{ fontSize:10, fontWeight:500, color:"#7a6f5a" }}>evrak {z.evrak.join(", ")} · {z.bulunan.join(" + ")}</div></>, uyuyor ? "#6abf69" : "#e85a4f"); })()}
           {kfAdm && s.altinKgUSD > 0 && (() => { const z = kfOz(s, o); return stat("Kâr", <>{fN(o.kar,3)} has<div style={{ fontSize:11, fontWeight:600 }}>{fN(z.net,3)} mly{z.dusuk ? " ⚠ min "+fN(z.min,3) : ""}</div><div style={{ fontSize:10, fontWeight:500, color:"#7a6f5a", marginTop:2 }}>{fN(Number(s.mc||madenCarpan)||0.03,3)} maliyet düşülmüş</div></>, z.dusuk ? "#e85a4f" : "#6abf69"); })()}
         </div>
         <div className="sp-s-ozt" style={{ display:"flex", gap:6, flexWrap:"wrap", alignItems:"center", marginBottom:12 }}><span style={{ fontSize:11, color:"#7a6f5a", fontWeight:600 }}>AYAR:</span>{Object.entries(o.ayarlar).sort((a,b)=>b[1]-a[1]).map(([a,g])=><span key={a} style={{ fontSize:13, fontWeight:600, color:GOLD, background:"rgba(var(--vurgu-rgb),0.14)", borderRadius:8, padding:"3px 10px" }}>{a} · {fN(g,2)} gr</span>)}</div>
@@ -19566,6 +19609,8 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
         </Modal>
       )}
 
+
+      <div title="Sürüm tarihi" style={{ position:"fixed", top:3, right:8, zIndex:60, fontSize:10, color:T.dim||"#998a6e", opacity:0.7, pointerEvents:"none", userSelect:"none" }}>{SURUM_TARIH}</div>
 
       {/* HURDA MODAL */}
       {hurdaModal && (
