@@ -1,7 +1,7 @@
 import { supabase, dbLoad, dbSave, fotoYukleStorage, yedekKaydet, yedekListesi, yedekGetir, bugunYedekVarMi, tabloModelleriSenkron, tabloModelleriToplu, tabloModelSil, tabloSiparisleriSenkron, tabloSiparisleriToplu, tabloSiparisSil, tabloMusterileriYaz, akilliModelOku, akilliSiparisOku, akilliMusteriOku, islemKaydet, islemGecmisiGetir, realtimeBaslat, tabloKoleksiyonlariYaz, tabloKasaYaz, akilliKoleksiyonOku, akilliKasaOku, tabloKoleksiyonlariOku, tabloKasaOku, saglikDenetimi, ekranSunucuFarki, toptanciKaydet, toptancilariGetir, toptanciSil, vitrinGecmisiGetir, vitrinEnCokBakilan, vitrinOzetGetir, vitrinAnaliz, vitrinGetirGuvenli, siparisOlusturGuvenli, siparislerimGetirGuvenli, siparisIptalGuvenli, siparisGuncelleGuvenli, siparisMusteriGizleGuvenli, vitrinAktiviteKaydetGuvenli, vitrinSupheliCihazlar, vitrinCevrimiciMusteriler, radarTrendleriOku, radarKaynaklariOku, radarKanitlariOku, radarTumKanitlariOku, radarTrendGuncelle, radarTrendSil, radarManuelKanitEkle } from "./supabase.js";
 import { useState, useEffect, useCallback, useMemo, useRef, Fragment } from "react";
 
-const SURUM_TARIH = "18 Kas 20:40"; // her yeni App.jsx tesliminde güncellenir — ekranın yenilendiğini anlamak için sağ üstte görünür
+const SURUM_TARIH = "18 Kas 21:10"; // her yeni App.jsx tesliminde güncellenir — ekranın yenilendiğini anlamak için sağ üstte görünür
 const uid = () => "x" + Date.now() + Math.random().toString(36).substr(2, 5);
 // ═══ ÇALIŞAN AUTH OTURUMU — yerel şifre kontrolünün ardından gerçek Supabase Auth oturumu açar ═══
 // (RLS politikaları "authenticated" rolüne dayanacak; hesap Supabase Dashboard'da manuel oluşturuldu)
@@ -6234,6 +6234,37 @@ function OngoruPaneli({ T, GH, siparisler, kasa, altinKgUSD, mc, onAc }) {
   );
 }
 
+// Sipariş ekranı için: her açık siparişin tahmini bitişi (teslim sırasıyla ortak kapasite). Öngörü sekmesindeki hesapla aynı mantık.
+function ongTeslimHaritasi(siparisler, altinKgUSD, mc) {
+  const bugun = Date.now(); const TAM = ["tamam", "teslim"];
+  const acik = [], tamK = [];
+  (siparisler || []).forEach(sp => {
+    if (sp.onayDurum === "bekliyor" || sp.onayDurum === "red" || sp.onayDurum === "iptal") return;
+    const kd = sp.kalemDurumlar || {}; const base = Number(sp.altinKgUSD) || Number(altinKgUSD) || 0;
+    let kalan = 0;
+    (sp.kalemler || []).forEach(k => {
+      const st = kd[k.id] || k.durum || "baslanmadi"; if (st === "hurda") return;
+      const net = Math.max(0, (k.adet || 1) - ((sp.kalemHurda || {})[k.id] || 0) - ((sp.kalemIade || {})[k.id] || 0) - ((sp.kalemTamir || {})[k.id] || 0)); if (net <= 0) return;
+      const gram = hesapla(k, k.secilenAyar || k.refAyar, base, sp.mc || mc).mamulGram * net;
+      if (TAM.includes(st)) { const t = (sp.kalemTamamTarih || {})[k.id] || ongSipTamamTarih(sp) || null; if (t) tamK.push({ t, gram }); }
+      else kalan += gram;
+    });
+    if (kalan > 0) acik.push({ sp, kalan });
+  });
+  const bas = bugun - 28 * ONG_GUN; const son = tamK.filter(x => x.t >= bas); const isGun = isGunuSure(bas, bugun) / ONG_GUN;
+  const yeterli = son.length >= 5 && isGun >= 5;
+  const thr = yeterli ? son.reduce((a, x) => a + x.gram, 0) / isGun : 0;
+  const harita = {};
+  let cum = 0;
+  [...acik].sort((a, b) => (ongTeslimMs(a.sp) ?? 9e15) - (ongTeslimMs(b.sp) ?? 9e15)).forEach(x => {
+    cum += x.kalan; const teslim = ongTeslimMs(x.sp);
+    const eta = thr > 0 ? ongIsGunuEkle(bugun, cum / thr) : null;
+    let durum = "belirsiz";
+    if (eta && teslim) durum = eta <= teslim - 2 * ONG_GUN ? "yetisir" : eta <= teslim ? "riskli" : "yetismez"; else if (eta) durum = "tarihsiz";
+    harita[x.sp.id] = { durum, eta, teslim, kalan: x.kalan, gecikGun: eta && teslim ? Math.ceil((eta - teslim) / ONG_GUN) : 0 };
+  });
+  return { yeterli, thr, harita };
+}
 function rpSonMizan(mizanlar){ return mizanlar.length ? mizanlar[mizanlar.length-1] : null; }
 function rpHasToplam(mizan){ // son mizandan başlıca bakiyeler (HAS)
   if (!mizan) return null;
@@ -12772,7 +12803,7 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
   const [sipSecId, setSipSecId] = useState("");
   const [sipMenu, setSipMenu] = useState("");
   const [sipBuyuk, setSipBuyuk] = useState(null);
-  const [sipGorunum, setSipGorunum] = useState(()=>{ try { return localStorage.getItem("sipGorunum")==="liste" ? "liste" : "aylar"; } catch(e) { return "aylar"; } });
+  const [sipGorunum, setSipGorunum] = useState(()=>{ try { const g = localStorage.getItem("sipGorunum"); return g==="liste" ? "liste" : g==="oncelik" ? "oncelik" : "aylar"; } catch(e) { return "aylar"; } });
   const [sipSurukle, setSipSurukle] = useState("");
   const [sipHedefAy, setSipHedefAy] = useState("");
   const [sipDrawer, setSipDrawer] = useState("");
@@ -12919,6 +12950,15 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
 
   const altinKgUSD  = Number(altinKg) || 0;
   const madenCarpan = Number(mc) || 0.25;
+  const teslimH = useMemo(() => AKTIF_SIRKET_ONEK === "" ? ongTeslimHaritasi(siparisler, altinKgUSD, madenCarpan) : null, [siparisler, altinKgUSD, madenCarpan]);
+  const teslimMetin = (sp) => {
+    if (!teslimH) return null; const d = teslimH.harita[sp.id]; if (!d || d.durum === "belirsiz") return null;
+    if (d.durum === "yetismez") return { m: "yetişmez · +" + d.gecikGun + " gün · tahmini bitiş " + ongTar(d.eta), c: "#ff5a4d", d };
+    if (d.durum === "riskli") return { m: "riskli · tahmini bitiş " + ongTar(d.eta), c: "#e0952f", d };
+    if (d.durum === "yetisir") return { m: "yetişir · tahmini bitiş " + ongTar(d.eta), c: "#4cc27a", d };
+    return { m: "tahmini bitiş " + ongTar(d.eta) + " (teslim tarihi yok)", c: "#998a6e", d };
+  };
+  const [sipSorunlu, setSipSorunlu] = useState(false);
 
   useEffect(() => {
     document.body.style.margin = "0";
@@ -15674,8 +15714,9 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
     return true;
   });
   const sirali = liste.map((s,i)=>({s,i})).sort((a,b)=>grupNo(a.s)-grupNo(b.s)||a.i-b.i).map(x=>x.s);
-  const aylarModu = sipGorunum==="aylar";
-  const sec = (aylarModu||sipRapor) ? (sipDrawer ? siparisler.find(x=>x.id===sipDrawer)||null : null) : (siparisler.find(x=>x.id===sipSecId && sirali.some(y=>y.id===x.id)) || sirali[0] || null);
+  const oncelikModu = sipGorunum==="oncelik" && AKTIF_SIRKET_ONEK==="";
+  const aylarModu = sipGorunum==="aylar" || (sipGorunum==="oncelik" && AKTIF_SIRKET_ONEK!=="");
+  const sec = (aylarModu||oncelikModu||sipRapor) ? (sipDrawer ? siparisler.find(x=>x.id===sipDrawer)||null : null) : (siparisler.find(x=>x.id===sipSecId && sirali.some(y=>y.id===x.id)) || sirali[0] || null);
   const ayAnahtar = t => { const d=new Date(t); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0"); };
   const ayAdi = key => { const [y,m]=key.split("-").map(Number); const a=new Date(y,m-1,1).toLocaleDateString("tr-TR",{month:"long",year:"numeric"}); return a.charAt(0).toLocaleUpperCase("tr-TR")+a.slice(1); };
   const gTarihU = t => new Date(t).toLocaleDateString("tr-TR",{day:"2-digit",month:"long"});
@@ -15805,6 +15846,7 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
           {stat("Sipariş tarihi", new Date(s.tarih).toLocaleDateString("tr-TR"))}
           {stat("Teslim", s.teslimTarihi?new Date(s.teslimTarihi).toLocaleDateString("tr-TR"):"—","#e8833a")}
           {stat("İlerleme", "%"+o.pct+" ("+o.tam+"/"+o.aktif+")", o.pct===100?"#6abf69":GOLD)}
+          {(() => { const t = teslimMetin(s); return t ? stat("Tahmini bitiş", <div style={{ fontSize:13, fontWeight:600 }}>{t.m}</div>, t.c) : null; })()}
           {kfAdm && stat("İşçilik toplam", kfUSD(o.isc))}
           {kfAdm && (() => { const z = rhinoOzet(s); if (!z) return null; if (!z.rows.length && !(z.tamAdet > 0)) return null;
             if (!z.rows.length) return stat("Rhino satış", <><div style={{ fontSize:13, fontWeight:600 }}>satışta görünmüyor</div><div style={{ fontSize:10, fontWeight:500, color:"#7a6f5a", marginTop:2 }}>{z.tamAdet} adet tamamlandı · beklenen {fN(z.beklenen,2)} has{z.anahtarVar ? "" : " · sipariş no yok"}</div></>, "#e8833a");
@@ -15837,7 +15879,8 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
           );
         })()}
         <div className="sp-s-kal">
-        <div style={{ display:"flex", justifyContent:"flex-end", marginBottom:6 }}>
+        <div style={{ display:"flex", justifyContent:"flex-end", alignItems:"center", gap:8, marginBottom:6 }}>
+          <button onClick={()=>setSipSorunlu(v=>!v)} title="Hurda, iade, tamir, geciken ya da düşük kârlı kalemleri göster" style={{ ...GH, fontSize:11, padding:"5px 10px", borderColor:sipSorunlu?"rgba(var(--vurgu-rgb),0.7)":undefined, color:sipSorunlu?GOLD:undefined, fontWeight:sipSorunlu?700:500 }}>{sipSorunlu ? "Sadece sorunlular ✓" : "Sadece sorunlular"}</button>
           <select value={sipSira} onChange={e=>setSipSira(e.target.value)} title="Kalem sıralaması (görünüm + PDF)" style={{ ...IS, width:"auto", padding:"5px 8px", fontSize:11 }}>
             {KONF_SIRA_SECENEKLERI.map(o=><option key={o.id} value={o.id}>↕ {o.l}</option>)}
           </select>
@@ -15848,6 +15891,7 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
             const dur = DURUMLAR.find(d=>d.id===mev)||DURUMLAR[0];
             const hA=(s.kalemHurda||{})[k.id]||0, iA=(s.kalemIade||{})[k.id]||0, tA=(s.kalemTamir||{})[k.id]||0;
             const sec_ = durumSecenekleri();
+            if (sipSorunlu && !(hA>0 || iA>0 || tA>0 || (o.gecikti && !["tamam","teslim"].includes(mev)) || (kfAdm && (() => { const hq = hesapla(k, k.secilenAyar||k.refAyar, s.altinKgUSD, s.mc); return hq.mamulGram > 0 && hq.karUyari; })()))) return null;
             return (
               <div key={k.id} className="sp-kalem" style={{ display:"flex", gap:10, alignItems:"center", flexWrap:"wrap", padding:8, background:"rgba(var(--vurgu-rgb),0.02)", border:"1px solid rgba(var(--vurgu-rgb),0.08)", borderRadius:12, borderLeft:"4px solid "+dur.c }}>
                 <div onClick={()=>{ const mm=modeller.find(x=>x.id===k.id)||modeller.find(x=>k.kod&&x.kod===k.kod); if (mm) openEM(mm); else if (k.foto) setSipBuyuk({src:k.foto,ad:(k.kod||"")+" "+(k.ad||"")}); }} title="Model kartını aç" style={{ position:"relative", width:84, height:84, borderRadius:10, overflow:"hidden", flexShrink:0, background:"rgba(0,0,0,0.08)", cursor:"pointer" }}>
@@ -15906,6 +15950,49 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
           </div>
         )}
         </div>
+      </div>
+    );
+  })();
+  const oncelikGorunum = (() => {
+    if (!oncelikModu) return null;
+    const bugunMs = Date.now();
+    const satirlar = liste.filter(s => { const g = grupNo(s); return g===1 || g===2; }).map(s => {
+      const o = ozet(s); const d = teslimH && teslimH.harita[s.id]; const tT = ongTeslimMs(s);
+      let puan = 0; const nedenler = [];
+      const kalanGun = tT ? Math.ceil((tT - bugunMs)/ONG_GUN) : null;
+      if (o.gecikti) { puan += 100 + Math.min(40, Math.abs(kalanGun||0)); nedenler.push("teslimi " + Math.abs(kalanGun||0) + " gün geçti"); }
+      else if (kalanGun != null && kalanGun <= 3) { puan += 45 - kalanGun*5; nedenler.push(kalanGun <= 0 ? "teslim bugün" : "teslime " + kalanGun + " gün"); }
+      if (d && d.durum==="yetismez") { puan += 60 + Math.min(30, d.gecikGun*3); nedenler.push("tahmini bitiş teslimden " + d.gecikGun + " gün sonra"); }
+      else if (d && d.durum==="riskli") { puan += 30; nedenler.push("teslime pay az"); }
+      if (grupNo(s)===1) { puan += 10; nedenler.push("henüz işleme alınmadı"); }
+      if (o.geciken) { puan += 15; nedenler.push("bir aşamada 7+ gün"); }
+      if (kfAdm) { const z = kfOz(s, o); if (z.dusuk) { puan += 8; nedenler.push("düşük kâr"); } }
+      return { s, o, puan, nedenler, tT };
+    }).sort((a,b)=> b.puan - a.puan || (a.tT ?? 9e15) - (b.tT ?? 9e15));
+    const dikkat = satirlar.filter(x=>x.puan>0), sakin = satirlar.filter(x=>x.puan<=0);
+    const sat = (x) => {
+      const t = teslimMetin(x.s); const ciddi = x.puan >= 100 ? "#ff5a4d" : x.puan >= 45 ? "#e0952f" : (_acikTema ? "#aaa" : "#555");
+      return (
+        <div key={x.s.id} onClick={()=>setSipDrawer(x.s.id)} style={{ cursor:"pointer", display:"flex", gap:12, alignItems:"center", padding:"10px 14px", borderRadius:12, background:_acikTema?"#f8f8f9":"#0c0c0c", border:"1px solid "+(_acikTema?T.border:"#2c2c2c"), borderLeft:"3px solid "+ciddi, marginBottom:8, color:_yazi }}>
+          <div style={{ minWidth:0, flex:"1 1 240px" }}>
+            <div style={{ fontSize:15, fontWeight:600 }}>{x.s.musKod||x.s.musteri||"İsimsiz"}{x.s.siparisNo && <span style={{ fontSize:12, fontWeight:500, opacity:.7, marginLeft:8 }}>{x.s.siparisNo}</span>}</div>
+            <div style={{ fontSize:12, opacity:.75, marginTop:2 }}>{x.o.adet} adet · {fN(x.o.gram,1)} gr · %{x.o.pct} tamam · teslim {x.s.teslimTarihi ? gTarihU(x.tT) : "—"}</div>
+          </div>
+          <div style={{ flex:"1 1 260px", fontSize:12.5 }}>
+            {x.nedenler.length>0 ? <div style={{ color:ciddi, fontWeight:600 }}>{x.nedenler.join(" · ")}</div> : <div style={{ opacity:.6 }}>sorun görünmüyor</div>}
+            {t && <div style={{ color:t.c, marginTop:2 }}>{t.m}</div>}
+          </div>
+        </div>
+      );
+    };
+    return (
+      <div style={{ maxWidth:900 }}>
+        <div style={{ fontSize:12, color:T.sub, marginBottom:10 }}>Açık siparişler ilgilenme önceliğine göre sıralı: geciken ve yetişmeyecek olanlar üstte. Satıra tıklayınca sipariş detayı açılır.</div>
+        {dikkat.length>0 && <div style={{ fontSize:12, fontWeight:700, color:T.gold, letterSpacing:.5, margin:"4px 0 8px" }}>DİKKAT İSTEYENLER ({dikkat.length})</div>}
+        {dikkat.map(sat)}
+        {sakin.length>0 && <div style={{ fontSize:12, fontWeight:700, color:T.sub, letterSpacing:.5, margin:"14px 0 8px" }}>SORUN GÖRÜNMEYENLER ({sakin.length})</div>}
+        {sakin.map(sat)}
+        {satirlar.length===0 && <div style={{ color:"#665d4a", fontSize:13, padding:20, textAlign:"center" }}>Açık sipariş yok</div>}
       </div>
     );
   })();
@@ -16067,6 +16154,7 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
                         </span>
                       </div>
                       {s.aciklama && <div title={s.aciklama} style={{ marginTop:7, fontSize:12.1, lineHeight:"16px", color:"#ff453a", fontWeight:600, display:"-webkit-box", WebkitLineClamp:2, WebkitBoxOrient:"vertical", overflow:"hidden" }}>{s.aciklama}</div>}
+                      {(() => { const t = !bitti(s) && teslimMetin(s); return t ? <div style={{ marginTop:6, fontSize:12.1, color:t.c, fontWeight:600 }}>{t.m}</div> : null; })()}
                       </div>
 
                       {fotolar.length>0 && <div className="sm-oc-eski" style={{ display:"grid", gridTemplateColumns:"repeat(4, minmax(0,1fr))", gap:5, marginTop:8 }}>{fotolar.map((k,ix)=><div key={k.id} title={(k.kod||"")+" "+(k.ad||"")+" — model kartını aç"} onClick={e=>{ const mm=modeller.find(x=>x.id===k.id) || modeller.find(x=>k.kod && x.kod===k.kod); if (mm) { e.stopPropagation(); openEM(mm); } }} style={{ position:"relative", aspectRatio:"1 / 1", borderRadius:8, overflow:"hidden", background:"rgba(0,0,0,0.06)", cursor:"zoom-in" }}><img loading="lazy" decoding="async" src={k.foto} alt="" draggable={false} style={{ width:"100%", height:"100%", objectFit:"cover", display:"block" }}/>{ix===7 && fotoHepsi.length>8 && <div style={{ position:"absolute", inset:0, background:"rgba(0,0,0,0.5)", color:"#fff", fontSize:15, fontWeight:600, display:"flex", alignItems:"center", justifyContent:"center" }}>+{fotoHepsi.length-7}</div>}</div>)}</div>}
@@ -16113,7 +16201,7 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
             onPdf={()=>downloadPDF(buildSipListeRaporuHTML(liste, altinKgUSD, madenCarpan), "siparis-listesi-raporu")}
             onAc={(sp)=>setSipDrawer(sp.id)}
             onModel={(k)=>{ const mm=modeller.find(x=>x.id===k.id)||modeller.find(x=>k.kod&&x.kod===k.kod); if (mm) openEM(mm); }} />}
-          <div className="sm-seg" style={{ display:"flex", border:"1px solid rgba(var(--vurgu-rgb),0.3)", borderRadius:9, overflow:"hidden" }}>{[["aylar","📅 Aylar"],["liste","☰ Liste"]].map(([id,l])=><button key={id} onClick={()=>{ setSipGorunum(id); try{localStorage.setItem("sipGorunum",id);}catch(e){} }} style={{ background:sipGorunum===id?"rgba(var(--vurgu-rgb),0.25)":"transparent", border:"none", padding:"7px 12px", color:sipGorunum===id?GOLD:"#998a6e", fontSize:12, fontWeight:600, cursor:"pointer" }}>{l}</button>)}</div>
+          <div className="sm-seg" style={{ display:"flex", border:"1px solid rgba(var(--vurgu-rgb),0.3)", borderRadius:9, overflow:"hidden" }}>{[["aylar","📅 Aylar"],["liste","☰ Liste"],...(AKTIF_SIRKET_ONEK===""?[["oncelik","Bugün"]]:[])].map(([id,l])=><button key={id} onClick={()=>{ setSipGorunum(id); try{localStorage.setItem("sipGorunum",id);}catch(e){} }} style={{ background:sipGorunum===id?"rgba(var(--vurgu-rgb),0.25)":"transparent", border:"none", padding:"7px 12px", color:sipGorunum===id?GOLD:"#998a6e", fontSize:12, fontWeight:600, cursor:"pointer" }}>{l}</button>)}</div>
         </div>
       </div>
       {siparisler.length>0 && (() => {
@@ -16140,7 +16228,7 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
         const secili = sipAsama ? say(sipAsama) : [];
         const sd = asamalar.find(d=>d.id===sipAsama);
         const grup = {}; secili.forEach(x=>{ (grup[x.sp.id]=grup[x.sp.id]||{ sp:x.sp, items:[] }).items.push(x); });
-        const ac = id => { if (aylarModu) setSipDrawer(id); else setSipSecId(id); };
+        const ac = id => { if (aylarModu||oncelikModu) setSipDrawer(id); else setSipSecId(id); };
         return (
           <div style={{ marginBottom:12 }}>
             <div className="sm-metal-orj" style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap", marginBottom:8 }}>
@@ -16217,7 +16305,8 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
       })()}
       {siparisler.length===0 && <p style={{ color:"#665d4a", textAlign:"center", padding:"30px", fontSize:13 }}>Henüz sipariş kaydı yok</p>}
       {siparisler.length>0 && aylarModu && aylarGorunum}
-      {(aylarModu||sipRapor) && sec && (
+      {siparisler.length>0 && oncelikModu && oncelikGorunum}
+      {(aylarModu||oncelikModu||sipRapor) && sec && (
         <div className="sp-drawer" style={{ position:"fixed", inset:0, zIndex:sipRapor?950:60 }}>
           <div onClick={()=>setSipDrawer("")} style={{ position:"absolute", inset:0, background:"rgba(0,0,0,0.35)" }}/>
           <div className="sp-panel" style={{ position:"absolute", top:0, right:0, bottom:0, width:"min(max(640px,50vw),100vw)", overflowY:"auto", background:T.bg2||T.card, color:T.text, borderLeft:"1px solid "+T.border, boxShadow:"-12px 0 32px rgba(0,0,0,0.25)", padding:16 }}>
@@ -16226,7 +16315,7 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
           </div>
         </div>
       )}
-      {siparisler.length>0 && !aylarModu && (
+      {siparisler.length>0 && !aylarModu && !oncelikModu && (
         <div className={"sp-wrap"+(sipSecId?" sp-sec":"")}>
           <div className="sp-list" style={{ display:"flex", flexDirection:"column", gap:6 }}>
             {sirali.length===0 && <div style={{ color:"#665d4a", fontSize:13, padding:20, textAlign:"center" }}>Eşleşen sipariş yok</div>}
