@@ -12285,6 +12285,21 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
   const [driveYukleniyor, setDriveYukleniyor] = useState(null);
   const [hurdaModal, setHurdaModal] = useState(null); // {sipId, kalemId, kalemAd, maxAdet, mevcAdet}
   const [devirModal, setDevirModal] = useState(null); // {sipId, kalemId, kalemAd, adet, hedef:"yeni"|sipId, tarih}
+  const kalemIptalEt = (sp, k) => {
+    if (!yoneticiMi) return;
+    const kalan = (sp.kalemler || []).filter(x => x.id !== k.id).length;
+    if (!window.confirm((k.kod || k.ad || "Model") + " (" + (k.adet || 1) + " adet) siparişten çıkarılsın mı?\n\nMüşteri iptal etti olarak işaretlenir; listeden, toplamlardan ve üretim sayısından düşer. İstersen sipariş detayından geri alabilirsin." + (kalan === 0 ? "\n\n⚠ Bu siparişteki son kalem; sipariş boş kalacak." : ""))) return;
+    svS(siparisler.map(x => x.id === sp.id ? { ...x, kalemler: (x.kalemler || []).filter(y => y.id !== k.id), iptalKalemler: [...(x.iptalKalemler || []), { ...k, iptalTarih: Date.now(), iptalEden: (AKTIF_KULLANICI && (AKTIF_KULLANICI.ad || AKTIF_KULLANICI.kullanici_adi)) || "" }] } : x));
+    islemKaydet(AKTIF_SIRKET_ONEK, "sil", "sipariş", (sp.siparisNo || sp.musteri || "") + " · kalem iptal: " + (k.kod || k.ad || "") + " ×" + (k.adet || 1));
+    toastGoster("ok", (k.kod || k.ad || "Model") + " siparişten çıkarıldı");
+  };
+  const kalemIptalGeri = (sp, ik) => {
+    if (!yoneticiMi) return;
+    const { iptalTarih, iptalEden, ...k } = ik;
+    svS(siparisler.map(x => x.id === sp.id ? { ...x, kalemler: [...(x.kalemler || []), k], iptalKalemler: (x.iptalKalemler || []).filter(y => y !== ik && !(y.id === ik.id && y.iptalTarih === ik.iptalTarih)) } : x));
+    islemKaydet(AKTIF_SIRKET_ONEK, "ekle", "sipariş", (sp.siparisNo || sp.musteri || "") + " · kalem iptali geri alındı: " + (k.kod || k.ad || ""));
+    toastGoster("ok", (k.kod || k.ad || "Model") + " geri eklendi");
+  };
   const devirAc = (sipId, kalemId, kalemAd, adet) => {
     const kay = siparisler.find(x => x.id === sipId);
     let tarih = "";
@@ -15515,12 +15530,25 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
                     { l:"↩ İade"+(iA>0?" ("+iA+")":""), c:"#a78bfa", f:()=>setIadeModal({sipId:s.id,kalemId:k.id,kalemAd:k.ad,kalemKod:k.kod,maxAdet:k.adet||1,mevcAdet:iA,mevcNeden:(s.kalemIadeNeden||{})[k.id]||"",iadeTuru:(s.kalemIadeTuru||{})[k.id]||"para"}) },
                     { l:"✏️ Adet düzenle ("+(k.adet||1)+")", c:"#d4a017", f:()=>setAdetModal({ sipId:s.id, kalemId:k.id, kalemAd:k.ad, kalemKod:k.kod, eski:k.adet||1, yeni:String(k.adet||1), alt:hA+iA+tA }) },
                     { l:"🔧 Tamir"+(tA>0?" ("+tA+")":""), c:"#5b9bd5", f:()=>setTamirModal({sipId:s.id,kalemId:k.id,kalemAd:k.ad,kalemKod:k.kod,maxAdet:k.adet||1,mevcAdet:tA,mevcNeden:(s.kalemTamirNeden||{})[k.id]||""}) },
+                    ...(yoneticiMi ? [{ l:"✕ Müşteri iptal etti — siparişten çıkar", c:"#e85a4f", f:()=>kalemIptalEt(s,k) }] : []),
                   ])}
                 </div>
               </div>
             );
           })}
         </div>
+        {(s.iptalKalemler||[]).length > 0 && (
+          <div style={{ marginTop:12, padding:"8px 10px", border:"1px dashed rgba(232,90,79,0.35)", borderRadius:10 }}>
+            <div style={{ fontSize:10, fontWeight:700, color:"#e85a4f", marginBottom:4, letterSpacing:.5 }}>MÜŞTERİ İPTAL ETTİ</div>
+            {(s.iptalKalemler||[]).map((ik,i) => (
+              <div key={(ik.id||"")+"|"+i} style={{ display:"flex", alignItems:"center", gap:8, fontSize:12, color:"#998a6e", padding:"2px 0" }}>
+                <span style={{ textDecoration:"line-through" }}>{ik.kod||""} {ik.ad} · {ik.adet||1} adet</span>
+                <span style={{ fontSize:10 }}>{ik.iptalTarih ? new Date(ik.iptalTarih).toLocaleDateString("tr-TR",{day:"2-digit",month:"short"}) : ""}{ik.iptalEden ? " · "+ik.iptalEden : ""}</span>
+                {yoneticiMi && <button onClick={()=>kalemIptalGeri(s,ik)} style={{ background:"transparent", border:"none", color:"#6abf69", fontWeight:700, fontSize:11, cursor:"pointer", padding:0 }}>Geri al</button>}
+              </div>
+            ))}
+          </div>
+        )}
         </div>
       </div>
     );
