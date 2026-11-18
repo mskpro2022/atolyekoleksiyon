@@ -1,7 +1,7 @@
 import { supabase, dbLoad, dbSave, fotoYukleStorage, yedekKaydet, yedekListesi, yedekGetir, bugunYedekVarMi, tabloModelleriSenkron, tabloModelleriToplu, tabloModelSil, tabloSiparisleriSenkron, tabloSiparisleriToplu, tabloSiparisSil, tabloMusterileriYaz, akilliModelOku, akilliSiparisOku, akilliMusteriOku, islemKaydet, islemGecmisiGetir, realtimeBaslat, tabloKoleksiyonlariYaz, tabloKasaYaz, akilliKoleksiyonOku, akilliKasaOku, tabloKoleksiyonlariOku, tabloKasaOku, saglikDenetimi, ekranSunucuFarki, toptanciKaydet, toptancilariGetir, toptanciSil, vitrinGecmisiGetir, vitrinEnCokBakilan, vitrinOzetGetir, vitrinAnaliz, vitrinGetirGuvenli, siparisOlusturGuvenli, siparislerimGetirGuvenli, siparisIptalGuvenli, siparisGuncelleGuvenli, siparisMusteriGizleGuvenli, vitrinAktiviteKaydetGuvenli, vitrinSupheliCihazlar, vitrinCevrimiciMusteriler, radarTrendleriOku, radarKaynaklariOku, radarKanitlariOku, radarTumKanitlariOku, radarTrendGuncelle, radarTrendSil, radarManuelKanitEkle } from "./supabase.js";
 import { useState, useEffect, useCallback, useMemo, useRef, Fragment } from "react";
 
-const SURUM_TARIH = "18 Kas 19:55"; // her yeni App.jsx tesliminde güncellenir — ekranın yenilendiğini anlamak için sağ üstte görünür
+const SURUM_TARIH = "18 Kas 20:40"; // her yeni App.jsx tesliminde güncellenir — ekranın yenilendiğini anlamak için sağ üstte görünür
 const uid = () => "x" + Date.now() + Math.random().toString(36).substr(2, 5);
 // ═══ ÇALIŞAN AUTH OTURUMU — yerel şifre kontrolünün ardından gerçek Supabase Auth oturumu açar ═══
 // (RLS politikaları "authenticated" rolüne dayanacak; hesap Supabase Dashboard'da manuel oluşturuldu)
@@ -5928,6 +5928,312 @@ function useRpVeri() {
   useEffect(() => { let i=false; rpYukleHepsi().then(d=>{ if(!i) setV(d); }); return ()=>{ i=true; }; }, [say]);
   return [v, () => setSay(x=>x+1)];
 }
+// ═══ ÖNGÖRÜ PANELİ (MSK) — teslim riski · iş yükü · altın pozisyonu · tahsilat · tahmin↔gerçekleşen ═══
+const ONG_GUN = 24 * 3600 * 1000;
+function ongIsGunuEkle(ms, n) { // n iş günü (Pzt–Cum) sonrası
+  let d = new Date(ms), kalan = Math.ceil(n);
+  while (kalan > 0) { d = new Date(d.getTime() + ONG_GUN); const g = d.getDay(); if (g !== 0 && g !== 6) kalan--; }
+  return d.getTime();
+}
+function ongTeslimMs(s) {
+  const x = String((s && s.teslimTarihi) || "").trim(); if (!x) return null;
+  const t = /^\d{4}-\d{2}-\d{2}$/.test(x) ? new Date(x + "T18:00:00").getTime() : new Date(x).getTime();
+  return isNaN(t) ? null : t;
+}
+function ongHaftaBas(ms) { const d = new Date(ms); d.setHours(0, 0, 0, 0); const g = (d.getDay() + 6) % 7; d.setDate(d.getDate() - g); return d.getTime(); }
+const ongTar = (ms) => ms ? new Date(ms).toLocaleDateString("tr-TR", { day: "2-digit", month: "short" }) : "—";
+const ongF = (n, d = 1) => (Number(n) || 0).toLocaleString("tr-TR", { minimumFractionDigits: d, maximumFractionDigits: d });
+const ongNorm = (v) => String(v || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+function ongSipTamamTarih(s) { const g = (s.durumGecmisi || []).filter(x => x.durum === "tamam" || x.durum === "teslim"); return g.length ? g[g.length - 1].tarih : null; }
+
+function OngoruPaneli({ T, GH, siparisler, kasa, altinKgUSD, mc, onAc }) {
+  const [v] = useRpVeri();
+  const [bolum, setBolum] = useState("teslim");
+  const R = { iyi: "#4cc27a", orta: "#e0952f", kotu: "#ef5a4f" };
+  const bugun = Date.now();
+  const kasaX = kasa || {};
+  const H = useMemo(() => {
+    const TAM = ["tamam", "teslim"];
+    const acik = [], tamamKalem = [], tamamSip = [];
+    const asama = {}; // aşama → {adet, gram, yasToplam, n}
+    const dokulmemis = {}; // ayar → has ihtiyacı
+    (siparisler || []).forEach(sp => {
+      if (sp.onayDurum === "bekliyor" || sp.onayDurum === "red" || sp.onayDurum === "iptal") return;
+      const kd = sp.kalemDurumlar || {};
+      const base = Number(sp.altinKgUSD) || Number(altinKgUSD) || 0, mly = sp.mc || mc;
+      const o = { sp, kalanGram: 0, kalanAdet: 0, tamGram: 0, tamKar: 0, tamIsc: 0, tamHas: 0, tamAdet: 0, hurdaHas: 0, iadeHas: 0 };
+      (sp.kalemler || []).forEach(k => {
+        const ay = k.secilenAyar || k.refAyar; const st0 = kd[k.id] || k.durum || "baslanmadi"; if (st0 === "hurda") return;
+        const st = st0 === "cizimde" ? "baslanmadi" : st0;
+        const hu = (sp.kalemHurda || {})[k.id] || 0, ia = (sp.kalemIade || {})[k.id] || 0, ta = (sp.kalemTamir || {})[k.id] || 0;
+        const net = Math.max(0, (k.adet || 1) - hu - ia - ta);
+        const hc = hesapla(k, ay, base, mly);
+        const oran = ay === "925" ? 0 : ((AYARLAR.find(a => a.id === ay) || { o: 0.585 }).o);
+        o.hurdaHas += hc.mamulGram * oran * hu; o.iadeHas += hc.mamulGram * oran * ia;
+        if (net <= 0) return;
+        const gram = hc.mamulGram * net;
+        if (TAM.includes(st)) {
+          const t = (sp.kalemTamamTarih || {})[k.id] || ongSipTamamTarih(sp) || null;
+          if (t) tamamKalem.push({ t, gram, adet: net });
+          o.tamGram += gram; o.tamAdet += net; o.tamHas += gram * oran; o.tamKar += (hc.karHas || 0) * net; o.tamIsc += (hc.iscilikHas || 0) * net;
+        } else {
+          o.kalanGram += gram; o.kalanAdet += net;
+          const asg = (sp.kalemAsamaGecmis || {})[k.id] || []; let giris = null;
+          for (let i = asg.length - 1; i >= 0; i--) if (asg[i].d === st) { giris = asg[i].t; break; }
+          if (!giris) { const dg = (sp.durumGecmisi || []).filter(x => x.durum === st); giris = dg.length ? dg[dg.length - 1].tarih : (sp.islemTarih || sp.tarih || bugun); }
+          const a = asama[st] || (asama[st] = { adet: 0, gram: 0, yas: 0, n: 0 });
+          a.adet += net; a.gram += gram; a.yas += isGunuSure(giris, bugun) / ONG_GUN * net; a.n += net;
+          if (["baslanmadi", "mum_tas"].includes(st) && oran > 0) dokulmemis[ay] = (dokulmemis[ay] || 0) + gram * oran;
+        }
+      });
+      if (o.kalanGram > 0) acik.push(o);
+      if (o.tamGram > 0) tamamSip.push(o);
+    });
+    // Günlük çıktı: son 28 gün
+    const bas = bugun - 28 * ONG_GUN;
+    const son = tamamKalem.filter(x => x.t >= bas);
+    const isGun = isGunuSure(bas, bugun) / ONG_GUN;
+    const yeterli = son.length >= 5 && isGun >= 5;
+    const thr = yeterli ? son.reduce((a, x) => a + x.gram, 0) / isGun : 0;
+    const thrAdet = yeterli ? son.reduce((a, x) => a + x.adet, 0) / isGun : 0;
+    // Teslim sırasına göre kuyruk
+    const sirali = [...acik].sort((a, b) => (ongTeslimMs(a.sp) ?? 9e15) - (ongTeslimMs(b.sp) ?? 9e15));
+    let cum = 0;
+    const kuyruk = sirali.map(o => {
+      cum += o.kalanGram;
+      const teslim = ongTeslimMs(o.sp);
+      const eta = thr > 0 ? ongIsGunuEkle(bugun, cum / thr) : null;
+      let durum = "belirsiz";
+      if (eta && teslim) durum = eta <= teslim - 2 * ONG_GUN ? "yetisir" : eta <= teslim ? "riskli" : "yetismez";
+      else if (eta && !teslim) durum = "tarihsiz";
+      return { ...o, teslim, eta, cum, durum, gecikGun: eta && teslim ? Math.ceil((eta - teslim) / ONG_GUN) : 0 };
+    });
+    return { acik, tamamSip, asama, dokulmemis, thr, thrAdet, yeterli, isGun, sonN: son.length, kuyruk };
+  }, [siparisler, altinKgUSD, mc]);
+
+  // Fiyat duyarlılığı: açık işlerin kârı (has) altın fiyatı değişirse
+  const duyarlilik = useMemo(() => {
+    const out = [];
+    [-10, -5, 0, 5, 10].forEach(p => {
+      let kar = 0, usd = 0;
+      H.acik.forEach(o => {
+        const sp = o.sp, kd = sp.kalemDurumlar || {}; const base0 = Number(sp.altinKgUSD) || Number(altinKgUSD) || 0; const base = base0 * (1 + p / 100);
+        (sp.kalemler || []).forEach(k => {
+          const st = kd[k.id] || k.durum || "baslanmadi"; if (["tamam", "teslim", "hurda"].includes(st)) return;
+          const net = Math.max(0, (k.adet || 1) - ((sp.kalemHurda || {})[k.id] || 0) - ((sp.kalemIade || {})[k.id] || 0) - ((sp.kalemTamir || {})[k.id] || 0)); if (!net) return;
+          const ay = k.secilenAyar || k.refAyar; if (ay === "925") return;
+          const hc = hesapla(k, ay, base, sp.mc || mc); kar += (hc.karHas || 0) * net; usd += (hc.karHas || 0) * net * (base / 1000);
+        });
+      });
+      out.push({ p, kar, usd });
+    });
+    return out;
+  }, [H, altinKgUSD, mc]);
+  const hamAltin = useMemo(() => (kasaX.hamAltin || []).reduce((a, x) => x.tip === "giris" ? a + (Number(x.has) || 0) : a - (Number(x.has) || 0), 0), [kasaX.hamAltin]);
+  const ihtiyac = Object.values(H.dokulmemis).reduce((a, x) => a + x, 0);
+
+  // Tahsilat: tamamlanan siparişlerden doğan alacak, ödemelerle FIFO eşleşir
+  const tahsilat = useMemo(() => {
+    const mus = {};
+    H.tamamSip.forEach(o => {
+      const ad = o.sp.musteri || "İsimsiz"; const t = ongSipTamamTarih(o.sp) || o.sp.tarih || bugun;
+      (mus[ad] = mus[ad] || { borclar: [] }).borclar.push({ t, has: Math.max(0, o.tamKar) });
+    });
+    const od = kasaX.musteriOdemeler || {};
+    Object.keys(od).forEach(ad => { mus[ad] = mus[ad] || { borclar: [] }; (od[ad] || []).filter(x => x.tip === "baslangic_bakiye").forEach(x => mus[ad].borclar.push({ t: x.tarih || 0, has: Number(x.has) || 0 })); });
+    const liste = [];
+    Object.keys(mus).forEach(ad => {
+      const borclar = mus[ad].borclar.filter(b => b.has > 0).sort((a, b) => a.t - b.t).map(b => ({ ...b, kalan: b.has }));
+      const odemeler = (od[ad] || []).filter(x => x.tip !== "baslangic_bakiye" && Number(x.has) > 0).sort((a, b) => (a.tarih || 0) - (b.tarih || 0));
+      let gecikTop = 0, gecikHas = 0, i = 0;
+      odemeler.forEach(p => {
+        let k = Number(p.has) || 0;
+        while (k > 1e-9 && i < borclar.length) {
+          const b = borclar[i]; const al = Math.min(k, b.kalan);
+          if (p.tarih && b.t) { gecikTop += Math.max(0, (p.tarih - b.t) / ONG_GUN) * al; gecikHas += al; }
+          b.kalan -= al; k -= al; if (b.kalan <= 1e-9) i++;
+        }
+      });
+      const acikB = borclar.filter(b => b.kalan > 1e-6);
+      const bakiye = acikB.reduce((a, b) => a + b.kalan, 0); if (bakiye < 0.5) return;
+      const ort = gecikHas > 0 ? gecikTop / gecikHas : null;
+      const enEski = acikB[0] ? (bugun - acikB[0].t) / ONG_GUN : 0;
+      const ref = Math.max(ort == null ? 45 : ort, 15);
+      let risk = "dusuk"; const oran = enEski / ref;
+      if (ort == null) risk = enEski > 60 ? "yuksek" : enEski > 30 ? "orta" : "dusuk"; else risk = oran > 2 ? "yuksek" : oran > 1.2 ? "orta" : "dusuk";
+      let beklenen = 0, kovaA = 0, kovaB = 0, kovaC = 0, gecik = 0;
+      acikB.forEach(b => { const e = b.t + ref * ONG_GUN; if (e < bugun) { gecik += b.kalan; if (beklenen === 0 || e < beklenen) beklenen = e; } else { const g = (e - bugun) / ONG_GUN; if (g <= 30) kovaA += b.kalan; else if (g <= 60) kovaB += b.kalan; else kovaC += b.kalan; if (beklenen === 0) beklenen = e; } });
+      const ilkBek = acikB.length ? acikB[0].t + ref * ONG_GUN : null;
+      liste.push({ ad, bakiye, ort, enEski, risk, ilkBek, kovaA, kovaB, kovaC, gecik, odemeVar: odemeler.length > 0 });
+    });
+    const rs = { yuksek: 0, orta: 1, dusuk: 2 };
+    liste.sort((a, b) => rs[a.risk] - rs[b.risk] || b.bakiye - a.bakiye);
+    return { liste, a30: liste.reduce((s, x) => s + x.kovaA, 0), a60: liste.reduce((s, x) => s + x.kovaB, 0), a90: liste.reduce((s, x) => s + x.kovaC, 0), gecik: liste.reduce((s, x) => s + x.gecik, 0), toplam: liste.reduce((s, x) => s + x.bakiye, 0) };
+  }, [H, kasaX.musteriOdemeler]);
+
+  // Tahmin ↔ gerçekleşen: Rhino satış satırları (EVRAK NOTU / ÜRÜN AÇK2 içinde bizim no ya da müşteri Ref/PO)
+  const gercek = useMemo(() => {
+    if (!v) return null;
+    const satirlar = (v.satislar || []).filter(r => !/GÜMÜŞ|GUMUS/i.test(String(r[2]))).map(r => ({ r, t: ongNorm((r[11] || "") + " " + (r[12] || "")) })).filter(x => x.t);
+    const sonuc = [];
+    let eslesmeyen = 0;
+    H.tamamSip.forEach(o => {
+      const sp = o.sp; const anah = [];
+      if (sp.siparisNo) anah.push(ongNorm(sp.siparisNo));
+      const ak = psPdfAnahtar(sp.aciklama); if (ak.ref) anah.push(ongNorm(ak.ref)); if (ak.po) anah.push(ongNorm(ak.po));
+      const keys = anah.filter(k => k.length >= 4);
+      const rows = keys.length ? satirlar.filter(x => keys.some(k => x.t.includes(k))).map(x => x.r) : [];
+      if (!rows.length) { eslesmeyen++; return; }
+      const rh = rows.reduce((a, r) => a + (Number(r[3]) || 0), 0), ri = rows.reduce((a, r) => a + (Number(r[4]) || 0), 0), rm = rows.reduce((a, r) => a + (Number(r[6]) || 0), 0);
+      sonuc.push({ sp, o, rhHas: rh, rhIsc: ri, rhMaden: rm, bekHas: o.tamHas, bekIsc: o.tamIsc, fark: ri - o.tamIsc, evrak: [...new Set(rows.map(r => r[1]))] });
+    });
+    sonuc.sort((a, b) => Math.abs(b.fark) - Math.abs(a.fark));
+    return { sonuc, eslesmeyen, topFark: sonuc.reduce((a, x) => a + x.fark, 0), topBek: sonuc.reduce((a, x) => a + x.bekIsc, 0), topRh: sonuc.reduce((a, x) => a + x.rhIsc, 0), topMaden: sonuc.reduce((a, x) => a + x.rhMaden, 0) };
+  }, [v, H]);
+
+  const chip = (id, l) => <button key={id} onClick={() => setBolum(id)} style={{ background: bolum === id ? "var(--goldtext)" : "rgba(var(--vurgu-rgb),0.06)", color: bolum === id ? (T.bg2 || "#14130f") : T.sub, border: "none", borderRadius: 16, padding: "7px 15px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>{l}</button>;
+  const th = { textAlign: "left", fontSize: 11, color: T.sub, fontWeight: 600, padding: "6px 8px", borderBottom: "1px solid " + T.border, whiteSpace: "nowrap" };
+  const td = { padding: "7px 8px", fontSize: 12, borderBottom: "1px solid " + T.border, color: T.text, whiteSpace: "nowrap" };
+  const rozet = (renk, m) => <span style={{ color: renk, fontWeight: 700 }}>{m}</span>;
+  const kpi = (ad, deger, alt, renk) => <RpKpi T={T} ad={ad} deger={deger} alt={alt} renk={renk} />;
+  const Izgara = ({ children }) => <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 10, marginBottom: 12 }}>{children}</div>;
+  const NOT = ({ children }) => <div style={{ fontSize: 11, color: T.sub, lineHeight: 1.5, marginTop: 8 }}>{children}</div>;
+  const yetersiz = !H.yeterli;
+  const ASAMA_AD = {}; DURUMLAR.forEach(d => { ASAMA_AD[d.id] = d.l; });
+
+  return (
+    <div>
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 14 }}>
+        {chip("teslim", "Teslim riski")}{chip("yuk", "İş yükü")}{chip("altin", "Altın pozisyonu")}{chip("tahsilat", "Tahsilat")}{chip("gercek", "Tahmin ↔ gerçekleşen")}
+      </div>
+
+      {bolum === "teslim" && (<div>
+        <Izgara>
+          {kpi("Günlük çıktı", yetersiz ? "yetersiz veri" : ongF(H.thr, 0) + " gr/iş günü", yetersiz ? "son 28 günde yeterli tamamlanan kalem yok" : H.sonN + " kalem · ~" + ongF(H.thrAdet, 0) + " adet/gün")}
+          {kpi("Yetişmez", H.kuyruk.filter(x => x.durum === "yetismez").length + " sipariş", "tahmini bitiş teslimden sonra", R.kotu)}
+          {kpi("Riskli", H.kuyruk.filter(x => x.durum === "riskli").length + " sipariş", "pay 2 günden az", R.orta)}
+          {kpi("Yetişir", H.kuyruk.filter(x => x.durum === "yetisir").length + " sipariş", "", R.iyi)}
+        </Izgara>
+        <RpKart T={T} baslik="AÇIK SİPARİŞLER — TAHMİNİ BİTİŞ (teslim tarihi sırasıyla, ortak kapasite)" genis>
+          {yetersiz ? <div style={{ fontSize: 12, color: T.sub }}>Tahmin için son 28 günde en az 5 tamamlanan kalem gerekir. Kalemleri "Tamamlandı" yaptıkça tahmin oluşur.</div> :
+            <div style={{ overflowX: "auto" }}><table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead><tr><th style={th}>Sipariş</th><th style={th}>Kalan</th><th style={th}>Teslim</th><th style={th}>Tahmini bitiş</th><th style={th}>Durum</th></tr></thead>
+              <tbody>{H.kuyruk.slice(0, 80).map(x => (
+                <tr key={x.sp.id} onClick={() => onAc && onAc(x.sp)} style={{ cursor: onAc ? "pointer" : "default" }}>
+                  <td style={td}>{x.sp.musKod || x.sp.musteri}{x.sp.siparisNo ? " · " + x.sp.siparisNo : ""}</td>
+                  <td style={td}>{ongF(x.kalanGram, 0)} gr · {x.kalanAdet} adet</td>
+                  <td style={td}>{ongTar(x.teslim)}</td>
+                  <td style={td}>{ongTar(x.eta)}</td>
+                  <td style={td}>{x.durum === "yetismez" ? rozet(R.kotu, "yetişmez +" + x.gecikGun + " gün") : x.durum === "riskli" ? rozet(R.orta, "riskli") : x.durum === "yetisir" ? rozet(R.iyi, "yetişir") : x.durum === "tarihsiz" ? <span style={{ color: T.sub }}>teslim tarihi yok</span> : "—"}</td>
+                </tr>))}</tbody>
+            </table></div>}
+          <NOT>Hesap: açık siparişler teslim tarihine göre sıralanır, kalan iş (gram) birikimli toplanıp son 28 günün gerçek günlük çıktısına (hafta sonu hariç) bölünür. Aşama sırası ve gerçek darboğaz hesaba katılmaz; kaba ama gerçek hıza dayalı bir tahmindir.</NOT>
+        </RpKart>
+      </div>)}
+
+      {bolum === "yuk" && (() => {
+        const hBas = ongHaftaBas(bugun); const kap = H.thr * 5;
+        const gruplar = {}; let tarihsiz = 0, gecmis = 0;
+        H.acik.forEach(o => { const t = ongTeslimMs(o.sp); if (t == null) { tarihsiz += o.kalanGram; return; } const hb = ongHaftaBas(t); if (hb < hBas) gecmis += o.kalanGram; else gruplar[hb] = (gruplar[hb] || 0) + o.kalanGram; });
+        const hafta = Object.keys(gruplar).map(Number).sort((a, b) => a - b).slice(0, 10);
+        const asamaSira = DURUMLAR.filter(d => d.id !== "hurda" && d.id !== "cizimde").map(d => d.id);
+        const wip = asamaSira.map(id => ({ id, ...(H.asama[id] || { adet: 0, gram: 0, yas: 0, n: 0 }) })).filter(x => x.adet > 0);
+        const uretimdeMax = wip.filter(x => x.id !== "baslanmadi").sort((a, b) => b.gram - a.gram)[0];
+        const satir = (ad, gr, renk) => { const oran = kap > 0 ? gr / kap : 0; return (
+          <div key={ad} style={{ marginBottom: 7 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: T.text, marginBottom: 2 }}><span>{ad}</span><span style={{ fontWeight: 700 }}>{ongF(gr, 0)} gr{kap > 0 ? " · kapasitenin %" + ongF(oran * 100, 0) : ""}</span></div>
+            <div style={{ height: 6, background: "rgba(128,128,128,0.15)", borderRadius: 3 }}><div style={{ height: 6, width: Math.min(100, Math.max(1, oran * 50)) + "%", background: renk || (oran > 1 ? R.kotu : oran > 0.8 ? R.orta : R.iyi), borderRadius: 3 }} /></div>
+          </div>); };
+        return (<div>
+          <Izgara>
+            {kpi("Haftalık kapasite", yetersiz ? "yetersiz veri" : ongF(kap, 0) + " gr", yetersiz ? "" : "günlük çıktı × 5 iş günü")}
+            {kpi("Bekleyen iş", ongF(H.acik.reduce((a, o) => a + o.kalanGram, 0), 0) + " gr", H.acik.length + " açık sipariş")}
+            {kpi("Teslimi geçmiş iş", ongF(gecmis, 0) + " gr", "bu haftadan önceki teslimler", gecmis > 0 ? R.kotu : undefined)}
+            {kpi("En çok biriken aşama", uretimdeMax ? ASAMA_AD[uretimdeMax.id] : "—", uretimdeMax ? ongF(uretimdeMax.gram, 0) + " gr · ort. " + ongF(uretimdeMax.yas / Math.max(1, uretimdeMax.n), 1) + " iş günü" : "")}
+          </Izgara>
+          <RpKart T={T} baslik="TESLİM HAFTASINA GÖRE İŞ YÜKÜ" genis>
+            {gecmis > 0 && satir("Teslimi geçmiş", gecmis, R.kotu)}
+            {hafta.map(h => satir(ongTar(h) + " haftası", gruplar[h]))}
+            {tarihsiz > 0 && satir("Teslim tarihi yok", tarihsiz, "#8a7d64")}
+            {!hafta.length && !gecmis && !tarihsiz && <div style={{ fontSize: 12, color: T.sub }}>Açık iş yok.</div>}
+            <NOT>Çubuk haftalık kapasiteye göre doludur (yarım çubuk = %100). Yeni sipariş kabul etmeden önce ilgili teslim haftasının doluluğuna bakın.</NOT>
+          </RpKart>
+          <RpKart T={T} baslik="AŞAMALARDA BİRİKEN İŞ" genis>
+            <div style={{ overflowX: "auto" }}><table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead><tr><th style={th}>Aşama</th><th style={th}>Adet</th><th style={th}>Gram</th><th style={th}>Ort. bekleme (iş günü)</th></tr></thead>
+              <tbody>{wip.map(x => <tr key={x.id}><td style={td}>{ASAMA_AD[x.id]}{uretimdeMax && uretimdeMax.id === x.id ? " ◂ en çok biriken" : ""}</td><td style={td}>{x.adet}</td><td style={td}>{ongF(x.gram, 0)}</td><td style={td}>{ongF(x.yas / Math.max(1, x.n), 1)}</td></tr>)}</tbody>
+            </table></div>
+          </RpKart>
+        </div>);
+      })()}
+
+      {bolum === "altin" && (<div>
+        <Izgara>
+          {kpi("Dökülmemiş iş için has ihtiyacı", ongF(ihtiyac, 1) + " has", "Başlanmadı + Muma taş aşamasındaki altın işler")}
+          {kpi("Eldeki ham altın", (kasaX.hamAltin || []).length ? ongF(hamAltin, 1) + " has" : "kayıt yok", "Kasa › ham altın girişlerinden")}
+          {kpi("Fark", (kasaX.hamAltin || []).length ? ongF(hamAltin - ihtiyac, 1) + " has" : "—", (kasaX.hamAltin || []).length ? (hamAltin >= ihtiyac ? "ihtiyaç karşılanıyor" : "alınması gereken altın") : "", (kasaX.hamAltin || []).length ? (hamAltin >= ihtiyac ? R.iyi : R.kotu) : undefined)}
+        </Izgara>
+        <RpKart T={T} baslik="AYAR BAZINDA HAS İHTİYACI (henüz dökülmemiş işler)">
+          {Object.keys(H.dokulmemis).length ? <RpYatay T={T} satirlar={Object.entries(H.dokulmemis).sort((a, b) => b[1] - a[1]).map(([ay, h]) => ({ ad: ay, v: h }))} fmt={(x) => ongF(x, 1) + " has"} /> : <div style={{ fontSize: 12, color: T.sub }}>Dökülmemiş altın iş yok.</div>}
+        </RpKart>
+        <RpKart T={T} baslik="ALTIN FİYATI DEĞİŞİRSE AÇIK İŞLERİN KÂRI (has)" genis>
+          <div style={{ overflowX: "auto" }}><table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <thead><tr><th style={th}>Fiyat</th><th style={th}>Kâr (has)</th><th style={th}>Fark (has)</th><th style={th}>Kâr ($)</th></tr></thead>
+            <tbody>{duyarlilik.map(x => { const sifir = duyarlilik.find(y => y.p === 0); const d = x.kar - (sifir ? sifir.kar : 0); return (
+              <tr key={x.p} style={{ fontWeight: x.p === 0 ? 700 : 400 }}><td style={td}>{x.p === 0 ? "bugünkü" : (x.p > 0 ? "+" : "") + x.p + "%"}</td><td style={td}>{ongF(x.kar, 1)}</td><td style={td}>{x.p === 0 ? "—" : <span style={{ color: d < 0 ? R.kotu : R.iyi }}>{(d > 0 ? "+" : "") + ongF(d, 1)}</span>}</td><td style={td}>{ongF(x.usd, 0)}</td></tr>); })}</tbody>
+          </table></div>
+          <NOT>İşçilik $/gr girilen modellerde altın fiyatı yükselince işçiliğin has karşılığı düşer; milyem girilenlerde değişmez. Hesap her siparişin kendi fiyatı üzerinden ±% oynatılarak yapılır. Ham altın yalnız Kasa'da girilen kayıtlara dayanır; girilmemişse karşılaştırma yapılmaz.</NOT>
+        </RpKart>
+      </div>)}
+
+      {bolum === "tahsilat" && (<div>
+        <Izgara>
+          {kpi("Toplam alacak", ongF(tahsilat.toplam, 1) + " has", "tamamlanan siparişler, ödemeler düşülmüş")}
+          {kpi("Ödeme alışkanlığına göre gecikmiş", ongF(tahsilat.gecik, 1) + " has", "", tahsilat.gecik > 0 ? R.kotu : undefined)}
+          {kpi("Önümüzdeki 30 gün", ongF(tahsilat.a30, 1) + " has", "beklenen tahsilat")}
+          {kpi("31–60 gün", ongF(tahsilat.a60, 1) + " has", "")}
+          {kpi("60 gün sonrası", ongF(tahsilat.a90, 1) + " has", "")}
+        </Izgara>
+        <RpKart T={T} baslik="MÜŞTERİ BAZINDA ALACAK VE RİSK" genis>
+          {tahsilat.liste.length ? <div style={{ overflowX: "auto" }}><table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <thead><tr><th style={th}>Müşteri</th><th style={th}>Bakiye (has)</th><th style={th}>En eski borç</th><th style={th}>Ort. ödeme süresi</th><th style={th}>Beklenen tahsilat</th><th style={th}>Risk</th></tr></thead>
+            <tbody>{tahsilat.liste.slice(0, 60).map(x => (
+              <tr key={x.ad}><td style={td}>{x.ad}</td><td style={td}>{ongF(x.bakiye, 1)}</td><td style={td}>{ongF(x.enEski, 0)} gün</td><td style={td}>{x.ort == null ? <span style={{ color: T.sub }}>ödeme geçmişi yok</span> : ongF(x.ort, 0) + " gün"}</td><td style={td}>{x.ilkBek ? (x.ilkBek < bugun ? <span style={{ color: R.kotu }}>gecikti</span> : ongTar(x.ilkBek)) : "—"}</td><td style={td}>{x.risk === "yuksek" ? rozet(R.kotu, "yüksek") : x.risk === "orta" ? rozet(R.orta, "orta") : rozet(R.iyi, "düşük")}</td></tr>))}</tbody>
+          </table></div> : <div style={{ fontSize: 12, color: T.sub }}>Açık alacak görünmüyor.</div>}
+          <NOT>Alacak = tamamlanan siparişlerin sistemdeki kârı (has), Cariler ekranıyla aynı hesap. Ödemeler en eski borçtan başlayarak eşleştirilir (FIFO); müşterinin ortalama ödeme süresi buradan çıkar. En eski borç, ortalama süresinin 1,2 katını aşarsa risk orta, 2 katını aşarsa yüksek sayılır. Ödeme geçmişi olmayan müşteride 30 gün orta, 60 gün yüksek eşiği kullanılır. Cariler ekranındaki bakiyeyle birebir aynı olmayabilir: orada henüz tamamlanmamış siparişler de sayılır.</NOT>
+        </RpKart>
+      </div>)}
+
+      {bolum === "gercek" && (<div>
+        {!gercek ? <div style={{ fontSize: 12, color: T.sub }}>Rhino satış verisi yükleniyor…</div> : (<>
+          <Izgara>
+            {kpi("Eşleşen sipariş", gercek.sonuc.length + " / " + (gercek.sonuc.length + gercek.eslesmeyen), gercek.eslesmeyen + " tamamlanan siparişin Rhino'da sipariş no'su yok")}
+            {kpi("Beklenen işçilik", ongF(gercek.topBek, 1) + " has", "sistemin hesabı")}
+            {kpi("Rhino'daki işçilik", ongF(gercek.topRh, 1) + " has", "satış raporu İSÇ.MLT")}
+            {kpi("Fark", (gercek.topFark > 0 ? "+" : "") + ongF(gercek.topFark, 1) + " has", gercek.topFark < 0 ? "beklenenden az işçilik yazıldı" : "beklenenden fazla", gercek.topFark < 0 ? R.kotu : R.iyi)}
+            {kpi("Rhino maden kâr", (gercek.topMaden > 0 ? "+" : "") + ongF(gercek.topMaden, 1) + " has", "bilgi (karşılaştırmaya girmez)")}
+          </Izgara>
+          <RpKart T={T} baslik="SİPARİŞ BAZINDA FARK (en büyük fark üstte)" genis>
+            {gercek.sonuc.length ? <div style={{ overflowX: "auto" }}><table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead><tr><th style={th}>Sipariş</th><th style={th}>Beklenen has</th><th style={th}>Rhino has</th><th style={th}>Beklenen işçilik</th><th style={th}>Rhino işçilik</th><th style={th}>Fark</th><th style={th}>Rhino maden kâr</th><th style={th}>Kayıp</th></tr></thead>
+              <tbody>{gercek.sonuc.slice(0, 60).map(x => (
+                <tr key={x.sp.id} onClick={() => onAc && onAc(x.sp)} style={{ cursor: onAc ? "pointer" : "default" }}>
+                  <td style={td}>{x.sp.musKod || x.sp.musteri}{x.sp.siparisNo ? " · " + x.sp.siparisNo : ""}</td>
+                  <td style={td}>{ongF(x.bekHas, 1)}</td><td style={td}>{ongF(x.rhHas, 1)}</td>
+                  <td style={td}>{ongF(x.bekIsc, 2)}</td><td style={td}>{ongF(x.rhIsc, 2)}</td>
+                  <td style={td}><span style={{ color: x.fark < -0.05 ? R.kotu : x.fark > 0.05 ? R.iyi : T.text, fontWeight: 700 }}>{(x.fark > 0 ? "+" : "") + ongF(x.fark, 2)}</span></td>
+                  <td style={td}>{(x.rhMaden > 0 ? "+" : "") + ongF(x.rhMaden, 2)}</td>
+                  <td style={td}>{x.o.hurdaHas > 0 || x.o.iadeHas > 0 ? (x.o.hurdaHas > 0 ? "hurda " + ongF(x.o.hurdaHas, 1) + " has " : "") + (x.o.iadeHas > 0 ? "iade " + ongF(x.o.iadeHas, 1) + " has" : "") : "—"}</td>
+                </tr>))}</tbody>
+            </table></div> : <div style={{ fontSize: 12, color: T.sub }}>Henüz Rhino satışıyla eşleşen tamamlanmış sipariş yok. Rhino raporunda EVRAK NOTU veya ÜRÜN AÇK2 sütununa sipariş no'su yazılıp rapor yüklendiğinde burada görünür.</div>}
+            <NOT>Beklenen işçilik, sistemin tamamlanan kalemler için hesapladığı işçilik (has); Rhino işçiliği satış satırlarındaki İSÇ.MLT toplamıdır. Maden kâr Rhino'da ayrı tutulduğu ve sistemde birebir karşılığı olmadığı için yalnızca bilgi olarak gösterilir. Kayıp sütunu, o siparişte hurda/iadeye giden altının has karşılığıdır.</NOT>
+          </RpKart>
+        </>)}
+      </div>)}
+    </div>
+  );
+}
+
 function rpSonMizan(mizanlar){ return mizanlar.length ? mizanlar[mizanlar.length-1] : null; }
 function rpHasToplam(mizan){ // son mizandan başlıca bakiyeler (HAS)
   if (!mizan) return null;
@@ -17794,11 +18100,16 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
 @media(max-width:900px){.kx-kp{grid-template-columns:1fr 1fr}.kx-kp .kx-hero{grid-column:1/-1}.kx-r2,.kx-r3{grid-template-columns:1fr}.kx-g4{grid-template-columns:1fr 1fr!important}.kx-g2{grid-template-columns:1fr!important}.kx-dash>div{grid-template-columns:repeat(auto-fit,minmax(130px,1fr))!important}}
 @media(max-width:700px){.kx-dr .pn{left:0;right:0;top:70px;bottom:0;width:auto;border-radius:20px 20px 0 0;box-shadow:0 -12px 32px rgba(0,0,0,.5)}}`}</style>
             <div className="kx-tabs">
-              {[["genel","Genel"],["uretim","Üretim"],["musteri","Müşteri"],["modeller","Modeller"],["vitrin","Vitrin"],["iade","İade"],...(AKTIF_SIRKET_ONEK===""?[["karlilik","Karlılık raporu"]]:[]),["ekip","Ekip"]].filter(([id]) => izinKesfet(id)).map(([id,l]) => (
+              {[["genel","Genel"],["uretim","Üretim"],["musteri","Müşteri"],["modeller","Modeller"],["vitrin","Vitrin"],["iade","İade"],...(AKTIF_SIRKET_ONEK===""?[["karlilik","Karlılık raporu"],["ongoru","Öngörü"]]:[]),["ekip","Ekip"]].filter(([id]) => izinKesfet(id)).map(([id,l]) => (
                 <button key={id} onClick={()=>setKTab(id)} style={{ background:kTab===id?"var(--goldtext)":"rgba(var(--vurgu-rgb),0.06)", color:kTab===id?(T.bg2||"#14130f"):T.sub, border:"none", borderRadius:16, padding:"7px 15px", fontSize:12, fontWeight:600, cursor:"pointer" }}>{l}</button>
               ))}
             </div>
             {kTab==="ekip" && izinKesfet("ekip") && <EkipEtkinligi T={T} />}
+            {kTab==="ongoru" && AKTIF_SIRKET_ONEK==="" && izinKesfet("ongoru") && izinHassas("karlilik") && (
+              <RpKapi T={T} GH={GH} baslik="Karlılık">
+                <OngoruPaneli T={T} GH={GH} siparisler={siparisler} kasa={kasa} altinKgUSD={altinKgUSD} mc={madenCarpan} onAc={(sp)=>{ setSayfa("siparisler"); setSipDrawer(sp.id); setSipSecId(sp.id); }} />
+              </RpKapi>
+            )}
             {kTab==="karlilik" && AKTIF_SIRKET_ONEK==="" && izinKesfet("karlilik") && (() => {
               const [kb, ke] = analizDonem==="ozel" ? [0, 8.64e15] : kxDonemAralik(analizDonem, analizYil, analizAyA, analizAyB);
               const lst = [...siparisler].reverse().filter(x => x.tarih >= kb && x.tarih <= ke);
