@@ -9986,7 +9986,7 @@ function VitrinModu({ kod, onizleme }) {
       let musteriAd = null, musteriKod = kod, onek = "", oncekiZiyaret = 0, veri = null;
       for (const o of ["", "bsp2_"]) {
         const r = await vitrinGetirCihazli(kod, o, onizleme);
-        if (r && r.gecerli) { veri = r; musteriAd = r.musteriAd; onek = o; break; }
+        if (r && r.gecerli) { veri = r; musteriAd = r.musteriAd; onek = o; if (r.musteriKod) musteriKod = r.musteriKod; break; } // eski link ile gelinse bile güncel kod
       }
 
       if (!veri) { setDurum("gecersiz"); return; }
@@ -12284,6 +12284,44 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
   const [yedekJson, setYedekJson] = useState("");
   const [driveYukleniyor, setDriveYukleniyor] = useState(null);
   const [hurdaModal, setHurdaModal] = useState(null); // {sipId, kalemId, kalemAd, maxAdet, mevcAdet}
+  const [devirModal, setDevirModal] = useState(null); // {sipId, kalemId, kalemAd, adet, hedef:"yeni"|sipId, tarih}
+  const devirAc = (sipId, kalemId, kalemAd, adet) => {
+    const kay = siparisler.find(x => x.id === sipId);
+    let tarih = "";
+    try { const d = kay && kay.teslimTarihi ? new Date(kay.teslimTarihi) : new Date(); if (isNaN(d.getTime())) throw 0; d.setDate(d.getDate() + 7); tarih = d.toISOString().slice(0, 10); } catch (e) { const d = new Date(); d.setDate(d.getDate() + 7); tarih = d.toISOString().slice(0, 10); }
+    setDevirModal({ sipId, kalemId, kalemAd, adet, hedef: "yeni", tarih });
+  };
+  const devirAcikSiparisler = (kay) => (siparisler || []).filter(x => x.id !== kay.id && (x.musKod ? x.musKod === kay.musKod : x.musteri === kay.musteri) && x.onayDurum !== "red" && x.onayDurum !== "iptal" && !(() => { const son = (x.durumGecmisi || []).slice(-1)[0]; return !!son && ["tamam", "teslim"].includes(son.durum); })());
+  const devirUygula = () => {
+    const dm = devirModal; if (!dm) return;
+    const kay = siparisler.find(x => x.id === dm.sipId); if (!kay) { setDevirModal(null); return; }
+    const kal = (kay.kalemler || []).find(k => k.id === dm.kalemId); if (!kal) { setDevirModal(null); return; }
+    const n = Number(dm.adet) || 0; if (n <= 0) { setDevirModal(null); return; }
+    const kaynakNo = kay.siparisNo || kay.musteri || "";
+    const notM = "Devir: " + kaynakNo + " (hurda)";
+    const kopya = (() => { const c = { ...kal, adet: n, sipNot: [kal.sipNot, notM].filter(Boolean).join(" · ") }; delete c.durum; delete c.boyListesi; return c; })();
+    let liste;
+    let hedefNo = "";
+    if (dm.hedef === "yeni") {
+      const yeni = { id: uid(), hazirlayan: (AKTIF_KULLANICI && (AKTIF_KULLANICI.ad || AKTIF_KULLANICI.kullanici_adi)) || "", musteri: kay.musteri, musKod: kay.musKod, ...(kay.musEtiket ? { musEtiket: kay.musEtiket } : {}), ...(kay.musAltHam ? { musAltHam: kay.musAltHam } : {}), tarih: Date.now(), teslimTarihi: dm.tarih || "", aciklama: notM, altinKgUSD: kay.altinKgUSD, mc: kay.mc, kalemler: [kopya], sira: kay.sira, kaynak: "devir", devirKaynak: kay.id };
+      liste = [...siparisler, yeni];
+      hedefNo = "yeni sipariş";
+    } else {
+      const hed = siparisler.find(x => x.id === dm.hedef); if (!hed) { toastGoster("hata", "Hedef sipariş bulunamadı"); return; }
+      const ayniAyar = (a, b) => (a.secilenAyar || a.refAyar) === (b.secilenAyar || b.refAyar);
+      const var_ = (hed.kalemler || []).find(k => k.id === kal.id && ayniAyar(k, kal));
+      const yeniKalemler = var_
+        ? hed.kalemler.map(k => k === var_ ? { ...k, adet: (k.adet || 1) + n, sipNot: [k.sipNot, notM + " +" + n].filter(Boolean).join(" · ") } : k)
+        : [...(hed.kalemler || []), kopya];
+      liste = siparisler.map(x => x.id === hed.id ? { ...x, kalemler: yeniKalemler } : x);
+      hedefNo = hed.siparisNo || "açık sipariş";
+    }
+    liste = liste.map(x => x.id === kay.id ? { ...x, kalemDevir: { ...(x.kalemDevir || {}), [kal.id]: ((x.kalemDevir || {})[kal.id] || 0) + n } } : x);
+    svS(liste);
+    islemKaydet(AKTIF_SIRKET_ONEK, "ekle", "sipariş", "Hurda devri: " + (kal.kod || kal.ad || "") + " ×" + n + " → " + hedefNo);
+    toastGoster("ok", n + " adet haftaya devredildi (" + hedefNo + ")");
+    setDevirModal(null);
+  };
   const [tamirModal, setTamirModal] = useState(null); // {sipId, kalemId, kalemAd, maxAdet, mevcAdet}
   const [adetModal, setAdetModal] = useState(null); // {sipId, kalemId, kalemAd, kalemKod, eski, yeni, alt} — yanlış girilen kalem adedini düzelt
   const HURDA_NEDENLER = ["İade","Çizim Hatası","Döküm Hatası","Atölyede Üretim Hatası","Taş Düşmesi","Müşteri Değişikliği","Diğer"];
@@ -16315,21 +16353,57 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
             if (editMusteri.yeniTel?.trim()) svMusTel({ ...musteriTel, [ad]: editMusteri.yeniTel.trim() });
             setEditMusteri(null);
           };
-          const kaydetDuzenle = () => {
+          const kaydetDuzenle = async () => {
             const ad = secAd, kod = secKod;
             const yeniAd = (editMusteri.yeniAd||"").trim();
             const tel = (editMusteri.yeniTel||"").replace(/[^0-9]/g,"");
-            if (yeniAd && yeniAd!==ad) {
-              const yeni = { ...musteriler }; delete yeni[ad]; yeni[yeniAd] = kod; svMus(yeni);
-              svS(siparisler.map(s=>(s.musteri||"").trim()===ad?{...s,musteri:yeniAd}:s));
-              const t = { ...musteriTel }; const eski = t[ad]; delete t[ad]; if (tel) t[yeniAd] = tel; else if (eski && !tel) { /* telefon silindi */ }
+            const yeniKod = String(editMusteri.yeniKod ?? kod).trim();
+            const kodDegisti = !!yeniKod && yeniKod !== kod;
+            const adDegisti = !!yeniAd && yeniAd !== ad;
+            const onek = AKTIF_SIRKET_ONEK;
+            if (kodDegisti) {
+              if (!/^[A-Z0-9][A-Z0-9_-]{1,23}$/.test(yeniKod)) { toastGoster("hata","Kod 2-24 karakter olmalı: harf, rakam, - veya _"); return; }
+              if (Object.entries(musteriler).some(([a,k]) => a !== ad && k === yeniKod)) { toastGoster("hata","Bu kod başka bir müşteride kullanılıyor"); return; }
+              try {
+                const { data: ta } = await supabase.from("vitrin_kod_takma").select("yeni_kod").eq("onek", onek).eq("eski_kod", yeniKod).maybeSingle();
+                if (ta && ta.yeni_kod !== kod) { toastGoster("hata","Bu kod eskiden başka bir müşteriye aitti ve linki hâlâ ona yönleniyor"); return; }
+              } catch (e) { toastGoster("hata","Kod kontrol edilemedi: " + (e && e.message || "")); return; }
+              const sipSay = siparisler.filter(x => (x.musteri||"").trim() === ad || x.musKod === kod).length;
+              if (!window.confirm("Müşteri kodu " + kod + " → " + yeniKod + " olarak değişecek.\n\n• " + sipSay + " sipariş, koleksiyon erişimleri, gizli model listeleri, cihaz kayıtları ve istatistikler yeni koda taşınır.\n• Eski vitrin linki çalışmaya devam eder.\n• Yeni link: " + window.location.origin + "?vitrin=" + yeniKod + "\n\nDevam edilsin mi?")) return;
+              // Sunucu tarafı: cihaz/engel/aktivite kayıtları + eski→yeni takma ad
+              try {
+                for (const tbl of ["vitrin_cihaz","vitrin_engel","vitrin_aktivite"]) {
+                  const { error } = await supabase.from(tbl).update({ musteri_kod: yeniKod }).eq("onek", onek).eq("musteri_kod", kod);
+                  if (error) throw error;
+                }
+                let r = await supabase.from("vitrin_kod_takma").update({ yeni_kod: yeniKod }).eq("onek", onek).eq("yeni_kod", kod); if (r.error) throw r.error;
+                r = await supabase.from("vitrin_kod_takma").delete().eq("onek", onek).eq("eski_kod", yeniKod); if (r.error) throw r.error;
+                r = await supabase.from("vitrin_kod_takma").upsert([{ onek, eski_kod: kod, yeni_kod: yeniKod }]); if (r.error) throw r.error;
+              } catch (e) { toastGoster("hata","Kod değiştirilemedi (sunucu): " + (e && e.message || "")); return; }
+              // Koleksiyon erişimleri ve gizli modeller
+              const kolYeni = kollar.map(k => Array.isArray(k.vitrinMus) && k.vitrinMus.includes(kod) ? { ...k, vitrinMus: k.vitrinMus.map(x => x === kod ? yeniKod : x) } : k);
+              if (kolYeni.some((k,i) => k !== kollar[i])) svK(kolYeni);
+              const modDeg = modeller.filter(m => Array.isArray(m.gizliMus) && m.gizliMus.includes(kod)).map(m => ({ ...m, gizliMus: m.gizliMus.map(x => x === kod ? yeniKod : x) }));
+              if (modDeg.length) svMUpsert(modDeg);
+              islemKaydet(onek, "düzenle", "müşteri kodu", ad + ": " + kod + " → " + yeniKod);
+              try { cihazKilitYukle(); vitrinOzetYukle(); } catch {}
+            }
+            if (kodDegisti || adDegisti) {
+              const yeni = { ...musteriler }; delete yeni[ad]; yeni[adDegisti ? yeniAd : ad] = kodDegisti ? yeniKod : kod; svMus(yeni);
+              svS(siparisler.map(x => {
+                const benim = (x.musteri||"").trim() === ad || (kodDegisti && x.musKod === kod);
+                if (!benim) return x;
+                return { ...x, ...(adDegisti ? { musteri: yeniAd } : {}), ...(kodDegisti ? { musKod: yeniKod } : {}) };
+              }));
+              const t = { ...musteriTel };
+              if (adDegisti) { delete t[ad]; if (tel) t[yeniAd] = tel; } else { if (tel) t[ad] = tel; else delete t[ad]; }
               svMusTel(t);
-              setEditMusteri({ ad:yeniAd, yeniAd, yeniTel:tel });
+              setEditMusteri({ ad: adDegisti ? yeniAd : ad, yeniAd: adDegisti ? yeniAd : ad, yeniTel: tel });
             } else {
               const t = { ...musteriTel }; if (tel) t[ad] = tel; else delete t[ad];
               svMusTel(t);
             }
-            toastGoster("ok","Müşteri kaydedildi");
+            toastGoster("ok", kodDegisti ? "Müşteri kodu " + yeniKod + " olarak değişti" : "Müşteri kaydedildi");
           };
           const bildir = (ad,kod) => {
             const YEDI_GUN = 7*24*60*60*1000, simdi = Date.now();
@@ -16506,7 +16580,7 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
                       <label style={lblM}>Müşteri adı</label>
                       <input value={editMusteri.yeniAd||""} onChange={e=>setEditMusteri(p=>({...p,yeniAd:e.target.value}))} style={{ ...IS, padding:"9px 12px", fontSize:13, marginBottom:12 }}/>
                       <div style={{ display:"flex", gap:10, marginBottom:12 }}>
-                        <div style={{ flex:1 }}><label style={lblM}>Kod</label><input value={secKod} disabled style={{ ...IS, padding:"9px 12px", fontSize:13, opacity:.7 }}/></div>
+                        <div style={{ flex:1 }}><label style={lblM}>Kod</label><input value={editMusteri.yeniKod ?? secKod} onChange={e=>setEditMusteri(p=>({...p,yeniKod:e.target.value.replace(/[çÇ]/g,"C").replace(/[ğĞ]/g,"G").replace(/[ıİ]/g,"I").replace(/[öÖ]/g,"O").replace(/[şŞ]/g,"S").replace(/[üÜ]/g,"U").toUpperCase().replace(/[^A-Z0-9_-]/g,"")}))} title="Kodu değiştirince eski vitrin linki de çalışmaya devam eder" style={{ ...IS, padding:"9px 12px", fontSize:13 }}/></div>
                         <div style={{ flex:1 }}><label style={lblM}>Telefon (WhatsApp)</label><input value={editMusteri.yeniTel||""} onChange={e=>setEditMusteri(p=>({...p,yeniTel:e.target.value.replace(/[^0-9]/g,"")}))} placeholder="5551234567" style={{ ...IS, padding:"9px 12px", fontSize:13 }}/></div>
                       </div>
                       <div style={{ borderTop:"1px solid "+T.border, margin:"16px 0 12px", paddingTop:14 }}>
@@ -19496,8 +19570,15 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
                 kalemHurda: { ...(sp.kalemHurda||{}), [hurdaModal.kalemId]: hurdaModal.mevcAdet },
                 kalemHurdaNeden: { ...(sp.kalemHurdaNeden||{}), [hurdaModal.kalemId]: hurdaModal.mevcNeden },
               } : sp));
-              setHurdaModal(null);
+              { const kaySp = siparisler.find(sp => sp.id===hurdaModal.sipId); const gerek = hurdaModal.mevcAdet - (((kaySp||{}).kalemDevir||{})[hurdaModal.kalemId]||0); const hm = hurdaModal;
+                setHurdaModal(null);
+                if (gerek > 0) devirAc(hm.sipId, hm.kalemId, hm.kalemAd, gerek); }
             }} style={{ ...BG, flex:1, padding:"8px 0" }}>Kaydet</button>
+            {(() => { const kaySp = siparisler.find(sp => sp.id===hurdaModal.sipId); const kalan = ((kaySp||{}).kalemHurda||{})[hurdaModal.kalemId] - (((kaySp||{}).kalemDevir||{})[hurdaModal.kalemId]||0); const dv = ((kaySp||{}).kalemDevir||{})[hurdaModal.kalemId]||0;
+              return (<>
+                {kalan > 0 && hurdaModal.mevcAdet === ((kaySp||{}).kalemHurda||{})[hurdaModal.kalemId] && <button onClick={()=>{ const hm = hurdaModal; setHurdaModal(null); devirAc(hm.sipId, hm.kalemId, hm.kalemAd, kalan); }} style={{ ...BG, padding:"8px 14px", fontSize:10 }}>Haftaya devret ({kalan})</button>}
+                {dv > 0 && <span style={{ alignSelf:"center", fontSize:9, color:"#998a6e" }}>{dv} adet devredildi</span>}
+              </>); })()}
             {hurdaModal.mevcAdet > 0 && (
               <button onClick={()=>{
                 svS(siparisler.map(sp => sp.id===hurdaModal.sipId ? {
@@ -19511,6 +19592,42 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
           </div>
         </Modal>
       )}
+
+      {/* HAFTAYA DEVİR MODAL */}
+      {devirModal && (() => {
+        const kay = siparisler.find(x => x.id === devirModal.sipId);
+        if (!kay) return null;
+        const acik = devirAcikSiparisler(kay);
+        const sec = (v) => setDevirModal(p => ({ ...p, hedef: v }));
+        const kutu = (aktif) => ({ border:"1px solid", borderColor: aktif ? "var(--goldtext)" : "rgba(153,138,110,0.25)", background: aktif ? "rgba(201,168,76,0.10)" : "transparent", borderRadius:8, padding:"9px 12px", cursor:"pointer", marginBottom:6, fontSize:11, color:"inherit" });
+        return (
+          <Modal open={true} onClose={()=>setDevirModal(null)} title="Haftaya devir" T={T}>
+            <div style={{ fontSize:12, fontWeight:700, marginBottom:4 }}>{devirModal.adet} adet haftaya devredilsin mi?</div>
+            <div style={{ fontSize:10, color:"#998a6e", marginBottom:12 }}>{devirModal.kalemAd} · {kay.musteri}{kay.siparisNo ? " · " + kay.siparisNo : ""}<br/>Aynı işçilik fiyatıyla eklenir. Bu siparişteki net adet zaten hurdayı düşüyor, çift sayılmaz.</div>
+            <div onClick={()=>sec("yeni")} style={kutu(devirModal.hedef === "yeni")}>
+              <div style={{ fontWeight:700 }}>Yeni sipariş oluştur</div>
+              {devirModal.hedef === "yeni" && (
+                <div style={{ marginTop:6, display:"flex", alignItems:"center", gap:8 }} onClick={e=>e.stopPropagation()}>
+                  <span style={{ fontSize:10, color:"#998a6e" }}>Teslim tarihi</span>
+                  <input type="date" value={devirModal.tarih} onChange={e=>setDevirModal(p=>({...p,tarih:e.target.value}))} style={{ ...IS, padding:"4px 8px", fontSize:11 }}/>
+                </div>
+              )}
+            </div>
+            {acik.length > 0 && <div style={{ fontSize:9, color:"#998a6e", margin:"8px 0 4px" }}>veya müşterinin açık siparişine ekle / birleştir</div>}
+            {acik.map(o => (
+              <div key={o.id} onClick={()=>sec(o.id)} style={kutu(devirModal.hedef === o.id)}>
+                <div style={{ fontWeight:700 }}>{o.siparisNo || "Sipariş"}{o.teslimTarihi ? " · teslim " + o.teslimTarihi : ""}</div>
+                <div style={{ fontSize:9, color:"#998a6e" }}>{(o.kalemler||[]).length} kalem{(o.kalemler||[]).some(k => k.id === devirModal.kalemId) ? " · bu model zaten var, adedi artar" : ""}</div>
+              </div>
+            ))}
+            {acik.length === 0 && <div style={{ fontSize:9, color:"#998a6e", margin:"6px 0" }}>Müşterinin açık siparişi yok.</div>}
+            <div style={{ display:"flex", gap:8, marginTop:12 }}>
+              <button onClick={devirUygula} style={{ ...BG, flex:1, padding:"8px 0" }}>Devret</button>
+              <button onClick={()=>setDevirModal(null)} style={{ ...RD, padding:"8px 16px", fontSize:10 }}>Hayır</button>
+            </div>
+          </Modal>
+        );
+      })()}
 
       {/* YEDEK MODAL */}
       {/* KATALOG SIRALAMA ÖNİZLEME */}
