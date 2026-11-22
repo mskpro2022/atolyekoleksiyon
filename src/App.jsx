@@ -1,7 +1,7 @@
 import { supabase, dbLoad, dbSave, fotoYukleStorage, yedekKaydet, yedekListesi, yedekGetir, bugunYedekVarMi, tabloModelleriSenkron, tabloModelleriToplu, tabloModelSil, tabloSiparisleriSenkron, tabloSiparisleriToplu, tabloSiparisSil, tabloMusterileriYaz, akilliModelOku, akilliSiparisOku, akilliMusteriOku, islemKaydet, islemGecmisiGetir, realtimeBaslat, tabloKoleksiyonlariYaz, tabloKasaYaz, akilliKoleksiyonOku, akilliKasaOku, tabloKoleksiyonlariOku, tabloKasaOku, saglikDenetimi, ekranSunucuFarki, toptanciKaydet, toptancilariGetir, toptanciSil, vitrinGecmisiGetir, vitrinEnCokBakilan, vitrinOzetGetir, vitrinAnaliz, vitrinGetirGuvenli, siparisOlusturGuvenli, siparislerimGetirGuvenli, siparisIptalGuvenli, siparisGuncelleGuvenli, siparisMusteriGizleGuvenli, vitrinAktiviteKaydetGuvenli, vitrinSupheliCihazlar, vitrinCevrimiciMusteriler, radarTrendleriOku, radarKaynaklariOku, radarKanitlariOku, radarTumKanitlariOku, radarTrendGuncelle, radarTrendSil, radarManuelKanitEkle } from "./supabase.js";
 import { useState, useEffect, useCallback, useMemo, useRef, Fragment } from "react";
 
-const SURUM_TARIH = "22 Kas 19:25"; // her yeni App.jsx tesliminde güncellenir — ekranın yenilendiğini anlamak için sağ üstte görünür
+const SURUM_TARIH = "22 Kas 19:55"; // her yeni App.jsx tesliminde güncellenir — ekranın yenilendiğini anlamak için sağ üstte görünür
 const uid = () => "x" + Date.now() + Math.random().toString(36).substr(2, 5);
 // ═══ ÇALIŞAN AUTH OTURUMU — yerel şifre kontrolünün ardından gerçek Supabase Auth oturumu açar ═══
 // (RLS politikaları "authenticated" rolüne dayanacak; hesap Supabase Dashboard'da manuel oluşturuldu)
@@ -84,15 +84,14 @@ const DURUMLAR = [
   { id: "baslanmadi", l: "Baslanmadi",    c: "#8a7d64", s: 0 },
   { id: "cizimde",    l: "Cizimde",       c: "#a78bfa", s: 1 },
   { id: "print3d",    l: "3D Print",      c: "#14b8a6", s: 2 },
-  { id: "mum_bas",    l: "Mum Basimi",    c: "#d97706", s: 3 },
-  { id: "mum_tas",    l: "Muma Tas Dizim", c: "#f59e0b", s: 4 },
-  { id: "dokum",      l: "Dokumde",       c: "#e8833a", s: 5 },
-  { id: "tezgah",     l: "Tezgahta",      c: "#5b9bd5", s: 6 },
-  { id: "cila",       l: "Cilada",        c: "#d4a017", s: 7 },
-  { id: "tas_dus",    l: "Tas Dusuk",     c: "#c27ba0", s: 8 },
-  { id: "kalite",     l: "Kalite",        c: "#9b59b6", s: 9 },
-  { id: "tamam",      l: "Tamamlandi",    c: "#6abf69", s: 10 },
-  { id: "teslim",     l: "Teslime Hazir", c: "#2ecc71", s: 11 },
+  { id: "mum_tas",    l: "Muma Tas Dizim", c: "#f59e0b", s: 3 },
+  { id: "dokum",      l: "Dokumde",       c: "#e8833a", s: 4 },
+  { id: "tezgah",     l: "Tezgahta",      c: "#5b9bd5", s: 5 },
+  { id: "cila",       l: "Cilada",        c: "#d4a017", s: 6 },
+  { id: "tas_dus",    l: "Tas Dusuk",     c: "#c27ba0", s: 7 },
+  { id: "kalite",     l: "Kalite",        c: "#9b59b6", s: 8 },
+  { id: "tamam",      l: "Tamamlandi",    c: "#6abf69", s: 9 },
+  { id: "teslim",     l: "Teslime Hazir", c: "#2ecc71", s: 10 },
   { id: "hurda",      l: "Hurda",         c: "#e85a4f", s: -1 },
 ];
 
@@ -4279,7 +4278,7 @@ function KarlilikRaporuEkrani({ T, GH, siparisler: siparislerHam, tumSip, usdTry
           const grp = {}; bekleyen.forEach(b => { const key = b.sp.id+"|"+b.st; const g = grp[key] || (grp[key] = { sp:b.sp, st:b.st, net:0, gun:0, tahmini:false }); g.net += b.net; if (b.gun > g.gun) { g.gun = b.gun; g.tahmini = b.tahmini; } });
           const uzun = Object.values(grp).sort((a,b)=>b.gun-a.gun).slice(0,12);
           // ── GECİKME TESPİTİ ── normal süre: aşamanın geçmiş geçişlerinin ortancası (en az 5 kayıt), yoksa varsayılan gün
-          const VARS = { baslanmadi:3, print3d:1, mum_bas:1, mum_tas:2, dokum:3, tezgah:3, cila:2, tas_dus:2, kalite:1 };
+          const VARS = { baslanmadi:3, print3d:1, mum_tas:2, dokum:3, tezgah:3, cila:2, tas_dus:2, kalite:1 };
           const ortanca = (l) => { const x = [...l].sort((a,b)=>a-b), n = x.length; return n ? (n%2 ? x[(n-1)/2] : (x[n/2-1]+x[n/2])/2) : 0; };
           const norm = {}, normKaynak = {}; asamalar.forEach(d => { const l = sureler[d.id] || []; const olc = l.length >= 5; norm[d.id] = Math.max(0.5, olc ? ortanca(l) : (VARS[d.id] || 3)); normKaynak[d.id] = olc ? l.length : 0; });
           // Model zorluk puanı (1–5): döküm sonrası aşamalarda (tezgah, cila, taş, kalite) sürenin normale oranı; en az 2 gözlem
@@ -5985,7 +5984,7 @@ function OngoruPaneli({ T, GH, siparisler, kasa, altinKgUSD, mc, onAc }) {
           if (!giris) { const dg = (sp.durumGecmisi || []).filter(x => x.durum === st); giris = dg.length ? dg[dg.length - 1].tarih : (sp.islemTarih || sp.tarih || bugun); }
           const a = asama[st] || (asama[st] = { adet: 0, gram: 0, yas: 0, n: 0 });
           a.adet += net; a.gram += gram; a.yas += isGunuSure(giris, bugun) / ONG_GUN * net; a.n += net;
-          if (["baslanmadi", "print3d", "mum_bas", "mum_tas"].includes(st) && oran > 0) dokulmemis[ay] = (dokulmemis[ay] || 0) + gram * oran;
+          if (["baslanmadi", "print3d", "mum_tas"].includes(st) && oran > 0) dokulmemis[ay] = (dokulmemis[ay] || 0) + gram * oran;
         }
       });
       if (o.kalanGram > 0) acik.push(o);
@@ -15625,7 +15624,7 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
     const gecikti = !!teslimT && teslimT < bugun0.getTime() && !kapali;
     return { ayarlar, hurda, aktif, tam, pct, gram, gumus, altin:gram-gumus, kar, isc, topMal, adet, enYaygin, sonraki, son, geciken, gecikti, teslimT };
   };
-  function baslandiMi(s) { return (s.kalemler||[]).some(k => { const d0 = (s.kalemDurumlar||{})[k.id]||k.durum||"baslanmadi"; const dd = DURUMLAR.find(y=>y.id===d0); return !!dd && dd.s>=5; }); } // en az bir kalem Dökümde veya ilerisinde
+  function baslandiMi(s) { return (s.kalemler||[]).some(k => { const d0 = (s.kalemDurumlar||{})[k.id]||k.durum||"baslanmadi"; const dd = DURUMLAR.find(y=>y.id===d0); return !!dd && dd.s>=4; }); } // en az bir kalem Dökümde veya ilerisinde
   const grupNo = s => {
     if (s.onayDurum==="bekliyor") return 0;
     if (s.onayDurum==="red"||s.onayDurum==="iptal") return 4;
