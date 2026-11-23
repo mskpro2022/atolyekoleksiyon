@@ -1,7 +1,7 @@
 import { supabase, dbLoad, dbSave, fotoYukleStorage, yedekKaydet, yedekListesi, yedekGetir, bugunYedekVarMi, tabloModelleriSenkron, tabloModelleriToplu, tabloModelSil, tabloSiparisleriSenkron, tabloSiparisleriToplu, tabloSiparisSil, tabloMusterileriYaz, akilliModelOku, akilliSiparisOku, akilliMusteriOku, islemKaydet, islemGecmisiGetir, realtimeBaslat, tabloKoleksiyonlariYaz, tabloKasaYaz, akilliKoleksiyonOku, akilliKasaOku, tabloKoleksiyonlariOku, tabloKasaOku, saglikDenetimi, ekranSunucuFarki, toptanciKaydet, toptancilariGetir, toptanciSil, vitrinGecmisiGetir, vitrinEnCokBakilan, vitrinOzetGetir, vitrinAnaliz, vitrinGetirGuvenli, siparisOlusturGuvenli, siparislerimGetirGuvenli, siparisIptalGuvenli, siparisGuncelleGuvenli, siparisMusteriGizleGuvenli, vitrinAktiviteKaydetGuvenli, vitrinSupheliCihazlar, vitrinCevrimiciMusteriler, radarTrendleriOku, radarKaynaklariOku, radarKanitlariOku, radarTumKanitlariOku, radarTrendGuncelle, radarTrendSil, radarManuelKanitEkle } from "./supabase.js";
 import { useState, useEffect, useCallback, useMemo, useRef, Fragment } from "react";
 
-const SURUM_TARIH = "23 Kas 13:00"; // her yeni App.jsx tesliminde güncellenir — ekranın yenilendiğini anlamak için sağ üstte görünür
+const SURUM_TARIH = "23 Kas 13:20"; // her yeni App.jsx tesliminde güncellenir — ekranın yenilendiğini anlamak için sağ üstte görünür
 const uid = () => "x" + Date.now() + Math.random().toString(36).substr(2, 5);
 // ═══ ÇALIŞAN AUTH OTURUMU — yerel şifre kontrolünün ardından gerçek Supabase Auth oturumu açar ═══
 // (RLS politikaları "authenticated" rolüne dayanacak; hesap Supabase Dashboard'da manuel oluşturuldu)
@@ -2374,7 +2374,9 @@ function rpTurTani(rows, sayfaAdlari){
   const ilk = rows.slice(0,15).map(r=>r.map(c=>rpUpper(c)).join("|")).join("\n");
   if (/HESAP KOD/.test(ilk) && /BORC|BORÇ/.test(ilk)) return "mizan";
   if (/ST\.M[İI]KTAR/.test(ilk) && /[A-ZÇĞİÖŞÜ]+_20\d\d/.test(ilk)) return "aylik";
-  if ((sayfaAdlari||[]).some(s=>/MEVCUT ANALİZ|MEVCUT ANALIZ/.test(rpUpper(s))) || (/GENEL TOPLAM/.test(ilk) && /ÜRÜN NO/.test(ilk))) return "depo";
+  if ((sayfaAdlari||[]).some(s=>/MEVCUT ANALİZ|MEVCUT ANALIZ/.test(rpUpper(s)))) return "depo";
+  if (rows.slice(0,40).some(r=>typeof r[0]==="string" && r[0].trim().startsWith("Ürün Adı"))) return ""; // Ürün Ekstresi (tezgah hareketleri): ilk satırlarında "Genel Toplam" geçse de depo sayımı sayılmaz
+  if (/GENEL TOPLAM/.test(ilk) && /ÜRÜN NO/.test(ilk)) return "depo";
   if (/SATIR AÇIKLAMA/.test(ilk) && /EVRAK NO/.test(ilk)) return "gider";
   if (/MİLYEM/.test(ilk) && /HAS GR/.test(ilk)) return "satis";
   return "";
