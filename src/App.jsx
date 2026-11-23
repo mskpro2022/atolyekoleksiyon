@@ -1,7 +1,7 @@
 import { supabase, dbLoad, dbSave, fotoYukleStorage, yedekKaydet, yedekListesi, yedekGetir, bugunYedekVarMi, tabloModelleriSenkron, tabloModelleriToplu, tabloModelSil, tabloSiparisleriSenkron, tabloSiparisleriToplu, tabloSiparisSil, tabloMusterileriYaz, akilliModelOku, akilliSiparisOku, akilliMusteriOku, islemKaydet, islemGecmisiGetir, realtimeBaslat, tabloKoleksiyonlariYaz, tabloKasaYaz, akilliKoleksiyonOku, akilliKasaOku, tabloKoleksiyonlariOku, tabloKasaOku, saglikDenetimi, ekranSunucuFarki, toptanciKaydet, toptancilariGetir, toptanciSil, vitrinGecmisiGetir, vitrinEnCokBakilan, vitrinOzetGetir, vitrinAnaliz, vitrinGetirGuvenli, siparisOlusturGuvenli, siparislerimGetirGuvenli, siparisIptalGuvenli, siparisGuncelleGuvenli, siparisMusteriGizleGuvenli, vitrinAktiviteKaydetGuvenli, vitrinSupheliCihazlar, vitrinCevrimiciMusteriler, radarTrendleriOku, radarKaynaklariOku, radarKanitlariOku, radarTumKanitlariOku, radarTrendGuncelle, radarTrendSil, radarManuelKanitEkle } from "./supabase.js";
 import { useState, useEffect, useCallback, useMemo, useRef, Fragment } from "react";
 
-const SURUM_TARIH = "23 Kas 12:10"; // her yeni App.jsx tesliminde güncellenir — ekranın yenilendiğini anlamak için sağ üstte görünür
+const SURUM_TARIH = "23 Kas 13:00"; // her yeni App.jsx tesliminde güncellenir — ekranın yenilendiğini anlamak için sağ üstte görünür
 const uid = () => "x" + Date.now() + Math.random().toString(36).substr(2, 5);
 // ═══ ÇALIŞAN AUTH OTURUMU — yerel şifre kontrolünün ardından gerçek Supabase Auth oturumu açar ═══
 // (RLS politikaları "authenticated" rolüne dayanacak; hesap Supabase Dashboard'da manuel oluşturuldu)
@@ -7111,6 +7111,189 @@ function BspMuhEk({ T, GH, sek, usdTry, onGit }) {
 const AYR_TUR = [["mizan","Mizan"],["tezgah","Tezgah hareketleri"],["satis","Satış & kâr"],["gider","Giderler"],["depo","Depo sayım"]];
 const AYR_AY = ["Ocak","Şubat","Mart","Nisan","Mayıs","Haziran","Temmuz","Ağustos","Eylül","Ekim","Kasım","Aralık"];
 function ayrAyAd(ay) { const [y, m] = String(ay).split("-"); return (AYR_AY[Number(m)-1] || m) + " " + y; }
+// ── MSK · Denetim (Rapor Kontrolü): 4 Rhino raporunu kendi içinde ve mizanla karşılaştırır (sadece okur, hiçbir kayda yazmaz) ──
+function mskDenetimOku(rows) {
+  const sayi = (v) => { const n = Number(v); return v !== null && v !== undefined && v !== "" && isFinite(n) ? n : 0; };
+  const sd = (n) => { const d = new Date(Math.round((Number(n) - 25569) * 864e5)); return { ym: d.getUTCFullYear() + "-" + String(d.getUTCMonth() + 1).padStart(2, "0"), ymd: d.getUTCFullYear() + "-" + String(d.getUTCMonth() + 1).padStart(2, "0") + "-" + String(d.getUTCDate()).padStart(2, "0") }; };
+  const ilk = rows.slice(0, 16).map(r => (r || []).join("|")).join("\n");
+  if (ilk.includes("SATIŞ ANALİZ RAPORU")) {
+    const hi = rows.findIndex(r => r && r[0] === "TARİH" && String(r[3] || "").includes("ÜRÜN ADI")); if (hi < 0) throw new Error("Satış raporu başlığı bulunamadı");
+    const col = {}; rows[hi].forEach((c, i) => { const k = String(c || "").trim(); if (k && col[k] === undefined) col[k] = i; });
+    const satirlar = [];
+    for (const r of rows.slice(hi + 1)) {
+      if (!r || typeof r[0] !== "number") continue; const t = sd(r[0]); const urun = String(r[col["ÜRÜN ADI"]] || "");
+      const mm = urun.match(/-(\d+)K/); const ayar = mm ? mm[1] + "K" : (urun.includes("925") ? "925" : urun);
+      satirlar.push({ ...t, evrak: r[col["EVR.No"]], urun, ayar, has: sayi(r[col["HAS GR"]]), isc: sayi(r[col["İSÇ.MLT"]]), maden: sayi(r[col["MADEN KAR"]]), musteri: String(r[col["MÜŞTERİ"]] || ""), not: String(r[col["EVRAK NOTU"]] || "") });
+    }
+    return { tur: "satis", satirlar, son: satirlar.reduce((a, x) => x.ymd > a ? x.ymd : a, ""), ilkT: satirlar.reduce((a, x) => !a || x.ymd < a ? x.ymd : a, "") };
+  }
+  if (ilk.includes("HESAP KOD") || ilk.includes("M I Z A N")) {
+    const hi = rows.findIndex(r => r && String(r[0] || "").trim() === "HESAP KOD"); if (hi < 0) throw new Error("Mizan başlığı bulunamadı");
+    const h = {}; let bitis = "";
+    const m = String((rows[1] || [])[0] || "").match(/-\s*(\d{2})\/(\d{2})\/(\d{2})/); if (m) bitis = "20" + m[3] + "-" + m[2] + "-" + m[1];
+    for (const r of rows.slice(hi + 1)) {
+      if (!r) continue; const kod = String(r[0] == null ? "" : r[0]).trim(); if (!kod || /^(Başlangıç|Bitiş|Fark)/.test(kod)) continue; const ad = String(r[1] || "").trim(); if (!ad) continue;
+      h[kod] = { kod, ad, dvz: String(r[2] || "").trim(), b: sayi(r[3]), a: sayi(r[4]), bb: sayi(r[5]), ba: sayi(r[6]) };
+    }
+    return { tur: "mizan", h, bitis };
+  }
+  const gi = rows.findIndex(r => r && String(r[0] || "").trim() === "ŞUBE" && String(r[2] || "").includes("GİDER"));
+  if (gi >= 0) {
+    const satirlar = [];
+    for (const r of rows.slice(gi + 1)) { if (!r || typeof r[1] !== "number") continue; const t = sd(r[1]); satirlar.push({ ...t, kat: String(r[2] || "").trim(), acik: String(r[3] || ""), evrak: String(r[4] || "").trim(), tl: sayi(r[5]), has: sayi(r[6]), satici: String(r[8] || ""), tip: String(r[11] || "").trim() }); }
+    return { tur: "gider", satirlar, son: satirlar.reduce((a, x) => x.ymd > a ? x.ymd : a, ""), ilkT: satirlar.reduce((a, x) => !a || x.ymd < a ? x.ymd : a, "") };
+  }
+  if (rows.some(r => r && String(r[0] || "").startsWith("Ürün Adı"))) {
+    const urun = {}; let ad = null, son = "";
+    for (const r of rows) {
+      if (!r) continue; if (String(r[0] || "").startsWith("Ürün Adı")) { ad = String(r[4] || "").trim(); continue; }
+      if (ad && typeof r[0] === "number" && typeof r[3] === "number") { const t = sd(r[3]); urun[ad] = { kalan: sayi(r[11]), birim: String(r[12] || "") }; if (t.ymd > son) son = t.ymd; }
+    }
+    return { tur: "ekstre", urun, son };
+  }
+  throw new Error("Rapor türü tanınamadı");
+}
+function mskDenetimHesapla(d) {
+  const sonuc = []; const f = (v, n = 2) => Number(v).toLocaleString("tr-TR", { minimumFractionDigits: n, maximumFractionDigits: n });
+  const N = (s) => String(s || "").replace(/ /g, " ").replace(/\s+/g, " ").trim().toLocaleUpperCase("tr-TR");
+  const miz = d.mizan, sat = d.satis, gid = d.gider, eks = d.ekstre;
+  const net = (x) => x ? (x.bb || 0) - (x.ba || 0) : 0;
+  const ek = (baslik, durum, ozet, satirlar, not) => sonuc.push({ baslik, durum, ozet, satirlar: satirlar || [], not: not || "" });
+  // 1) Kapsam
+  { const s = []; const mb = miz ? miz.bitis : ""; const gun = (a, b) => Math.round((new Date(b) - new Date(a)) / 864e5);
+    if (miz) s.push({ ad: "Mizan", a: "01.01 – " + (mb || "?"), b: mb || "", fark: 0, not: "referans" });
+    [["Satış kâr", sat], ["Gider", gid], ["Tezgah ekstresi", eks]].forEach(([ad, x]) => { if (!x) return; const g = mb && x.son ? gun(x.son, mb) : 0; s.push({ ad, a: (x.ilkT ? x.ilkT + " → " : "") + (x.son || "?"), b: x.son || "", fark: g, not: g > 2 ? g + " gün geride" : "güncel" }); });
+    const geri = s.some(x => x.fark > 2); ek("Rapor kapsamı ve güncellik", geri ? "uyari" : "ok", geri ? "Bazı raporlar mizandan geride; küçük farkların kaynağı bu olabilir" : "Raporlar mizanla aynı tarihte", s, "Satış kârda son satış günü, giderde son kayıt günü gösterilir (rapor tarihi değil).");
+  }
+  const ay = miz && miz.bitis ? miz.bitis.slice(0, 7) : "";
+  // 2) Satış ↔ mizan
+  if (miz && sat && ay) {
+    const AK = { "9K": "02", "10K": "03", "14K": "04", "18K": "05", "19K": "06", "21K": "07", "22K": "08", "24K": "09" };
+    const satir = []; let fark = 0; const tol = 0.05;
+    const bu = sat.satirlar.filter(x => x.ym === ay);
+    Object.keys(AK).forEach(ak => {
+      const r = bu.filter(x => x.ayar === ak); const hr = r.reduce((a, x) => a + x.has, 0), ir = r.reduce((a, x) => a + x.isc, 0);
+      const mh = miz.h["600 001 01 " + AK[ak]], mi = miz.h["600 001 02 " + AK[ak]];
+      if (!r.length && !(mh && Math.abs(net(mh)) > tol) && !(mi && Math.abs(net(mi)) > tol)) return;
+      const hm = -net(mh), im = -net(mi);
+      const f1 = hr - hm, f2 = ir - im; if (Math.abs(f1) > tol) fark++; if (Math.abs(f2) > tol) fark++;
+      satir.push({ ad: ak + " satış (has)", a: f(hr), b: f(hm), fark: f1 }); satir.push({ ad: ak + " işçilik (has)", a: f(ir), b: f(im), fark: f2 });
+    });
+    const mr = bu.reduce((a, x) => a + x.maden, 0); const mm = (miz.h["649"] ? -net(miz.h["649"]) : 0) - (miz.h["659"] ? net(miz.h["659"]) : 0);
+    if (Math.abs(mr - mm) > tol) fark++; satir.push({ ad: "Maden kâr/zarar net (has)", a: f(mr), b: f(mm), fark: mr - mm, not: "649 − 659" });
+    ek("Satışlar ↔ mizan (" + ay + ")", fark ? "fark" : "ok", fark ? fark + " satırda fark var" : "Satış has, işçilik ve maden kâr mizanla tutuyor", satir.map(x => ({ ...x, fark: Math.abs(x.fark) < 0.005 ? 0 : x.fark })), "Rapor = Satış kâr raporu (" + ay + " satırları); mizan = hesap bakiyesi (son kapamadan beri). Gümüş (925) USD/SLV tuttuğu için karşılaştırılmaz.");
+  }
+  // 3) Gider ↔ mizan
+  if (miz && gid && ay) {
+    const ALIAS = { "MUM PROJET": "MUM GİDERİ", "FİRE": "ERİTME FİRE KAYBI", "GÜNLÜK MESAİ İÇERİ": "MESAİ YEMEK VE İÇECEK GİDERLERİ", "KALEM İŞÇİLİK": "KALEM FASON İŞÇİLİK", "MALZEME CİLA": "2-3 NUMARA KALEM", "AYAREVİ ÜCRET GİDERİ": "YOL ÜCRET GİDERLERİ" };
+    const yap = {}; Object.values(miz.h).forEach(x => { if (x.kod[0] === "7" && !Object.keys(miz.h).some(y => y !== x.kod && y.startsWith(x.kod))) yap[N(x.ad)] = x; });
+    const nov = gid.satirlar.filter(x => x.ym === ay && x.tip !== "FYN"); const onc = gid.satirlar.filter(x => x.ym < ay && x.tip !== "FYN");
+    const gk = {}; nov.forEach(x => { const k = N(x.kat); (gk[k] = gk[k] || { has: 0 }).has += x.has; });
+    const adlar = new Set([...Object.keys(gk)]); onc.forEach(x => adlar.add(N(x.kat)));
+    const satir = []; let fark = 0, acik = 0; const tol = 0.05; const eslesen = new Set();
+    [...adlar].sort((a, b) => Math.abs((gk[b] || {}).has || 0) - Math.abs((gk[a] || {}).has || 0)).forEach(k => {
+      const mz = yap[ALIAS[k] ? N(ALIAS[k]) : k]; const r = (gk[k] || {}).has || 0;
+      if (!mz) { if (Math.abs(r) > tol) { satir.push({ ad: k, a: f(r), b: "—", fark: 0, not: "mizanda eşleşen hesap yok (eşleştirme tablosuna ekle)" }); acik++; } return; }
+      eslesen.add(mz.kod);
+      if (mz.dvz && mz.dvz !== "HAS") { if (Math.abs(r) > tol || Math.abs(net(mz)) > tol) satir.push({ ad: k, a: f(r), b: f(net(mz)) + " " + mz.dvz, fark: 0, not: "mizanda " + mz.dvz + " tutuluyor, karşılaştırılmadı" }); return; }
+      const mb = net(mz), fr = r - mb;
+      if (Math.abs(fr) <= tol) { if (Math.abs(r) > tol) satir.push({ ad: k + (ALIAS[k] ? " (= " + ALIAS[k] + ")" : ""), a: f(r), b: f(mb), fark: 0 }); return; }
+      fark++;
+      let not = "";
+      if (fr < -tol) { const ap = -fr; const gr = {}; onc.filter(x => N(x.kat) === k).forEach(x => { (gr[x.evrak] = gr[x.evrak] || { has: 0, ymd: x.ymd }).has += x.has; });
+        const tek = Object.entries(gr).find(([, v]) => Math.abs(v.has - ap) < tol); const hep = Object.values(gr).reduce((a, v) => a + v.has, 0);
+        if (tek) not = "Önceki ay satırı kapama dışında kalmış olabilir: " + tek[0] + " (" + tek[1].ymd + ", " + f(tek[1].has) + ")";
+        else if (Math.abs(hep - ap) < tol) not = "Önceki ayın tüm satırları (" + f(hep) + ") kapama dışında kalmış görünüyor";
+        else not = "Mizan raporun " + f(ap) + " üstünde: rapor tarihinden sonraki giriş ya da kapama dışı kalan önceki ay satırı olabilir"; }
+      else not = "Rapor mizanın " + f(fr) + " üstünde";
+      satir.push({ ad: k + (ALIAS[k] ? " (= " + ALIAS[k] + ")" : ""), a: f(r), b: f(mb), fark: fr, not });
+    });
+    Object.values(yap).forEach(x => { if (eslesen.has(x.kod) || x.dvz !== "HAS" || Math.abs(net(x)) <= tol) return; if (Object.keys(miz.h).some(y => y !== x.kod && y.startsWith(x.kod))) return; satir.push({ ad: x.ad + " (mizan)", a: "—", b: f(net(x)), fark: -net(x), not: "raporda karşılığı yok" }); fark++; });
+    const trp = nov.reduce((a, x) => a + x.has, 0);
+    ek("Giderler ↔ mizan (" + ay + ")", fark ? "fark" : (acik ? "uyari" : "ok"), fark ? fark + " kalemde fark" + (acik ? ", " + acik + " kalem eşleşmedi" : "") : (acik ? acik + " kalem eşleşmedi" : "Giderler mizanla tutuyor"), satir.slice(0, 60), "Kapama fişleri (FYN) hariç. Rapor " + ay + " toplamı: " + f(trp) + " has. Birebir tutanlar kısa gösterilir; mizan = son kapamadan beri bakiye.");
+  }
+  // 4) Ekstre ↔ stok
+  if (miz && eks) {
+    const MIL = { 8: .333, 9: .375, 10: .417, 14: .585, 18: .75, 19: .792, 21: .875, 22: .916, 24: .995 }; const AK = { 9: "02", 10: "03", 14: "04", 18: "05", 19: "06", 21: "07", 22: "08", 24: "09" };
+    const topl = {}; let gumus = 0;
+    Object.entries(eks.urun).forEach(([ad, v]) => { const a = ad.match(/-(\d+)K/); const h = ad.match(/#?(99\d) HAS/i);
+      if (a) { const k = Number(a[1]); topl[k] = (topl[k] || 0) + v.kalan * (MIL[k] || 0); } else if (h) { topl[24] = (topl[24] || 0) + v.kalan * (h[1] === "999" ? .999 : .995); } else if (/GÜMÜŞ/i.test(ad) && !/İ$/.test(ad)) gumus += v.kalan; });
+    const satir = []; let fark = 0;
+    Object.keys(AK).forEach(k => { const m = miz.h["153 001 01 " + AK[k]]; const e = topl[k] || 0, mv = m ? net(m) : 0; if (Math.abs(e) < 0.005 && Math.abs(mv) < 0.005) return; const fr = e - mv; const tol = Math.max(1, Math.abs(mv) * 0.01); if (Math.abs(fr) > tol) fark++; satir.push({ ad: k + " ayar stok (has)", a: f(e), b: f(mv), fark: fr, not: Math.abs(fr) > tol ? "%" + f(mv ? fr / mv * 100 : 0, 1) : "" }); });
+    const gm = miz.h["153 001 03 01"]; if (gm || gumus) satir.push({ ad: "925 gümüş (gr)", a: f(gumus), b: gm ? f(net(gm)) + " " + gm.dvz : "—", fark: 0, not: "birimler farklı, elle kontrol et" });
+    ek("Tezgah ekstresi ↔ mizan stok (153)", fark ? "fark" : "ok", fark ? fark + " ayarda %1 üstü fark (yaklaşık)" : "Stok ayar bazında tutuyor", satir, "Ekstre grami × standart milyem ile has'a çevrilir; yaklaşık değerdir, yönü gösterir.");
+  }
+  // 5) Ters bakiyeler
+  if (miz) {
+    const kont = [["120 001", "Müşteri hesabı alacak bakiyeli", (x) => x.ba > 0.005, (x) => x.ba], ["320 001", "Satıcı hesabı borç bakiyeli", (x) => x.bb > 0.005, (x) => x.bb], ["135 001", "Personel hesabı alacak bakiyeli", (x) => x.ba > 0.005, (x) => x.ba]];
+    const satir = []; const kucuk = { HAS: 1, USD: 5, EUR: 5, SLV: 5, TL: 500 };
+    kont.forEach(([on, ad, ko, dg]) => Object.values(miz.h).forEach(x => { if (!x.kod.startsWith(on) || !x.kod.includes("\\") || !ko(x)) return; const v = dg(x); if (v < (kucuk[x.dvz] || 1)) return; satir.push({ ad: x.ad, a: ad, b: f(v) + " " + x.dvz, fark: 0, _v: v }); }));
+    ek("Ters bakiyeler (onay bekleyen)", satir.length ? "uyari" : "ok", satir.length ? satir.length + " hesapta ters yönlü bakiye var; hata olmayabilir (avans, ortak cari) ama onay gerekir" : "Anlamlı ters bakiye yok", satir.sort((a, b) => b._v - a._v).slice(0, 40), "Küçük kuruş farkları (1 has, 5 USD/EUR, 500 TL altı) gösterilmez.");
+  }
+  // 6) Mizan iç denge
+  if (miz) {
+    const ks = Object.keys(miz.h); const satir = []; let fark = 0;
+    ks.forEach(k => { const x = miz.h[k]; const cocuk = ks.filter(y => y !== k && y.startsWith(k) && !ks.some(z => z !== k && z !== y && y.startsWith(z) && z.startsWith(k)));
+      if (!cocuk.length) return; const ayni = cocuk.every(y => miz.h[y].dvz === x.dvz); if (!ayni) return;
+      const t = cocuk.reduce((a, y) => a + net(miz.h[y]), 0); if (Math.abs(net(x) - t) > Math.max(0.05, Math.abs(net(x)) * 0.0005)) { fark++; satir.push({ ad: x.kod + " " + x.ad, a: f(net(x)), b: f(t), fark: net(x) - t }); } });
+    ek("Mizan iç tutarlılık (üst hesap = alt hesaplar)", fark ? "fark" : "ok", fark ? fark + " üst hesapta alt toplam uyuşmuyor" : "Aynı birimli üst/alt hesaplar tutuyor", satir.slice(0, 30));
+  }
+  return sonuc;
+}
+function MskDenetim({ T, GH }) {
+  const [d, setD] = useState({}); const [mesgul, setMesgul] = useState(""); const [hata, setHata] = useState(""); const [acik, setAcik] = useState({});
+  const yukle = async (files) => {
+    if (!files || !files.length) return; setMesgul("Raporlar okunuyor…"); setHata("");
+    try {
+      const XLSX = await import("https://cdn.jsdelivr.net/npm/xlsx@0.18.5/+esm"); const yeni = { ...d }; const uyar = [];
+      for (const f of Array.from(files)) {
+        try { const wb = XLSX.read(await f.arrayBuffer(), { type: "array" }); const sn = wb.SheetNames.includes("Mizan") ? "Mizan" : wb.SheetNames[0];
+          const rows = XLSX.utils.sheet_to_json(wb.Sheets[sn], { header: 1, defval: null, raw: true }); const r = mskDenetimOku(rows); yeni[r.tur] = { ...r, dosya: f.name };
+        } catch (e) { uyar.push(f.name + ": " + e.message); }
+      }
+      setD(yeni); if (uyar.length) setHata(uyar.join(" · "));
+    } catch (e) { setHata("Excel okuyucu yüklenemedi: " + e.message); }
+    setMesgul("");
+  };
+  const sonuc = useMemo(() => { try { return d.mizan ? mskDenetimHesapla(d) : []; } catch (e) { return [{ baslik: "Hesaplama hatası", durum: "fark", ozet: String(e.message), satirlar: [] }]; } }, [d]);
+  const RENK = { ok: "#6abf69", fark: "#e85a4f", uyari: "#e8a33a" }; const AD = { ok: "Tuttu", fark: "Fark var", uyari: "Dikkat" };
+  const bos = !d.mizan && !d.satis && !d.gider && !d.ekstre;
+  const th = { textAlign: "left", fontSize: 11, color: T.sub, fontWeight: 700, padding: "5px 8px", borderBottom: "1px solid " + T.border };
+  return (
+    <div style={{ maxWidth: 1100 }}>
+      <div style={{ fontSize: 18, fontWeight: 700, color: T.text, marginBottom: 4 }}>Denetim · Rapor Kontrolü</div>
+      <div style={{ fontSize: 12, color: T.sub, marginBottom: 12 }}>Rhino'dan aldığın mizan, satış kâr, gider ve tezgah ekstresi raporlarını birlikte seç. Raporlar kendi içinde ve mizanla karşılaştırılır. Bu ekran sadece okur, sisteme hiçbir şey kaydetmez.</div>
+      <label style={{ display: "inline-block", cursor: "pointer", border: "1px solid " + T.border, borderRadius: 9, padding: "9px 14px", fontSize: 13, color: T.text, background: T.card }}>
+        Raporları seç (4 dosya birden)<input type="file" multiple accept=".xlsx,.xls" style={{ display: "none" }} onChange={e => { yukle(e.target.files); e.target.value = ""; }} />
+      </label>
+      {!bos && <button onClick={() => setD({})} style={{ ...GH, marginLeft: 8, fontSize: 12, padding: "8px 12px" }}>Temizle</button>}
+      {mesgul && <span style={{ marginLeft: 10, fontSize: 12, color: T.sub }}>{mesgul}</span>}
+      {hata && <div style={{ marginTop: 10, fontSize: 12, color: "#e85a4f" }}>{hata}</div>}
+      {!bos && <div style={{ display: "flex", gap: 8, flexWrap: "wrap", margin: "12px 0" }}>
+        {[["mizan", "Mizan"], ["satis", "Satış kâr"], ["gider", "Gider"], ["ekstre", "Tezgah ekstresi"]].map(([k, ad]) => <div key={k} style={{ border: "1px solid " + T.border, borderRadius: 9, padding: "6px 10px", fontSize: 12, color: d[k] ? T.text : T.sub, opacity: d[k] ? 1 : 0.6 }}><b>{ad}</b>{d[k] ? " · " + d[k].dosya : " · yüklenmedi"}</div>)}
+      </div>}
+      {bos && <div style={{ marginTop: 14, fontSize: 12, color: T.sub }}>Henüz rapor seçilmedi.</div>}
+      {!bos && !d.mizan && <div style={{ marginTop: 10, fontSize: 12, color: "#e8a33a" }}>Karşılaştırma için mizan dosyası da seçilmeli.</div>}
+      {sonuc.map((s, i) => (
+        <div key={i} style={{ background: T.card, border: "1px solid " + T.border, borderLeft: "4px solid " + RENK[s.durum], borderRadius: 12, padding: "12px 14px", marginTop: 12 }}>
+          <div onClick={() => setAcik(a => ({ ...a, [i]: !a[i] }))} style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10, cursor: s.satirlar.length ? "pointer" : "default", flexWrap: "wrap" }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: T.text }}>{s.baslik}</div>
+            <div style={{ fontSize: 12, fontWeight: 700, color: RENK[s.durum] }}>{AD[s.durum]}</div>
+          </div>
+          <div style={{ fontSize: 12, color: T.sub, marginTop: 3 }}>{s.ozet}</div>
+          {s.satirlar.length > 0 && (acik[i] !== undefined ? acik[i] : s.durum !== "ok") && (
+            <div style={{ overflowX: "auto", marginTop: 8 }}><table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, color: T.text }}>
+              <thead><tr><th style={th}>Kalem</th><th style={{ ...th, textAlign: "right" }}>Rapor</th><th style={{ ...th, textAlign: "right" }}>Mizan</th><th style={{ ...th, textAlign: "right" }}>Fark</th><th style={th}>Not</th></tr></thead>
+              <tbody>{s.satirlar.map((x, j) => <tr key={j} style={{ borderBottom: "1px solid " + T.border }}>
+                <td style={{ padding: "5px 8px" }}>{x.ad}</td><td style={{ padding: "5px 8px", textAlign: "right", whiteSpace: "nowrap" }}>{x.a}</td><td style={{ padding: "5px 8px", textAlign: "right", whiteSpace: "nowrap" }}>{x.b}</td>
+                <td style={{ padding: "5px 8px", textAlign: "right", whiteSpace: "nowrap", fontWeight: 700, color: Math.abs(x.fark) > 0.05 ? "#e85a4f" : T.sub }}>{Math.abs(x.fark) < 0.005 ? "—" : (x.fark > 0 ? "+" : "") + Number(x.fark).toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                <td style={{ padding: "5px 8px", color: T.sub, minWidth: 180 }}>{x.not || ""}</td></tr>)}</tbody></table></div>)}
+          {s.not && <div style={{ fontSize: 11, color: T.sub, marginTop: 6 }}>{s.not}</div>}
+        </div>))}
+    </div>
+  );
+}
+
 function MskAylikRaporlar({ T, setRhinoMizan }) {
   const [v, yenile] = useRpVeri();
   const simdi = new Date(); const buAy = simdi.getFullYear() + "-" + String(simdi.getMonth()+1).padStart(2,"0");
@@ -17319,7 +17502,7 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
                   ["STOK & ÜRETİM", [["Konum Bakiyeleri","g_muh","konum"],["Tezgah Hareketleri","g_muh","hareket"],["Altın & Gümüş Stok","g_stok","altin"],["Sayım & Stok Kayıtları","g_stok","kayit"],["Fason Takibi"]]],
                   ["GİDERLER", [["Gider Kayıtları","g_muh","giderler"]]],
                   ["RAPORLAR", [["İç Bilanço","raporlar","bilanco","oz"],["Öz Sermaye","g_stok","oz","oz"],["Karlılık","karlilik",null,"kar"],["Mizan"]]],
-                  ["VERİ", [["Rhino'dan Aktar","g_muh","aktar"],["Mizan Yükleme & Kapsam","raporlar","yukle","oz"],["Hesap Planı"]]],
+                  ["VERİ", [["Rhino'dan Aktar","g_muh","aktar"],["Mizan Yükleme & Kapsam","raporlar","yukle","oz"],["Denetim (Rapor Kontrolü)","denetim",null,"oz"],["Hesap Planı"]]],
                   ["İŞLEMLER", [["Yeni İşlem","g_muh","islem"],["Fiş Listesi"]]],
                 ];
                 // izne göre süz: "oz" = net durum/öz sermaye/bilanço, "kar" = karlılık. Kasa personelinde İşlemler en üste gelir.
@@ -18041,6 +18224,7 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
               {kasaSayfa==="g_muh" && AKTIF_SIRKET_ONEK==="" && <MskMuhasebeSayfa T={T} GH={GH} disSek={mskMuhSek} onDisSek={setMskMuhSek} menuGizle />}
               {kasaSayfa==="karlilik" && !kmGizli && <RpKapi T={T} GH={GH}><RaporKarlilik T={T} GH={GH}/></RpKapi>}
               {kasaSayfa==="ayrapor" && AKTIF_SIRKET_ONEK==="" && <MskAylikRaporlar T={T} setRhinoMizan={setRhinoMizan} />}
+              {kasaSayfa==="denetim" && AKTIF_SIRKET_ONEK==="" && <MskDenetim T={T} GH={GH} />}
 
               {/* ══ MODALLAR ══ */}
               {kasaModal && (() => {
