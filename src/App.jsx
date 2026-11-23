@@ -1,7 +1,7 @@
 import { supabase, dbLoad, dbSave, fotoYukleStorage, yedekKaydet, yedekListesi, yedekGetir, bugunYedekVarMi, tabloModelleriSenkron, tabloModelleriToplu, tabloModelSil, tabloSiparisleriSenkron, tabloSiparisleriToplu, tabloSiparisSil, tabloMusterileriYaz, akilliModelOku, akilliSiparisOku, akilliMusteriOku, islemKaydet, islemGecmisiGetir, realtimeBaslat, tabloKoleksiyonlariYaz, tabloKasaYaz, akilliKoleksiyonOku, akilliKasaOku, tabloKoleksiyonlariOku, tabloKasaOku, saglikDenetimi, ekranSunucuFarki, toptanciKaydet, toptancilariGetir, toptanciSil, vitrinGecmisiGetir, vitrinEnCokBakilan, vitrinOzetGetir, vitrinAnaliz, vitrinGetirGuvenli, siparisOlusturGuvenli, siparislerimGetirGuvenli, siparisIptalGuvenli, siparisGuncelleGuvenli, siparisMusteriGizleGuvenli, vitrinAktiviteKaydetGuvenli, vitrinSupheliCihazlar, vitrinCevrimiciMusteriler, radarTrendleriOku, radarKaynaklariOku, radarKanitlariOku, radarTumKanitlariOku, radarTrendGuncelle, radarTrendSil, radarManuelKanitEkle } from "./supabase.js";
 import { useState, useEffect, useCallback, useMemo, useRef, Fragment } from "react";
 
-const SURUM_TARIH = "23 Kas 11:55"; // her yeni App.jsx tesliminde güncellenir — ekranın yenilendiğini anlamak için sağ üstte görünür
+const SURUM_TARIH = "23 Kas 12:10"; // her yeni App.jsx tesliminde güncellenir — ekranın yenilendiğini anlamak için sağ üstte görünür
 const uid = () => "x" + Date.now() + Math.random().toString(36).substr(2, 5);
 // ═══ ÇALIŞAN AUTH OTURUMU — yerel şifre kontrolünün ardından gerçek Supabase Auth oturumu açar ═══
 // (RLS politikaları "authenticated" rolüne dayanacak; hesap Supabase Dashboard'da manuel oluşturuldu)
@@ -12801,7 +12801,6 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
   const [sipVw,setSipVw]= useState(() => (typeof window!=="undefined"?window.innerWidth:1400));
   useEffect(() => { const f=()=>setSipVw(window.innerWidth); window.addEventListener("resize",f); return ()=>window.removeEventListener("resize",f); }, []);
   const [sipAsama,setSipAsama]= useState("");
-  const [sipAsamaAy,setSipAsamaAy]= useState(""); // MSK: aşama panelinde sipariş ayı süzgeci ("2026-10")
   const [sipSecId, setSipSecId] = useState("");
   const [sipMenu, setSipMenu] = useState("");
   const [sipBuyuk, setSipBuyuk] = useState(null);
@@ -16242,13 +16241,7 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
           });
         });
         const say = id => kalemler.filter(x=>x.st===id);
-        const seciliHam = sipAsama ? say(sipAsama) : [];
-        // MSK: aşama panelinde ay ay süz — ay = siparişin kayıtlı olduğu ay (geriye dönük girilen eski siparişler girildiği ayda kalır)
-        const ayAnahtar = x => { const d = new Date(x.sp.tarih || 0); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0"); };
-        const ayCip = {}; if (AKTIF_SIRKET_ONEK==="") seciliHam.forEach(x => { const a = ayAnahtar(x); (ayCip[a] = ayCip[a] || new Set()).add(x.sp.id); });
-        const ayCipListe = Object.keys(ayCip).sort().reverse();
-        const ayGecerli = AKTIF_SIRKET_ONEK==="" && sipAsamaAy && ayCip[sipAsamaAy] ? sipAsamaAy : "";
-        const secili = ayGecerli ? seciliHam.filter(x => ayAnahtar(x)===ayGecerli) : seciliHam;
+        const secili = sipAsama ? say(sipAsama) : [];
         const sd = asamalar.find(d=>d.id===sipAsama);
         const grup = {}; secili.forEach(x=>{ (grup[x.sp.id]=grup[x.sp.id]||{ sp:x.sp, items:[] }).items.push(x); });
         const ac = id => { if (aylarModu||oncelikModu) setSipDrawer(id); else setSipSecId(id); };
@@ -16270,22 +16263,20 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
                 );
                 return [
                   ...[["tumu","Tümü","#998a6e"]].map(([id,l,col])=>{ const f=filtreler.find(x=>x.id===id); return kutu(id,l,col,f?f.cnt:0,"sipariş","", !sipAsama && (id==="tumu"?tumuF:sipFiltre===id), ()=>{ setSipAsama(""); setSipFiltre(id); }, false); }),
-                  ...asamalar.filter(d => !(d.id==="teslim" && AKTIF_SIRKET_ONEK!=="bsp2_")).map(d => { const l = say(d.id), adet = l.reduce((a,x)=>a+x.net,0), gr = l.reduce((a,x)=>a+x.gram,0), on = sipAsama===d.id; return kutu(d.id, durumEtiket(d), d.c, adet, "adet", l.length?fN(gr,0)+" gr":"", on, ()=>{ setSipFiltre("tumu"); setSipAsama(d.id); if (!on) setTimeout(()=>{ try { const el=document.getElementById("sip-asama-panel"); if (el) el.scrollIntoView({ block:"nearest", behavior:"smooth" }); } catch(e){} }, 60); }, !l.length&&!on); }),
+                  ...asamalar.filter(d => !(d.id==="teslim" && AKTIF_SIRKET_ONEK!=="bsp2_")).map(d => { const l = say(d.id), adet = l.reduce((a,x)=>a+x.net,0), gr = l.reduce((a,x)=>a+x.gram,0), on = sipAsama===d.id; return kutu(d.id, durumEtiket(d), d.c, adet, "adet", l.length?fN(gr,0)+" gr":"", on, ()=>{ setSipFiltre("tumu"); setSipAsama(d.id);
+                    if (AKTIF_SIRKET_ONEK==="") { // MSK: ayrı panel yok — aşama süzgeci aşağıdaki ay görünümünü yerinde süzer; eşleşen siparişlerin olduğu aylar otomatik açılır
+                      if (!on) { const ks = new Set(); siparisler.forEach(sp => { if (sp.onayDurum==="bekliyor"||sp.onayDurum==="red"||sp.onayDurum==="iptal") return; const kd0 = sp.kalemDurumlar||{}; if ((sp.kalemler||[]).some(k => { const q0 = kd0[k.id]||k.durum||"baslanmadi"; return (q0==="cizimde"?"baslanmadi":q0)===d.id; })) ks.add(sp.planAy || ayAnahtar(sp.tarih)); }); if (ks.size) setSipAyAcik([...ks]); }
+                    } else if (!on) setTimeout(()=>{ try { const el=document.getElementById("sip-asama-panel"); if (el) el.scrollIntoView({ block:"nearest", behavior:"smooth" }); } catch(e){} }, 60); }, !l.length&&!on); }),
                   ...[["teslimgecti","Teslimi geçen","#d9736b"]].map(([id,l,col])=>{ const f=filtreler.find(x=>x.id===id); const on=!sipAsama && sipFiltre===id; return kutu(id,l,col,f?f.cnt:0,"sipariş","", on, ()=>{ setSipAsama(""); setSipFiltre(on?"tumu":id); }, !(f&&f.cnt)&&!on); })
                 ];
               })()}
             </div>
-            {sipAsama && sd && (
+            {sipAsama && sd && AKTIF_SIRKET_ONEK!=="" && (
               <div id="sip-asama-panel" style={{ marginTop:8, background:T.card, border:"1px solid "+sd.c+"88", borderRadius:12, padding:12 }}>
                 <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
                   <span style={{ fontSize:14, fontWeight:600, color:sd.c }}>{durumEtiket(sd)} — {Object.keys(grup).length} sipariş · {secili.length} model</span>
                   <button onClick={()=>setSipAsama("")} style={{ ...GH, fontSize:11, padding:"4px 10px" }}>✕ Kapat</button>
                 </div>
-                {ayCipListe.length>1 && (() => { const AYA = ["Oca","Şub","Mar","Nis","May","Haz","Tem","Ağu","Eyl","Eki","Kas","Ara"]; const cb = (on) => ({ background:on?"rgba(var(--vurgu-rgb),0.22)":"transparent", border:"1px solid "+(on?"rgba(var(--vurgu-rgb),0.6)":T.border), borderRadius:8, padding:"4px 10px", fontSize:12, fontWeight:on?700:500, color:T.text, cursor:"pointer" });
-                  return (<div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:10 }}>
-                    <button onClick={()=>setSipAsamaAy("")} style={cb(!ayGecerli)}>Tümü ({new Set(seciliHam.map(x=>x.sp.id)).size})</button>
-                    {ayCipListe.map(a => { const [y,m] = a.split("-"); return <button key={a} onClick={()=>setSipAsamaAy(a)} style={cb(ayGecerli===a)}>{AYA[Number(m)-1]} {y} ({ayCip[a].size})</button>; })}
-                  </div>); })()}
                 {secili.length===0 && <div style={{ fontSize:12, color:"#998a6e" }}>Bu aşamada ürün yok</div>}
                 <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(300px, 1fr))", gap:8 }}>
                   {Object.values(grup).map(({sp,items}) => {
