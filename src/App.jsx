@@ -1,7 +1,7 @@
 import { supabase, dbLoad, dbSave, fotoYukleStorage, yedekKaydet, yedekListesi, yedekGetir, bugunYedekVarMi, tabloModelleriSenkron, tabloModelleriToplu, tabloModelSil, tabloSiparisleriSenkron, tabloSiparisleriToplu, tabloSiparisSil, tabloMusterileriYaz, akilliModelOku, akilliSiparisOku, akilliMusteriOku, islemKaydet, islemGecmisiGetir, realtimeBaslat, tabloKoleksiyonlariYaz, tabloKasaYaz, akilliKoleksiyonOku, akilliKasaOku, tabloKoleksiyonlariOku, tabloKasaOku, saglikDenetimi, ekranSunucuFarki, toptanciKaydet, toptancilariGetir, toptanciSil, vitrinGecmisiGetir, vitrinEnCokBakilan, vitrinOzetGetir, vitrinAnaliz, vitrinGetirGuvenli, siparisOlusturGuvenli, siparislerimGetirGuvenli, siparisIptalGuvenli, siparisGuncelleGuvenli, siparisMusteriGizleGuvenli, vitrinAktiviteKaydetGuvenli, vitrinSupheliCihazlar, vitrinCevrimiciMusteriler, radarTrendleriOku, radarKaynaklariOku, radarKanitlariOku, radarTumKanitlariOku, radarTrendGuncelle, radarTrendSil, radarManuelKanitEkle } from "./supabase.js";
 import { useState, useEffect, useCallback, useMemo, useRef, Fragment } from "react";
 
-const SURUM_TARIH = "23 Kas 14:50"; // her yeni App.jsx tesliminde güncellenir — ekranın yenilendiğini anlamak için sağ üstte görünür
+const SURUM_TARIH = "23 Kas 17:55"; // her yeni App.jsx tesliminde güncellenir — ekranın yenilendiğini anlamak için sağ üstte görünür
 const uid = () => "x" + Date.now() + Math.random().toString(36).substr(2, 5);
 // ═══ ÇALIŞAN AUTH OTURUMU — yerel şifre kontrolünün ardından gerçek Supabase Auth oturumu açar ═══
 // (RLS politikaları "authenticated" rolüne dayanacak; hesap Supabase Dashboard'da manuel oluşturuldu)
@@ -228,12 +228,29 @@ const FOTO_KENAR_SOLUK = (() => { const g = "linear-gradient(to right,transparen
 // Kayıt biçimi: { "10K": {iscilikDolar, iscilikBirim}, "14K": {...} }  (eski tek-fiyat biçimi { iscilikDolar, iscilikBirim } her ayara uygulanır — geriye uyum)
 // Ayar bazlı GENEL STANDART işçilik (örn. tüm modellerde 10K = $3.25/gr). Modelin o ayar için kendi fiyatı varsa o geçerli; yoksa bu standart.
 // Sadece yeni teklif/sipariş hesabında ve kart/form gösteriminde kullanılır — kayıtlı siparişler fiyatı kendi içinde taşıdığı için eskiler değişmez.
-const ISCILIK_STANDART_VARSAYILAN = { "10K": { dolar: 3.25, birim: "dolar" } };
+// 10K standardı OTOMATİK: ayar kârı (gram kârı, mly/gr) = 14K gram kârı + puan/1000. Varsayılan işçilik (milyem altı) değişince 10K da kendiliğinden değişir.
+const ISCILIK_STANDART_VARSAYILAN = { "10K": { birim: "oto", puan: 10, dolar: 0 } };
 let ISCILIK_STANDART = ISCILIK_STANDART_VARSAYILAN;
+let ISCILIK_CTX = { altinKgUSD: 0, mly: 0.03 }; // render sırasında App tarafından güncellenir (otomatik işçilik hesabı için)
+function setIscilikCtx(a, m) { ISCILIK_CTX = { altinKgUSD: Number(a) || 0, mly: Number(m) || 0.03 }; }
+function iscilikOtoMly(m, ayar, puan) { // milyem/gr — null: hesaplanamadı
+  if (!m || ayar === "14K" || ayar === "925") return null;
+  const { altinKgUSD, mly } = ISCILIK_CTX;
+  const m0 = { ...m, iscilikAyarlar: { ...(m.iscilikAyarlar || {}), [ayar]: { dolar: 0, birim: "milyem" } } };
+  const h0 = hesapla(m0, ayar, altinKgUSD, mly);
+  const h14 = hesapla({ ...m }, "14K", altinKgUSD, mly);
+  if (!(h0.mamulGram > 0) || !(h14.mamulGram > 0)) return null;
+  const k0 = h0.karHas / h0.mamulGram, k14 = h14.karHas / h14.mamulGram;
+  return Math.round((k14 + (Number(puan) || 0) / 1000 - k0) * 100000) / 100000;
+}
 function setIscilikStandart(o) { ISCILIK_STANDART = (o && typeof o === "object") ? o : ISCILIK_STANDART_VARSAYILAN; }
 function iscilikStandartUygula(m) {
   const ek = {};
-  Object.entries(ISCILIK_STANDART || {}).forEach(([ay, v]) => { if (!(m.iscilikAyarlar || {})[ay] && v && v.dolar !== "" && v.dolar !== undefined) ek[ay] = { dolar: Number(v.dolar) || 0, birim: v.birim || "dolar" }; });
+  Object.entries(ISCILIK_STANDART || {}).forEach(([ay, v]) => {
+    if ((m.iscilikAyarlar || {})[ay] || !v) return;
+    if (v.birim === "oto") { const x = iscilikOtoMly(m, ay, v.puan); if (x !== null) ek[ay] = { dolar: x, birim: "milyem", oto: true }; return; }
+    if (v.dolar !== "" && v.dolar !== undefined) ek[ay] = { dolar: Number(v.dolar) || 0, birim: v.birim || "dolar" };
+  });
   return Object.keys(ek).length ? { ...m, iscilikAyarlar: { ...(m.iscilikAyarlar || {}), ...ek } } : m;
 }
 function iscilikOvrBul(kayit, ayar) {
@@ -250,7 +267,8 @@ function iscilikCoz(m, ayar, konfKayit, hafizaKayit) {
   const ma = (m.iscilikAyarlar || {})[ayar];
   if (ma) return { dolar: Number(ma.dolar) || 0, birim: ma.birim || "dolar", kaynak: "model" };
   const gs = (ISCILIK_STANDART || {})[ayar];
-  if (gs && gs.dolar !== "" && gs.dolar !== undefined) return { dolar: Number(gs.dolar) || 0, birim: gs.birim || "dolar", kaynak: "standart" };
+  if (gs && gs.birim === "oto") { const x = iscilikOtoMly(m, ayar, gs.puan); if (x !== null) return { dolar: x, birim: "milyem", kaynak: "standart", oto: true }; }
+  else if (gs && gs.dolar !== "" && gs.dolar !== undefined) return { dolar: Number(gs.dolar) || 0, birim: gs.birim || "dolar", kaynak: "standart" };
   return { dolar: m.iscilikDolar, birim: m.iscilikBirim || "dolar", kaynak: "model" };
 }
 // hesapla() ayar bazlı işçiliği (iscilikAyarlar) genel işçiliğe tercih ettiği için, seçilen ayarın çözümlenmiş fiyatı HEM üst alana HEM iscilikAyarlar[ayar]'a yazılır
@@ -13262,6 +13280,7 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
 
   const altinKgUSD  = Number(altinKg) || 0;
   const madenCarpan = Number(mc) || 0.25;
+  setIscilikCtx(altinKgUSD, madenCarpan); // otomatik 10K işçiliği için güncel altın/maliyet milyemi
   const teslimH = useMemo(() => AKTIF_SIRKET_ONEK === "" ? ongTeslimHaritasi(siparisler, altinKgUSD, madenCarpan) : null, [siparisler, altinKgUSD, madenCarpan]);
   const teslimMetin = (sp) => {
     if (!teslimH) return null; const d = teslimH.harita[sp.id]; if (!d || d.durum === "belirsiz") return null;
@@ -19370,21 +19389,22 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
             <div style={{ background:T.card, border:"1px solid "+T.border, borderRadius:14, padding:"15px 16px" }}>
               {(() => {
                 const kayitli = ISCILIK_STANDART["10K"] || { dolar:"", birim:"dolar" };
-                const deger = stdIscGirdi ?? { dolar: String(kayitli.dolar ?? ""), birim: kayitli.birim || "dolar" };
+                const deger = stdIscGirdi ?? (kayitli.birim==="oto" ? { dolar: String(kayitli.puan ?? 10), birim:"oto" } : { dolar: String(kayitli.dolar ?? ""), birim: kayitli.birim || "dolar" });
                 const degisti = stdIscGirdi !== null;
                 return (
                   <div>
-                    <div style={{ fontSize:9, color:T.sub, marginBottom:8 }}>10K için kendi ayrı fiyatı girilmemiş TÜM modellerde bu işçilik geçerli olur (kart, model formu, Konfirmasyon). Modelde 10K fiyatı ayrıca girilmişse o kullanılır. Kayıtlı siparişler değişmez.</div>
+                    <div style={{ fontSize:9, color:T.sub, marginBottom:8 }}>{deger.birim==="oto" ? "Otomatik: 10K işçiliği, her modelde 14K gram kârının (mly/gr) PUAN kadar üstünde kâr kalacak şekilde hesaplanır (1 puan = 0,001 mly/gr). Varsayılan işçilik (milyem altı) değişince 10K da değişir. " : ""}10K için kendi ayrı fiyatı girilmemiş TÜM modellerde bu işçilik geçerli olur (kart, model formu, Konfirmasyon). Modelde 10K fiyatı ayrıca girilmişse o kullanılır. Kayıtlı siparişler değişmez.</div>
                     <div style={{ display:"flex", gap:6, alignItems:"center" }}>
                       <span style={{ fontSize:11, fontWeight:800, color:GOLD, width:32 }}>10K</span>
                       <select value={deger.birim} onChange={e=>setStdIscGirdi({ ...deger, birim:e.target.value })} style={{ ...IS, width:110, padding:"5px 6px", fontSize:11 }}>
                         <option value="dolar">$ / gr</option>
                         <option value="milyem">milyem / gr</option>
+                        <option value="oto">Otomatik (14K + puan)</option>
                       </select>
-                      <input type="number" step="0.01" value={deger.dolar} onChange={e=>setStdIscGirdi({ ...deger, dolar:e.target.value })} placeholder="3.25" style={{ ...IS, flex:1, padding:"5px 8px", fontSize:12, fontWeight:700 }}/>
+                      <input type="number" step={deger.birim==="oto"?1:0.01} value={deger.dolar} onChange={e=>setStdIscGirdi({ ...deger, dolar:e.target.value })} placeholder={deger.birim==="oto"?"10":"3.25"} style={{ ...IS, flex:1, padding:"5px 8px", fontSize:12, fontWeight:700 }}/>
                     </div>
                     <div style={{ display:"flex", gap:6, marginTop:8 }}>
-                      <button disabled={!degisti} onClick={()=>{ const yeni = { ...(kasa.iscilikStandart ?? ISCILIK_STANDART_VARSAYILAN) }; if (String(deger.dolar).trim()==="") delete yeni["10K"]; else yeni["10K"] = { dolar:Number(deger.dolar)||0, birim:deger.birim }; svKasa({ ...kasa, iscilikStandart: yeni }); setStdIscGirdi(null); toastGoster("ok","💰 10K standart işçilik kaydedildi"); }} style={{ ...BG, padding:"6px 14px", fontSize:10, opacity:degisti?1:0.4 }}>Kaydet</button>
+                      <button disabled={!degisti} onClick={()=>{ const yeni = { ...(kasa.iscilikStandart ?? ISCILIK_STANDART_VARSAYILAN) }; if (String(deger.dolar).trim()==="") delete yeni["10K"]; else yeni["10K"] = deger.birim==="oto" ? { birim:"oto", puan:Number(deger.dolar)||0, dolar:0 } : { dolar:Number(deger.dolar)||0, birim:deger.birim }; svKasa({ ...kasa, iscilikStandart: yeni }); setStdIscGirdi(null); toastGoster("ok","💰 10K standart işçilik kaydedildi"); }} style={{ ...BG, padding:"6px 14px", fontSize:10, opacity:degisti?1:0.4 }}>Kaydet</button>
                       {degisti && <button onClick={()=>setStdIscGirdi(null)} style={{ ...GH, fontSize:10, padding:"6px 12px" }}>Vazgeç</button>}
                     </div>
                   </div>
@@ -21863,7 +21883,10 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
               const KUTU = ["10K","14K","18K"];
               const stdMevcut = (ISCILIK_STANDART||{})["10K"];
               const varsayilan = (ay) => {
-                if (ay==="10K" && stdMevcut && stdMevcut.dolar!==""&&stdMevcut.dolar!==undefined) return { dolar:String(stdMevcut.dolar), birim:stdMevcut.birim||"dolar", std:true };
+                if (ay==="10K" && stdMevcut && stdMevcut.birim==="oto") {
+                  const x = iscilikOtoMly({ gram:Number(fGram), refAyar:fRefAyar, tasGram:tlForm, tasKarDus:fTaslar.reduce((a,t)=>a+(Number(t.kd)||0),0), madenCarpan:Number(fMadenC)||0, iscilikDolar:Number(fIscilikDolar)||0, iscilikBirim:fIscilikBirim, iscilikAyarlar:fIscilikAyarlar, ekMaliyet:Number(fEkMaliyet)||0 }, "10K", stdMevcut.puan);
+                  if (x !== null) return { dolar:String(x), birim:"milyem", std:true, oto:true };
+                } else if (ay==="10K" && stdMevcut && stdMevcut.dolar!==""&&stdMevcut.dolar!==undefined) return { dolar:String(stdMevcut.dolar), birim:stdMevcut.birim||"dolar", std:true };
                 return { dolar: fIscilikDolar!=="" ? String(fIscilikDolar) : (fIscilikBirim==="milyem"?"0.30":"2.75"), birim:fIscilikBirim, std:false };
               };
               const tlForm = (() => { const tl = fTaslar.reduce((acc,t)=>{const gr=tasGramHesapla(t.sekil,t.tur,isNaN(Number(t.boyut))?t.boyut:Number(t.boyut),Number(t.adet)||1,ozelTaslar,tasGramOverride);return acc+(gr>0?gr:(Number(t.gram)||0));},0); return (fTaslar.length>0&&tl>0)?tl:(Number(fTasGram)||0); })();
@@ -21897,7 +21920,7 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
                       <div key={ay} style={{ border:"1px solid "+(ozel?"rgba(232,131,58,0.55)":"rgba(var(--vurgu-rgb),0.15)"), borderRadius:8, padding:"5px 7px", background: ozel?"rgba(232,131,58,0.08)":"transparent" }}>
                         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:3 }}>
                           <span style={{ fontSize:10, fontWeight:800, color:GOLD }}>{ay}</span>
-                          <span style={{ fontSize:7, fontWeight:700, color: ozel?"#e8833a":"#8a7d64" }}>{ozel?"ÖZEL":(vr.std?"STANDART":"VARSAYILAN")}</span>
+                          <span style={{ fontSize:7, fontWeight:700, color: ozel?"#e8833a":"#8a7d64" }}>{ozel?"ÖZEL":(vr.oto?"OTOMATİK":(vr.std?"STANDART":"VARSAYILAN"))}</span>
                         </div>
                         <input type="number" value={ozel?val.dolar:""} onChange={e=>kutuYaz(ay,e.target.value)} placeholder={vr.dolar} style={{ ...IS, width:"100%", boxSizing:"border-box", padding:"5px 6px", fontSize:12, fontWeight:700 }}/>
                         <div onClick={()=>{ if (!ozel) return; setFIscilikAyarlar(p=>({ ...p, [ay]:{ ...p[ay], birim: birim==="milyem" ? "dolar" : "milyem" } })); }} title={ozel ? "Birimi değiştir ($ / gr ↔ milyem / gr)" : "Değer girince birim değiştirilebilir"} style={{ fontSize:7, color: ozel ? "#e8833a" : "#8a7d64", marginTop:2, cursor: ozel ? "pointer" : "default", textDecoration: ozel ? "underline dotted" : "none" }}>{birim==="milyem"?"milyem / gr":"$ / gr"}{ozel && " ⇄"}</div>
