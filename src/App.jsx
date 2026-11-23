@@ -1,7 +1,7 @@
 import { supabase, dbLoad, dbSave, fotoYukleStorage, yedekKaydet, yedekListesi, yedekGetir, bugunYedekVarMi, tabloModelleriSenkron, tabloModelleriToplu, tabloModelSil, tabloSiparisleriSenkron, tabloSiparisleriToplu, tabloSiparisSil, tabloMusterileriYaz, akilliModelOku, akilliSiparisOku, akilliMusteriOku, islemKaydet, islemGecmisiGetir, realtimeBaslat, tabloKoleksiyonlariYaz, tabloKasaYaz, akilliKoleksiyonOku, akilliKasaOku, tabloKoleksiyonlariOku, tabloKasaOku, saglikDenetimi, ekranSunucuFarki, toptanciKaydet, toptancilariGetir, toptanciSil, vitrinGecmisiGetir, vitrinEnCokBakilan, vitrinOzetGetir, vitrinAnaliz, vitrinGetirGuvenli, siparisOlusturGuvenli, siparislerimGetirGuvenli, siparisIptalGuvenli, siparisGuncelleGuvenli, siparisMusteriGizleGuvenli, vitrinAktiviteKaydetGuvenli, vitrinSupheliCihazlar, vitrinCevrimiciMusteriler, radarTrendleriOku, radarKaynaklariOku, radarKanitlariOku, radarTumKanitlariOku, radarTrendGuncelle, radarTrendSil, radarManuelKanitEkle } from "./supabase.js";
 import { useState, useEffect, useCallback, useMemo, useRef, Fragment } from "react";
 
-const SURUM_TARIH = "23 Kas 14:05"; // her yeni App.jsx tesliminde güncellenir — ekranın yenilendiğini anlamak için sağ üstte görünür
+const SURUM_TARIH = "23 Kas 14:30"; // her yeni App.jsx tesliminde güncellenir — ekranın yenilendiğini anlamak için sağ üstte görünür
 const uid = () => "x" + Date.now() + Math.random().toString(36).substr(2, 5);
 // ═══ ÇALIŞAN AUTH OTURUMU — yerel şifre kontrolünün ardından gerçek Supabase Auth oturumu açar ═══
 // (RLS politikaları "authenticated" rolüne dayanacak; hesap Supabase Dashboard'da manuel oluşturuldu)
@@ -6745,6 +6745,45 @@ function MskAylikOzet({ T, vDis, ayDis }) {
     </div>
   );
 }
+// ── Mizan gelir/gider tablosu — birebir (MSK): Tüm yıl = hesabın yıl içi hareketi · Kapama sonrası = mizan bakiyesi ──
+function MizanBirebir({ T, kayit }) {
+  const [ac, setAc] = useState({});
+  if (!kayit || !kayit.kur || !kayit.kur.HAS || !Array.isArray(kayit.satirlar)) return null;
+  const kur = kayit.kur, sat = kayit.satirlar;
+  const n = (x) => Number(x) || 0;
+  const has = (r, t) => r[2]==="HAS" ? t : r[2]==="TL" ? t/kur.HAS : (t*(kur[r[2]]||0))/kur.HAS;
+  const GAD = { "600":"Atölye satışları", "602":"Diğer gelirler (taş, mine, yay…)", "610":"Satış iadeleri", "621":"Satılan malın maliyeti", "622":"Satılan hizmet maliyeti", "649":"Maden milyem karları", "659":"Maden milyem zararları", "710":"Döküm işçilik giderleri", "740":"Atölye giderleri", "760":"Eritme ve taş düşümü giderleri" };
+  const gelirMi = (k) => k==="600" || k==="602" || /^64/.test(k);
+  const kodlar = sat.filter(r=>/^[67]\d\d$/.test(r[0]) && (Math.abs(n(r[3]))>=0.005 || Math.abs(n(r[4]))>=0.005)).map(r=>r[0]);
+  const siraliK = [...new Set([...Object.keys(GAD), ...kodlar])].filter(k=>sat.some(r=>r[0]===k)).sort();
+  const yil = (r, g) => has(r, g ? n(r[4]) : n(r[3]));
+  const bak = (r, g) => { const net = n(r[5]) - n(r[6]); return has(r, g ? -net : net); };
+  const grup = siraliK.map(k => { const r = sat.find(x=>x[0]===k); const g = gelirMi(k); return { k, ad:GAD[k] || r[1], g, yil:yil(r,g), bak:bak(r,g), r }; });
+  const topla = (g, f) => grup.filter(x=>x.g===g).reduce((t,x)=>t+x[f],0);
+  const gelY = topla(true,"yil"), gidY = topla(false,"yil"), gelB = topla(true,"bak"), gidB = topla(false,"bak");
+  const alt = (k) => sat.filter(r => r[0]!==k && (r[0].startsWith(k+" ") || r[0].startsWith(k+"\\")) && !sat.some(x => x[0]!==r[0] && (x[0].startsWith(r[0]+" ") || x[0].startsWith(r[0]+"\\"))));
+  const renk = (x) => x<0 ? (T.danger||"#e85a4f") : T.text;
+  const Sat = ({ ad, y, b, kalin, girinti, onClick, acik }) => (
+    <div onClick={onClick} style={{ display:"grid", gridTemplateColumns:"1fr 84px 84px", gap:6, padding:"5px 4px", marginLeft:girinti?14:0, borderTop:"1px solid "+T.border, cursor:onClick?"pointer":"default", alignItems:"baseline" }}>
+      <span style={{ fontSize:girinti?11:12, fontWeight:kalin?800:(girinti?400:600), color:kalin?T.gold:(girinti?T.sub:T.text) }}>{onClick?(acik?"▾ ":"▸ "):""}{ad}</span>
+      <span style={{ textAlign:"right", fontSize:girinti?11:12.5, fontWeight:kalin?800:600, color:renk(y) }}>{rpF(y,2)}</span>
+      <span style={{ textAlign:"right", fontSize:girinti?11:12.5, fontWeight:kalin?800:600, color:renk(b) }}>{rpF(b,2)}</span>
+    </div>
+  );
+  return (
+    <RpKart T={T} baslik={"MİZAN GELİR / GİDER (HAS) — BİREBİR · "+kayit.bas+" – "+kayit.bit}>
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 84px 84px", gap:6, padding:"0 4px 4px", fontSize:10.5, color:T.sub, fontWeight:700 }}><span>Hesap</span><span style={{ textAlign:"right" }}>Tüm yıl</span><span style={{ textAlign:"right" }}>Kapama sonrası</span></div>
+      <div style={{ fontSize:10.5, color:T.sub, fontWeight:800, padding:"4px 4px 0" }}>GELİRLER</div>
+      {grup.filter(x=>x.g).map(x=><div key={x.k}><Sat ad={x.k+" · "+x.ad} y={x.yil} b={x.bak} onClick={()=>setAc({ ...ac, [x.k]:!ac[x.k] })} acik={ac[x.k]}/>{ac[x.k] && alt(x.k).map(r=>{ const y=yil(r,true), b=bak(r,true); return (Math.abs(y)<0.005 && Math.abs(b)<0.005) ? null : <Sat key={r[0]} girinti ad={r[0].replace(/^\d{3} 001 /,"")+" · "+r[1]} y={y} b={b}/>; })}</div>)}
+      <Sat ad="TOPLAM GELİR" y={gelY} b={gelB} kalin/>
+      <div style={{ fontSize:10.5, color:T.sub, fontWeight:800, padding:"8px 4px 0" }}>GİDERLER VE MALİYETLER</div>
+      {grup.filter(x=>!x.g).map(x=><div key={x.k}><Sat ad={x.k+" · "+x.ad} y={x.yil} b={x.bak} onClick={()=>setAc({ ...ac, [x.k]:!ac[x.k] })} acik={ac[x.k]}/>{ac[x.k] && alt(x.k).map(r=>{ const y=yil(r,false), b=bak(r,false); return (Math.abs(y)<0.005 && Math.abs(b)<0.005) ? null : <Sat key={r[0]} girinti ad={r[0].replace(/^\d{3} 001 /,"")+" · "+r[1]} y={y} b={b}/>; })}</div>)}
+      <Sat ad="TOPLAM GİDER / MALİYET" y={gidY} b={gidB} kalin/>
+      <Sat ad="SONUÇ (gelir − gider)" y={gelY-gidY} b={gelB-gidB} kalin/>
+      <div style={{ fontSize:11, color:T.dim||T.sub, marginTop:8, lineHeight:1.5 }}>Tüm yıl: hesabın yıl içi toplam hareketi (gelirde alacak, giderde borç; kapama aktarımları sayılmaz). Kapama sonrası: mizan bakiyesi. Hesap satırına dokununca alt hesaplar açılır. Döviz hesapları mizan kuruyla has'a çevrilir; Rhino'nun işlem günü kuruyla küçük sapma olabilir.</div>
+    </RpKart>
+  );
+}
 function RaporKarlilik({ T, GH }) {
   const [v] = useRpVeri();
   const [mid, setMid] = useState("");
@@ -6780,6 +6819,7 @@ function RaporKarlilik({ T, GH }) {
   const aktifPasif = hes ? Object.keys(hes).filter(k=>/^[1345]\d$/.test(k)).reduce((t,k)=>t+hes[k].has,0) : null;
   return (
     <div>
+      {kayit && kayit.kur && kayit.kur.HAS && <MizanBirebir T={T} kayit={kayit}/>}
       {(v.satislar.length>0 || v.giderler.length>0) && <MskAylikOzet T={T} vDis={v}/>}
       {!hes && !v.satislar.length && <RpKart T={T} baslik="KARLILIK"><div style={{ fontSize:11, color:T.text }}>Karlılık için Raporlar sekmesinden mizan, giderler ve satış dosyalarını yükle.</div></RpKart>}
       {v.satislar.length>0 && v.giderler.length>0 && (
