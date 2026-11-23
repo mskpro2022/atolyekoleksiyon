@@ -1,7 +1,7 @@
 import { supabase, dbLoad, dbSave, fotoYukleStorage, yedekKaydet, yedekListesi, yedekGetir, bugunYedekVarMi, tabloModelleriSenkron, tabloModelleriToplu, tabloModelSil, tabloSiparisleriSenkron, tabloSiparisleriToplu, tabloSiparisSil, tabloMusterileriYaz, akilliModelOku, akilliSiparisOku, akilliMusteriOku, islemKaydet, islemGecmisiGetir, realtimeBaslat, tabloKoleksiyonlariYaz, tabloKasaYaz, akilliKoleksiyonOku, akilliKasaOku, tabloKoleksiyonlariOku, tabloKasaOku, saglikDenetimi, ekranSunucuFarki, toptanciKaydet, toptancilariGetir, toptanciSil, vitrinGecmisiGetir, vitrinEnCokBakilan, vitrinOzetGetir, vitrinAnaliz, vitrinGetirGuvenli, siparisOlusturGuvenli, siparislerimGetirGuvenli, siparisIptalGuvenli, siparisGuncelleGuvenli, siparisMusteriGizleGuvenli, vitrinAktiviteKaydetGuvenli, vitrinSupheliCihazlar, vitrinCevrimiciMusteriler, radarTrendleriOku, radarKaynaklariOku, radarKanitlariOku, radarTumKanitlariOku, radarTrendGuncelle, radarTrendSil, radarManuelKanitEkle } from "./supabase.js";
 import { useState, useEffect, useCallback, useMemo, useRef, Fragment } from "react";
 
-const SURUM_TARIH = "23 Kas 14:30"; // her yeni App.jsx tesliminde güncellenir — ekranın yenilendiğini anlamak için sağ üstte görünür
+const SURUM_TARIH = "23 Kas 14:50"; // her yeni App.jsx tesliminde güncellenir — ekranın yenilendiğini anlamak için sağ üstte görünür
 const uid = () => "x" + Date.now() + Math.random().toString(36).substr(2, 5);
 // ═══ ÇALIŞAN AUTH OTURUMU — yerel şifre kontrolünün ardından gerçek Supabase Auth oturumu açar ═══
 // (RLS politikaları "authenticated" rolüne dayanacak; hesap Supabase Dashboard'da manuel oluşturuldu)
@@ -6746,7 +6746,7 @@ function MskAylikOzet({ T, vDis, ayDis }) {
   );
 }
 // ── Mizan gelir/gider tablosu — birebir (MSK): Tüm yıl = hesabın yıl içi hareketi · Kapama sonrası = mizan bakiyesi ──
-function MizanBirebir({ T, kayit }) {
+function MizanBirebir({ T, kayit, v }) {
   const [ac, setAc] = useState({});
   if (!kayit || !kayit.kur || !kayit.kur.HAS || !Array.isArray(kayit.satirlar)) return null;
   const kur = kayit.kur, sat = kayit.satirlar;
@@ -6763,6 +6763,22 @@ function MizanBirebir({ T, kayit }) {
   const gelY = topla(true,"yil"), gidY = topla(false,"yil"), gelB = topla(true,"bak"), gidB = topla(false,"bak");
   const alt = (k) => sat.filter(r => r[0]!==k && (r[0].startsWith(k+" ") || r[0].startsWith(k+"\\")) && !sat.some(x => x[0]!==r[0] && (x[0].startsWith(r[0]+" ") || x[0].startsWith(r[0]+"\\"))));
   const renk = (x) => x<0 ? (T.danger||"#e85a4f") : T.text;
+  // Ayrıştırma: mizan alt hesabının tüm yıl tutarını satış / gider raporlarındaki kayıtlardan ay ay açar
+  const NN = (x) => String(x||"").replace(/\u00a0/g," ").replace(/\s+/g," ").trim().toLocaleUpperCase("tr-TR");
+  const MSK_ALIAS = { "MUM PROJET": "MUM GİDERİ", "FİRE": "ERİTME FİRE KAYBI", "GÜNLÜK MESAİ İÇERİ": "MESAİ YEMEK VE İÇECEK GİDERLERİ", "KALEM İŞÇİLİK": "KALEM FASON İŞÇİLİK", "MALZEME CİLA": "2-3 NUMARA KALEM", "AYAREVİ ÜCRET GİDERİ": "YOL ÜCRET GİDERLERİ" };
+  const AYR = { "02":"9K", "03":"10K", "04":"14K", "05":"18K", "06":"19K", "07":"21K", "08":"22K", "09":"24K" };
+  const detay = (r, y) => {
+    if (!v) return null;
+    const ayT = {}; let bulundu = false;
+    const m = String(r[0]).match(/^600 001 0([12]) (\d\d)$/);
+    if (m && AYR[m[2]]) { v.satislar.forEach(sr => { const b = rpBrutGr(sr); if (!b || b.ayar !== AYR[m[2]]) return; bulundu = true; const a = String(sr[0]).slice(0,7); ayT[a] = (ayT[a]||0) + (m[1]==="1" ? sr[3] : sr[4]); }); }
+    else if (String(r[0])[0]==="7") { const kap = rpKapanisTurleri(v.giderler); const hedef = NN(r[1]); v.giderler.forEach(sr => { if (kap.has(sr[1])) return; const t = NN(sr[1]); if (NN(MSK_ALIAS[t] || t) !== hedef) return; bulundu = true; const a = String(sr[0]).slice(0,7); ayT[a] = (ayT[a]||0) + sr[5]; }); }
+    else return null;
+    const stl = { fontSize:10.5, color:T.sub, marginLeft:28, padding:"0 4px 4px", lineHeight:1.5 };
+    if (!bulundu) return Math.abs(y)<0.05 ? null : <div style={stl}>raporda eşleşen kayıt yok</div>;
+    const ks = Object.keys(ayT).sort(), top = ks.reduce((t,a)=>t+ayT[a],0), fr = y - top;
+    return <div style={stl}>{ks.filter(a=>Math.abs(ayT[a])>=0.005).map(a=>rpAyAd(a).split(" ")[0]+" "+rpF(ayT[a],1)).join(" · ")}{Math.abs(fr)>=0.05 && <span style={{ color:(T.danger||"#e85a4f") }}>{" · ayrışmayan "+rpF(fr,2)}</span>}</div>;
+  };
   const Sat = ({ ad, y, b, kalin, girinti, onClick, acik }) => (
     <div onClick={onClick} style={{ display:"grid", gridTemplateColumns:"1fr 84px 84px", gap:6, padding:"5px 4px", marginLeft:girinti?14:0, borderTop:"1px solid "+T.border, cursor:onClick?"pointer":"default", alignItems:"baseline" }}>
       <span style={{ fontSize:girinti?11:12, fontWeight:kalin?800:(girinti?400:600), color:kalin?T.gold:(girinti?T.sub:T.text) }}>{onClick?(acik?"▾ ":"▸ "):""}{ad}</span>
@@ -6774,13 +6790,13 @@ function MizanBirebir({ T, kayit }) {
     <RpKart T={T} baslik={"MİZAN GELİR / GİDER (HAS) — BİREBİR · "+kayit.bas+" – "+kayit.bit}>
       <div style={{ display:"grid", gridTemplateColumns:"1fr 84px 84px", gap:6, padding:"0 4px 4px", fontSize:10.5, color:T.sub, fontWeight:700 }}><span>Hesap</span><span style={{ textAlign:"right" }}>Tüm yıl</span><span style={{ textAlign:"right" }}>Kapama sonrası</span></div>
       <div style={{ fontSize:10.5, color:T.sub, fontWeight:800, padding:"4px 4px 0" }}>GELİRLER</div>
-      {grup.filter(x=>x.g).map(x=><div key={x.k}><Sat ad={x.k+" · "+x.ad} y={x.yil} b={x.bak} onClick={()=>setAc({ ...ac, [x.k]:!ac[x.k] })} acik={ac[x.k]}/>{ac[x.k] && alt(x.k).map(r=>{ const y=yil(r,true), b=bak(r,true); return (Math.abs(y)<0.005 && Math.abs(b)<0.005) ? null : <Sat key={r[0]} girinti ad={r[0].replace(/^\d{3} 001 /,"")+" · "+r[1]} y={y} b={b}/>; })}</div>)}
+      {grup.filter(x=>x.g).map(x=><div key={x.k}><Sat ad={x.k+" · "+x.ad} y={x.yil} b={x.bak} onClick={()=>setAc({ ...ac, [x.k]:!ac[x.k] })} acik={ac[x.k]}/>{ac[x.k] && alt(x.k).map(r=>{ const y=yil(r,true), b=bak(r,true); return (Math.abs(y)<0.005 && Math.abs(b)<0.005) ? null : <div key={r[0]}><Sat girinti ad={r[0].replace(/^\d{3} 001 /,"")+" · "+r[1]} y={y} b={b}/>{detay(r,y)}</div>; })}</div>)}
       <Sat ad="TOPLAM GELİR" y={gelY} b={gelB} kalin/>
       <div style={{ fontSize:10.5, color:T.sub, fontWeight:800, padding:"8px 4px 0" }}>GİDERLER VE MALİYETLER</div>
-      {grup.filter(x=>!x.g).map(x=><div key={x.k}><Sat ad={x.k+" · "+x.ad} y={x.yil} b={x.bak} onClick={()=>setAc({ ...ac, [x.k]:!ac[x.k] })} acik={ac[x.k]}/>{ac[x.k] && alt(x.k).map(r=>{ const y=yil(r,false), b=bak(r,false); return (Math.abs(y)<0.005 && Math.abs(b)<0.005) ? null : <Sat key={r[0]} girinti ad={r[0].replace(/^\d{3} 001 /,"")+" · "+r[1]} y={y} b={b}/>; })}</div>)}
+      {grup.filter(x=>!x.g).map(x=><div key={x.k}><Sat ad={x.k+" · "+x.ad} y={x.yil} b={x.bak} onClick={()=>setAc({ ...ac, [x.k]:!ac[x.k] })} acik={ac[x.k]}/>{ac[x.k] && alt(x.k).map(r=>{ const y=yil(r,false), b=bak(r,false); return (Math.abs(y)<0.005 && Math.abs(b)<0.005) ? null : <div key={r[0]}><Sat girinti ad={r[0].replace(/^\d{3} 001 /,"")+" · "+r[1]} y={y} b={b}/>{detay(r,y)}</div>; })}</div>)}
       <Sat ad="TOPLAM GİDER / MALİYET" y={gidY} b={gidB} kalin/>
       <Sat ad="SONUÇ (gelir − gider)" y={gelY-gidY} b={gelB-gidB} kalin/>
-      <div style={{ fontSize:11, color:T.dim||T.sub, marginTop:8, lineHeight:1.5 }}>Tüm yıl: hesabın yıl içi toplam hareketi (gelirde alacak, giderde borç; kapama aktarımları sayılmaz). Kapama sonrası: mizan bakiyesi. Hesap satırına dokununca alt hesaplar açılır. Döviz hesapları mizan kuruyla has'a çevrilir; Rhino'nun işlem günü kuruyla küçük sapma olabilir.</div>
+      <div style={{ fontSize:11, color:T.dim||T.sub, marginTop:8, lineHeight:1.5 }}>Tüm yıl: hesabın yıl içi toplam hareketi (gelirde alacak, giderde borç; kapama aktarımları sayılmaz). Kapama sonrası: mizan bakiyesi. Hesap satırına dokununca alt hesaplar açılır; altlarında satış ve gider raporlarından ay ay dağılım, "ayrışmayan" ise mizanla raporun farkıdır. Döviz hesapları mizan kuruyla has'a çevrilir; Rhino'nun işlem günü kuruyla küçük sapma olabilir.</div>
     </RpKart>
   );
 }
@@ -6819,7 +6835,7 @@ function RaporKarlilik({ T, GH }) {
   const aktifPasif = hes ? Object.keys(hes).filter(k=>/^[1345]\d$/.test(k)).reduce((t,k)=>t+hes[k].has,0) : null;
   return (
     <div>
-      {kayit && kayit.kur && kayit.kur.HAS && <MizanBirebir T={T} kayit={kayit}/>}
+      {kayit && kayit.kur && kayit.kur.HAS && <MizanBirebir T={T} kayit={kayit} v={v}/>}
       {(v.satislar.length>0 || v.giderler.length>0) && <MskAylikOzet T={T} vDis={v}/>}
       {!hes && !v.satislar.length && <RpKart T={T} baslik="KARLILIK"><div style={{ fontSize:11, color:T.text }}>Karlılık için Raporlar sekmesinden mizan, giderler ve satış dosyalarını yükle.</div></RpKart>}
       {v.satislar.length>0 && v.giderler.length>0 && (
