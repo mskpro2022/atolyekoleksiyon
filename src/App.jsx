@@ -1,7 +1,7 @@
 import { supabase, dbLoad, dbSave, fotoYukleStorage, yedekKaydet, yedekListesi, yedekGetir, bugunYedekVarMi, tabloModelleriSenkron, tabloModelleriToplu, tabloModelSil, tabloSiparisleriSenkron, tabloSiparisleriToplu, tabloSiparisSil, tabloMusterileriYaz, akilliModelOku, akilliSiparisOku, akilliMusteriOku, islemKaydet, islemGecmisiGetir, realtimeBaslat, tabloKoleksiyonlariYaz, tabloKasaYaz, akilliKoleksiyonOku, akilliKasaOku, tabloKoleksiyonlariOku, tabloKasaOku, saglikDenetimi, ekranSunucuFarki, toptanciKaydet, toptancilariGetir, toptanciSil, vitrinGecmisiGetir, vitrinEnCokBakilan, vitrinOzetGetir, vitrinAnaliz, vitrinGetirGuvenli, siparisOlusturGuvenli, siparislerimGetirGuvenli, siparisIptalGuvenli, siparisGuncelleGuvenli, siparisMusteriGizleGuvenli, vitrinAktiviteKaydetGuvenli, vitrinSupheliCihazlar, vitrinCevrimiciMusteriler, radarTrendleriOku, radarKaynaklariOku, radarKanitlariOku, radarTumKanitlariOku, radarTrendGuncelle, radarTrendSil, radarManuelKanitEkle } from "./supabase.js";
 import { useState, useEffect, useCallback, useMemo, useRef, Fragment } from "react";
 
-const SURUM_TARIH = "25 Kas 20:45"; // her yeni App.jsx tesliminde güncellenir — ekranın yenilendiğini anlamak için sağ üstte görünür
+const SURUM_TARIH = "25 Kas 21:00"; // her yeni App.jsx tesliminde güncellenir — ekranın yenilendiğini anlamak için sağ üstte görünür
 const uid = () => "x" + Date.now() + Math.random().toString(36).substr(2, 5);
 // ═══ ÇALIŞAN AUTH OTURUMU — yerel şifre kontrolünün ardından gerçek Supabase Auth oturumu açar ═══
 // (RLS politikaları "authenticated" rolüne dayanacak; hesap Supabase Dashboard'da manuel oluşturuldu)
@@ -721,6 +721,57 @@ async function fotoZoomla(src, faktor) {
   cx.imageSmoothingEnabled = true; cx.imageSmoothingQuality = "high";
   cx.drawImage(img, (cw - W * olcek) / 2, (ch - H * olcek) / 2, W * olcek, H * olcek);
   return c.toDataURL("image/jpeg", 0.98);
+}
+// Keskinleştirme (unsharp mask): kenar detayını geri getirir; büyütülen fotoğrafta bulanıklığı azaltır
+function fotoKeskinlestir(c, miktar) {
+  const W = c.width, H = c.height, cx = c.getContext("2d");
+  const id = cx.getImageData(0, 0, W, H), d = id.data, n = W * H;
+  const bl = new Float32Array(n * 3), tmp = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) { bl[i*3] = d[i*4]; bl[i*3+1] = d[i*4+1]; bl[i*3+2] = d[i*4+2]; }
+  const R = 1; // 3x3 kutu bulanıklığı x2 ≈ yumuşak gauss
+  for (let gecis = 0; gecis < 2; gecis++) {
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const a = Math.max(0, x-R), b = Math.min(W-1, x+R), k = b-a+1; for (let ch = 0; ch < 3; ch++) { let s = 0; for (let xx = a; xx <= b; xx++) s += bl[(y*W+xx)*3+ch]; tmp[(y*W+x)*3+ch] = s/k; } }
+    for (let y = 0; y < H; y++) { const a = Math.max(0, y-R), b = Math.min(H-1, y+R), k = b-a+1; for (let x = 0; x < W; x++) for (let ch = 0; ch < 3; ch++) { let s = 0; for (let yy = a; yy <= b; yy++) s += tmp[(yy*W+x)*3+ch]; bl[(y*W+x)*3+ch] = s/k; } }
+  }
+  for (let i = 0; i < n; i++) for (let ch = 0; ch < 3; ch++) { const o = d[i*4+ch], v = o + miktar * (o - bl[i*3+ch]); d[i*4+ch] = v < 0 ? 0 : v > 255 ? 255 : v; }
+  cx.putImageData(id, 0, 0);
+}
+// Ürünü algıla (zemin renginden farklı pikseller), etrafına pay bırakıp çerçeve oranında ortala.
+// Fotoğraf kırpılıyorsa piksel kaybı olmaz; yakınlaştırma gerekirse yüksek kaliteyle + keskinleştirerek orijinal boyuta getirilir.
+async function fotoOturt(src, pay) {
+  const img = await resimYukle(src);
+  const W = img.naturalWidth, H = img.naturalHeight;
+  const ol = Math.min(1, 480 / Math.max(W, H)), sw = Math.max(8, Math.round(W * ol)), sh = Math.max(8, Math.round(H * ol));
+  const k = document.createElement("canvas"); k.width = sw; k.height = sh;
+  const kx = k.getContext("2d"); kx.drawImage(img, 0, 0, sw, sh);
+  const d = kx.getImageData(0, 0, sw, sh).data;
+  const kose = (x0, y0) => { let r = 0, g = 0, b = 0; for (let y = y0; y < y0 + 4; y++) for (let x = x0; x < x0 + 4; x++) { const i = (y*sw+x)*4; r += d[i]; g += d[i+1]; b += d[i+2]; } return [r/16, g/16, b/16]; };
+  const kl = [kose(0,0), kose(sw-4,0), kose(0,sh-4), kose(sw-4,sh-4)];
+  const bg = [0,1,2].map(ch => { const v = kl.map(q => q[ch]).sort((a,b)=>a-b); return (v[1] + v[2]) / 2; });
+  const sat = new Uint16Array(sh), kol = new Uint16Array(sw);
+  for (let y = 0; y < sh; y++) for (let x = 0; x < sw; x++) { const i = (y*sw+x)*4; if (Math.max(Math.abs(d[i]-bg[0]), Math.abs(d[i+1]-bg[1]), Math.abs(d[i+2]-bg[2])) > 42) { sat[y]++; kol[x]++; } }
+  const ilk = (a, esik) => { for (let i = 0; i < a.length; i++) if (a[i] >= esik) return i; return 0; };
+  const son = (a, esik) => { for (let i = a.length - 1; i >= 0; i--) if (a[i] >= esik) return i; return a.length - 1; };
+  let x0 = ilk(kol, 2), x1 = son(kol, 2), y0 = ilk(sat, 2), y1 = son(sat, 2);
+  if (x1 - x0 < sw * 0.05 || y1 - y0 < sh * 0.05) throw new Error("Ürün algılanamadı");
+  x0 /= ol; x1 = (x1 + 1) / ol; y0 /= ol; y1 = (y1 + 1) / ol;
+  const bw = x1 - x0, bh = y1 - y0, p = pay == null ? 0.07 : pay;
+  let w = Math.max(bw * (1 + 2*p), bh * (1 + 2*p) * W / H), h = w * H / W;
+  const mx = (x0 + x1) / 2, my = (y0 + y1) / 2;
+  let wx = mx - w/2, wy = my - h/2;
+  if (w <= W) wx = Math.max(0, Math.min(W - w, wx)); else wx = (W - w) / 2;   // sığmıyorsa zemin rengiyle genişlet
+  if (h <= H) wy = Math.max(0, Math.min(H - h, wy)); else wy = (H - h) / 2;
+  const buyut = w < W * 0.97;   // pencere küçük → kırpıp büyütmek gerekiyor
+  let cw, ch, sc = 1;
+  if (buyut) { cw = W; ch = H; sc = W / w; } else { sc = 1; cw = Math.round(w); ch = Math.round(h); const uz = Math.max(cw, ch); if (uz > 4200) { sc = 4200 / uz; cw = Math.round(cw * sc); ch = Math.round(ch * sc); } }
+  const c = document.createElement("canvas"); c.width = cw; c.height = ch;
+  const cx = c.getContext("2d");
+  cx.fillStyle = "rgb(" + bg.map(Math.round).join(",") + ")"; cx.fillRect(0, 0, cw, ch);
+  cx.imageSmoothingEnabled = true; cx.imageSmoothingQuality = "high";
+  if (buyut) cx.drawImage(img, wx, wy, w, h, 0, 0, cw, ch);
+  else cx.drawImage(img, -wx * sc, -wy * sc, W * sc, H * sc);
+  if (buyut && sc > 1.04) fotoKeskinlestir(c, Math.min(0.9, 0.35 + (sc - 1) * 0.5));
+  return c.toDataURL("image/jpeg", 0.97);
 }
 async function fotoCevir(src) {
   const img = await resimYukle(src);
@@ -14723,6 +14774,7 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
     finally { setFotoDurum(""); }
   };
   const fotoZoom = async (f) => { if (!fFoto || fotoDurum) return; try { fotoDegistir(await fotoZoomla(fFoto, f)); } catch (e) { toastGoster("hata", "İşlem yapılamadı"); } };
+  const fotoOturtla = async () => { if (!fFoto || fotoDurum) return; try { fotoDegistir(await fotoOturt(fFoto)); } catch (e) { toastGoster("hata", e && e.message ? e.message : "İşlem yapılamadı"); } };
   const fotoYansit = async () => { if (!fFoto || fotoDurum) return; try { fotoDegistir(await fotoCevir(fFoto)); } catch (e) { toastGoster("hata", "İşlem yapılamadı"); } };
   const _fb = { background:"transparent", border:"none", borderRadius:6, padding:"3px 9px", color:T.sub, fontSize:15, fontWeight:700, cursor:"pointer", lineHeight:"22px" };
   const fotoAracCubugu = fFoto ? (
@@ -14732,6 +14784,7 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
       <span style={{ width:1, height:16, background:T.border, margin:"0 4px" }}/>
       <button onClick={()=>fotoZoom(1.18)} disabled={!!fotoDurum} style={_fb} title="Yakınlaştır">＋</button>
       <button onClick={()=>fotoZoom(0.85)} disabled={!!fotoDurum} style={_fb} title="Uzaklaştır">－</button>
+      <button onClick={fotoOturtla} disabled={!!fotoDurum} style={{ ..._fb, fontSize:12 }} title="Ürünü algıla, çerçeveye ortala">Oturt</button>
       <button onClick={fotoYansit} disabled={!!fotoDurum} style={_fb} title="Yatay çevir">⇋</button>
       <button onClick={fotoGeriAl} disabled={!!fotoDurum || fGeriVar===0} style={{ ..._fb, opacity:fGeriVar===0?0.3:1 }} title="Geri al">↩</button>
       <span style={{ marginLeft:8, fontSize:12 }}>
@@ -15771,6 +15824,7 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
                           <span style={{ width:1, height:14, background:T.border, margin:"0 3px" }}/>
                           <button onClick={()=>kartFotoIslem(m, ()=>fotoZoomla(m.foto, 1.18), false)} disabled={mesgul} title="Yakınlaştır (kaydedilir)" style={ib}>＋</button>
                           <button onClick={()=>kartFotoIslem(m, ()=>fotoZoomla(m.foto, 0.85), false)} disabled={mesgul} title="Uzaklaştır (kaydedilir)" style={ib}>－</button>
+                          <button onClick={()=>kartFotoIslem(m, ()=>fotoOturt(m.foto), false)} disabled={mesgul} title="Ürünü algıla, çerçeveye ortala (kaydedilir; geri alınabilir)" style={{ ...ib, fontSize:11 }}>Oturt</button>
                           <button onClick={()=>kartFotoIslem(m, ()=>fotoCevir(m.foto), false)} disabled={mesgul} title="Yatay çevir (kaydedilir)" style={ib}>⇋</button>
                           {gecmis > 0 && <button onClick={()=>kartFotoGeriAl(m)} disabled={mesgul} title="Son işlemi geri al" style={ib}>↩</button>}
                         </div>
