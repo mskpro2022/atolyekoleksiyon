@@ -1,7 +1,7 @@
 import { supabase, dbLoad, dbSave, fotoYukleStorage, yedekKaydet, yedekListesi, yedekGetir, bugunYedekVarMi, tabloModelleriSenkron, tabloModelleriToplu, tabloModelSil, tabloSiparisleriSenkron, tabloSiparisleriToplu, tabloSiparisSil, tabloMusterileriYaz, akilliModelOku, akilliSiparisOku, akilliMusteriOku, islemKaydet, islemGecmisiGetir, realtimeBaslat, tabloKoleksiyonlariYaz, tabloKasaYaz, akilliKoleksiyonOku, akilliKasaOku, tabloKoleksiyonlariOku, tabloKasaOku, saglikDenetimi, ekranSunucuFarki, toptanciKaydet, toptancilariGetir, toptanciSil, vitrinGecmisiGetir, vitrinEnCokBakilan, vitrinOzetGetir, vitrinAnaliz, vitrinGetirGuvenli, siparisOlusturGuvenli, siparislerimGetirGuvenli, siparisIptalGuvenli, siparisGuncelleGuvenli, siparisMusteriGizleGuvenli, vitrinAktiviteKaydetGuvenli, vitrinSupheliCihazlar, vitrinCevrimiciMusteriler, radarTrendleriOku, radarKaynaklariOku, radarKanitlariOku, radarTumKanitlariOku, radarTrendGuncelle, radarTrendSil, radarManuelKanitEkle } from "./supabase.js";
 import { useState, useEffect, useCallback, useMemo, useRef, Fragment } from "react";
 
-const SURUM_TARIH = "25 Kas 20:10"; // her yeni App.jsx tesliminde güncellenir — ekranın yenilendiğini anlamak için sağ üstte görünür
+const SURUM_TARIH = "25 Kas 20:45"; // her yeni App.jsx tesliminde güncellenir — ekranın yenilendiğini anlamak için sağ üstte görünür
 const uid = () => "x" + Date.now() + Math.random().toString(36).substr(2, 5);
 // ═══ ÇALIŞAN AUTH OTURUMU — yerel şifre kontrolünün ardından gerçek Supabase Auth oturumu açar ═══
 // (RLS politikaları "authenticated" rolüne dayanacak; hesap Supabase Dashboard'da manuel oluşturuldu)
@@ -713,8 +713,7 @@ async function fotoZoomla(src, faktor) {
   let nw = W / faktor, nh = H / faktor;
   let olcek = 1;
   const uz = Math.max(nw, nh);
-  if (uz > 4200) olcek = 4200 / uz;        // çok büyürse sınırla (normal kullanımda ürün hiç küçülmez)
-  else if (uz < 1000) olcek = 1000 / uz;   // çok küçülürse yüzey çözünürlüğünü koru
+  if (uz > 4200) olcek = 4200 / uz;        // çok büyürse sınırla; ASLA büyütme (küçük fotoyu şişirmek bulanıklaştırır)
   const cw = Math.max(1, Math.round(nw * olcek)), ch = Math.max(1, Math.round(nh * olcek));
   const c = document.createElement("canvas"); c.width = cw; c.height = ch;
   const cx = c.getContext("2d");
@@ -1454,7 +1453,7 @@ function pdfjsYukle() {
 
 // Her sayfayı bir kez çizip, fotoğraf kutularını kırpar → kalem.foto (JPEG data URL), kalem.fotolar
 async function psFotolariKirp(pdf, kalemler, ilerle) {
-  const OLCEK = 2;
+  const OLCEK = 3;
   const sayfaNolar = [...new Set(kalemler.flatMap(k => k.fotoKutular.map(b => b.sayfaNo)))].sort((a, b) => a - b);
   let yapilan = 0;
   for (const no of sayfaNolar) {
@@ -1471,13 +1470,14 @@ async function psFotolariKirp(pdf, kalemler, ilerle) {
         const x = Math.max(0, Math.floor(b.x0 * OLCEK)), y = Math.max(0, Math.floor(b.y0 * OLCEK));
         const w = Math.min(cv.width - x, Math.ceil((b.x1 - b.x0) * OLCEK)), h = Math.min(cv.height - y, Math.ceil((b.y1 - b.y0) * OLCEK));
         if (w < 8 || h < 8) continue;
-        const en = Math.min(1, 720 / Math.max(w, h));
+        const en = Math.min(1, 1600 / Math.max(w, h));
         const kc = document.createElement("canvas");
         kc.width = Math.max(1, Math.round(w * en)); kc.height = Math.max(1, Math.round(h * en));
         const kctx = kc.getContext("2d");
         kctx.fillStyle = "#fff"; kctx.fillRect(0, 0, kc.width, kc.height);
+        kctx.imageSmoothingEnabled = true; kctx.imageSmoothingQuality = "high";
         kctx.drawImage(cv, x, y, w, h, 0, 0, kc.width, kc.height);
-        b.dataUrl = kc.toDataURL("image/jpeg", 0.85);
+        b.dataUrl = kc.toDataURL("image/jpeg", 0.92);
         b.alan = (b.x1 - b.x0) * (b.y1 - b.y0);
       }
     }
@@ -1741,14 +1741,14 @@ function psBenzerBul(q, modeller, n) {
 }
 
 // Bekleyen kartlarda saklanacak müşteri fotoğrafını küçültür (taslak kaydı şişmesin)
-async function psKucukFoto(src, maks = 360) {
+async function psKucukFoto(src, maks = 1000) {
   try {
     const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = src; });
     const o = Math.min(1, maks / Math.max(img.width, img.height));
     const cv = document.createElement("canvas");
     cv.width = Math.max(1, Math.round(img.width * o)); cv.height = Math.max(1, Math.round(img.height * o));
     const ctx = cv.getContext("2d"); ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, cv.width, cv.height); ctx.drawImage(img, 0, 0, cv.width, cv.height);
-    return cv.toDataURL("image/jpeg", 0.72);
+    return cv.toDataURL("image/jpeg", 0.85);
   } catch { return src; }
 }
 
