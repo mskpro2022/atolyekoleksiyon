@@ -1,7 +1,7 @@
 import { supabase, dbLoad, dbSave, fotoYukleStorage, yedekKaydet, yedekListesi, yedekGetir, bugunYedekVarMi, tabloModelleriSenkron, tabloModelleriToplu, tabloModelSil, tabloSiparisleriSenkron, tabloSiparisleriToplu, tabloSiparisSil, tabloMusterileriYaz, akilliModelOku, akilliSiparisOku, akilliMusteriOku, islemKaydet, islemGecmisiGetir, realtimeBaslat, tabloKoleksiyonlariYaz, tabloKasaYaz, akilliKoleksiyonOku, akilliKasaOku, tabloKoleksiyonlariOku, tabloKasaOku, saglikDenetimi, ekranSunucuFarki, toptanciKaydet, toptancilariGetir, toptanciSil, vitrinGecmisiGetir, vitrinEnCokBakilan, vitrinOzetGetir, vitrinAnaliz, vitrinGetirGuvenli, siparisOlusturGuvenli, siparislerimGetirGuvenli, siparisIptalGuvenli, siparisGuncelleGuvenli, siparisMusteriGizleGuvenli, vitrinAktiviteKaydetGuvenli, vitrinSupheliCihazlar, vitrinCevrimiciMusteriler, radarTrendleriOku, radarKaynaklariOku, radarKanitlariOku, radarTumKanitlariOku, radarTrendGuncelle, radarTrendSil, radarManuelKanitEkle } from "./supabase.js";
 import { useState, useEffect, useCallback, useMemo, useRef, Fragment } from "react";
 
-const SURUM_TARIH = "25 Kas 21:00"; // her yeni App.jsx tesliminde güncellenir — ekranın yenilendiğini anlamak için sağ üstte görünür
+const SURUM_TARIH = "25 Kas 21:20"; // her yeni App.jsx tesliminde güncellenir — ekranın yenilendiğini anlamak için sağ üstte görünür
 const uid = () => "x" + Date.now() + Math.random().toString(36).substr(2, 5);
 // ═══ ÇALIŞAN AUTH OTURUMU — yerel şifre kontrolünün ardından gerçek Supabase Auth oturumu açar ═══
 // (RLS politikaları "authenticated" rolüne dayanacak; hesap Supabase Dashboard'da manuel oluşturuldu)
@@ -772,6 +772,16 @@ async function fotoOturt(src, pay) {
   else cx.drawImage(img, -wx * sc, -wy * sc, W * sc, H * sc);
   if (buyut && sc > 1.04) fotoKeskinlestir(c, Math.min(0.9, 0.35 + (sc - 1) * 0.5));
   return c.toDataURL("image/jpeg", 0.97);
+}
+// + / − her zaman ORİJİNAL (ilk) fotoğraftan tek hamlede hesaplanır: ileri-geri tıklamak kayıp biriktirmez, tam eski haline döner.
+let _zoomTaban = { son: null, taban: null, olcek: 1 }, _zoomBekleyen = null;
+async function fotoZoomlaDonusumlu(src, f) {
+  const st = _zoomTaban, devam = !!(st.son && st.son === src);
+  const taban = devam ? st.taban : src;
+  let ol = (devam ? st.olcek : 1) * f; ol = Math.max(0.3, Math.min(4, ol));
+  if (Math.abs(ol - 1) < 0.02) { _zoomBekleyen = { taban, olcek: 1 }; return taban; }
+  _zoomBekleyen = { taban, olcek: ol };
+  return fotoZoomla(taban, ol);
 }
 async function fotoCevir(src) {
   const img = await resimYukle(src);
@@ -14711,8 +14721,10 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
     setKartDurum(p => ({ ...p, [m.id]: true }));
     try {
       const orjData = m.foto.startsWith("data:") ? m.foto : await blobDataUrl(await (await fetch(m.foto)).blob());
+      _zoomBekleyen = null;
       const yeniData = await islem();
       const url = await fotoYukleStorage(yeniData, m.id, AKTIF_SIRKET_ONEK);
+      if (_zoomBekleyen) { _zoomTaban = { son: url, taban: _zoomBekleyen.taban, olcek: _zoomBekleyen.olcek }; _zoomBekleyen = null; }
       setKartGeri(p => ({ ...p, [m.id]: [...(p[m.id] || []), { foto: orjData, temiz: !!m.fotoTemiz }] }));
       const temiz = temizYap ? true : !!m.fotoTemiz;
       if (temiz) _temizFotolar.add(url);
@@ -14773,7 +14785,7 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
     } catch (e) { toastGoster("hata", "Arka plan silinemedi: " + (e && e.message ? e.message : e)); }
     finally { setFotoDurum(""); }
   };
-  const fotoZoom = async (f) => { if (!fFoto || fotoDurum) return; try { fotoDegistir(await fotoZoomla(fFoto, f)); } catch (e) { toastGoster("hata", "İşlem yapılamadı"); } };
+  const fotoZoom = async (f) => { if (!fFoto || fotoDurum) return; try { _zoomBekleyen = null; const y = await fotoZoomlaDonusumlu(fFoto, f); fotoDegistir(y); if (_zoomBekleyen) { _zoomTaban = { son: y, taban: _zoomBekleyen.taban, olcek: _zoomBekleyen.olcek }; _zoomBekleyen = null; } } catch (e) { toastGoster("hata", "İşlem yapılamadı"); } };
   const fotoOturtla = async () => { if (!fFoto || fotoDurum) return; try { fotoDegistir(await fotoOturt(fFoto)); } catch (e) { toastGoster("hata", e && e.message ? e.message : "İşlem yapılamadı"); } };
   const fotoYansit = async () => { if (!fFoto || fotoDurum) return; try { fotoDegistir(await fotoCevir(fFoto)); } catch (e) { toastGoster("hata", "İşlem yapılamadı"); } };
   const _fb = { background:"transparent", border:"none", borderRadius:6, padding:"3px 9px", color:T.sub, fontSize:15, fontWeight:700, cursor:"pointer", lineHeight:"22px" };
@@ -15822,8 +15834,8 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
                           <button onClick={()=>kartFotoAI(m)} disabled={mesgul} title={m.fotoTemiz ? "Arka planı yeniden sil" : "Arka planı sil"} style={{ ...ib, color:"var(--vurgu)" }}>{mesgul ? "⏳" : "✨"}</button>
                           <button onClick={()=>setKartKoruModal(m)} disabled={mesgul} title="Korunacak bölgeleri işaretle" style={{ ...ib, ...(kartKoru[m.id] ? { color:"#e0175f" } : {}) }}>🖌{kartKoru[m.id] ? "✓" : ""}</button>
                           <span style={{ width:1, height:14, background:T.border, margin:"0 3px" }}/>
-                          <button onClick={()=>kartFotoIslem(m, ()=>fotoZoomla(m.foto, 1.18), false)} disabled={mesgul} title="Yakınlaştır (kaydedilir)" style={ib}>＋</button>
-                          <button onClick={()=>kartFotoIslem(m, ()=>fotoZoomla(m.foto, 0.85), false)} disabled={mesgul} title="Uzaklaştır (kaydedilir)" style={ib}>－</button>
+                          <button onClick={()=>kartFotoIslem(m, ()=>fotoZoomlaDonusumlu(m.foto, 1.18), false)} disabled={mesgul} title="Yakınlaştır (kaydedilir)" style={ib}>＋</button>
+                          <button onClick={()=>kartFotoIslem(m, ()=>fotoZoomlaDonusumlu(m.foto, 0.85), false)} disabled={mesgul} title="Uzaklaştır (kaydedilir)" style={ib}>－</button>
                           <button onClick={()=>kartFotoIslem(m, ()=>fotoOturt(m.foto), false)} disabled={mesgul} title="Ürünü algıla, çerçeveye ortala (kaydedilir; geri alınabilir)" style={{ ...ib, fontSize:11 }}>Oturt</button>
                           <button onClick={()=>kartFotoIslem(m, ()=>fotoCevir(m.foto), false)} disabled={mesgul} title="Yatay çevir (kaydedilir)" style={ib}>⇋</button>
                           {gecmis > 0 && <button onClick={()=>kartFotoGeriAl(m)} disabled={mesgul} title="Son işlemi geri al" style={ib}>↩</button>}
