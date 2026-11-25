@@ -1,7 +1,7 @@
 import { supabase, dbLoad, dbSave, fotoYukleStorage, yedekKaydet, yedekListesi, yedekGetir, bugunYedekVarMi, tabloModelleriSenkron, tabloModelleriToplu, tabloModelSil, tabloSiparisleriSenkron, tabloSiparisleriToplu, tabloSiparisSil, tabloMusterileriYaz, akilliModelOku, akilliSiparisOku, akilliMusteriOku, islemKaydet, islemGecmisiGetir, realtimeBaslat, tabloKoleksiyonlariYaz, tabloKasaYaz, akilliKoleksiyonOku, akilliKasaOku, tabloKoleksiyonlariOku, tabloKasaOku, saglikDenetimi, ekranSunucuFarki, toptanciKaydet, toptancilariGetir, toptanciSil, vitrinGecmisiGetir, vitrinEnCokBakilan, vitrinOzetGetir, vitrinAnaliz, vitrinGetirGuvenli, siparisOlusturGuvenli, siparislerimGetirGuvenli, siparisIptalGuvenli, siparisGuncelleGuvenli, siparisMusteriGizleGuvenli, vitrinAktiviteKaydetGuvenli, vitrinSupheliCihazlar, vitrinCevrimiciMusteriler, radarTrendleriOku, radarKaynaklariOku, radarKanitlariOku, radarTumKanitlariOku, radarTrendGuncelle, radarTrendSil, radarManuelKanitEkle } from "./supabase.js";
 import { useState, useEffect, useCallback, useMemo, useRef, Fragment } from "react";
 
-const SURUM_TARIH = "23 Kas 17:55"; // her yeni App.jsx tesliminde güncellenir — ekranın yenilendiğini anlamak için sağ üstte görünür
+const SURUM_TARIH = "25 Kas 12:30"; // her yeni App.jsx tesliminde güncellenir — ekranın yenilendiğini anlamak için sağ üstte görünür
 const uid = () => "x" + Date.now() + Math.random().toString(36).substr(2, 5);
 // ═══ ÇALIŞAN AUTH OTURUMU — yerel şifre kontrolünün ardından gerçek Supabase Auth oturumu açar ═══
 // (RLS politikaları "authenticated" rolüne dayanacak; hesap Supabase Dashboard'da manuel oluşturuldu)
@@ -6707,6 +6707,137 @@ function VerimlilikPaneli({ T, depo }) {
 }
 
 // ── Aylık özet (MSK): ay seçici · 5 kutu · satış & işçilik/taş/masraf grafiği · masraf dökümü. Karlılık ve Keşfet Genel'de ortak ──
+// ═══ AY DEVRİ — ay sonunda bitmeyen siparişlerin sonraki aya devri analizi (kayıt yazmaz; sipariş kayıtlarından hesaplanır) ═══
+function aydevriHesapla(siparisler, altinKgUSD, madenCarpan, kar) {
+  const BIT = ["tamam","teslim"]; const out = [];
+  (siparisler||[]).forEach(s => {
+    if (!s || s.onayDurum === "red" || s.onayDurum === "iptal" || s.onayDurum === "bekliyor") return;
+    const gelis = Number(s.tarih) || 0; if (!gelis) return;
+    const kd = s.kalemDurumlar || {}; const gec = s.durumGecmisi || [];
+    let gr = 0, kr = 0, adet = 0, hepsiBitti = true, hepsiHurda = true, kalemSay = 0;
+    (s.kalemler||[]).forEach(k => {
+      const d = kd[k.id] || k.durum || "baslanmadi"; kalemSay++;
+      let h = null; try { h = hesapla(k, k.secilenAyar||k.refAyar, s.altinKgUSD||altinKgUSD, s.mc||madenCarpan); } catch(e) { h = null; }
+      const hu = ((s.kalemHurda)||{})[k.id]||0, ia = ((s.kalemIade)||{})[k.id]||0, ta = ((s.kalemTamir)||{})[k.id]||0;
+      const net = Math.max(0, (k.adet||1) - hu - ia - ta);
+      if (d === "hurda") return;
+      hepsiHurda = false;
+      if (!BIT.includes(d)) hepsiBitti = false;
+      adet += net; if (h) { gr += (h.mamulGram||0) * net; kr += (h.karHas||0) * net; }
+    });
+    if (!kalemSay) return;
+    const bitG = gec.filter(x => BIT.includes(x.durum)); const sonG = gec[gec.length-1];
+    let bitis = null, hurdaT = null;
+    if (hepsiHurda) hurdaT = (sonG && sonG.tarih) || s.islemTarih || gelis;
+    else if (hepsiBitti) bitis = bitG.length ? bitG[bitG.length-1].tarih : (s.islemTarih || gelis);
+    out.push({ s, gelis, gr, kr, adet, bitis, hurdaT });
+  });
+  return out;
+}
+function aydevriDurumAt(o, t) {
+  const g = (o.s.durumGecmisi||[]).filter(x => x.tarih < t); const son = g[g.length-1];
+  return son ? { d: son.durum, t: son.tarih } : { d: "baslanmadi", t: o.gelis };
+}
+function AyDevri({ T, siparisler, altinKgUSD, madenCarpan, kar }) {
+  const tum = useMemo(() => aydevriHesapla(siparisler, altinKgUSD, madenCarpan, kar), [siparisler, altinKgUSD, madenCarpan, kar]);
+  const AYK = ["Oca","Şub","Mar","Nis","May","Haz","Tem","Ağu","Eyl","Eki","Kas","Ara"];
+  const simdi = new Date(); const buAyNo = simdi.getFullYear()*12 + simdi.getMonth();
+  const [secAy, setSecAy] = useState(buAyNo);
+  const ayBas = (n) => new Date(Math.floor(n/12), n%12, 1).getTime();
+  const ayAd = (n) => AYK[n%12] + " " + String(Math.floor(n/12)).slice(2);
+  const kapT = (o) => o.bitis || o.hurdaT || null;
+  const hesap = (n) => {
+    const b = ayBas(n), e = ayBas(n+1);
+    const acikEnd = (o) => o.gelis < e && !(kapT(o) && kapT(o) < e);
+    const acikBas = (o) => o.gelis < b && !(kapT(o) && kapT(o) < b);
+    const gir = tum.filter(acikBas), gelen = tum.filter(o => o.gelis >= b && o.gelis < e);
+    const biten = tum.filter(o => o.bitis && o.bitis >= b && o.bitis < e), hurda = tum.filter(o => o.hurdaT && o.hurdaT >= b && o.hurdaT < e);
+    const cik = tum.filter(acikEnd);
+    const topla = (l) => ({ n: l.length, gr: l.reduce((t,o)=>t+o.gr,0), kr: l.reduce((t,o)=>t+o.kr,0), liste: l });
+    return { b, e, gir: topla(gir), gelen: topla(gelen), biten: topla(biten), hurda: topla(hurda), cik: topla(cik) };
+  };
+  const ayListe = []; for (let i = 11; i >= 0; i--) ayListe.push(buAyNo - i);
+  if (!ayListe.includes(secAy)) ayListe.push(secAy);
+  const r = hesap(secAy);
+  const seri = ayListe.slice(-12).map(n => { const h = hesap(n); const pay = h.gir.gr + h.gelen.gr; return { n, e: ayAd(n), v: h.cik.gr/1000, oran: pay > 0 ? h.cik.gr/pay*100 : 0 }; });
+  const secI = seri.findIndex(x => x.n === secAy);
+  const oncekiOran = secI > 0 ? seri[secI-1].oran : null; const buOran = secI >= 0 ? seri[secI].oran : 0;
+  // yaş (ay sonu itibarıyla)
+  const gun = (o) => Math.max(0, Math.floor((r.e - o.gelis)/86400000));
+  const yasKov = [["0–30 gün", 0, 30], ["31–60 gün", 31, 60], ["61–90 gün", 61, 90], ["90 günden eski", 91, 1e9]].map(([l,a,z]) => { const li = r.cik.liste.filter(o => gun(o) >= a && gun(o) <= z); return { l, n: li.length, gr: li.reduce((t,o)=>t+o.gr,0), liste: li }; });
+  // aşama (ay sonu itibarıyla) + bekleme
+  const asama = {}; r.cik.liste.forEach(o => { const a = aydevriDurumAt(o, r.e); const k = a.d === "cizimde" ? "baslanmadi" : a.d; const x = asama[k] || (asama[k] = { n:0, gr:0, bek:0, liste:[] }); x.n++; x.gr += o.gr; x.bek += Math.max(0, r.e - a.t)/86400000; x.liste.push(o); });
+  const asamaL = Object.entries(asama).map(([id,x]) => ({ id, ...x, bek: x.n ? x.bek/x.n : 0, ad: (() => { const d = DURUMLAR.find(z => z.id === id); return d ? durumEtiket(d) : id; })(), sira: (DURUMLAR.find(z => z.id === id)||{s:0}).s })).sort((a,b) => a.sira - b.sira);
+  // müşteri
+  const mus = {}; r.cik.liste.forEach(o => { const k = o.s.musKod || o.s.musteri || "?"; const x = mus[k] || (mus[k] = { ad: o.s.musteri || k, n:0, gr:0, liste:[] }); x.n++; x.gr += o.gr; x.liste.push(o); });
+  const musL = Object.values(mus).sort((a,b) => b.gr - a.gr);
+  // bitiş hızı: son 12 ayda (seçili ay sonuna kadar) biten siparişlerin süresi
+  const sureler = tum.filter(o => o.bitis && o.bitis < r.e && o.bitis >= ayBas(secAy-11)).map(o => Math.max(0, (o.bitis - o.gelis)/86400000)).sort((a,b)=>a-b);
+  const medyan = sureler.length ? sureler[Math.floor(sureler.length/2)] : null;
+  const p75 = sureler.length ? sureler[Math.min(sureler.length-1, Math.floor(sureler.length*0.75))] : null;
+  const uzun = p75 != null ? r.cik.liste.filter(o => gun(o) > p75) : [];
+  const listeAc = (baslik, liste) => rpDetayAc(baslik, () => <AyDevriListe T={T} liste={liste} bitisT={r.e} kar={kar}/>);
+  const satirSt = { display:"grid", gridTemplateColumns:"1.6fr .6fr .9fr"+(kar?" .9fr":""), gap:8, padding:"6px 0", borderBottom:"1px solid "+T.border, fontSize:13, alignItems:"center" };
+  const bas = { fontSize:11, color:T.sub, fontWeight:700 };
+  const akis = [["Önceki aydan devreden", r.gir, ""], ["+ Bu ay gelen", r.gelen, ""], ["− Bu ay biten", r.biten, ""], ["− Hurda / tamamı hurda", r.hurda, ""], ["= Sonraki aya devreden", r.cik, "b"]];
+  const chip = (n) => <button key={n} onClick={()=>setSecAy(n)} style={{ background:secAy===n?T.text+"22":"transparent", color:secAy===n?T.text:T.sub, border:"1px solid "+(secAy===n?T.text:T.border), borderRadius:20, padding:"2px 10px", fontSize:12, cursor:"pointer" }}>{ayAd(n)}</button>;
+  if (!tum.length) return null;
+  return (
+    <div className="kx-s-uretim" style={{ marginBottom:14 }}>
+      <RpKart T={T} baslik="AY DEVRİ — ay sonunda bitmeyen siparişler" genis>
+        <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:10 }}>{ayListe.map(chip)}</div>
+        <div style={{ ...satirSt, borderBottom:"1px solid "+T.border }}><span style={bas}>{ayAd(secAy)} akışı</span><span style={{ ...bas, textAlign:"right" }}>Sipariş</span><span style={{ ...bas, textAlign:"right" }}>Gram</span>{kar && <span style={{ ...bas, textAlign:"right" }}>Kâr (has)</span>}</div>
+        {akis.map(([l, x, b]) => (
+          <div key={l} onClick={x.n ? ()=>listeAc(l.replace(/^[+−=] /,"")+" — "+ayAd(secAy), x.liste) : undefined} style={{ ...satirSt, fontWeight:b?800:500, cursor:x.n?"pointer":"default", borderTop:b?"1px solid "+T.text:undefined }}>
+            <span>{l}</span><span style={{ textAlign:"right" }}>{rpF(x.n)}</span><span style={{ textAlign:"right" }}>{rpF(x.gr,0)}</span>{kar && <span style={{ textAlign:"right" }}>{rpF(x.kr,1)}</span>}
+          </div>
+        ))}
+        <div style={{ fontSize:11, color:T.sub, marginTop:6, lineHeight:1.5 }}>Gram: siparişin toplam mamul gramı (hurda kalemler hariç). Bitti = siparişin tüm kalemleri tamamlandı/teslim; kısmi teslimde kalan kalemler devreden sayılır. Satıra dokununca siparişler açılır.</div>
+      </RpKart>
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(170px,1fr))", gap:8, marginBottom:12 }}>
+        <RpKpi T={T} ad="DEVİR ORANI" deger={"%"+rpF(buOran,0)} alt={oncekiOran!=null ? "önceki ay %"+rpF(oncekiOran,0)+" · ay içindeki işin bitmeden geçen payı (gram)" : "ay içindeki işin bitmeden geçen payı (gram)"}/>
+        <RpKpi T={T} ad="DEVREDEN" deger={rpF(r.cik.gr/1000,2)+" kg"} alt={rpF(r.cik.n)+" sipariş"} onClick={r.cik.n?()=>listeAc("Sonraki aya devreden — "+ayAd(secAy), r.cik.liste):undefined}/>
+        <RpKpi T={T} ad="BİTEN İŞLERİN SÜRESİ" deger={medyan!=null ? rpF(medyan,0)+" gün" : "—"} alt={medyan!=null ? "ortanca, son 12 ay · "+sureler.length+" sipariş" : "yeterli veri yok"}/>
+        <RpKpi T={T} ad="NORMALDEN UZUN BEKLEYEN" deger={rpF(uzun.length)} alt={p75!=null ? p75>0 ? "bitenlerin %75'i "+rpF(p75,0)+" günde biter; bunlar daha eski" : "" : "yeterli veri yok"} onClick={uzun.length?()=>listeAc("Normalden uzun bekleyen — "+ayAd(secAy), uzun):undefined} renk={uzun.length?"#e85a4f":undefined}/>
+        {kar && <RpKpi T={T} ad="DEVREDEN İŞİN KÂRI" deger={rpF(r.cik.kr,1)+" has"} alt="devreden siparişlerin toplam kârı"/>}
+      </div>
+      <RpKart T={T} baslik="SONRAKİ AYA DEVREDEN (KG) — son 12 ay">
+        <RpSutun T={T} veri={seri.map(x=>({ e:x.e, v:x.v }))} birim="" yuk={90} onSec={(i)=>setSecAy(seri[i].n)}/>
+        <div style={{ fontSize:11, color:T.sub, marginTop:6 }}>Sütuna dokununca o ay seçilir. Devreden = ay sonunda hâlâ bitmemiş siparişlerin toplam gramı.</div>
+      </RpKart>
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(300px,1fr))", gap:12 }}>
+        <RpKart T={T} baslik="DEVREDENLERİN YAŞI">
+          {yasKov.map(y => <div key={y.l} onClick={y.n?()=>listeAc(y.l+" — devreden",y.liste):undefined} style={{ ...satirSt, gridTemplateColumns:"1.6fr .6fr .9fr", cursor:y.n?"pointer":"default", color:y.l==="90 günden eski"&&y.n?"#e85a4f":T.text }}><span>{y.l}</span><span style={{ textAlign:"right" }}>{rpF(y.n)}</span><span style={{ textAlign:"right" }}>{rpF(y.gr,0)} gr</span></div>)}
+        </RpKart>
+        <RpKart T={T} baslik={"NEREDE TAKILI — "+ayAd(secAy)+" sonu"}>
+          {asamaL.length ? asamaL.map(a => <div key={a.id} onClick={()=>listeAc(a.ad+" — devreden",a.liste)} style={{ ...satirSt, gridTemplateColumns:"1.3fr .5fr .8fr .9fr", cursor:"pointer" }}><span>{a.ad}</span><span style={{ textAlign:"right" }}>{rpF(a.n)}</span><span style={{ textAlign:"right" }}>{rpF(a.gr,0)} gr</span><span style={{ textAlign:"right", color:T.sub }}>ort. {rpF(a.bek,0)} gün</span></div>) : <div style={{ fontSize:13, color:T.sub }}>Devreden sipariş yok.</div>}
+          <div style={{ fontSize:11, color:T.sub, marginTop:6 }}>Aşama, siparişin durum geçmişinden o ay sonu itibarıyla okunur; "ort. gün" aşamada geçen süredir.</div>
+        </RpKart>
+        <RpKart T={T} baslik="MÜŞTERİYE GÖRE DEVREDEN">
+          {musL.length ? musL.slice(0,8).map(m => <div key={m.ad} onClick={()=>listeAc(m.ad+" — devreden",m.liste)} style={{ ...satirSt, gridTemplateColumns:"1.6fr .6fr .9fr", cursor:"pointer" }}><span>{m.ad}</span><span style={{ textAlign:"right" }}>{rpF(m.n)}</span><span style={{ textAlign:"right" }}>{rpF(m.gr,0)} gr</span></div>) : <div style={{ fontSize:13, color:T.sub }}>Devreden sipariş yok.</div>}
+          {musL.length > 8 && <div style={{ fontSize:11, color:T.sub, marginTop:6 }}>+ {musL.length-8} müşteri daha</div>}
+        </RpKart>
+      </div>
+    </div>
+  );
+}
+function AyDevriListe({ T, liste, bitisT, kar }) {
+  const gunF = (o) => Math.max(0, Math.floor((bitisT - o.gelis)/86400000));
+  const sirali = [...liste].sort((a,b) => a.gelis - b.gelis);
+  const td = { padding:"6px 8px", borderBottom:"1px solid "+T.border, fontSize:12.5, textAlign:"left" };
+  return (
+    <div style={{ overflowX:"auto" }}>
+      <table style={{ width:"100%", borderCollapse:"collapse" }}>
+        <thead><tr style={{ color:T.sub, fontSize:11 }}><th style={td}>Sipariş</th><th style={td}>Müşteri</th><th style={td}>Açılış</th><th style={{ ...td, textAlign:"right" }}>Yaş</th><th style={td}>Aşama</th><th style={{ ...td, textAlign:"right" }}>Gram</th>{kar && <th style={{ ...td, textAlign:"right" }}>Kâr (has)</th>}</tr></thead>
+        <tbody>{sirali.map(o => { const son = (o.s.durumGecmisi||[]).slice(-1)[0]; const d = DURUMLAR.find(z => z.id === (son ? son.durum : "baslanmadi")); return (
+          <tr key={o.s.id}><td style={td}>{o.s.siparisNo || ("SIP-"+new Date(o.gelis).getFullYear()+"-"+String(o.s.tarih).slice(-5))}</td><td style={td}>{o.s.musteri || o.s.musKod || ""}</td><td style={td}>{new Date(o.gelis).toLocaleDateString("tr-TR")}</td><td style={{ ...td, textAlign:"right" }}>{rpF(gunF(o))} gün</td><td style={td}>{d ? durumEtiket(d) : ""}</td><td style={{ ...td, textAlign:"right" }}>{rpF(o.gr,0)}</td>{kar && <td style={{ ...td, textAlign:"right" }}>{rpF(o.kr,1)}</td>}</tr>
+        ); })}</tbody>
+      </table>
+      <div style={{ fontSize:11, color:T.sub, marginTop:8 }}>{sirali.length} sipariş · yaş ve aşama listedeki ay sonu itibarıyla; aşama şu anki durumdur.</div>
+    </div>
+  );
+}
+
 function MskAylikOzet({ T, vDis, ayDis }) {
   const [vH] = useRpVeri(); const v = vDis || vH;
   const [ayS, setAyS] = useState(null);
@@ -18885,6 +19016,8 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
                 </div>
               );
             })()}
+
+            <AyDevri T={T} siparisler={siparisler} altinKgUSD={altinKgUSD} madenCarpan={madenCarpan} kar={AKTIF_SIRKET_ONEK !== "bsp2_" && izinHassas("karlilik")}/>
 
             {/* ── ORTA: AŞAMA DAĞILIMI + GECİKENLER ── */}
             <div className="kx-s-uretim kx-g2" style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:14 }}>
