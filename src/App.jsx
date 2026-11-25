@@ -1,7 +1,7 @@
 import { supabase, dbLoad, dbSave, fotoYukleStorage, yedekKaydet, yedekListesi, yedekGetir, bugunYedekVarMi, tabloModelleriSenkron, tabloModelleriToplu, tabloModelSil, tabloSiparisleriSenkron, tabloSiparisleriToplu, tabloSiparisSil, tabloMusterileriYaz, akilliModelOku, akilliSiparisOku, akilliMusteriOku, islemKaydet, islemGecmisiGetir, realtimeBaslat, tabloKoleksiyonlariYaz, tabloKasaYaz, akilliKoleksiyonOku, akilliKasaOku, tabloKoleksiyonlariOku, tabloKasaOku, saglikDenetimi, ekranSunucuFarki, toptanciKaydet, toptancilariGetir, toptanciSil, vitrinGecmisiGetir, vitrinEnCokBakilan, vitrinOzetGetir, vitrinAnaliz, vitrinGetirGuvenli, siparisOlusturGuvenli, siparislerimGetirGuvenli, siparisIptalGuvenli, siparisGuncelleGuvenli, siparisMusteriGizleGuvenli, vitrinAktiviteKaydetGuvenli, vitrinSupheliCihazlar, vitrinCevrimiciMusteriler, radarTrendleriOku, radarKaynaklariOku, radarKanitlariOku, radarTumKanitlariOku, radarTrendGuncelle, radarTrendSil, radarManuelKanitEkle } from "./supabase.js";
 import { useState, useEffect, useCallback, useMemo, useRef, Fragment } from "react";
 
-const SURUM_TARIH = "25 Kas 21:55"; // her yeni App.jsx tesliminde güncellenir — ekranın yenilendiğini anlamak için sağ üstte görünür
+const SURUM_TARIH = "25 Kas 22:05"; // her yeni App.jsx tesliminde güncellenir — ekranın yenilendiğini anlamak için sağ üstte görünür
 const uid = () => "x" + Date.now() + Math.random().toString(36).substr(2, 5);
 // ═══ ÇALIŞAN AUTH OTURUMU — yerel şifre kontrolünün ardından gerçek Supabase Auth oturumu açar ═══
 // (RLS politikaları "authenticated" rolüne dayanacak; hesap Supabase Dashboard'da manuel oluşturuldu)
@@ -14253,7 +14253,11 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
   // ── Model kartındaki gram/taş gramı → AÇIK siparişlerin kalemlerine yansıt (fiyatlar sipariş/müşteri bazlı kalır, dokunulmaz) ──
   // Tamamlanan/teslim/hurda kalemler ve iptal/red siparişler değişmez. Önce sorar; reddedilen fark aynı oturumda tekrar sorulmaz.
   const modellerRefS = useRef([]); modellerRefS.current = modeller;
-  const gramRedRef = useRef(new Set());
+  // İptal edilen farklar kalıcı hatırlanır (tarayıcıda, şirket bazlı); model gramı tekrar değişirse yeniden sorar
+  const gramRedAnahtar = "v7gramred_" + (AKTIF_SIRKET_ONEK || "msk");
+  const gramRedRef = useRef(null);
+  if (gramRedRef.current === null) { let l = []; try { l = JSON.parse(localStorage.getItem(gramRedAnahtar) || "[]"); } catch (e) {} gramRedRef.current = new Set(Array.isArray(l) ? l : []); }
+  const gramRedKaydet = () => { try { localStorage.setItem(gramRedAnahtar, JSON.stringify([...gramRedRef.current].slice(-1500))); } catch (e) {} };
   const gramFnRef = useRef(null);
   const gramIlkRef = useRef(false);
   const gramSenkronSor = () => {
@@ -14269,7 +14273,7 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
         if (["tamam","teslim","hurda"].includes(st)) return;
         const g = Number(m.gram)||0, t = Number(m.tasGram)||0, y = Number(m.tasKarDus)||0;
         if (!(g > 0)) return;
-        if (Math.abs((Number(k.gram)||0) - g) < 0.0005 && Math.abs((Number(k.tasGram)||0) - t) < 0.0005 && Math.abs((Number(k.tasKarDus)||0) - y) < 0.0005) return;
+        if (Math.abs((Number(k.gram)||0) - g) < 0.005 && Math.abs((Number(k.tasGram)||0) - t) < 0.005 && Math.abs((Number(k.tasKarDus)||0) - y) < 0.005) return; // 0.005 gr altı fark önemsiz
         const rk = k.id + ":" + g + ":" + t + ":" + y;
         if (gramRedRef.current.has(rk)) return;
         fark.push({ sp, k, m, g, t, y, rk });
@@ -14278,7 +14282,7 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
     if (!fark.length) return;
     const satirlar = fark.slice(0, 8).map(f => "• " + (f.k.kod || f.m.kod || "?") + ": " + fN(Number(f.k.gram)||0, 2) + " → " + fN(f.g, 2) + " gr" + (Math.abs((Number(f.k.tasGram)||0) - f.t) >= 0.0005 ? " (taş " + fN(Number(f.k.tasGram)||0, 2) + " → " + fN(f.t, 2) + ")" : "") + (Math.abs((Number(f.k.tasKarDus)||0) - f.y) >= 0.0005 ? " (kârdan düş " + fN(Number(f.k.tasKarDus)||0, 2) + " → " + fN(f.y, 2) + ")" : "") + "   [" + (f.sp.siparisNo || f.sp.musKod || f.sp.musteri || "sipariş") + ", " + (f.k.adet||1) + " adet]");
     const msg = "Model kartında gramı değişen ürünler var; açık siparişlerde eski gram kalmış:\n\n" + satirlar.join("\n") + (fark.length > 8 ? "\n… ve " + (fark.length - 8) + " kalem daha" : "") + "\n\nSiparişlerdeki gram da güncellensin mi?\n(Fiyatlar değişmez; tamamlanan kalemlere dokunulmaz.)";
-    if (!window.confirm(msg)) { fark.forEach(f => gramRedRef.current.add(f.rk)); return; }
+    if (!window.confirm(msg)) { fark.forEach(f => gramRedRef.current.add(f.rk)); gramRedKaydet(); return; }
     const mapK = new Map(fark.map(f => [String(f.sp.id) + "|" + String(f.k.id), f]));
     svS(sips.map(sp => {
       if (!(sp.kalemler||[]).some(k => mapK.has(String(sp.id) + "|" + String(k.id)))) return sp;
