@@ -1,7 +1,7 @@
 import { supabase, dbLoad, dbSave, fotoYukleStorage, yedekKaydet, yedekListesi, yedekGetir, bugunYedekVarMi, tabloModelleriSenkron, tabloModelleriToplu, tabloModelSil, tabloSiparisleriSenkron, tabloSiparisleriToplu, tabloSiparisSil, tabloMusterileriYaz, akilliModelOku, akilliSiparisOku, akilliMusteriOku, islemKaydet, islemGecmisiGetir, realtimeBaslat, tabloKoleksiyonlariYaz, tabloKasaYaz, akilliKoleksiyonOku, akilliKasaOku, tabloKoleksiyonlariOku, tabloKasaOku, saglikDenetimi, ekranSunucuFarki, toptanciKaydet, toptancilariGetir, toptanciSil, vitrinGecmisiGetir, vitrinEnCokBakilan, vitrinOzetGetir, vitrinAnaliz, vitrinGetirGuvenli, siparisOlusturGuvenli, siparislerimGetirGuvenli, siparisIptalGuvenli, siparisGuncelleGuvenli, siparisMusteriGizleGuvenli, vitrinAktiviteKaydetGuvenli, vitrinSupheliCihazlar, vitrinCevrimiciMusteriler, radarTrendleriOku, radarKaynaklariOku, radarKanitlariOku, radarTumKanitlariOku, radarTrendGuncelle, radarTrendSil, radarManuelKanitEkle } from "./supabase.js";
 import { useState, useEffect, useCallback, useMemo, useRef, Fragment } from "react";
 
-const SURUM_TARIH = "25 Kas 13:05"; // her yeni App.jsx tesliminde güncellenir — ekranın yenilendiğini anlamak için sağ üstte görünür
+const SURUM_TARIH = "25 Kas 13:40"; // her yeni App.jsx tesliminde güncellenir — ekranın yenilendiğini anlamak için sağ üstte görünür
 const uid = () => "x" + Date.now() + Math.random().toString(36).substr(2, 5);
 // ═══ ÇALIŞAN AUTH OTURUMU — yerel şifre kontrolünün ardından gerçek Supabase Auth oturumu açar ═══
 // (RLS politikaları "authenticated" rolüne dayanacak; hesap Supabase Dashboard'da manuel oluşturuldu)
@@ -6730,7 +6730,9 @@ function aydevriHesapla(siparisler, altinKgUSD, madenCarpan, kar) {
     let bitis = null, hurdaT = null;
     if (hepsiHurda) hurdaT = (sonG && sonG.tarih) || s.islemTarih || gelis;
     else if (hepsiBitti) bitis = bitG.length ? bitG[bitG.length-1].tarih : (s.islemTarih || gelis);
-    out.push({ s, gelis, gr, kr, adet, bitis, hurdaT });
+    // Dökümden gelişi: durum geçmişinde tezgah ve sonrası aşamaya ilk geçiş
+    const dgG = gec.find(x => { const d = DURUMLAR.find(z => z.id === x.durum); return d && d.s >= 5; });
+    out.push({ s, gelis, gr, kr, adet, bitis, hurdaT, dg: dgG ? dgG.tarih : null });
   });
   return out;
 }
@@ -6755,13 +6757,13 @@ function aydevriCanli(tum, n) {
 }
 function aydevriKayitYap(v, arsiv, yeniden) {
   const sip = {}; const g = {};
-  ["gir","gelen","biten","hurda","cik"].forEach(k => { g[k] = v[k].map(o => { const id = o.s.id; if (!sip[id]) { const a = aydevriDurumAt(o, v.e); sip[id] = [o.s.siparisNo || "", o.s.musteri || "", o.s.musKod || "", Math.round(o.gr*100)/100, Math.round(o.kr*1000)/1000, o.gelis, a.d, a.t, o.bitis || 0, o.hurdaT || 0]; } return id; }); });
+  ["gir","gelen","biten","hurda","cik"].forEach(k => { g[k] = v[k].map(o => { const id = o.s.id; if (!sip[id]) { const a = aydevriDurumAt(o, v.e); sip[id] = [o.s.siparisNo || "", o.s.musteri || "", o.s.musKod || "", Math.round(o.gr*100)/100, Math.round(o.kr*1000)/1000, o.gelis, a.d, a.t, o.bitis || 0, o.hurdaT || 0, o.dg || 0]; } return id; }); });
   return { alinma: Date.now(), yeniden: !!yeniden, medyan: v.medyan, p75: v.p75, sureN: v.sureN, sip, g, arsiv: arsiv || [] };
 }
-function aydevriKayittan(rec, n) {
-  const ob = (id) => { const a = rec.sip[id]; if (!a) return null; return { s:{ id, siparisNo:a[0], musteri:a[1], musKod:a[2], tarih:a[5], durumGecmisi:[{ durum:a[6], tarih:a[7] }] }, gelis:a[5], gr:a[3], kr:a[4], bitis:a[8]||null, hurdaT:a[9]||null }; };
+function aydevriKayittan(rec, n, b0, e0) {
+  const ob = (id) => { const a = rec.sip[id]; if (!a) return null; return { s:{ id, siparisNo:a[0], musteri:a[1], musKod:a[2], tarih:a[5], durumGecmisi:[{ durum:a[6], tarih:a[7] }] }, gelis:a[5], gr:a[3], kr:a[4], bitis:a[8]||null, hurdaT:a[9]||null, dg:a[10]||null }; };
   const l = (k) => (rec.g[k] || []).map(ob).filter(Boolean);
-  return { n, b: aydevriAyBas(n), e: aydevriAyBas(n+1), kayitli:true, gir:l("gir"), gelen:l("gelen"), biten:l("biten"), hurda:l("hurda"), cik:l("cik"), medyan:rec.medyan, p75:rec.p75, sureN:rec.sureN };
+  return { n, b: b0 !== undefined ? b0 : aydevriAyBas(n), e: e0 !== undefined ? e0 : aydevriAyBas(n+1), kayitli:true, gir:l("gir"), gelen:l("gelen"), biten:l("biten"), hurda:l("hurda"), cik:l("cik"), medyan:rec.medyan, p75:rec.p75, sureN:rec.sureN };
 }
 // Kayıt ile canlı hesap arasındaki fark: ay sonunda devreden listesi bazında
 function aydevriFark(rec, canli, ham) {
@@ -6882,6 +6884,139 @@ function AyDevriListe({ T, liste, bitisT, kar, kayitli }) {
         ); })}</tbody>
       </table>
       <div style={{ fontSize:11, color:T.sub, marginTop:8 }}>{sirali.length} sipariş · yaş ay sonu itibarıyla; aşama {kayitli ? "ay sonundaki" : "şu anki"} durumdur.</div>
+    </div>
+  );
+}
+
+// ═══ HAFTALIK TAKİP (MSK) — dökümden gelen işin haftalık bitişi, sarkan iş ve tahmini bitiş ═══
+const haftaAnahtar = (hb) => { const d = new Date(hb); return "v7haftadevri_" + d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0"); };
+const haftaEkle = (hb, k) => { const d = new Date(hb); d.setDate(d.getDate() + 7*k); return d.getTime(); };
+async function haftaOku(hb) { try { const r = await dbLoad(sirketAnahtar(haftaAnahtar(hb)), null); return { ok:true, val:(r && r.g) ? r : null }; } catch(e) { return { ok:false, val:null }; } }
+// Siparişler ekranı kategorisi: dökümden gelmiş (tezgah ve sonrası) ve henüz bitmemiş sipariş
+function sipHaftaDurum(s) {
+  if (!s || s.onayDurum === "red" || s.onayDurum === "iptal" || s.onayDurum === "bekliyor") return null;
+  const g = s.durumGecmisi || []; const son = g[g.length-1]; if (!son || ["tamam","teslim","hurda"].includes(son.durum)) return null;
+  const dg = g.find(x => { const d = DURUMLAR.find(z => z.id === x.durum); return d && d.s >= 5; });
+  if (!dg) return null;
+  return { dg: dg.tarih, sarkan: dg.tarih < ongHaftaBas(Date.now()) };
+}
+function haftaCanli(tum, hb) {
+  const b = hb, e = haftaEkle(hb, 1); const post = tum.filter(o => o.dg);
+  const kap = (o) => o.bitis || o.hurdaT || null; const acik = (o, t) => o.dg < t && !(kap(o) && kap(o) < t);
+  return { b, e, kayitli:false, gir: post.filter(o => acik(o, b)), gelen: post.filter(o => o.dg >= b && o.dg < e),
+    biten: post.filter(o => o.bitis && o.bitis >= b && o.bitis < e), hurda: post.filter(o => o.hurdaT && o.hurdaT >= b && o.hurdaT < e), cik: post.filter(o => acik(o, e)) };
+}
+function haftaNormaller(siparisler) {
+  const ST = ["tezgah","cila","tas_dus","kalite"]; const v = { tezgah:[], cila:[], tas_dus:[], kalite:[] }; const ziy = { tezgah:0, cila:0, tas_dus:0, kalite:0 }; let n = 0;
+  (siparisler||[]).forEach(s => { const g = s.durumGecmisi || []; if (g.length < 2) return; if (!["tamam","teslim"].includes(g[g.length-1].durum)) return; n++; const gor = {};
+    g.forEach((d, i) => { if (!v[d.durum] || !g[i+1]) return; v[d.durum].push(isGunuSure(d.tarih, g[i+1].tarih)); gor[d.durum] = 1; }); Object.keys(gor).forEach(k => ziy[k]++); });
+  const DEF = { tezgah:3, cila:2, tas_dus:1, kalite:1 }; const m = {}, p = {}, tah = {};
+  ST.forEach(k => { const a = v[k].sort((x,y) => x-y); if (a.length >= 5) { m[k] = a[Math.floor(a.length/2)]; p[k] = n ? ziy[k]/n : 1; tah[k] = false; } else { m[k] = DEF[k]*86400000; p[k] = k === "tas_dus" ? 0.3 : 1; tah[k] = true; } });
+  return { m, p, tah, n };
+}
+function haftaIsGunuEkle(t, ms) {
+  let d = new Date(t); let kalan = ms; let guv = 0;
+  while (kalan > 0 && guv++ < 400) { const dow = d.getDay(); if (dow === 0 || dow === 6) { d = new Date(d); d.setHours(24,0,0,0); continue; }
+    const gs = new Date(d); gs.setHours(24,0,0,0); const bos = gs - d; if (kalan <= bos) return d.getTime() + kalan; kalan -= bos; d = gs; }
+  return d.getTime();
+}
+function haftaTahmin(o, norm, simdi) {
+  const g = o.s.durumGecmisi || []; const son = g[g.length-1]; if (!son) return null;
+  const ST = ["tezgah","cila","tas_dus","kalite"]; const i = ST.indexOf(son.durum); if (i < 0) return null;
+  let kalan = Math.max(0, norm.m[son.durum] - isGunuSure(son.tarih, simdi));
+  for (let j = i+1; j < ST.length; j++) kalan += norm.m[ST[j]] * (norm.p[ST[j]] || 0);
+  return { t: haftaIsGunuEkle(simdi, Math.max(kalan, 0.25*86400000)), tahmin: !!norm.tah[son.durum] };
+}
+function HaftaDevri({ T, siparisler, altinKgUSD, madenCarpan, kar }) {
+  const tum = useMemo(() => aydevriHesapla(siparisler, altinKgUSD, madenCarpan, kar), [siparisler, altinKgUSD, madenCarpan, kar]);
+  const norm = useMemo(() => haftaNormaller(siparisler), [siparisler]);
+  const hbNow = ongHaftaBas(Date.now());
+  const [secH, setSecH] = useState(hbNow);
+  const [kayitlar, setKayitlar] = useState(null);
+  const okuHata = useRef(false); const otoRef = useRef(false);
+  const hAd = (hb) => new Date(hb).toLocaleDateString("tr-TR", { day:"numeric", month:"short" });
+  const hbListe = []; for (let i = 7; i >= 0; i--) hbListe.push(haftaEkle(hbNow, -i));
+  useEffect(() => { let iptal = false; (async () => { const hs = []; for (let i = 1; i <= 7; i++) hs.push(haftaEkle(hbNow, -i)); const arr = await Promise.all(hs.map(haftaOku)); const m = {}; arr.forEach((x, i) => { if (!x.ok) okuHata.current = true; else if (x.val) m[hs[i]] = x.val; }); if (!iptal) setKayitlar(m); })(); return () => { iptal = true; }; }, [hbNow]);
+  useEffect(() => { if (!kayitlar || otoRef.current || !tum.length || okuHata.current) return; otoRef.current = true; (async () => {
+    const yeni = {};
+    for (let i = 1; i <= 7; i++) { const hb = haftaEkle(hbNow, -i); if (kayitlar[hb]) continue;
+      const v = haftaCanli(tum, hb); if (!(v.gir.length || v.gelen.length || v.biten.length || v.hurda.length || v.cik.length)) continue;
+      const son = await haftaOku(hb); if (!son.ok || son.val) { if (son.val) yeni[hb] = son.val; continue; }
+      const rec = aydevriKayitYap(v, [], (Date.now() - v.e) > 3*86400000); await sv(haftaAnahtar(hb), rec); yeni[hb] = rec; }
+    if (Object.keys(yeni).length) setKayitlar(k => ({ ...(k||{}), ...yeni }));
+  })(); }, [kayitlar, tum, hbNow]);
+  const topla = (l) => ({ n: l.length, gr: l.reduce((t,o)=>t+o.gr,0), liste: l });
+  const G = useMemo(() => { const m = {}; hbListe.forEach(hb => { const canli = haftaCanli(tum, hb); const rec = hb < hbNow && kayitlar ? kayitlar[hb] : null; m[hb] = rec ? { v: aydevriKayittan(rec, 0, hb, haftaEkle(hb, 1)), rec, fark: aydevriFark(rec, canli, siparisler) } : { v: canli, rec: null, fark: [] }; }); return m; }, [tum, kayitlar, hbNow, siparisler]);
+  if (!tum.some(o => o.dg)) return null;
+  const g0 = G[secH] || G[hbNow]; const v = g0.v; const rec = g0.rec; const fark = g0.fark; const cur = secH === hbNow;
+  const r = { gelen: topla(v.gelen), gir: topla(v.gir), biten: topla(v.biten), hurda: topla(v.hurda), cik: topla(v.cik) };
+  const hedefGr = r.gir.gr + r.gelen.gr; const oran = hedefGr > 0 ? r.biten.gr/hedefGr*100 : 0;
+  const prevHb = haftaEkle(secH, -1); const pv = G[prevHb] ? G[prevHb].v : null;
+  const pHedef = pv ? topla(pv.gir).gr + topla(pv.gelen).gr : 0; const pOran = pv && pHedef > 0 ? topla(pv.biten).gr/pHedef*100 : null;
+  const seri = hbListe.map(hb => { const h = G[hb].v; return { hb, e: hAd(hb), v: topla(h.cik).gr/1000, v2: topla(h.biten).gr/1000 }; });
+  const sarkmaH = (o) => Math.max(1, Math.round((secH - ongHaftaBas(o.dg))/(7*86400000)) + 1);
+  const simdi = Date.now();
+  const acikSatir = v.cik.map(o => { const a = aydevriDurumAt(o, v.e); const d = DURUMLAR.find(z => z.id === a.d); return { o, asama: d ? durumEtiket(d) : a.d, hafta: sarkmaH(o), tah: cur ? haftaTahmin(o, norm, simdi) : null }; }).sort((a,b) => b.hafta - a.hafta || a.o.dg - b.o.dg);
+  const sarkacak = cur ? acikSatir.filter(x => x.tah && x.tah.t >= v.e).length : 0;
+  const ikiHafta = acikSatir.filter(x => x.hafta >= 2).length;
+  const gunAd = (t) => new Date(t).toLocaleDateString("tr-TR", { day:"numeric", month:"short", weekday:"short" });
+  const listeAc = (baslik, liste) => rpDetayAc(baslik, () => <AyDevriListe T={T} liste={liste} bitisT={v.e} kar={false} kayitli={v.kayitli}/>);
+  const farkAc = () => rpDetayAc("Kayıttan sonra değişenler — " + hAd(secH) + " haftası", () => (
+    <div style={{ overflowX:"auto" }}><table style={{ width:"100%", borderCollapse:"collapse" }}><thead><tr style={{ color:T.sub, fontSize:11 }}><th style={{ padding:"6px 8px", textAlign:"left" }}>Sipariş</th><th style={{ padding:"6px 8px", textAlign:"left" }}>Müşteri</th><th style={{ padding:"6px 8px", textAlign:"left" }}>Ne oldu</th></tr></thead>
+      <tbody>{fark.map(f => <tr key={f.id}><td style={{ padding:"6px 8px", borderBottom:"1px solid "+T.border, fontSize:12.5 }}>{f.no || f.id}</td><td style={{ padding:"6px 8px", borderBottom:"1px solid "+T.border, fontSize:12.5 }}>{f.mus}</td><td style={{ padding:"6px 8px", borderBottom:"1px solid "+T.border, fontSize:12.5 }}>{f.neden}</td></tr>)}</tbody></table>
+    <div style={{ fontSize:11, color:T.sub, marginTop:8 }}>Hafta kaydı değişmedi; rakamlar kayıttan gösteriliyor. Bu liste kayıt ile siparişlerin şimdiki hâli arasındaki farktır.</div></div>));
+  const yenidenKaydet = async () => {
+    if (!rec || !window.confirm(hAd(secH) + " haftasının kaydı güncel siparişlerden yeniden alınacak. Eski kayıt arşivde saklanır. Devam?")) return;
+    const eski = { alinma: rec.alinma, yeniden: rec.yeniden, sip: rec.sip, g: rec.g };
+    const yeniRec = aydevriKayitYap(haftaCanli(tum, secH), [eski, ...(rec.arsiv || [])].slice(0, 3), (Date.now() - v.e) > 3*86400000);
+    await sv(haftaAnahtar(secH), yeniRec); setKayitlar(k => ({ ...(k||{}), [secH]: yeniRec }));
+  };
+  const trT = (t) => new Date(t).toLocaleString("tr-TR", { day:"numeric", month:"short", hour:"2-digit", minute:"2-digit" });
+  const satirSt = { display:"grid", gridTemplateColumns:"1.8fr .6fr .9fr", gap:8, padding:"6px 0", borderBottom:"1px solid "+T.border, fontSize:13, alignItems:"center" };
+  const bas = { fontSize:11, color:T.sub, fontWeight:700 };
+  const akis = [["Dökümden gelen iş", r.gelen], ["Önceki haftadan sarkan", r.gir], ["− Bu hafta biten", r.biten], ["− Hurda / tamamı hurda", r.hurda], ["= Haftayı bitiremeyip sarkan", r.cik, "b"]];
+  const td = { padding:"6px 8px", borderBottom:"1px solid "+T.border, fontSize:12.5, textAlign:"left" };
+  const bitisH = new Date(v.e - 1).toLocaleDateString("tr-TR", { day:"numeric", month:"short" });
+  return (
+    <div className="kx-s-uretim" style={{ marginBottom:14 }}>
+      <RpKart T={T} baslik="HAFTALIK TAKİP — dökümden gelen iş" genis>
+        <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:10 }}>{hbListe.map(hb => { const fl = G[hb].fark.length; return <button key={hb} onClick={()=>setSecH(hb)} style={{ background:secH===hb?T.text+"22":"transparent", color:secH===hb?T.text:T.sub, border:"1px solid "+(secH===hb?T.text:T.border), borderRadius:20, padding:"2px 10px", fontSize:12, cursor:"pointer" }} title={fl ? "Kayıttan sonra "+fl+" sipariş değişti" : undefined}>{hb === hbNow ? "Bu hafta" : hAd(hb)}{fl ? " !" : ""}</button>; })}</div>
+        <div style={{ fontSize:11.5, color:fark.length?"#e85a4f":T.sub, marginBottom:8, display:"flex", gap:12, flexWrap:"wrap", alignItems:"center" }}>
+          <span>{hAd(secH)} – {bitisH}</span>
+          {v.kayitli ? <span>Hafta kaydı: {trT(rec.alinma)}{rec.yeniden ? " · sonradan kurulmuş kayıt" : ""}</span> : <span>{cur ? "Bu hafta sürüyor: rakamlar canlı, hafta bitince kaydedilir." : "Kayıt henüz yok, canlı hesap gösteriliyor."}</span>}
+          {fark.length > 0 && <span onClick={farkAc} style={{ cursor:"pointer", textDecoration:"underline" }}>Kayıttan sonra {fark.length} sipariş değişti ›</span>}
+          {v.kayitli && <span onClick={yenidenKaydet} style={{ cursor:"pointer", color:T.sub, textDecoration:"underline" }}>Bu haftayı yeniden kaydet</span>}
+        </div>
+        <div style={satirSt}><span style={bas}>Akış</span><span style={{ ...bas, textAlign:"right" }}>Sipariş</span><span style={{ ...bas, textAlign:"right" }}>Gram</span></div>
+        {akis.map(([l, x, b]) => (
+          <div key={l} onClick={x.n ? ()=>listeAc(l.replace(/^[−=] /,"")+" — "+hAd(secH)+" haftası", x.liste) : undefined} style={{ ...satirSt, fontWeight:b?800:500, cursor:x.n?"pointer":"default", borderTop:b?"1px solid "+T.text:undefined }}>
+            <span>{l}</span><span style={{ textAlign:"right" }}>{rpF(x.n)}</span><span style={{ textAlign:"right" }}>{rpF(x.gr,0)}</span>
+          </div>
+        ))}
+        <div style={{ fontSize:11, color:T.sub, marginTop:6, lineHeight:1.5 }}>Dökümden gelen = sipariş tezgah ve sonrası aşamaya o hafta geçti. Takip sipariş bazlıdır (kalem bazında geçiş tarihi tutulmaz). Bitti = siparişin tüm kalemleri tamamlandı/teslim. Gram: siparişin toplam mamul gramı.</div>
+      </RpKart>
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(170px,1fr))", gap:8, marginBottom:12 }}>
+        <RpKpi T={T} ad="BİTİRME ORANI" deger={"%"+rpF(oran,0)} alt={pOran!=null ? "önceki hafta %"+rpF(pOran,0)+" · hedef işin (gram) bitmiş payı" : "hedef işin (gram) bitmiş payı"} renk={pOran!=null && oran < pOran-5 ? "#e85a4f" : undefined}/>
+        <RpKpi T={T} ad="SARKAN" deger={rpF(r.cik.gr/1000,2)+" kg"} alt={rpF(r.cik.n)+" sipariş"} onClick={r.cik.n?()=>listeAc("Sarkan — "+hAd(secH)+" haftası", r.cik.liste):undefined}/>
+        <RpKpi T={T} ad="2+ HAFTADIR SARKAN" deger={rpF(ikiHafta)} alt="art arda ikinci hafta bitmemiş" renk={ikiHafta?"#e85a4f":undefined}/>
+        {cur && <RpKpi T={T} ad="TAHMİNEN SARKACAK" deger={rpF(sarkacak)} alt="tahmini bitişi bu haftayı aşan" renk={sarkacak?"#e85a4f":undefined}/>}
+      </div>
+      <RpKart T={T} baslik="SON 8 HAFTA — sarkan ve biten (kg)">
+        <RpSutun T={T} veri={seri} yuk={90} ad="Sarkan" ad2="Biten" onSec={(i)=>setSecH(seri[i].hb)}/>
+        <div style={{ fontSize:11, color:T.sub, marginTop:6 }}>Sütuna dokununca o hafta seçilir. Tamamlanmış haftalar hafta sonu kaydından gösterilir; değişenler "!" ile işaretlenir.</div>
+      </RpKart>
+      <RpKart T={T} baslik={cur ? "BU HAFTA BİTMESİ GEREKENLER — tahmini bitişle" : "SARKAN İŞLER — "+hAd(secH)+" haftası sonu"} genis>
+        {acikSatir.length ? (<div style={{ overflowX:"auto" }}><table style={{ width:"100%", borderCollapse:"collapse" }}>
+          <thead><tr style={{ color:T.sub, fontSize:11 }}><th style={td}>Sipariş</th><th style={td}>Müşteri</th><th style={td}>Aşama</th><th style={{ ...td, textAlign:"right" }}>Gram</th><th style={{ ...td, textAlign:"right" }}>Sarkma</th>{cur && <th style={td}>Tahmini bitiş</th>}</tr></thead>
+          <tbody>{acikSatir.map(x => { const asar = cur && x.tah && x.tah.t >= v.e; return (
+            <tr key={x.o.s.id} style={{ color: x.hafta >= 2 ? "#e85a4f" : T.text }}>
+              <td style={td}>{x.o.s.siparisNo || ("SIP-"+new Date(x.o.gelis).getFullYear()+"-"+String(x.o.s.tarih).slice(-5))}</td><td style={td}>{x.o.s.musteri || x.o.s.musKod || ""}</td><td style={td}>{x.asama}</td>
+              <td style={{ ...td, textAlign:"right" }}>{rpF(x.o.gr,0)}</td><td style={{ ...td, textAlign:"right" }}>{x.hafta === 1 && x.o.dg >= secH ? "yeni" : x.hafta + ". hafta"}</td>
+              {cur && <td style={{ ...td, color: asar ? "#e85a4f" : T.text }}>{x.tah ? gunAd(x.tah.t) + (x.tah.tahmin ? " *" : "") + (asar ? " · sarkacak" : "") : "—"}</td>}
+            </tr>); })}</tbody></table>
+          {cur && <div style={{ fontSize:11, color:T.sub, marginTop:8, lineHeight:1.5 }}>Tahmini bitiş: şu anki aşamada kalan normal süre + sonraki aşamaların normal süreleri (iş günü, hafta sonu hariç). Normaller son biten işlerin ortancasından alınır; "*" = o aşamada 5'ten az kayıt var, varsayılan süre kullanıldı.</div>}
+        </div>) : <div style={{ fontSize:13, color:T.sub }}>{cur ? "Açık iş yok." : "Bu hafta sonunda sarkan iş yok."}</div>}
+      </RpKart>
     </div>
   );
 }
@@ -16224,6 +16359,8 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
     if (sipFiltre==="geciken") { if (!son||BIT.includes(son.durum)||isGunuSure(son.tarih,Date.now())<=7*24*60*60*1000) return false; }
     if (sipFiltre==="teslimgecti") { if (!ozet(s).gecikti) return false; }
     if (sipFiltre==="tamamlanan") { if (!["tamam","teslim"].includes(son?.durum)) return false; }
+    if (sipFiltre==="hbitecek") { if (!sipHaftaDurum(s)) return false; }
+    if (sipFiltre==="sarkan") { const h=sipHaftaDurum(s); if (!h || !h.sarkan) return false; }
     return true;
   });
   const sirali = liste.map((s,i)=>({s,i})).sort((a,b)=>grupNo(a.s)-grupNo(b.s)||a.i-b.i).map(x=>x.s);
@@ -16251,6 +16388,7 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
     { id:"teslimgecti", l:"Teslimi geçen", cnt:siparisler.filter(s=>ozet(s).gecikti).length },
     { id:"geciken", l:"Aşamada 7+ gün", cnt:siparisler.filter(s=>ozet(s).geciken).length },
     { id:"tamamlanan", l:"Tamamlanan", cnt:siparisler.filter(s=>["tamam","teslim"].includes(SON(s)?.durum)).length },
+    ...(AKTIF_SIRKET_ONEK==="" ? [{ id:"hbitecek", l:"Bu hafta bitecek", cnt:siparisler.filter(s=>sipHaftaDurum(s)).length }, { id:"sarkan", l:"Sarkan", cnt:siparisler.filter(s=>{ const h=sipHaftaDurum(s); return h && h.sarkan; }).length }] : []),
   ];
   const topluDurum = (s, id) => svS(siparisler.map(sp=>sp.id===s.id?{...sp,kalemDurumlar:Object.fromEntries((sp.kalemler||[]).map(k=>[k.id,((sp.kalemDurumlar||{})[k.id]==="hurda")?"hurda":id]))}:sp));
   const kalemDurum = (sipId, kalemId, yeni) => {
@@ -16920,6 +17058,7 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
                 { id:"dokumde",    l:"Dökümde",          cnt: siparisler.filter(s=>{ const son=(s.durumGecmisi||[]).slice(-1)[0]; return son?.durum==="dokum"; }).length },
                 { id:"geciken",    l:"Geciken 7+ gün",   cnt: siparisler.filter(s=>{ const son=(s.durumGecmisi||[]).slice(-1)[0]; return son&&!["tamam","teslim","hurda"].includes(son.durum)&&isGunuSure(son.tarih,Date.now())>7*24*60*60*1000; }).length },
                 { id:"tamamlanan", l:"Tamamlanan",       cnt: siparisler.filter(s=>{ const son=(s.durumGecmisi||[]).slice(-1)[0]; return ["tamam","teslim"].includes(son?.durum); }).length },
+                ...(AKTIF_SIRKET_ONEK==="" ? [{ id:"hbitecek", l:"Bu hafta bitecek", cnt: siparisler.filter(s=>sipHaftaDurum(s)).length }, { id:"sarkan", l:"Sarkan", cnt: siparisler.filter(s=>{ const h=sipHaftaDurum(s); return h && h.sarkan; }).length }] : []),
               ].map(f => (
                 <button key={f.id} onClick={()=>setSipFiltre(f.id)}
                   style={{ background:sipFiltre===f.id?"rgba(var(--vurgu-rgb),0.18)":"rgba(var(--vurgu-rgb),0.04)", border:"1px solid", borderColor:sipFiltre===f.id?"rgba(var(--vurgu-rgb),0.4)":"rgba(var(--vurgu-rgb),0.1)", borderRadius:6, padding:"4px 10px", color:sipFiltre===f.id?GOLD:"#7a6f5a", fontSize:9, fontWeight:sipFiltre===f.id?700:400, cursor:"pointer" }}>
@@ -16939,6 +17078,8 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
                   if (sipFiltre === "dokumde") { const son=(s.durumGecmisi||[]).slice(-1)[0]; if (son?.durum!=="dokum") return false; }
                   if (sipFiltre === "geciken") { const son=(s.durumGecmisi||[]).slice(-1)[0]; if (!son||["tamam","teslim","hurda"].includes(son.durum)||isGunuSure(son.tarih,Date.now())<=7*24*60*60*1000) return false; }
                   if (sipFiltre === "tamamlanan") { const son=(s.durumGecmisi||[]).slice(-1)[0]; if (!["tamam","teslim"].includes(son?.durum)) return false; }
+                  if (sipFiltre === "hbitecek") { if (!sipHaftaDurum(s)) return false; }
+                  if (sipFiltre === "sarkan") { const h=sipHaftaDurum(s); if (!h || !h.sarkan) return false; }
                   return true;
                 })
                 .map(s => {
@@ -19065,6 +19206,7 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
               );
             })()}
 
+            {AKTIF_SIRKET_ONEK === "" && <HaftaDevri T={T} siparisler={siparisler} altinKgUSD={altinKgUSD} madenCarpan={madenCarpan} kar={izinHassas("karlilik")}/>}
             <AyDevri T={T} siparisler={siparisler} altinKgUSD={altinKgUSD} madenCarpan={madenCarpan} kar={AKTIF_SIRKET_ONEK !== "bsp2_" && izinHassas("karlilik")}/>
 
             {/* ── ORTA: AŞAMA DAĞILIMI + GECİKENLER ── */}
