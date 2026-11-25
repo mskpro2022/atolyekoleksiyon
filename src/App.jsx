@@ -1,7 +1,7 @@
 import { supabase, dbLoad, dbSave, fotoYukleStorage, yedekKaydet, yedekListesi, yedekGetir, bugunYedekVarMi, tabloModelleriSenkron, tabloModelleriToplu, tabloModelSil, tabloSiparisleriSenkron, tabloSiparisleriToplu, tabloSiparisSil, tabloMusterileriYaz, akilliModelOku, akilliSiparisOku, akilliMusteriOku, islemKaydet, islemGecmisiGetir, realtimeBaslat, tabloKoleksiyonlariYaz, tabloKasaYaz, akilliKoleksiyonOku, akilliKasaOku, tabloKoleksiyonlariOku, tabloKasaOku, saglikDenetimi, ekranSunucuFarki, toptanciKaydet, toptancilariGetir, toptanciSil, vitrinGecmisiGetir, vitrinEnCokBakilan, vitrinOzetGetir, vitrinAnaliz, vitrinGetirGuvenli, siparisOlusturGuvenli, siparislerimGetirGuvenli, siparisIptalGuvenli, siparisGuncelleGuvenli, siparisMusteriGizleGuvenli, vitrinAktiviteKaydetGuvenli, vitrinSupheliCihazlar, vitrinCevrimiciMusteriler, radarTrendleriOku, radarKaynaklariOku, radarKanitlariOku, radarTumKanitlariOku, radarTrendGuncelle, radarTrendSil, radarManuelKanitEkle } from "./supabase.js";
 import { useState, useEffect, useCallback, useMemo, useRef, Fragment } from "react";
 
-const SURUM_TARIH = "25 Kas 17:20"; // her yeni App.jsx tesliminde güncellenir — ekranın yenilendiğini anlamak için sağ üstte görünür
+const SURUM_TARIH = "25 Kas 19:15"; // her yeni App.jsx tesliminde güncellenir — ekranın yenilendiğini anlamak için sağ üstte görünür
 const uid = () => "x" + Date.now() + Math.random().toString(36).substr(2, 5);
 // ═══ ÇALIŞAN AUTH OTURUMU — yerel şifre kontrolünün ardından gerçek Supabase Auth oturumu açar ═══
 // (RLS politikaları "authenticated" rolüne dayanacak; hesap Supabase Dashboard'da manuel oluşturuldu)
@@ -703,17 +703,25 @@ async function arkaPlanSilAI(src, ilerle, golge, koru) {
 }
 // Ürünü kare içinde büyüt/küçült (faktor>1 yakınlaştır, <1 uzaklaştır). Zemin: köşe rengi
 async function fotoZoomla(src, faktor) {
+  // Kayıpsız yöntem: ürün pikselleri HER ZAMAN 1:1 kalır (yeniden örnekleme yok).
+  // Yakınlaştır → orta bölge olduğu gibi kırpılır (tuval küçülür). Uzaklaştır → tuval büyür, ürün aynı piksellerle ortada kalır.
   const img = await resimYukle(src);
   const W = img.naturalWidth, H = img.naturalHeight;
-  const c = document.createElement("canvas"); c.width = W; c.height = H;
-  const cx = c.getContext("2d");
   const k = document.createElement("canvas"); k.width = 1; k.height = 1;
   k.getContext("2d").drawImage(img, 0, 0, 4, 4, 0, 0, 1, 1);
   const p = k.getContext("2d").getImageData(0, 0, 1, 1).data;
-  cx.fillStyle = "rgb(" + p[0] + "," + p[1] + "," + p[2] + ")"; cx.fillRect(0, 0, W, H);
-  const w = W * faktor, h = H * faktor;
-  cx.imageSmoothingQuality = "high"; cx.drawImage(img, (W - w) / 2, (H - h) / 2, w, h);
-  return c.toDataURL("image/jpeg", 0.95);
+  let nw = W / faktor, nh = H / faktor;
+  let olcek = 1;
+  const uz = Math.max(nw, nh);
+  if (uz > 2600) olcek = 2600 / uz;        // çok büyürse sınırla
+  else if (uz < 1000) olcek = 1000 / uz;   // çok küçülürse yüzey çözünürlüğünü koru
+  const cw = Math.max(1, Math.round(nw * olcek)), ch = Math.max(1, Math.round(nh * olcek));
+  const c = document.createElement("canvas"); c.width = cw; c.height = ch;
+  const cx = c.getContext("2d");
+  cx.fillStyle = "rgb(" + p[0] + "," + p[1] + "," + p[2] + ")"; cx.fillRect(0, 0, cw, ch);
+  cx.imageSmoothingEnabled = true; cx.imageSmoothingQuality = "high";
+  cx.drawImage(img, (cw - W * olcek) / 2, (ch - H * olcek) / 2, W * olcek, H * olcek);
+  return c.toDataURL("image/jpeg", 0.98);
 }
 async function fotoCevir(src) {
   const img = await resimYukle(src);
@@ -13655,7 +13663,7 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
     if (!document.getElementById("atolye-hover-zoom")) {
       const s = document.createElement("style");
       s.id = "atolye-hover-zoom";
-      s.textContent = `.model-foto-wrap { overflow:hidden; position:relative; } .model-foto-wrap img { transition: transform .4s cubic-bezier(.25,.46,.45,.94), transform-origin 0s !important; transform-origin: center center; } .model-foto-wrap:hover img { transform: scale(1.90) !important; }`;
+      s.textContent = `.model-foto-wrap { overflow:hidden; position:relative; } .model-foto-wrap img { transition: transform .25s cubic-bezier(.25,.46,.45,.94), transform-origin 0s !important; transform-origin: center center; } .model-foto-wrap:hover img { transform: scale(1.90) !important; -webkit-mask-image:none !important; mask-image:none !important; image-rendering:auto; backface-visibility:hidden; }`;
       document.head.appendChild(s);
     }
     const hoverHandler = function(e) {
