@@ -1,7 +1,7 @@
 import { supabase, dbLoad, dbSave, fotoYukleStorage, yedekKaydet, yedekListesi, yedekGetir, bugunYedekVarMi, tabloModelleriSenkron, tabloModelleriToplu, tabloModelSil, tabloSiparisleriSenkron, tabloSiparisleriToplu, tabloSiparisSil, tabloMusterileriYaz, akilliModelOku, akilliSiparisOku, akilliMusteriOku, islemKaydet, islemGecmisiGetir, realtimeBaslat, tabloKoleksiyonlariYaz, tabloKasaYaz, akilliKoleksiyonOku, akilliKasaOku, tabloKoleksiyonlariOku, tabloKasaOku, saglikDenetimi, ekranSunucuFarki, toptanciKaydet, toptancilariGetir, toptanciSil, vitrinGecmisiGetir, vitrinEnCokBakilan, vitrinOzetGetir, vitrinAnaliz, vitrinGetirGuvenli, siparisOlusturGuvenli, siparislerimGetirGuvenli, siparisIptalGuvenli, siparisGuncelleGuvenli, siparisMusteriGizleGuvenli, vitrinAktiviteKaydetGuvenli, vitrinSupheliCihazlar, vitrinCevrimiciMusteriler, radarTrendleriOku, radarKaynaklariOku, radarKanitlariOku, radarTumKanitlariOku, radarTrendGuncelle, radarTrendSil, radarManuelKanitEkle } from "./supabase.js";
 import { useState, useEffect, useCallback, useMemo, useRef, Fragment } from "react";
 
-const SURUM_TARIH = "25 Kas 13:40"; // her yeni App.jsx tesliminde güncellenir — ekranın yenilendiğini anlamak için sağ üstte görünür
+const SURUM_TARIH = "25 Kas 14:55"; // her yeni App.jsx tesliminde güncellenir — ekranın yenilendiğini anlamak için sağ üstte görünür
 const uid = () => "x" + Date.now() + Math.random().toString(36).substr(2, 5);
 // ═══ ÇALIŞAN AUTH OTURUMU — yerel şifre kontrolünün ardından gerçek Supabase Auth oturumu açar ═══
 // (RLS politikaları "authenticated" rolüne dayanacak; hesap Supabase Dashboard'da manuel oluşturuldu)
@@ -9197,6 +9197,7 @@ function buildKonfHTML(siparis, altinKgUSD, mc, fiyatli, modeller, siraModu) {
   // fiyatli=true  → Müşteri PDF: işçilik/fiyat VAR, taş detayı YOK
   // fiyatli=false → İç PDF:      işçilik/fiyat YOK, taş detayı VAR
   const hasGramUSD = altinKgUSD / 1000;
+  const fUSDs = (p) => (Number(p) < 0 ? "-" : "") + fUSD(Math.abs(Number(p) || 0));
   let tGram = 0, tIscilik = 0, tIscilikHas = 0;
   // Sipariş kalemi eklendiği ANDAKİ kategoriyi taşır (örn. sonradan "bileklik" olarak düzeltilmiş bir model
   // hâlâ eski kategorisiyle görünebilir) — bu yüzden gösterim için KATALOGDAKİ GÜNCEL kategoriyi tercih ediyoruz.
@@ -9211,17 +9212,22 @@ function buildKonfHTML(siparis, altinKgUSD, mc, fiyatli, modeller, siraModu) {
     const hc = hesapla(k, k.secilenAyar || k.refAyar, altinKgUSD, mc);
     const adet = k.adet || 1;
     tGram += hc.mamulGram * adet;
-    const isMilyem = k.iscilikBirim === "milyem";
+    // hesapla() ile aynı kural: seçili ayarın işçilik fiyatı (iscilikAyarlar) doluysa o, yoksa kalemin genel fiyatı — milyem altı (eksi) fiyatlar da gösterilir
+    const _ayK = k.secilenAyar || k.refAyar || "14K"; const _aI = (k.iscilikAyarlar || {})[_ayK];
+    const _aVar = _aI && _aI.dolar !== "" && _aI.dolar != null;
+    const _birim = _aVar ? (_aI.birim || "dolar") : (k.iscilikBirim || "dolar");
+    const _dolar = _aVar ? (Number(_aI.dolar) || 0) : (Number(k.iscilikDolar) || 0);
+    const isMilyem = _birim === "milyem";
     const iscilikTop = isMilyem
       ? hc.iscilikHas * hc.hasGramUSD * adet
-      : (k.iscilikDolar||0) * hc.mamulGram * adet;
+      : _dolar * hc.mamulGram * adet;
     const iscilikTopHas = isMilyem
       ? hc.iscilikHas * adet
       : iscilikTop / (hc.hasGramUSD || 1);
     tIscilik += iscilikTop;
     tIscilikHas += iscilikTopHas;
     const guncelKategori = (k.kod && guncelKatMap.has(k.kod)) ? guncelKatMap.get(k.kod) : k.kategori;
-    return { ...k, hc, adet, iscilikTop, iscilikTopHas, isMilyem, kategori: guncelKategori };
+    return { ...k, iscilikDolar: _dolar, iscilikBirim: _birim, hc, adet, iscilikTop, iscilikTopHas, isMilyem, kategori: guncelKategori };
   });
   const tAdet = rows.reduce((s,r)=>s+r.adet,0);
   const sipNo = "SIP-" + new Date(siparis.tarih).getFullYear() + "-" + String(siparis.tarih).slice(-5);
@@ -9312,14 +9318,14 @@ function buildKonfHTML(siparis, altinKgUSD, mc, fiyatli, modeller, siraModu) {
     if (r.boy && r.boy.deger) return "<div class='boy'>Boy: " + esc(r.boy.sistem) + " " + esc(r.boy.deger) + (r.boy.sistem !== "mm" && r.boy.sistem !== "Beden" ? " (≈" + boyToMM(r.boy.sistem, r.boy.deger) + "mm)" : "") + "</div>";
     return "";
   };
-  const iscBirim = (r) => r.isMilyem ? (r.iscilikDolar || 0).toFixed(3) + " mly/gr" : fUSD(r.iscilikDolar || 0) + "/gr";
+  const iscBirim = (r) => r.isMilyem ? (r.iscilikDolar || 0).toFixed(3) + " mly/gr" : fUSDs(r.iscilikDolar || 0) + "/gr";
   const foto = (r) => r.foto ? "<img src='" + r.foto + "'/>" : "";
   const meta = (r) => esc(TIP_ETIKET[r.kategori] || r.kategori || "") + (r.kategori ? " · " : "") + esc(r.renk || "Sari") + " · " + r.adet + " adet";
   const ortak = (r, sn) => "<div class='k'>" + (sn ? "<span class='n'>" + sn + "</span>" : "") + esc(r.kod || "—") + "</div><div class='ad'>" + meta(r) + "</div>" + (r.ad ? "<div class='mad'>" + esc(r.ad) + "</div>" : "") + (r.sipNot ? "<div class='rn'>" + esc(r.sipNot) + "</div>" : "") + boyHtml(r) + ekKutu(r) + tasGrup(r);
   const statlar = (r) => {
     let s = "<div class='strip'><div><span>Birim</span><b>" + gramStr(r.hc.mamulGram) + "</b></div><div><span>Toplam</span><b>" + gramStr(r.hc.mamulGram * r.adet) + "</b></div>";
     if (Number(r.tasGram) > 0) s += "<div><span>Taş</span><b>" + fN(r.tasGram, 4) + " gr</b></div>";
-    if (fiyatli && r.iscilikTop > 0) s += "<div><span>İşçilik / br</span><b>" + iscBirim(r) + "</b></div><div><span>İşçilik toplam</span><b>" + fUSD(r.iscilikTop) + "</b></div>";
+    if (fiyatli && r.iscilikTop !== 0) s += "<div><span>İşçilik / br</span><b>" + iscBirim(r) + "</b></div><div><span>İşçilik toplam</span><b>" + fUSDs(r.iscilikTop) + "</b></div>";
     return s + "</div>";
   };
 
@@ -9339,7 +9345,7 @@ function buildKonfHTML(siparis, altinKgUSD, mc, fiyatli, modeller, siraModu) {
     h += "<div class='g'>";
     kisa.forEach(r => {
       no++;
-      h += "<div class='c'><div class='ph'>" + foto(r) + "</div><div>" + ortak(r) + "<div class='st'><span>" + gramStr(r.hc.mamulGram) + (fiyatli && r.iscilikTop > 0 ? " · " + iscBirim(r) : "") + "</span><b>" + gramStr(r.hc.mamulGram * r.adet) + (fiyatli && r.iscilikTop > 0 ? " · " + fUSD(r.iscilikTop) : "") + "</b></div></div></div>";
+      h += "<div class='c'><div class='ph'>" + foto(r) + "</div><div>" + ortak(r) + "<div class='st'><span>" + gramStr(r.hc.mamulGram) + (fiyatli && r.iscilikTop !== 0 ? " · " + iscBirim(r) : "") + "</span><b>" + gramStr(r.hc.mamulGram * r.adet) + (fiyatli && r.iscilikTop !== 0 ? " · " + fUSDs(r.iscilikTop) : "") + "</b></div></div></div>";
     });
     h += "</div>";
   } else {
@@ -9355,7 +9361,7 @@ function buildKonfHTML(siparis, altinKgUSD, mc, fiyatli, modeller, siraModu) {
       if (kat(r) === "kolye") {
         h += "<div class='kol'><div class='ph'>" + foto(r) + "</div><div>" + ortak(r, String(no).padStart(2, "0")) + statlar(r) + "</div></div>";
       } else {
-        h += "<div class='w'><div class='wh'><div class='l'><span class='k'>" + esc(r.kod || "—") + "</span><span><span class='tagb'>BİLEKLİK</span><span class='ad'>" + esc(r.renk || "Sari") + " · " + r.adet + " adet" + (r.ad ? " · " + esc(r.ad) : "") + "</span></span></div><div class='r'><div><span>Birim</span><b>" + gramStr(r.hc.mamulGram) + "</b></div><div><span>Toplam</span><b>" + gramStr(r.hc.mamulGram * r.adet) + "</b></div>" + (fiyatli && r.iscilikTop > 0 ? "<div><span>İşçilik</span><b>" + fUSD(r.iscilikTop) + "</b></div>" : "") + "</div></div>";
+        h += "<div class='w'><div class='wh'><div class='l'><span class='k'>" + esc(r.kod || "—") + "</span><span><span class='tagb'>BİLEKLİK</span><span class='ad'>" + esc(r.renk || "Sari") + " · " + r.adet + " adet" + (r.ad ? " · " + esc(r.ad) : "") + "</span></span></div><div class='r'><div><span>Birim</span><b>" + gramStr(r.hc.mamulGram) + "</b></div><div><span>Toplam</span><b>" + gramStr(r.hc.mamulGram * r.adet) + "</b></div>" + (fiyatli && r.iscilikTop !== 0 ? "<div><span>İşçilik</span><b>" + fUSDs(r.iscilikTop) + "</b></div>" : "") + "</div></div>";
         if (r.foto) h += "<div class='ph wp'>" + foto(r) + "</div>";
         h += "<div class='wf'><div class='lft'>" + (r.sipNot ? "<div class='rn'>" + esc(r.sipNot) + "</div>" : "") + boyHtml(r) + ekKutu(r) + "</div>" + tasGrup(r) + "</div></div>";
       }
@@ -9363,7 +9369,7 @@ function buildKonfHTML(siparis, altinKgUSD, mc, fiyatli, modeller, siraModu) {
   }
 
   h += "<div class='tot'><div><span>Adet</span><b>" + tAdet + "</b></div><div><span>Toplam gram</span><b>" + fN(tGram, 2) + " gr</b></div>";
-  if (fiyatli) h += "<div class='s'><span>İşçilik has</span><b>" + tIscilikHas.toFixed(4) + " has</b></div><div><span>Toplam işçilik</span><b>" + fUSD(tIscilik) + "</b></div>";
+  if (fiyatli) h += "<div class='s'><span>İşçilik has</span><b>" + tIscilikHas.toFixed(4) + " has</b></div><div><span>Toplam işçilik</span><b>" + fUSDs(tIscilik) + "</b></div>";
   h += "</div>";
 
   const _hazir = String(siparis.hazirlayan || (AKTIF_KULLANICI && (AKTIF_KULLANICI.ad || AKTIF_KULLANICI.kullanici_adi)) || "").toLocaleUpperCase("tr").replace(/[<>&]/g, "");
@@ -14126,6 +14132,31 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
     }
   };
 
+  // ── Siparişin açık kalemlerini modelin GÜNCEL işçilik fiyatına eşitler (elle; önce fark listesini gösterir, onay ister; müşteriye özel fiyatlar korunur) ──
+  const siparisFiyatEsitle = (s) => {
+    if (AKTIF_SIRKET_ONEK === "bsp2_") return;
+    const hafiza = (kasa && kasa.musteriModelFiyat) || {};
+    const mus = String(s.musteri || "").trim(); const mMap = new Map((modeller || []).map(m => [String(m.id), m]));
+    const fm = (x) => (x.birim === "milyem" ? (Number(x.dolar) || 0).toFixed(3) + " mly/gr" : "$" + (Number(x.dolar) || 0).toFixed(2) + "/gr");
+    const fark = [];
+    const kl = (s.kalemler || []).map(k => {
+      const st = (s.kalemDurumlar || {})[k.id] || k.durum || "baslanmadi"; if (["tamam","teslim","hurda"].includes(st)) return k;
+      const m = mMap.get(String(k.id)); if (!m) return k;
+      const ay = k.secilenAyar || k.refAyar || "14K";
+      const hm = hafiza[mus] && hafiza[mus][k.id]; if (hm && (hm.iscilikDolar !== undefined || hm[ay])) return k; // müşteriye özel fiyat
+      const y = iscilikCoz(m, ay, null, null); const a = (k.iscilikAyarlar || {})[ay];
+      const kal = (a && a.dolar !== "" && a.dolar != null) ? { dolar:a.dolar, birim:a.birim || "dolar" } : { dolar:k.iscilikDolar, birim:k.iscilikBirim || "dolar" };
+      if (Math.abs((Number(kal.dolar) || 0) - (Number(y.dolar) || 0)) < 1e-9 && (kal.birim || "dolar") === (y.birim || "dolar")) return k;
+      fark.push((k.kod || k.id) + " (" + ay + "): " + fm(kal) + " → " + fm({ dolar:y.dolar, birim:y.birim }));
+      return { ...k, iscilikDolar:y.dolar, iscilikBirim:y.birim, iscilikAyarlar:{ ...(k.iscilikAyarlar || {}), [ay]:{ dolar:y.dolar, birim:y.birim } } };
+    });
+    if (!fark.length) { toastGoster("ok", "Açık kalemlerin fiyatı zaten modelle aynı"); return; }
+    if (!window.confirm(fark.length + " kalemin işçilik fiyatı modelin güncel fiyatına eşitlenecek:\n\n" + fark.slice(0, 14).join("\n") + (fark.length > 14 ? "\n… +" + (fark.length - 14) + " kalem daha" : "") + "\n\nMüşteriye özel fiyatlı, tamamlanan ve hurda kalemlere dokunulmaz. Devam?")) return;
+    svS(siparisler.map(sp => sp.id === s.id ? { ...sp, kalemler:kl } : sp));
+    islemKaydet(AKTIF_SIRKET_ONEK, "güncelle", "sipariş fiyatı", (s.musteri || "") + " siparişinde " + fark.length + " kalem model fiyatına eşitlendi");
+    toastGoster("ok", fark.length + " kalemin fiyatı modele eşitlendi");
+  };
+
   // ── Model kartındaki gram/taş gramı → AÇIK siparişlerin kalemlerine yansıt (fiyatlar sipariş/müşteri bazlı kalır, dokunulmaz) ──
   // Tamamlanan/teslim/hurda kalemler ve iptal/red siparişler değişmez. Önce sorar; reddedilen fark aynı oturumda tekrar sorulmaz.
   const modellerRefS = useRef([]); modellerRefS.current = modeller;
@@ -16480,6 +16511,7 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
             {menu("d"+s.id, [
               { l:"📄 Fiyatlı PDF", f:()=>downloadPDF(buildKonfHTML(s,s.altinKgUSD||altinKgUSD,s.mc||madenCarpan,true,modeller,sipSira),(s.musteri||"siparis")+"-fiyatli") },
               { l:"📄 Fiyatsız PDF", f:()=>downloadPDF(buildKonfHTML(s,s.altinKgUSD||altinKgUSD,s.mc||madenCarpan,false,modeller,sipSira),(s.musteri||"siparis")+"-fiyatsiz") },
+              AKTIF_SIRKET_ONEK!=="bsp2_" && s.onayDurum!=="red" && s.onayDurum!=="iptal" && { l:"≈ Fiyatları model fiyatına eşitle", f:()=>siparisFiyatEsitle(s) },
               AKTIF_SIRKET_ONEK!=="bsp2_" && s.durumGecmisi?.length>0 && { l:"📊 Zaman çizelgesi", f:()=>setCizelgeModal(s.id) },
               { l:"🏷 Müşteri alt kodu (PSEV…)", f:()=>altKodDuzenle(s) },
               { l:"⧉ Kopyala → konfirmasyona", f:()=>konfKopyala(s) },
