@@ -1,7 +1,7 @@
 import { supabase, dbLoad, dbSave, fotoYukleStorage, yedekKaydet, yedekListesi, yedekGetir, bugunYedekVarMi, tabloModelleriSenkron, tabloModelleriToplu, tabloModelSil, tabloSiparisleriSenkron, tabloSiparisleriToplu, tabloSiparisSil, tabloMusterileriYaz, akilliModelOku, akilliSiparisOku, akilliMusteriOku, islemKaydet, islemGecmisiGetir, realtimeBaslat, tabloKoleksiyonlariYaz, tabloKasaYaz, akilliKoleksiyonOku, akilliKasaOku, tabloKoleksiyonlariOku, tabloKasaOku, saglikDenetimi, ekranSunucuFarki, toptanciKaydet, toptancilariGetir, toptanciSil, vitrinGecmisiGetir, vitrinEnCokBakilan, vitrinOzetGetir, vitrinAnaliz, vitrinGetirGuvenli, siparisOlusturGuvenli, siparislerimGetirGuvenli, siparisIptalGuvenli, siparisGuncelleGuvenli, siparisMusteriGizleGuvenli, vitrinAktiviteKaydetGuvenli, vitrinSupheliCihazlar, vitrinCevrimiciMusteriler, radarTrendleriOku, radarKaynaklariOku, radarKanitlariOku, radarTumKanitlariOku, radarTrendGuncelle, radarTrendSil, radarManuelKanitEkle } from "./supabase.js";
 import { useState, useEffect, useCallback, useMemo, useRef, Fragment } from "react";
 
-const SURUM_TARIH = "25 Kas 14:55"; // her yeni App.jsx tesliminde güncellenir — ekranın yenilendiğini anlamak için sağ üstte görünür
+const SURUM_TARIH = "25 Kas 15:50"; // her yeni App.jsx tesliminde güncellenir — ekranın yenilendiğini anlamak için sağ üstte görünür
 const uid = () => "x" + Date.now() + Math.random().toString(36).substr(2, 5);
 // ═══ ÇALIŞAN AUTH OTURUMU — yerel şifre kontrolünün ardından gerçek Supabase Auth oturumu açar ═══
 // (RLS politikaları "authenticated" rolüne dayanacak; hesap Supabase Dashboard'da manuel oluşturuldu)
@@ -16381,6 +16381,7 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
     if (sipTarih1 && s.tarih < new Date(sipTarih1).getTime()) return false;
     if (sipTarih2 && s.tarih > new Date(sipTarih2).getTime()+86399999) return false;
     if (sipMetal!=="tumu") { const oo=ozet(s); if (sipMetal==="gumus" ? oo.gumus<=0 : oo.altin<=0.0001) return false; }
+    if ((sipAsama==="tamam"||sipAsama==="teslim") && (s.tarih||0) < Date.now()-366*86400000) return false; // Tamamlandı: son 12 ay
     if (sipAsama) { if (s.onayDurum==="bekliyor"||s.onayDurum==="red"||s.onayDurum==="iptal") return false; const kd0=s.kalemDurumlar||{}; if (!(s.kalemler||[]).some(k=>{ const q0=kd0[k.id]||k.durum||"baslanmadi"; return (q0==="cizimde"?"baslanmadi":q0)===sipAsama; })) return false; }
     const son = SON(s);
     if (tumuF && !sipAsama && !sipMusF && ["tamam","teslim"].includes(son?.durum)) return false; // Tümü: tamamlanan siparişler gizli (arama yapılınca bulunur)
@@ -16695,7 +16696,10 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
     for (let i=1;i<=2;i++) keys.add(ayAnahtar(new Date(bugun.getFullYear(),bugun.getMonth()+i,1).getTime()));
     const sirKeys = [...keys].sort();
     const bitti = s => { const g=grupNo(s); return g===3||g===4; };
-    const gorunen = (() => { const f = sipAyAcik.filter(k=>sirKeys.includes(k)); return f.length ? f : [bk]; })();
+    const tamAsamaF = sipAsama==="tamam" || sipAsama==="teslim";
+    const gorunen = (() => { const f = sipAyAcik.filter(k=>sirKeys.includes(k)); const base = f.length ? f : [bk];
+      if (tamAsamaF && !base.some(k=>liste.some(s=>planAy(s)===k))) { const ks = sirKeys.filter(k=>liste.some(s=>planAy(s)===k)); if (ks.length) return [ks[ks.length-1]]; }
+      return base; })();
     const gorKeys = sirKeys.filter(k=>gorunen.includes(k));
     const coklu = gorKeys.length>1;
     const ayGen = Math.max(300, (sipVw - 70 - 12*(gorKeys.length-1)) / gorKeys.length - 30);
@@ -16736,7 +16740,7 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
         {gorKeys.map(key => {
           const sl = liste.filter(s=>planAy(s)===key).sort((a,b)=>((grupNo(a)===3)-(grupNo(b)===3)) || (b.tarih-a.tarih)); // tamamlananlar en sonda
           const oz = sl.map(s=>ozet(s));
-          const nTam = sl.filter(s=>grupNo(s)===3).length, tamAcikAy = !!sipTamAcik[key];
+          const nTam = sl.filter(s=>grupNo(s)===3).length, tamAcikAy = !!sipTamAcik[key] || tamAsamaF;
           const ozAcik = oz.filter((o,ix)=>grupNo(sl[ix])!==3); // ay toplamı: tamamlananlar düşülür
           const topGum = ozAcik.reduce((a,o)=>a+o.gumus,0), topAlt = ozAcik.reduce((a,o)=>a+o.altin,0);
           const ayTop = {}; ozAcik.forEach(o=>Object.entries(o.ayarlar).forEach(([a,g])=>{ ayTop[a]=(ayTop[a]||0)+g; }));
@@ -16753,6 +16757,8 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
                 const tamG = aktifSl.filter(x=>x.g===3).reduce((a,x)=>a+x.o.gram,0);
                 const uretG = aktifSl.filter(x=>x.g===2).reduce((a,x)=>a+x.o.gram,0);
                 const pTam = topGr>0 ? tamG/topGr*100 : 0, pUret = topGr>0 ? uretG/topGr*100 : 0;
+                const asamaAd = sipAsama ? (() => { const d = DURUMLAR.find(z=>z.id===sipAsama); return d ? durumEtiket(d) : sipAsama; })() : "";
+                const asamaGr = sipAsama ? sl.reduce((a,sp)=>{ const kd=sp.kalemDurumlar||{}; return a+(sp.kalemler||[]).reduce((b,k)=>{ const q0=kd[k.id]||k.durum||"baslanmadi"; if ((q0==="cizimde"?"baslanmadi":q0)!==sipAsama) return b; const du=((sp.kalemHurda)||{})[k.id]||0, ia=((sp.kalemIade)||{})[k.id]||0, ta=((sp.kalemTamir)||{})[k.id]||0; const net=Math.max(0,(k.adet||1)-du-ia-ta); const hc=hesapla(k,k.secilenAyar||k.refAyar,sp.altinKgUSD||altinKgUSD,sp.mc||madenCarpan); return b+hc.mamulGram*net; },0); },0) : 0;
                 const altinAyar = Object.entries(ayTop).filter(([a])=>a!=="925").sort((a,b)=>b[1]-a[1]);
                 const sutunlar = [[sipMetal==="gumus"?"Gümüş":"Toplam", sipMetal==="gumus"?topGum:topAlt, true]];
                 if (sipMetal!=="gumus" && altinAyar.length>1) altinAyar.forEach(([a,g])=>sutunlar.push([a,g,false]));
@@ -16760,8 +16766,8 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
                 return (
                   <div style={{ padding:"0 2px 10px" }}>
                     <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", gap:8 }}>
-                      <span style={{ fontSize:15, fontWeight:600, color:key===bk?GOLD:"var(--goldtext)" }}>{ayAdi(key)}{key===bk && <span style={{ fontSize:10, marginLeft:6, color:"#6abf69", fontWeight:500 }}>● bu ay</span>}</span>
-                      <span style={{ fontSize:11, color:"#998a6e" }}>{sl.length-nTam} açık{nTam>0 && " · "+nTam+" tamamlanan"}</span>
+                      <span style={{ fontSize:15, fontWeight:600, color:key===bk?GOLD:"var(--goldtext)" }}>{ayAdi(key)}{key===bk && <span style={{ fontSize:10, marginLeft:6, color:"#6abf69", fontWeight:500 }}>● bu ay</span>}{sipAsama && <span onClick={()=>setSipAsama("")} title="Aşama filtresini kaldır" style={{ fontSize:11, marginLeft:8, color:"var(--goldtext)", fontWeight:500, border:"1px solid rgba(var(--vurgu-rgb),0.4)", background:"rgba(var(--vurgu-rgb),0.12)", borderRadius:8, padding:"2px 8px", cursor:"pointer" }}>Aşama: {asamaAd}  ×</span>}</span>
+                      <span style={{ fontSize:11, color:"#998a6e" }}>{sipAsama ? sl.length+" sipariş "+asamaAd.toLowerCase()+" · "+fN(asamaGr,0)+" gr" : (sl.length-nTam)+" açık"+(nTam>0 ? " · "+nTam+" tamamlanan" : "")}</span>
                     </div>
                     <div className="sm-mbar" title={"%"+Math.round(pTam)+" tamamlandı · %"+Math.round(pUret)+" üretimde"} style={{ display:"flex", height:3, borderRadius:2, overflow:"hidden", background:"rgba(128,128,128,0.2)", margin:"8px 0 7px" }}>
                       <div style={{ width:pTam+"%", background:"#5fae6e" }}/><div style={{ width:pUret+"%", background:"#d4a017", opacity:.7 }}/>
