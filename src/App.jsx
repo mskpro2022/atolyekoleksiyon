@@ -1,7 +1,7 @@
 import { supabase, dbLoad, dbSave, fotoYukleStorage, yedekKaydet, yedekListesi, yedekGetir, bugunYedekVarMi, tabloModelleriSenkron, tabloModelleriToplu, tabloModelSil, tabloSiparisleriSenkron, tabloSiparisleriToplu, tabloSiparisSil, tabloMusterileriYaz, akilliModelOku, akilliSiparisOku, akilliMusteriOku, islemKaydet, islemGecmisiGetir, realtimeBaslat, tabloKoleksiyonlariYaz, tabloKasaYaz, akilliKoleksiyonOku, akilliKasaOku, tabloKoleksiyonlariOku, tabloKasaOku, saglikDenetimi, ekranSunucuFarki, toptanciKaydet, toptancilariGetir, toptanciSil, vitrinGecmisiGetir, vitrinEnCokBakilan, vitrinOzetGetir, vitrinAnaliz, vitrinGetirGuvenli, siparisOlusturGuvenli, siparislerimGetirGuvenli, siparisIptalGuvenli, siparisGuncelleGuvenli, siparisMusteriGizleGuvenli, vitrinAktiviteKaydetGuvenli, vitrinSupheliCihazlar, vitrinCevrimiciMusteriler, radarTrendleriOku, radarKaynaklariOku, radarKanitlariOku, radarTumKanitlariOku, radarTrendGuncelle, radarTrendSil, radarManuelKanitEkle } from "./supabase.js";
 import { useState, useEffect, useCallback, useMemo, useRef, Fragment } from "react";
 
-const SURUM_TARIH = "25 Kas 12:30"; // her yeni App.jsx tesliminde güncellenir — ekranın yenilendiğini anlamak için sağ üstte görünür
+const SURUM_TARIH = "25 Kas 13:05"; // her yeni App.jsx tesliminde güncellenir — ekranın yenilendiğini anlamak için sağ üstte görünür
 const uid = () => "x" + Date.now() + Math.random().toString(36).substr(2, 5);
 // ═══ ÇALIŞAN AUTH OTURUMU — yerel şifre kontrolünün ardından gerçek Supabase Auth oturumu açar ═══
 // (RLS politikaları "authenticated" rolüne dayanacak; hesap Supabase Dashboard'da manuel oluşturuldu)
@@ -6738,54 +6738,102 @@ function aydevriDurumAt(o, t) {
   const g = (o.s.durumGecmisi||[]).filter(x => x.tarih < t); const son = g[g.length-1];
   return son ? { d: son.durum, t: son.tarih } : { d: "baslanmadi", t: o.gelis };
 }
+const aydevriAyBas = (n) => new Date(Math.floor(n/12), n%12, 1).getTime();
+const aydevriAnahtar = (n) => "v7aydevri_" + Math.floor(n/12) + "-" + String(n%12+1).padStart(2,"0");
+// Kayıt okuma: hata ile "kayıt yok"u ayırır (hata durumunda üzerine yazılmaz)
+async function aydevriOku(n) { try { const r = await dbLoad(sirketAnahtar(aydevriAnahtar(n)), null); return { ok:true, val: (r && r.g) ? r : null }; } catch(e) { return { ok:false, val:null }; } }
+function aydevriCanli(tum, n) {
+  const b = aydevriAyBas(n), e = aydevriAyBas(n+1);
+  const kap = (o) => o.bitis || o.hurdaT || null;
+  const acik = (o, t) => o.gelis < t && !(kap(o) && kap(o) < t);
+  const sureler = tum.filter(o => o.bitis && o.bitis < e && o.bitis >= aydevriAyBas(n-11)).map(o => Math.max(0, (o.bitis - o.gelis)/86400000)).sort((a,c) => a-c);
+  return { n, b, e, kayitli:false,
+    gir: tum.filter(o => acik(o, b)), gelen: tum.filter(o => o.gelis >= b && o.gelis < e),
+    biten: tum.filter(o => o.bitis && o.bitis >= b && o.bitis < e), hurda: tum.filter(o => o.hurdaT && o.hurdaT >= b && o.hurdaT < e),
+    cik: tum.filter(o => acik(o, e)),
+    medyan: sureler.length ? sureler[Math.floor(sureler.length/2)] : null, p75: sureler.length ? sureler[Math.min(sureler.length-1, Math.floor(sureler.length*0.75))] : null, sureN: sureler.length };
+}
+function aydevriKayitYap(v, arsiv, yeniden) {
+  const sip = {}; const g = {};
+  ["gir","gelen","biten","hurda","cik"].forEach(k => { g[k] = v[k].map(o => { const id = o.s.id; if (!sip[id]) { const a = aydevriDurumAt(o, v.e); sip[id] = [o.s.siparisNo || "", o.s.musteri || "", o.s.musKod || "", Math.round(o.gr*100)/100, Math.round(o.kr*1000)/1000, o.gelis, a.d, a.t, o.bitis || 0, o.hurdaT || 0]; } return id; }); });
+  return { alinma: Date.now(), yeniden: !!yeniden, medyan: v.medyan, p75: v.p75, sureN: v.sureN, sip, g, arsiv: arsiv || [] };
+}
+function aydevriKayittan(rec, n) {
+  const ob = (id) => { const a = rec.sip[id]; if (!a) return null; return { s:{ id, siparisNo:a[0], musteri:a[1], musKod:a[2], tarih:a[5], durumGecmisi:[{ durum:a[6], tarih:a[7] }] }, gelis:a[5], gr:a[3], kr:a[4], bitis:a[8]||null, hurdaT:a[9]||null }; };
+  const l = (k) => (rec.g[k] || []).map(ob).filter(Boolean);
+  return { n, b: aydevriAyBas(n), e: aydevriAyBas(n+1), kayitli:true, gir:l("gir"), gelen:l("gelen"), biten:l("biten"), hurda:l("hurda"), cik:l("cik"), medyan:rec.medyan, p75:rec.p75, sureN:rec.sureN };
+}
+// Kayıt ile canlı hesap arasındaki fark: ay sonunda devreden listesi bazında
+function aydevriFark(rec, canli, ham) {
+  const kCik = new Set(rec.g.cik || []); const cCik = new Map(canli.cik.map(o => [o.s.id, o]));
+  const hm = new Map((ham || []).map(x => [x.id, x])); const out = [];
+  kCik.forEach(id => { const a = rec.sip[id]; if (!a) return; const c = cCik.get(id);
+    if (!c) { const x = hm.get(id); out.push({ id, no:a[0], mus:a[1], gr:a[3], neden: !x ? "silindi" : (x.onayDurum === "red" || x.onayDurum === "iptal") ? "iptal edildi" : "kapanış kaydı sonradan değişti (ay sonundan önce bitmiş görünüyor)" }); }
+    else if (Math.abs(c.gr - a[3]) > 0.5) out.push({ id, no:a[0], mus:a[1], gr:c.gr, neden:"gramı değişti (" + Math.round(a[3]) + " → " + Math.round(c.gr) + ")" }); });
+  cCik.forEach((c, id) => { if (!kCik.has(id)) out.push({ id, no:c.s.siparisNo || "", mus:c.s.musteri || "", gr:c.gr, neden:"kayıttan sonra eklendi / yeniden açıldı" }); });
+  return out;
+}
 function AyDevri({ T, siparisler, altinKgUSD, madenCarpan, kar }) {
   const tum = useMemo(() => aydevriHesapla(siparisler, altinKgUSD, madenCarpan, kar), [siparisler, altinKgUSD, madenCarpan, kar]);
   const AYK = ["Oca","Şub","Mar","Nis","May","Haz","Tem","Ağu","Eyl","Eki","Kas","Ara"];
   const simdi = new Date(); const buAyNo = simdi.getFullYear()*12 + simdi.getMonth();
   const [secAy, setSecAy] = useState(buAyNo);
-  const ayBas = (n) => new Date(Math.floor(n/12), n%12, 1).getTime();
+  const [kayitlar, setKayitlar] = useState(null);
+  const okuHata = useRef(false); const otoRef = useRef(false);
   const ayAd = (n) => AYK[n%12] + " " + String(Math.floor(n/12)).slice(2);
-  const kapT = (o) => o.bitis || o.hurdaT || null;
-  const hesap = (n) => {
-    const b = ayBas(n), e = ayBas(n+1);
-    const acikEnd = (o) => o.gelis < e && !(kapT(o) && kapT(o) < e);
-    const acikBas = (o) => o.gelis < b && !(kapT(o) && kapT(o) < b);
-    const gir = tum.filter(acikBas), gelen = tum.filter(o => o.gelis >= b && o.gelis < e);
-    const biten = tum.filter(o => o.bitis && o.bitis >= b && o.bitis < e), hurda = tum.filter(o => o.hurdaT && o.hurdaT >= b && o.hurdaT < e);
-    const cik = tum.filter(acikEnd);
-    const topla = (l) => ({ n: l.length, gr: l.reduce((t,o)=>t+o.gr,0), kr: l.reduce((t,o)=>t+o.kr,0), liste: l });
-    return { b, e, gir: topla(gir), gelen: topla(gelen), biten: topla(biten), hurda: topla(hurda), cik: topla(cik) };
-  };
+  // 1) son 12 tamamlanmış ayın kayıtlarını oku
+  useEffect(() => { let iptal = false; (async () => { const ns = []; for (let i = 1; i <= 12; i++) ns.push(buAyNo - i); const arr = await Promise.all(ns.map(aydevriOku)); const m = {}; arr.forEach((x, i) => { if (!x.ok) okuHata.current = true; else if (x.val) m[ns[i]] = x.val; }); if (!iptal) setKayitlar(m); })(); return () => { iptal = true; }; }, [buAyNo]);
+  // 2) kaydı olmayan tamamlanmış ayları bir kez kaydet (okuma hatası varsa hiçbir şey yazılmaz)
+  useEffect(() => { if (!kayitlar || otoRef.current || !tum.length || okuHata.current) return; otoRef.current = true; (async () => {
+    const yeni = {};
+    for (let i = 1; i <= 12; i++) { const n = buAyNo - i; if (kayitlar[n]) continue;
+      const v = aydevriCanli(tum, n); if (!(v.gir.length || v.gelen.length || v.biten.length || v.hurda.length || v.cik.length)) continue;
+      const son = await aydevriOku(n); if (!son.ok || son.val) { if (son.val) yeni[n] = son.val; continue; }
+      const rec = aydevriKayitYap(v, [], (Date.now() - v.e) > 3*86400000); await sv(aydevriAnahtar(n), rec); yeni[n] = rec; }
+    if (Object.keys(yeni).length) setKayitlar(k => ({ ...(k||{}), ...yeni }));
+  })(); }, [kayitlar, tum, buAyNo]);
   const ayListe = []; for (let i = 11; i >= 0; i--) ayListe.push(buAyNo - i);
-  if (!ayListe.includes(secAy)) ayListe.push(secAy);
-  const r = hesap(secAy);
-  const seri = ayListe.slice(-12).map(n => { const h = hesap(n); const pay = h.gir.gr + h.gelen.gr; return { n, e: ayAd(n), v: h.cik.gr/1000, oran: pay > 0 ? h.cik.gr/pay*100 : 0 }; });
+  const gorunumler = useMemo(() => { const m = {}; ayListe.forEach(n => { const canli = aydevriCanli(tum, n); const rec = n < buAyNo && kayitlar ? kayitlar[n] : null; m[n] = rec ? { v: aydevriKayittan(rec, n), rec, fark: aydevriFark(rec, canli, siparisler) } : { v: canli, rec: null, fark: [] }; }); return m; }, [tum, kayitlar, buAyNo, siparisler]);
+  const G = gorunumler[secAy] || gorunumler[buAyNo]; const r0 = G.v; const rec = G.rec; const fark = G.fark;
+  const topla = (l) => ({ n: l.length, gr: l.reduce((t,o)=>t+o.gr,0), kr: l.reduce((t,o)=>t+o.kr,0), liste: l });
+  const r = { e: r0.e, gir: topla(r0.gir), gelen: topla(r0.gelen), biten: topla(r0.biten), hurda: topla(r0.hurda), cik: topla(r0.cik) };
+  const seri = ayListe.map(n => { const h = gorunumler[n].v; const gg = topla(h.gir).gr + topla(h.gelen).gr; const cg = topla(h.cik).gr; return { n, e: ayAd(n), v: cg/1000, oran: gg > 0 ? cg/gg*100 : 0 }; });
   const secI = seri.findIndex(x => x.n === secAy);
   const oncekiOran = secI > 0 ? seri[secI-1].oran : null; const buOran = secI >= 0 ? seri[secI].oran : 0;
-  // yaş (ay sonu itibarıyla)
   const gun = (o) => Math.max(0, Math.floor((r.e - o.gelis)/86400000));
   const yasKov = [["0–30 gün", 0, 30], ["31–60 gün", 31, 60], ["61–90 gün", 61, 90], ["90 günden eski", 91, 1e9]].map(([l,a,z]) => { const li = r.cik.liste.filter(o => gun(o) >= a && gun(o) <= z); return { l, n: li.length, gr: li.reduce((t,o)=>t+o.gr,0), liste: li }; });
-  // aşama (ay sonu itibarıyla) + bekleme
   const asama = {}; r.cik.liste.forEach(o => { const a = aydevriDurumAt(o, r.e); const k = a.d === "cizimde" ? "baslanmadi" : a.d; const x = asama[k] || (asama[k] = { n:0, gr:0, bek:0, liste:[] }); x.n++; x.gr += o.gr; x.bek += Math.max(0, r.e - a.t)/86400000; x.liste.push(o); });
   const asamaL = Object.entries(asama).map(([id,x]) => ({ id, ...x, bek: x.n ? x.bek/x.n : 0, ad: (() => { const d = DURUMLAR.find(z => z.id === id); return d ? durumEtiket(d) : id; })(), sira: (DURUMLAR.find(z => z.id === id)||{s:0}).s })).sort((a,b) => a.sira - b.sira);
-  // müşteri
   const mus = {}; r.cik.liste.forEach(o => { const k = o.s.musKod || o.s.musteri || "?"; const x = mus[k] || (mus[k] = { ad: o.s.musteri || k, n:0, gr:0, liste:[] }); x.n++; x.gr += o.gr; x.liste.push(o); });
   const musL = Object.values(mus).sort((a,b) => b.gr - a.gr);
-  // bitiş hızı: son 12 ayda (seçili ay sonuna kadar) biten siparişlerin süresi
-  const sureler = tum.filter(o => o.bitis && o.bitis < r.e && o.bitis >= ayBas(secAy-11)).map(o => Math.max(0, (o.bitis - o.gelis)/86400000)).sort((a,b)=>a-b);
-  const medyan = sureler.length ? sureler[Math.floor(sureler.length/2)] : null;
-  const p75 = sureler.length ? sureler[Math.min(sureler.length-1, Math.floor(sureler.length*0.75))] : null;
+  const medyan = r0.medyan, p75 = r0.p75, sureN = r0.sureN;
   const uzun = p75 != null ? r.cik.liste.filter(o => gun(o) > p75) : [];
-  const listeAc = (baslik, liste) => rpDetayAc(baslik, () => <AyDevriListe T={T} liste={liste} bitisT={r.e} kar={kar}/>);
+  const listeAc = (baslik, liste) => rpDetayAc(baslik, () => <AyDevriListe T={T} liste={liste} bitisT={r.e} kar={kar} kayitli={r0.kayitli}/>);
+  const farkAc = () => rpDetayAc("Kayıttan sonra değişenler — " + ayAd(secAy), () => (
+    <div style={{ overflowX:"auto" }}><table style={{ width:"100%", borderCollapse:"collapse" }}><thead><tr style={{ color:T.sub, fontSize:11 }}><th style={{ padding:"6px 8px", textAlign:"left" }}>Sipariş</th><th style={{ padding:"6px 8px", textAlign:"left" }}>Müşteri</th><th style={{ padding:"6px 8px", textAlign:"left" }}>Ne oldu</th></tr></thead>
+      <tbody>{fark.map(f => <tr key={f.id}><td style={{ padding:"6px 8px", borderBottom:"1px solid "+T.border, fontSize:12.5 }}>{f.no || f.id}</td><td style={{ padding:"6px 8px", borderBottom:"1px solid "+T.border, fontSize:12.5 }}>{f.mus}</td><td style={{ padding:"6px 8px", borderBottom:"1px solid "+T.border, fontSize:12.5 }}>{f.neden}</td></tr>)}</tbody></table>
+    <div style={{ fontSize:11, color:T.sub, marginTop:8 }}>Ay sonu kaydı değişmedi; yukarıdaki rakamlar kayıttan gösteriliyor. Bu liste kayıt ile siparişlerin şimdiki hâli arasındaki farktır.</div></div>));
+  const yenidenKaydet = async () => {
+    if (!rec || !window.confirm(ayAd(secAy) + " kaydı güncel siparişlerden yeniden alınacak. Eski kayıt arşivde saklanır. Devam?")) return;
+    const eski = { alinma: rec.alinma, yeniden: rec.yeniden, medyan: rec.medyan, p75: rec.p75, sureN: rec.sureN, sip: rec.sip, g: rec.g };
+    const yeniRec = aydevriKayitYap(aydevriCanli(tum, secAy), [eski, ...(rec.arsiv || [])].slice(0, 3), (Date.now() - r.e) > 3*86400000);
+    await sv(aydevriAnahtar(secAy), yeniRec); setKayitlar(k => ({ ...(k||{}), [secAy]: yeniRec }));
+  };
+  const trT = (t) => new Date(t).toLocaleString("tr-TR", { day:"numeric", month:"short", hour:"2-digit", minute:"2-digit" });
   const satirSt = { display:"grid", gridTemplateColumns:"1.6fr .6fr .9fr"+(kar?" .9fr":""), gap:8, padding:"6px 0", borderBottom:"1px solid "+T.border, fontSize:13, alignItems:"center" };
   const bas = { fontSize:11, color:T.sub, fontWeight:700 };
-  const akis = [["Önceki aydan devreden", r.gir, ""], ["+ Bu ay gelen", r.gelen, ""], ["− Bu ay biten", r.biten, ""], ["− Hurda / tamamı hurda", r.hurda, ""], ["= Sonraki aya devreden", r.cik, "b"]];
-  const chip = (n) => <button key={n} onClick={()=>setSecAy(n)} style={{ background:secAy===n?T.text+"22":"transparent", color:secAy===n?T.text:T.sub, border:"1px solid "+(secAy===n?T.text:T.border), borderRadius:20, padding:"2px 10px", fontSize:12, cursor:"pointer" }}>{ayAd(n)}</button>;
+  const akis = [["Önceki aydan devreden", r.gir], ["+ Bu ay gelen", r.gelen], ["− Bu ay biten", r.biten], ["− Hurda / tamamı hurda", r.hurda], ["= Sonraki aya devreden", r.cik, "b"]];
+  const chip = (n) => { const fl = gorunumler[n].fark.length; return <button key={n} onClick={()=>setSecAy(n)} style={{ background:secAy===n?T.text+"22":"transparent", color:secAy===n?T.text:T.sub, border:"1px solid "+(secAy===n?T.text:T.border), borderRadius:20, padding:"2px 10px", fontSize:12, cursor:"pointer" }} title={fl ? "Kayıttan sonra "+fl+" sipariş değişti" : undefined}>{ayAd(n)}{fl ? " !" : ""}</button>; };
   if (!tum.length) return null;
   return (
     <div className="kx-s-uretim" style={{ marginBottom:14 }}>
       <RpKart T={T} baslik="AY DEVRİ — ay sonunda bitmeyen siparişler" genis>
         <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:10 }}>{ayListe.map(chip)}</div>
+        <div style={{ fontSize:11.5, color:fark.length?"#e85a4f":T.sub, marginBottom:8, display:"flex", gap:12, flexWrap:"wrap", alignItems:"center" }}>
+          {r0.kayitli ? <span>Ay sonu kaydı: {trT(rec.alinma)}{rec.yeniden ? " · sonradan kurulmuş kayıt (o günkü gerçek durum bilinmiyor)" : ""}</span> : <span>{secAy === buAyNo ? "Bu ay sürüyor: rakamlar canlı, ay bitince kaydedilir." : "Kayıt henüz yok, canlı hesap gösteriliyor."}</span>}
+          {fark.length > 0 && <span onClick={farkAc} style={{ cursor:"pointer", textDecoration:"underline" }}>Kayıttan sonra {fark.length} sipariş değişti ›</span>}
+          {r0.kayitli && <span onClick={yenidenKaydet} style={{ cursor:"pointer", color:T.sub, textDecoration:"underline" }}>Bu ayı yeniden kaydet</span>}
+        </div>
         <div style={{ ...satirSt, borderBottom:"1px solid "+T.border }}><span style={bas}>{ayAd(secAy)} akışı</span><span style={{ ...bas, textAlign:"right" }}>Sipariş</span><span style={{ ...bas, textAlign:"right" }}>Gram</span>{kar && <span style={{ ...bas, textAlign:"right" }}>Kâr (has)</span>}</div>
         {akis.map(([l, x, b]) => (
           <div key={l} onClick={x.n ? ()=>listeAc(l.replace(/^[+−=] /,"")+" — "+ayAd(secAy), x.liste) : undefined} style={{ ...satirSt, fontWeight:b?800:500, cursor:x.n?"pointer":"default", borderTop:b?"1px solid "+T.text:undefined }}>
@@ -6797,13 +6845,13 @@ function AyDevri({ T, siparisler, altinKgUSD, madenCarpan, kar }) {
       <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(170px,1fr))", gap:8, marginBottom:12 }}>
         <RpKpi T={T} ad="DEVİR ORANI" deger={"%"+rpF(buOran,0)} alt={oncekiOran!=null ? "önceki ay %"+rpF(oncekiOran,0)+" · ay içindeki işin bitmeden geçen payı (gram)" : "ay içindeki işin bitmeden geçen payı (gram)"}/>
         <RpKpi T={T} ad="DEVREDEN" deger={rpF(r.cik.gr/1000,2)+" kg"} alt={rpF(r.cik.n)+" sipariş"} onClick={r.cik.n?()=>listeAc("Sonraki aya devreden — "+ayAd(secAy), r.cik.liste):undefined}/>
-        <RpKpi T={T} ad="BİTEN İŞLERİN SÜRESİ" deger={medyan!=null ? rpF(medyan,0)+" gün" : "—"} alt={medyan!=null ? "ortanca, son 12 ay · "+sureler.length+" sipariş" : "yeterli veri yok"}/>
+        <RpKpi T={T} ad="BİTEN İŞLERİN SÜRESİ" deger={medyan!=null ? rpF(medyan,0)+" gün" : "—"} alt={medyan!=null ? "ortanca, son 12 ay · "+sureN+" sipariş" : "yeterli veri yok"}/>
         <RpKpi T={T} ad="NORMALDEN UZUN BEKLEYEN" deger={rpF(uzun.length)} alt={p75!=null ? p75>0 ? "bitenlerin %75'i "+rpF(p75,0)+" günde biter; bunlar daha eski" : "" : "yeterli veri yok"} onClick={uzun.length?()=>listeAc("Normalden uzun bekleyen — "+ayAd(secAy), uzun):undefined} renk={uzun.length?"#e85a4f":undefined}/>
         {kar && <RpKpi T={T} ad="DEVREDEN İŞİN KÂRI" deger={rpF(r.cik.kr,1)+" has"} alt="devreden siparişlerin toplam kârı"/>}
       </div>
       <RpKart T={T} baslik="SONRAKİ AYA DEVREDEN (KG) — son 12 ay">
         <RpSutun T={T} veri={seri.map(x=>({ e:x.e, v:x.v }))} birim="" yuk={90} onSec={(i)=>setSecAy(seri[i].n)}/>
-        <div style={{ fontSize:11, color:T.sub, marginTop:6 }}>Sütuna dokununca o ay seçilir. Devreden = ay sonunda hâlâ bitmemiş siparişlerin toplam gramı.</div>
+        <div style={{ fontSize:11, color:T.sub, marginTop:6 }}>Sütuna dokununca o ay seçilir. Tamamlanmış aylar ay sonu kaydından gösterilir; değişen aylar adının yanında "!" ile işaretlenir.</div>
       </RpKart>
       <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(300px,1fr))", gap:12 }}>
         <RpKart T={T} baslik="DEVREDENLERİN YAŞI">
@@ -6821,7 +6869,7 @@ function AyDevri({ T, siparisler, altinKgUSD, madenCarpan, kar }) {
     </div>
   );
 }
-function AyDevriListe({ T, liste, bitisT, kar }) {
+function AyDevriListe({ T, liste, bitisT, kar, kayitli }) {
   const gunF = (o) => Math.max(0, Math.floor((bitisT - o.gelis)/86400000));
   const sirali = [...liste].sort((a,b) => a.gelis - b.gelis);
   const td = { padding:"6px 8px", borderBottom:"1px solid "+T.border, fontSize:12.5, textAlign:"left" };
@@ -6833,7 +6881,7 @@ function AyDevriListe({ T, liste, bitisT, kar }) {
           <tr key={o.s.id}><td style={td}>{o.s.siparisNo || ("SIP-"+new Date(o.gelis).getFullYear()+"-"+String(o.s.tarih).slice(-5))}</td><td style={td}>{o.s.musteri || o.s.musKod || ""}</td><td style={td}>{new Date(o.gelis).toLocaleDateString("tr-TR")}</td><td style={{ ...td, textAlign:"right" }}>{rpF(gunF(o))} gün</td><td style={td}>{d ? durumEtiket(d) : ""}</td><td style={{ ...td, textAlign:"right" }}>{rpF(o.gr,0)}</td>{kar && <td style={{ ...td, textAlign:"right" }}>{rpF(o.kr,1)}</td>}</tr>
         ); })}</tbody>
       </table>
-      <div style={{ fontSize:11, color:T.sub, marginTop:8 }}>{sirali.length} sipariş · yaş ve aşama listedeki ay sonu itibarıyla; aşama şu anki durumdur.</div>
+      <div style={{ fontSize:11, color:T.sub, marginTop:8 }}>{sirali.length} sipariş · yaş ay sonu itibarıyla; aşama {kayitli ? "ay sonundaki" : "şu anki"} durumdur.</div>
     </div>
   );
 }
