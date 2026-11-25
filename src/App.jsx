@@ -1,7 +1,7 @@
 import { supabase, dbLoad, dbSave, fotoYukleStorage, yedekKaydet, yedekListesi, yedekGetir, bugunYedekVarMi, tabloModelleriSenkron, tabloModelleriToplu, tabloModelSil, tabloSiparisleriSenkron, tabloSiparisleriToplu, tabloSiparisSil, tabloMusterileriYaz, akilliModelOku, akilliSiparisOku, akilliMusteriOku, islemKaydet, islemGecmisiGetir, realtimeBaslat, tabloKoleksiyonlariYaz, tabloKasaYaz, akilliKoleksiyonOku, akilliKasaOku, tabloKoleksiyonlariOku, tabloKasaOku, saglikDenetimi, ekranSunucuFarki, toptanciKaydet, toptancilariGetir, toptanciSil, vitrinGecmisiGetir, vitrinEnCokBakilan, vitrinOzetGetir, vitrinAnaliz, vitrinGetirGuvenli, siparisOlusturGuvenli, siparislerimGetirGuvenli, siparisIptalGuvenli, siparisGuncelleGuvenli, siparisMusteriGizleGuvenli, vitrinAktiviteKaydetGuvenli, vitrinSupheliCihazlar, vitrinCevrimiciMusteriler, radarTrendleriOku, radarKaynaklariOku, radarKanitlariOku, radarTumKanitlariOku, radarTrendGuncelle, radarTrendSil, radarManuelKanitEkle } from "./supabase.js";
 import { useState, useEffect, useCallback, useMemo, useRef, Fragment } from "react";
 
-const SURUM_TARIH = "25 Kas 15:50"; // her yeni App.jsx tesliminde güncellenir — ekranın yenilendiğini anlamak için sağ üstte görünür
+const SURUM_TARIH = "25 Kas 17:20"; // her yeni App.jsx tesliminde güncellenir — ekranın yenilendiğini anlamak için sağ üstte görünür
 const uid = () => "x" + Date.now() + Math.random().toString(36).substr(2, 5);
 // ═══ ÇALIŞAN AUTH OTURUMU — yerel şifre kontrolünün ardından gerçek Supabase Auth oturumu açar ═══
 // (RLS politikaları "authenticated" rolüne dayanacak; hesap Supabase Dashboard'da manuel oluşturuldu)
@@ -451,6 +451,40 @@ function sirketAnahtar(k) {
 
 async function ld(k, f) { try { const r = await dbLoad(sirketAnahtar(k), f); return r ?? f; } catch { return f; } }
 async function sv(k, d) { try { await dbSave(sirketAnahtar(k), d); } catch(e) { console.error("sv error:", e); } }
+// ── SİLİNEN SİPARİŞ İŞARETİ ("mezar taşı"): silinen siparişin numarası tarihiyle saklanır (90 gün); eski/açık duran sayfa onu geri yazamaz ──
+async function silinenSiparisler() { try { const t = await ld("v7s_silinen", {}); return (t && typeof t === "object" && !Array.isArray(t)) ? t : {}; } catch { return {}; } }
+async function silinenIsaretle(idler) {
+  if (!idler || !idler.length) return;
+  const t = await silinenSiparisler(); const simdi = Date.now();
+  idler.forEach(i => { t[String(i)] = simdi; });
+  Object.keys(t).forEach(k => { if (simdi - t[k] > 90*86400000) delete t[k]; });
+  await sv("v7s_silinen", t);
+}
+async function silinenTemizle(idler) { // yedekten geri yükleme: geri gelen siparişlerin işaretini kaldırır
+  if (!idler || !idler.length) return;
+  const t = await silinenSiparisler(); let d = false; idler.forEach(i => { if (t[String(i)]) { delete t[String(i)]; d = true; } });
+  if (d) await sv("v7s_silinen", t);
+}
+// ── GEÇMİŞ AY SİPARİŞİ: geçmiş bir aya yüklenen/taşınan, hiç başlanmamış sipariş otomatik "tamamlandı" olur (bitiş tarihi bugün değil, siparişin kendi tarihi) ──
+function sipGecmisAyKey(sp) { if (sp.planAy) return String(sp.planAy); const d = new Date(sp.tarih || 0); return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0"); }
+function sipGecmisAyaMi(sp) { const b = new Date(); return sipGecmisAyKey(sp) < b.getFullYear() + "-" + String(b.getMonth()+1).padStart(2,"0"); }
+function sipGecmisTamamla(sp) {
+  const g = sp.durumGecmisi || []; let T = Number(sp.tarih) || Date.now();
+  const tt = sp.teslimTarihi ? new Date(sp.teslimTarihi + "T12:00:00").getTime() : 0; if (tt && tt >= T && tt <= Date.now()) T = tt;
+  if (g.length && g[g.length-1].tarih > T) T = g[g.length-1].tarih;
+  const kd = { ...(sp.kalemDurumlar || {}) }; (sp.kalemler || []).forEach(k => { if ((kd[k.id] || k.durum) !== "hurda") kd[k.id] = "tamam"; });
+  return { ...sp, kalemDurumlar: kd, durumGecmisi: [...g, { durum:"tamam", tarih:T, manuel:false, gecmis:true }], gecmisYukleme: true, islemTarih: sp.islemTarih || T };
+}
+function silinenSuz(liste, t) { if (!Array.isArray(liste) || !t || !Object.keys(t).length) return liste; return liste.filter(x => !(x && t[String(x.id)])); }
+// Okuma: silinmiş işaretli siparişler listeden çıkar; sunucuda geri dönmüş kalıntılar arka planda temizlenir
+async function siparisOkuSuzulmus(onek) {
+  const s = await akilliSiparisOku(onek);
+  try {
+    const t = await silinenSiparisler(); const temiz = silinenSuz(s, t);
+    if (Array.isArray(s) && temiz.length !== s.length) { s.filter(x => x && t[String(x.id)]).forEach(x => { tabloSiparisSil(x.id); }); return temiz; }
+  } catch {}
+  return s;
+}
 
 // Canvas şeffaf piksel içeriyorsa #f3f3f3 zemine oturtur (temiz foto sayılır), çıktı JPEG
 function canvasCikti(c, kalite) {
@@ -13675,7 +13709,7 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
           Promise.all([
             akilliKoleksiyonOku(AKTIF_SIRKET_ONEK),
             akilliModelOku(AKTIF_SIRKET_ONEK),
-            akilliSiparisOku(AKTIF_SIRKET_ONEK),
+            siparisOkuSuzulmus(AKTIF_SIRKET_ONEK),
             akilliMusteriOku(AKTIF_SIRKET_ONEK),
             ld("v7c",{}), ld("v7ay",{}), akilliKasaOku(AKTIF_SIRKET_ONEK)
           ]).then(([k,m,s,u,c,ay,ks]) => {
@@ -13702,7 +13736,7 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
     const [k,m,s,u,c,ay,ks] = await Promise.all([
       akilliKoleksiyonOku(AKTIF_SIRKET_ONEK),
       akilliModelOku(AKTIF_SIRKET_ONEK),
-      akilliSiparisOku(AKTIF_SIRKET_ONEK),
+      siparisOkuSuzulmus(AKTIF_SIRKET_ONEK),
       akilliMusteriOku(AKTIF_SIRKET_ONEK),
       ld("v7c",{}), ld("v7ay",{}), akilliKasaOku(AKTIF_SIRKET_ONEK)
     ]);
@@ -13772,7 +13806,7 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
           }
         }
         if (vs && vs !== guncel.v7s) {
-          const yeni = await akilliSiparisOku(AKTIF_SIRKET_ONEK);
+          const yeni = await siparisOkuSuzulmus(AKTIF_SIRKET_ONEK);
           setSiparisler(yeni);
           versiyonRef.current.v7s = vs;
         }
@@ -13816,7 +13850,7 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
               toastGoster("ok", "↻ Modeller güncellendi (başka cihaz)");
             }
           } else if (tablo === "siparisler") {
-            const s = await akilliSiparisOku(AKTIF_SIRKET_ONEK);
+            const s = await siparisOkuSuzulmus(AKTIF_SIRKET_ONEK);
             setSiparisler(s);
           } else if (tablo === "musteriler") {
             const u = await akilliMusteriOku(AKTIF_SIRKET_ONEK);
@@ -13880,6 +13914,7 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
           } catch (e) { /* birleştirme başarısızsa yine de kaydet, veri kaybetme */ }
         }
       }
+      if (key === "v7s" && Array.isArray(data)) { try { data = silinenSuz(data, await silinenSiparisler()); } catch {} } // silinmiş siparişler geri yazılmaz
       await sv(key, data);
       // Kaydın gerçekten gittiğini doğrula — geri okuyup karşılaştır (güvenli tam okuma)
       const dogrulama = await ld(key, null);
@@ -14063,7 +14098,7 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
   }, []);
   const siparislerRefGuvenli = useRef([]);
   siparislerRefGuvenli.current = siparisler;
-  const svS = useCallback(async d => {
+  const svS = useCallback(async (d, opts) => {
     // GÜVENLİ SİLME: tabloyu "listede olmayanı sil" diye senkronlamak yerine sadece upsert yap;
     // silinecek = bu ekranın BİLDİĞİ listeden bu işlemle çıkarılanlar (eski/eksik listeli ekran başkasının siparişini silemez)
     const onceki = siparislerRefGuvenli.current || [];
@@ -14081,9 +14116,24 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
       });
       return (tt===sp.kalemTamamTarih && ag===sp.kalemAsamaGecmis) ? sp : { ...sp, kalemTamamTarih: tt, kalemAsamaGecmis: ag };
     });
+    let _gecmisN = 0;
+    if (AKTIF_SIRKET_ONEK === "" && !(opts && opts.gecmisOto === false) && onceki.length > 0) {
+      d = d.map(sp => {
+        if (!sp || sp.onayDurum === "bekliyor" || sp.onayDurum === "red" || sp.onayDurum === "iptal" || sp.gecmisYukleme || (sp.durumGecmisi || []).length) return sp;
+        if (!sipGecmisAyaMi(sp)) return sp;
+        if (!(sp.kalemler || []).every(k => ["baslanmadi","cizimde"].includes((sp.kalemDurumlar || {})[k.id] || k.durum || "baslanmadi"))) return sp;
+        const ob = onceki.find(x => String(x.id) === String(sp.id));
+        if (ob && (ob.planAy || "") === (sp.planAy || "")) return sp; // yeni yüklenen ya da geçmiş aya taşınan
+        _gecmisN++; return sipGecmisTamamla(sp);
+      });
+    }
+    const _silT = await silinenSiparisler();
+    d = silinenSuz(d, _silT); // eski sayfanın geri getirmeye çalıştığı, daha önce silinmiş siparişler
     const yeniIdler = new Set(d.map(x => String(x.id)));
-    const silinen = onceki.filter(x => !yeniIdler.has(String(x.id))).map(x => String(x.id));
+    const silinen = onceki.filter(x => !yeniIdler.has(String(x.id)) && !_silT[String(x.id)]).map(x => String(x.id));
     if (silinen.length > 1 && !window.confirm("⚠ Bu işlem " + silinen.length + " siparişi SİLECEK. Emin misiniz?")) { toastGoster("hata","İptal edildi — siparişler korundu"); return; }
+    await silinenIsaretle(silinen); // önce işaretle: aynı anda kaydeden başka sayfa görsün
+    if (_gecmisN > 0) toastGoster("ok", _gecmisN + " sipariş geçmiş aya ait olduğu için tamamlandı olarak işaretlendi");
     setSiparisler(d);
     await guvenliKaydet("v7s", d);
     sonKendiYazma.current = Date.now();
@@ -16513,6 +16563,7 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
               { l:"📄 Fiyatlı PDF", f:()=>downloadPDF(buildKonfHTML(s,s.altinKgUSD||altinKgUSD,s.mc||madenCarpan,true,modeller,sipSira),(s.musteri||"siparis")+"-fiyatli") },
               { l:"📄 Fiyatsız PDF", f:()=>downloadPDF(buildKonfHTML(s,s.altinKgUSD||altinKgUSD,s.mc||madenCarpan,false,modeller,sipSira),(s.musteri||"siparis")+"-fiyatsiz") },
               AKTIF_SIRKET_ONEK!=="bsp2_" && s.onayDurum!=="red" && s.onayDurum!=="iptal" && { l:"≈ Fiyatları model fiyatına eşitle", f:()=>siparisFiyatEsitle(s) },
+              AKTIF_SIRKET_ONEK===""  && s.onayDurum!=="red" && s.onayDurum!=="iptal" && s.onayDurum!=="bekliyor" && sipGecmisAyaMi(s) && !["tamam","teslim"].includes(((s.durumGecmisi||[]).slice(-1)[0]||{}).durum) && { l:"✓ Geçmiş sipariş: tamamlandı yap", f:()=>{ if (!window.confirm((s.musteri||"Sipariş")+" siparişinin tüm kalemleri tamamlandı yapılacak (bitiş tarihi siparişin kendi tarihi olur, hesaplara bugün sayılmaz). Devam?")) return; svS(siparisler.map(sp=>sp.id===s.id?sipGecmisTamamla(sp):sp), { gecmisOto:false }); } },
               AKTIF_SIRKET_ONEK!=="bsp2_" && s.durumGecmisi?.length>0 && { l:"📊 Zaman çizelgesi", f:()=>setCizelgeModal(s.id) },
               { l:"🏷 Müşteri alt kodu (PSEV…)", f:()=>altKodDuzenle(s) },
               { l:"⧉ Kopyala → konfirmasyona", f:()=>konfKopyala(s) },
@@ -18961,7 +19012,7 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
                   aktifN++; if (donemF || k0 === buAy) yeniN++; bekKar += sk;
                   const mk = s.musKod || s.musteri || "?"; musPay[mk] = (musPay[mk]||0) + acikG;
                   if (teslimT && teslimT < bugun0) { gecikN++; gecikG += acikG; gecikListe.push({ s, gun: Math.ceil((bugun0 - teslimT)/86400000), g: acikG }); }
-                } else if (teslimT) {
+                } else if (teslimT && !s.gecmisYukleme) {
                   const son = (s.durumGecmisi||[]).slice(-1)[0]; const bt = son ? son.tarih : 0;
                   if (bt) { bitenT++; if (bt <= teslimT + 86399999) zamaninda++; }
                 }
@@ -20254,7 +20305,7 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
                       if (!veri) { toastGoster("hata","Yedek okunamadı"); return; }
                       // Geri yükle
                       if (veri.kollar) await svK(veri.kollar);
-                      if (veri.siparisler) await svS(veri.siparisler);
+                      if (veri.siparisler) { await silinenTemizle(veri.siparisler.map(x => x && x.id).filter(Boolean)); await svS(veri.siparisler, { gecmisOto:false }); }
                       if (veri.musteriler) await svMus(veri.musteriler);
                       if (veri.kasa) await svKasa(veri.kasa);
                       if (Array.isArray(veri.modeller)) {
