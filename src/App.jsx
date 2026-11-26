@@ -1,7 +1,7 @@
 import { supabase, dbLoad, dbSave, fotoYukleStorage, yedekKaydet, yedekListesi, yedekGetir, bugunYedekVarMi, tabloModelleriSenkron, tabloModelleriToplu, tabloModelSil, tabloSiparisleriSenkron, tabloSiparisleriToplu, tabloSiparisSil, tabloMusterileriYaz, akilliModelOku, akilliSiparisOku, akilliMusteriOku, islemKaydet, islemGecmisiGetir, realtimeBaslat, tabloKoleksiyonlariYaz, tabloKasaYaz, akilliKoleksiyonOku, akilliKasaOku, tabloKoleksiyonlariOku, tabloKasaOku, saglikDenetimi, ekranSunucuFarki, toptanciKaydet, toptancilariGetir, toptanciSil, vitrinGecmisiGetir, vitrinEnCokBakilan, vitrinOzetGetir, vitrinAnaliz, vitrinGetirGuvenli, siparisOlusturGuvenli, siparislerimGetirGuvenli, siparisIptalGuvenli, siparisGuncelleGuvenli, siparisMusteriGizleGuvenli, vitrinAktiviteKaydetGuvenli, vitrinSupheliCihazlar, vitrinCevrimiciMusteriler, radarTrendleriOku, radarKaynaklariOku, radarKanitlariOku, radarTumKanitlariOku, radarTrendGuncelle, radarTrendSil, radarManuelKanitEkle } from "./supabase.js";
 import { useState, useEffect, useCallback, useMemo, useRef, Fragment } from "react";
 
-const SURUM_TARIH = "26 Kas 16:30"; // her yeni App.jsx tesliminde güncellenir — ekranın yenilendiğini anlamak için sağ üstte görünür
+const SURUM_TARIH = "26 Kas 18:00"; // her yeni App.jsx tesliminde güncellenir — ekranın yenilendiğini anlamak için sağ üstte görünür
 const uid = () => "x" + Date.now() + Math.random().toString(36).substr(2, 5);
 // ═══ ÇALIŞAN AUTH OTURUMU — yerel şifre kontrolünün ardından gerçek Supabase Auth oturumu açar ═══
 // (RLS politikaları "authenticated" rolüne dayanacak; hesap Supabase Dashboard'da manuel oluşturuldu)
@@ -486,6 +486,16 @@ async function silinenTemizle(idler) { // yedekten geri yükleme: geri gelen sip
   if (d) await sv("v7s_silinen", t);
 }
 // ── GEÇMİŞ AY SİPARİŞİ: geçmiş bir aya yüklenen/taşınan, hiç başlanmamış sipariş otomatik "tamamlandı" olur (bitiş tarihi bugün değil, siparişin kendi tarihi) ──
+// Tüm (hurda olmayan) kalemler tamam/teslim ise siparişin GENEL durumu da tamam olmalı; kalem düğmeleri üst durumu güncellemeyi atlarsa burada eşitlenir
+function sipBitisUyumla(sp) {
+  if (!sp || sp.onayDurum === "bekliyor" || sp.onayDurum === "red" || sp.onayDurum === "iptal") return sp;
+  const kd = sp.kalemDurumlar || {};
+  const dl = (sp.kalemler || []).map(k => kd[k.id] || k.durum || "baslanmadi").filter(x => x !== "hurda");
+  if (!dl.length || !dl.every(x => x === "tamam" || x === "teslim")) return sp;
+  const g = sp.durumGecmisi || [], son = g[g.length - 1];
+  if (son && (son.durum === "tamam" || son.durum === "teslim")) return sp;
+  return { ...sp, durumGecmisi: [...g, { durum: dl.every(x => x === "teslim") ? "teslim" : "tamam", tarih: Date.now(), manuel: false, otoUyum: true }] };
+}
 function sipGecmisAyKey(sp) { if (sp.planAy) return String(sp.planAy); const d = new Date(sp.tarih || 0); return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0"); }
 function sipGecmisAyaMi(sp) { const b = new Date(); return sipGecmisAyKey(sp) < b.getFullYear() + "-" + String(b.getMonth()+1).padStart(2,"0"); }
 function sipGecmisTamamla(sp) {
@@ -6871,6 +6881,110 @@ function aydevriFark(rec, canli, ham) {
     else if (Math.abs(c.gr - a[3]) > 0.5) out.push({ id, no:a[0], mus:a[1], gr:c.gr, neden:"gramı değişti (" + Math.round(a[3]) + " → " + Math.round(c.gr) + ")" }); });
   cCik.forEach((c, id) => { if (!kCik.has(id)) out.push({ id, no:c.s.siparisNo || "", mus:c.s.musteri || "", gr:c.gr, neden:"kayıttan sonra eklendi / yeniden açıldı" }); });
   return out;
+}
+// ── TAMİR NEDENLERİ: seçmeli başlıklar + serbest "ekstra açıklama". Eski serbest metin kayıtları anahtar kelimeyle eşlenir.
+const TAMIR_NEDENLER = ["Buzlanma", "Döküm hatası", "Taşlar kara", "Taş düşmesi / yuva", "Kopça / mekanizma", "Boy / ölçü", "Cila / yüzey", "Lehim", "Diğer"];
+function tamirNedenTahmin(metin) {
+  const t = String(metin || "").toLocaleLowerCase("tr"); const r = [];
+  if (!t.trim()) return r;
+  if (/buzlan/.test(t)) r.push("Buzlanma");
+  if (/d[öo]küm|dokum/.test(t)) r.push("Döküm hatası");
+  if (/kara\b|karar|kara g/.test(t)) r.push("Taşlar kara");
+  if (/taş düş|tas dus|taş kay|düşen taş/.test(t)) r.push("Taş düşmesi / yuva");
+  if (/kopça|kopca|mekanizma|kilit/.test(t)) r.push("Kopça / mekanizma");
+  if (/\bboy\b|ölçü|olcu|beden/.test(t)) r.push("Boy / ölçü");
+  if (/cila|çizik|yüzey/.test(t)) r.push("Cila / yüzey");
+  if (/lehim/.test(t)) r.push("Lehim");
+  return r;
+}
+// Bir kalemin tamir nedenleri: kayıtlı seçimler; yoksa eski metinden tahmin; o da yoksa metin → "Diğer", boşsa "Belirtilmedi" (ham=true ise boş döner)
+function tamirNedenCoz(s, kid, ham) {
+  const kayitli = (s.kalemTamirNedenler || {})[kid];
+  if (Array.isArray(kayitli)) return kayitli;
+  const metin = (s.kalemTamirNeden || {})[kid] || "";
+  const t = tamirNedenTahmin(metin);
+  if (ham) return t;
+  return t.length ? t : (String(metin).trim() ? ["Diğer"] : ["Belirtilmedi"]);
+}
+function tamirAciklamaOku(s, kid) {
+  const a = (s.kalemTamirAciklama || {})[kid];
+  if (a !== undefined) return a;
+  return Array.isArray((s.kalemTamirNedenler || {})[kid]) ? "" : ((s.kalemTamirNeden || {})[kid] || "");
+}
+const HURDA_NEDEN_LISTE = ["İade", "Çizim Hatası", "Döküm Hatası", "Atölyede Üretim Hatası", "Taş Düşmesi", "Müşteri Değişikliği", "Diğer"];
+function hurdaNedenNormal(m) {
+  const t = String(m || "").trim(); if (!t) return "Belirtilmedi";
+  const b = HURDA_NEDEN_LISTE.find(x => x !== "Diğer" && t.toLocaleLowerCase("tr").startsWith(x.toLocaleLowerCase("tr")));
+  return b || "Diğer";
+}
+function TamirAnaliz({ T, siparisler }) {
+  const [don, setDon] = useState("tum");
+  const veri = useMemo(() => {
+    const bas = don === "ay" ? new Date(new Date().getFullYear(), new Date().getMonth(), 1).getTime() : don === "3ay" ? new Date(new Date().getFullYear(), new Date().getMonth() - 2, 1).getTime() : 0;
+    const tm = {}, hm = {}, model = {}, mus = {}; let tAdet = 0, hAdet = 0, tKalem = 0;
+    (siparisler || []).forEach(sp => {
+      if (sp.onayDurum === "red" || sp.onayDurum === "iptal" || sp.onayDurum === "bekliyor") return;
+      if (bas && (sp.tarih || 0) < bas) return;
+      (sp.kalemler || []).forEach(k => {
+        const ta = ((sp.kalemTamir) || {})[k.id] || 0, hu = ((sp.kalemHurda) || {})[k.id] || 0;
+        const satir = { no: sp.siparisNo || "", mus: sp.musKod || sp.musteri || "", kod: k.kod || "?", ad: k.ad || "", aciklama: "" };
+        if (ta > 0) {
+          tAdet += ta; tKalem++; const nl = tamirNedenCoz(sp, k.id); const ac = tamirAciklamaOku(sp, k.id);
+          nl.forEach(n => { const o = tm[n] || (tm[n] = { adet: 0, liste: [] }); o.adet += ta; o.liste.push({ ...satir, adet: ta, aciklama: ac, nedenler: nl }); });
+          const mk = k.kod || k.id; const mo = model[mk] || (model[mk] = { kod: k.kod || "?", ad: k.ad || "", adet: 0, sip: new Set(), n: new Set() }); mo.adet += ta; mo.sip.add(sp.id); nl.forEach(n => mo.n.add(n));
+          const mu = sp.musKod || sp.musteri || "İsimsiz"; mus[mu] = (mus[mu] || 0) + ta;
+        }
+        if (hu > 0) { hAdet += hu; const n = hurdaNedenNormal(((sp.kalemHurdaNeden) || {})[k.id]); const o = hm[n] || (hm[n] = { adet: 0, liste: [] }); o.adet += hu; o.liste.push({ ...satir, adet: hu, aciklama: ((sp.kalemHurdaNeden) || {})[k.id] || "" }); }
+      });
+    });
+    const sirala = o => Object.entries(o).map(([ad, v]) => ({ ad, ...v })).sort((a, b) => b.adet - a.adet);
+    return { tm: sirala(tm), hm: sirala(hm), model: Object.values(model).sort((a, b) => b.adet - a.adet), mus: Object.entries(mus).sort((a, b) => b[1] - a[1]), tAdet, hAdet, tKalem };
+  }, [siparisler, don]);
+  const detay = (baslik, liste) => rpDetayAc(baslik, () => (
+    <div>{liste.map((x, i) => (
+      <div key={i} style={{ padding:"8px 0", borderBottom:"1px solid "+T.border, fontSize:12 }}>
+        <div><b>{x.kod}</b> {x.ad} · {x.adet} adet</div>
+        <div style={{ color:T.sub }}>{x.no} · {x.mus}{x.nedenler ? " · " + x.nedenler.join(", ") : ""}</div>
+        {x.aciklama ? <div style={{ marginTop:2 }}>{x.aciklama}</div> : null}
+      </div>))}</div>));
+  const bar = (liste, renk, baslikOn, toplam) => liste.length === 0 ? <div style={{ fontSize:12, color:T.sub }}>Kayıt yok</div> : liste.map(x => (
+    <div key={x.ad} onClick={() => detay(baslikOn + " — " + x.ad, x.liste)} style={{ cursor:"pointer", marginBottom:6 }}>
+      <div style={{ display:"flex", justifyContent:"space-between", fontSize:12 }}><span>{x.ad}</span><span style={{ color:T.sub }}>{x.adet} adet · %{toplam > 0 ? Math.round(x.adet / toplam * 100) : 0}</span></div>
+      <div style={{ height:5, background:"rgba(128,128,128,0.18)", borderRadius:3, overflow:"hidden" }}><div style={{ width:(toplam > 0 ? x.adet / toplam * 100 : 0) + "%", height:"100%", background:renk }}/></div>
+    </div>));
+  if (veri.tAdet === 0 && veri.hAdet === 0 && don === "tum") return null;
+  const tekrar = veri.model.filter(m => m.sip.size > 1);
+  return (
+    <RpKart T={T} baslik="TAMİR VE HURDA NEDENLERİ" genis>
+      <div style={{ display:"flex", gap:6, marginBottom:10 }}>
+        {[["tum","Tümü"],["3ay","Son 3 ay"],["ay","Bu ay"]].map(([id, l]) => (
+          <button key={id} onClick={() => setDon(id)} style={{ background:don === id ? "rgba(var(--vurgu-rgb),0.18)" : "transparent", border:"1px solid "+T.border, borderRadius:8, padding:"4px 10px", fontSize:11, color:don === id ? T.gold : T.sub, cursor:"pointer" }}>{l}</button>
+        ))}
+      </div>
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(260px,1fr))", gap:16 }}>
+        <div>
+          <div style={{ fontSize:11, fontWeight:700, color:T.sub, marginBottom:6 }}>TAMİR NEDENLERİ · {veri.tAdet} adet</div>
+          {bar(veri.tm, "#5b9bd5", "Tamir", veri.tm.reduce((a, x) => a + x.adet, 0))}
+          {veri.tm.length > 0 && <div style={{ fontSize:10, color:T.sub, marginTop:4 }}>Bir kalem birden fazla nedene yazılmışsa her nedende sayılır. Satıra basınca kayıtlar açılır.</div>}
+        </div>
+        <div>
+          <div style={{ fontSize:11, fontWeight:700, color:T.sub, marginBottom:6 }}>HURDA NEDENLERİ · {veri.hAdet} adet</div>
+          {bar(veri.hm, "#ef5a4f", "Hurda", veri.hAdet)}
+        </div>
+      </div>
+      {veri.model.length > 0 && (
+        <div style={{ marginTop:12 }}>
+          <div style={{ fontSize:11, fontWeight:700, color:T.sub, marginBottom:6 }}>EN ÇOK TAMİRE GİREN MODELLER{tekrar.length > 0 ? " · " + tekrar.length + " modelde tekrar var" : ""}</div>
+          {veri.model.slice(0, 8).map(m => (
+            <div key={m.kod} style={{ display:"flex", justifyContent:"space-between", fontSize:12, padding:"3px 0" }}>
+              <span><b>{m.kod}</b> <span style={{ color:T.sub }}>{m.ad}</span>{m.sip.size > 1 && <span style={{ color:"#e8833a" }}> · {m.sip.size} siparişte</span>}</span>
+              <span style={{ color:T.sub }}>{m.adet} adet · {[...m.n].join(", ")}</span>
+            </div>))}
+        </div>
+      )}
+      {veri.mus.length > 1 && <div style={{ marginTop:10, fontSize:11, color:T.sub }}>Müşteriye göre: {veri.mus.slice(0, 6).map(([a, n]) => a + " " + n).join(" · ")}</div>}
+    </RpKart>
+  );
 }
 function AyDevri({ T, siparisler, altinKgUSD, madenCarpan, kar }) {
   const tum = useMemo(() => aydevriHesapla(siparisler, altinKgUSD, madenCarpan, kar), [siparisler, altinKgUSD, madenCarpan, kar]);
@@ -14190,12 +14304,15 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
         _gecmisN++; return sipGecmisTamamla(sp);
       });
     }
+    let _uyumN = 0;
+    d = d.map(sp => { const y = sipBitisUyumla(sp); if (y !== sp) _uyumN++; return y; });
     const _silT = await silinenSiparisler();
     d = silinenSuz(d, _silT); // eski sayfanın geri getirmeye çalıştığı, daha önce silinmiş siparişler
     const yeniIdler = new Set(d.map(x => String(x.id)));
     const silinen = onceki.filter(x => !yeniIdler.has(String(x.id)) && !_silT[String(x.id)]).map(x => String(x.id));
     if (silinen.length > 1 && !window.confirm("⚠ Bu işlem " + silinen.length + " siparişi SİLECEK. Emin misiniz?")) { toastGoster("hata","İptal edildi — siparişler korundu"); return; }
     await silinenIsaretle(silinen); // önce işaretle: aynı anda kaydeden başka sayfa görsün
+    if (_uyumN > 0) toastGoster("ok", _uyumN + " siparişin genel durumu, kalemlerin hepsi tamamlandığı için Tamamlandı yapıldı");
     if (_gecmisN > 0) toastGoster("ok", _gecmisN + " sipariş geçmiş aya ait olduğu için tamamlandı olarak işaretlendi");
     setSiparisler(d);
     await guvenliKaydet("v7s", d);
@@ -16417,13 +16534,15 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
     const aktif = kl.length - hurdaKalem;
     const tam = kl.filter(k=>{ const d=kd[k.id]||k.durum||"baslanmadi"; return ["tamam","teslim"].includes(d) && !(d!=="hurda" && ((((s.kalemHurda)||{})[k.id]||0) >= (k.adet||1))); }).length;
     const pct = aktif>0 ? Math.min(100, Math.round(tam/aktif*100)) : 0;
-    let gram = 0, kar = 0, gumus = 0, isc = 0, topMal = 0; const ayarlar = {};
+    let gram = 0, kar = 0, gumus = 0, isc = 0, topMal = 0, acikGram = 0, acikGumus = 0; const ayarlar = {};
     kl.forEach(k => {
       const hc = hesapla(k,k.secilenAyar||k.refAyar,s.altinKgUSD,s.mc);
       const du=((s.kalemHurda)||{})[k.id]||0, ia=((s.kalemIade)||{})[k.id]||0, ta=((s.kalemTamir)||{})[k.id]||0;
       const net = Math.max(0,(k.adet||1)-du-ia-ta);
       gram += hc.mamulGram*net; kar += hc.karHas*net; isc += (hc.iscilikUSD||0)*net; topMal += hc.topMaliyetHas*net;
       const ay = k.secilenAyar||k.refAyar||"?"; ayarlar[ay] = (ayarlar[ay]||0) + hc.mamulGram*net; if (ay==="925") gumus += hc.mamulGram*net;
+      // kalem bazlı AÇIK gram: tamam/teslim/hurda olmayan kalemler (müşteriye gitmemiş / bitmemiş)
+      const kdk = kd[k.id]||k.durum||"baslanmadi"; if (!BIT.includes(kdk) && kdk!=="hurda") { acikGram += hc.mamulGram*net; if (ay==="925") acikGumus += hc.mamulGram*net; }
     });
     const adet = kl.reduce((a,k)=>a+(k.adet||1),0);
     const aktifD = kl.map(k=>kd[k.id]||k.durum||"baslanmadi").filter(d=>d!=="hurda");
@@ -16436,7 +16555,7 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
     const teslimT = s.teslimTarihi ? new Date(s.teslimTarihi).getTime() : 0;
     const kapali = s.onayDurum==="red" || s.onayDurum==="iptal" || (son && BIT.includes(son.durum));
     const gecikti = !!teslimT && teslimT < bugun0.getTime() && !kapali;
-    return { ayarlar, hurda, aktif, tam, pct, gram, gumus, altin:gram-gumus, kar, isc, topMal, adet, enYaygin, sonraki, son, geciken, gecikti, teslimT };
+    return { ayarlar, hurda, aktif, tam, pct, gram, gumus, altin:gram-gumus, acikGram, acikGumus, acikAltin:acikGram-acikGumus, kar, isc, topMal, adet, enYaygin, sonraki, son, geciken, gecikti, teslimT };
   };
   function baslandiMi(s) { return (s.kalemler||[]).some(k => { const d0 = (s.kalemDurumlar||{})[k.id]||k.durum||"baslanmadi"; const dd = DURUMLAR.find(y=>y.id===d0); return !!dd && dd.s>=4; }); } // en az bir kalem Dökümde veya ilerisinde
   const grupNo = s => {
@@ -16671,7 +16790,7 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
                 if (!acikK.length) return null;
                 return (<div style={{ marginBottom:10, padding:"8px 10px", borderRadius:9, border:"1px solid rgba(232,90,79,0.5)", background:"rgba(232,90,79,0.08)", fontSize:12, color:"#e85a4f", display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}>
                   <span style={{ flex:1, minWidth:180 }}><b>Tutarsızlık:</b> sipariş "Tamamlandı" ama {acikK.length} kalem açık ({acikK.slice(0,3).map(k=>k.kod||k.ad).join(", ")}{acikK.length>3?"…":""}) — Başlanmadı/üretim sayımlarında görünür.</span>
-                  <button onClick={()=>{ const kdN = { ...(s.kalemDurumlar||{}) }; acikK.forEach(k => { kdN[k.id] = "tamam"; }); svS(siparisler.map(sp => sp.id===s.id ? { ...sp, kalemDurumlar: kdN } : sp)); toastGoster("ok", acikK.length+" kalem tamamlandı yapıldı"); }} style={{ ...GH, fontSize:12, padding:"6px 10px" }}>Kalemleri tamamlandı yap</button>
+                  <button onClick={()=>{ const kdN = { ...(s.kalemDurumlar||{}) }; acikK.forEach(k => { kdN[k.id] = "tamam"; }); svS(siparisler.map(sp => sp.id===s.id ? { ...sp, kalemDurumlar: kdN } : sp)); sipDurumKaydet(s.id, siparisDurumHesapla({ ...s, kalemDurumlar: kdN })); toastGoster("ok", acikK.length+" kalem tamamlandı yapıldı"); }} style={{ ...GH, fontSize:12, padding:"6px 10px" }}>Kalemleri tamamlandı yap</button>
                 </div>); })()}
               <div style={{ fontSize:10, color:"#7a6f5a", fontWeight:600, letterSpacing:.6, marginBottom:8 }}>ÜRETİM ŞERİDİ <span style={{ fontWeight:600 }}>· aşamaya tıkla = tüm kalemleri oraya al</span></div>
               <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(92px, 1fr))", gap:5 }}>
@@ -16742,7 +16861,7 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
                     { l:"🗑 Hurda"+(hA>0?" ("+hA+")":""), c:"#e85a4f", f:()=>setHurdaModal({sipId:s.id,kalemId:k.id,kalemAd:k.ad,maxAdet:k.adet||1,mevcAdet:hA,mevcNeden:(s.kalemHurdaNeden||{})[k.id]||""}) },
                     { l:"↩ İade"+(iA>0?" ("+iA+")":""), c:"#a78bfa", f:()=>setIadeModal({sipId:s.id,kalemId:k.id,kalemAd:k.ad,kalemKod:k.kod,maxAdet:k.adet||1,mevcAdet:iA,mevcNeden:(s.kalemIadeNeden||{})[k.id]||"",iadeTuru:(s.kalemIadeTuru||{})[k.id]||"para"}) },
                     { l:"✏️ Adet düzenle ("+(k.adet||1)+")", c:"#d4a017", f:()=>setAdetModal({ sipId:s.id, kalemId:k.id, kalemAd:k.ad, kalemKod:k.kod, eski:k.adet||1, yeni:String(k.adet||1), alt:hA+iA+tA }) },
-                    { l:"🔧 Tamir"+(tA>0?" ("+tA+")":""), c:"#5b9bd5", f:()=>setTamirModal({sipId:s.id,kalemId:k.id,kalemAd:k.ad,kalemKod:k.kod,maxAdet:k.adet||1,mevcAdet:tA,mevcNeden:(s.kalemTamirNeden||{})[k.id]||""}) },
+                    { l:"🔧 Tamir"+(tA>0?" ("+tA+")":""), c:"#5b9bd5", f:()=>setTamirModal({sipId:s.id,kalemId:k.id,kalemAd:k.ad,kalemKod:k.kod,maxAdet:k.adet||1,mevcAdet:tA,mevcNeden:tamirAciklamaOku(s,k.id), mevcNedenler:tamirNedenCoz(s,k.id,true)}) },
                     ...(yoneticiMi ? [{ l:"✕ Müşteri iptal etti — siparişten çıkar", c:"#e85a4f", f:()=>kalemIptalEt(s,k) }] : []),
                   ])}
                 </div>
@@ -16881,6 +17000,7 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
                 const asamaGr = sipAsama ? sl.reduce((a,sp)=>{ const kd=sp.kalemDurumlar||{}; return a+(sp.kalemler||[]).reduce((b,k)=>{ const q0=kd[k.id]||k.durum||"baslanmadi"; if ((q0==="cizimde"?"baslanmadi":q0)!==sipAsama) return b; const du=((sp.kalemHurda)||{})[k.id]||0, ia=((sp.kalemIade)||{})[k.id]||0, ta=((sp.kalemTamir)||{})[k.id]||0; const net=Math.max(0,(k.adet||1)-du-ia-ta); const hc=hesapla(k,k.secilenAyar||k.refAyar,sp.altinKgUSD||altinKgUSD,sp.mc||madenCarpan); return b+hc.mamulGram*net; },0); },0) : 0;
                 const altinAyar = Object.entries(ayTop).filter(([a])=>a!=="925").sort((a,b)=>b[1]-a[1]);
                 const sutunlar = [[sipMetal==="gumus"?"Gümüş":"Toplam", sipMetal==="gumus"?topGum:topAlt, true]];
+                { const acikT = ozAcik.reduce((a,o)=>a+(sipMetal==="gumus"?o.acikGumus:o.acikAltin),0), toplT = sipMetal==="gumus"?topGum:topAlt; if (toplT-acikT > 0.05) sutunlar.push(["Bitmemiş", acikT, false]); } // bitmiş kalem varsa: kalem bazlı bitmemiş gram
                 if (sipMetal!=="gumus" && altinAyar.length>1) altinAyar.forEach(([a,g])=>sutunlar.push([a,g,false]));
                 if (sipMetal==="tumu" && topGum>0) sutunlar.push(["925 gümüş", topGum, false]);
                 return (
@@ -17396,10 +17516,10 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
                         <div style={{ display:"flex", gap:4, marginTop:6, alignItems:"center" }} onClick={e=>e.stopPropagation()}>
                           <span style={{ fontSize:7, color:"#665d4a", fontWeight:700 }}>TOPLU:</span>
                           {durumSecenekleri().map(d => (
-                            <button key={d.id} onClick={()=>svS(siparisler.map(sp=>sp.id===s.id?{...sp,kalemDurumlar:Object.fromEntries((sp.kalemler||[]).filter(k=>(sp.kalemDurumlar||{})[k.id]!=="hurda").map(k=>[k.id,d.id]).concat(Object.entries(sp.kalemDurumlar||{}).filter(([,v])=>v==="hurda")))}:sp))} title={d.l} style={{ width:12, height:12, borderRadius:6, background:enYaygin===d.id?d.c:"rgba(255,255,255,0.06)", border:enYaygin===d.id?"2px solid "+d.c:"1px solid rgba(255,255,255,0.1)", cursor:"pointer", padding:0, flexShrink:0 }}/>
+                            <button key={d.id} onClick={()=>{ svS(siparisler.map(sp=>sp.id===s.id?{...sp,kalemDurumlar:Object.fromEntries((sp.kalemler||[]).filter(k=>(sp.kalemDurumlar||{})[k.id]!=="hurda").map(k=>[k.id,d.id]).concat(Object.entries(sp.kalemDurumlar||{}).filter(([,v])=>v==="hurda")))}:sp)); sipDurumKaydet(s.id, d.id); }} title={d.l} style={{ width:12, height:12, borderRadius:6, background:enYaygin===d.id?d.c:"rgba(255,255,255,0.06)", border:enYaygin===d.id?"2px solid "+d.c:"1px solid rgba(255,255,255,0.1)", cursor:"pointer", padding:0, flexShrink:0 }}/>
                           ))}
                           {sonrakiDurum && (
-                            <button onClick={()=>svS(siparisler.map(sp=>sp.id===s.id?{...sp,kalemDurumlar:Object.fromEntries((sp.kalemler||[]).map(k=>[(k.id),(sp.kalemDurumlar||{})[k.id]==="hurda"?"hurda":sonrakiDurum.id]))}:sp))} style={{ background:"rgba(var(--vurgu-rgb),0.1)", border:"1px solid rgba(var(--vurgu-rgb),0.2)", borderRadius:5, padding:"2px 8px", color:GOLD, fontSize:8, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap", marginLeft:4 }}>→ {durumEtiket(sonrakiDurum)}</button>
+                            <button onClick={()=>{ svS(siparisler.map(sp=>sp.id===s.id?{...sp,kalemDurumlar:Object.fromEntries((sp.kalemler||[]).map(k=>[(k.id),(sp.kalemDurumlar||{})[k.id]==="hurda"?"hurda":sonrakiDurum.id]))}:sp)); sipDurumKaydet(s.id, sonrakiDurum.id); }} style={{ background:"rgba(var(--vurgu-rgb),0.1)", border:"1px solid rgba(var(--vurgu-rgb),0.2)", borderRadius:5, padding:"2px 8px", color:GOLD, fontSize:8, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap", marginLeft:4 }}>→ {durumEtiket(sonrakiDurum)}</button>
                           )}
                         </div>
                       </div>
@@ -17509,7 +17629,7 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
                                         <span style={{ fontSize:7, color:"#a78bfa", fontWeight:700 }}>↩ İADE</span>
                                         {iadeAdet>0 && <span style={{ fontSize:9, color:"#a78bfa", fontWeight:800 }}>{iadeAdet}/{k.adet||1}</span>}
                                       </button>
-                                      <button onClick={e=>{e.stopPropagation(); setTamirModal({sipId:s.id, kalemId:k.id, kalemAd:k.ad, kalemKod:k.kod, maxAdet:k.adet||1, mevcAdet:tamirAdet, mevcNeden:(s.kalemTamirNeden||{})[k.id]||""});}}
+                                      <button onClick={e=>{e.stopPropagation(); setTamirModal({sipId:s.id, kalemId:k.id, kalemAd:k.ad, kalemKod:k.kod, maxAdet:k.adet||1, mevcAdet:tamirAdet, mevcNeden:tamirAciklamaOku(s,k.id), mevcNedenler:tamirNedenCoz(s,k.id,true)});}}
                                         style={{ display:"flex", alignItems:"center", gap:3, marginLeft:6, background:tamirAdet>0?"rgba(91,155,213,0.15)":"rgba(91,155,213,0.06)", border:"1px solid rgba(91,155,213,0.25)", borderRadius:6, padding:"2px 7px", cursor:"pointer" }}>
                                         <span style={{ fontSize:7, color:"#5b9bd5", fontWeight:700 }}>🔧 TAMİR</span>
                                         {tamirAdet>0 && <span style={{ fontSize:9, color:"#5b9bd5", fontWeight:800 }}>{tamirAdet}/{k.adet||1}</span>}
@@ -19366,6 +19486,7 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
 
             {AKTIF_SIRKET_ONEK === "" && <HaftaDevri T={T} siparisler={siparisler} altinKgUSD={altinKgUSD} madenCarpan={madenCarpan} kar={izinHassas("karlilik")}/>}
             <AyDevri T={T} siparisler={siparisler} altinKgUSD={altinKgUSD} madenCarpan={madenCarpan} kar={AKTIF_SIRKET_ONEK !== "bsp2_" && izinHassas("karlilik")}/>
+            <TamirAnaliz T={T} siparisler={siparisler}/>
 
             {/* ── ORTA: AŞAMA DAĞILIMI + GECİKENLER ── */}
             <div className="kx-s-uretim kx-g2" style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:14 }}>
@@ -21576,9 +21697,18 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
             </div>
           </Fl>
 
-          <Fl label="Tamir Açıklaması (opsiyonel)" T={T}>
+          <Fl label="Tamir nedeni (birden fazla seçilebilir)" T={T}>
+            <div style={{ display:"flex", gap:5, flexWrap:"wrap" }}>
+              {TAMIR_NEDENLER.map(n => { const sec = (tamirModal.mevcNedenler||[]).includes(n); return (
+                <button key={n} onClick={()=>setTamirModal(p=>{ const l = p.mevcNedenler||[]; return { ...p, mevcNedenler: l.includes(n) ? l.filter(x=>x!==n) : [...l, n] }; })}
+                  style={{ background:sec?"rgba(91,155,213,0.25)":"rgba(91,155,213,0.06)", border:"1px solid", borderColor:sec?"rgba(91,155,213,0.6)":"rgba(91,155,213,0.18)", borderRadius:6, padding:"5px 10px", color:sec?"#5b9bd5":"#998a6e", fontSize:11, fontWeight:sec?800:600, cursor:"pointer" }}>{n}</button>
+              ); })}
+            </div>
+          </Fl>
+
+          <Fl label="Ekstra açıklama (opsiyonel)" T={T}>
             <textarea value={tamirModal.mevcNeden||""} onChange={e=>setTamirModal(p=>({...p, mevcNeden:e.target.value}))}
-              placeholder="Örnek: Taş düştü, kopça gevşek, boyut değişikliği vb."
+              placeholder="Örnek: sağ taş yuvasında buzlanma, 3 adette"
               style={{ ...IS, padding:"7px 10px", fontSize:11, minHeight:50, resize:"vertical" }}/>
           </Fl>
 
@@ -21589,14 +21719,18 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
               if (!sip) return;
               const yeniKalemTamir = { ...(sip.kalemTamir||{}) };
               const yeniKalemTamirNeden = { ...(sip.kalemTamirNeden||{}) };
+              const yeniNedenler = { ...(sip.kalemTamirNedenler||{}) };
+              const yeniAciklama = { ...(sip.kalemTamirAciklama||{}) };
               if (tamirModal.mevcAdet > 0) {
+                const nl = tamirModal.mevcNedenler || [], ac = (tamirModal.mevcNeden || "").trim();
                 yeniKalemTamir[tamirModal.kalemId] = tamirModal.mevcAdet;
-                yeniKalemTamirNeden[tamirModal.kalemId] = tamirModal.mevcNeden || "";
+                yeniNedenler[tamirModal.kalemId] = nl; yeniAciklama[tamirModal.kalemId] = ac;
+                yeniKalemTamirNeden[tamirModal.kalemId] = [nl.join(", "), ac].filter(Boolean).join(" — "); // eski ekranlar/PDF bu metni gösterir
               } else {
-                delete yeniKalemTamir[tamirModal.kalemId];
-                delete yeniKalemTamirNeden[tamirModal.kalemId];
+                delete yeniKalemTamir[tamirModal.kalemId]; delete yeniKalemTamirNeden[tamirModal.kalemId];
+                delete yeniNedenler[tamirModal.kalemId]; delete yeniAciklama[tamirModal.kalemId];
               }
-              svS(siparisler.map(x => x.id===tamirModal.sipId ? {...x, kalemTamir:yeniKalemTamir, kalemTamirNeden:yeniKalemTamirNeden} : x));
+              svS(siparisler.map(x => x.id===tamirModal.sipId ? {...x, kalemTamir:yeniKalemTamir, kalemTamirNeden:yeniKalemTamirNeden, kalemTamirNedenler:yeniNedenler, kalemTamirAciklama:yeniAciklama} : x));
               setTamirModal(null);
             }} style={{ flex:2, padding:"9px", background:"linear-gradient(135deg,#5b9bd5,#4a89c4)", border:"none", borderRadius:8, color:"#fff", fontSize:11, fontWeight:800, cursor:"pointer" }}>
               🔧 Kaydet
