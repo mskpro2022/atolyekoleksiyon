@@ -1,7 +1,7 @@
 import { supabase, dbLoad, dbSave, fotoYukleStorage, yedekKaydet, yedekListesi, yedekGetir, bugunYedekVarMi, tabloModelleriSenkron, tabloModelleriToplu, tabloModelSil, tabloSiparisleriSenkron, tabloSiparisleriToplu, tabloSiparisSil, tabloMusterileriYaz, akilliModelOku, akilliSiparisOku, akilliMusteriOku, islemKaydet, islemGecmisiGetir, realtimeBaslat, tabloKoleksiyonlariYaz, tabloKasaYaz, akilliKoleksiyonOku, akilliKasaOku, tabloKoleksiyonlariOku, tabloKasaOku, saglikDenetimi, ekranSunucuFarki, toptanciKaydet, toptancilariGetir, toptanciSil, vitrinGecmisiGetir, vitrinEnCokBakilan, vitrinOzetGetir, vitrinAnaliz, vitrinGetirGuvenli, siparisOlusturGuvenli, siparislerimGetirGuvenli, siparisIptalGuvenli, siparisGuncelleGuvenli, siparisMusteriGizleGuvenli, vitrinAktiviteKaydetGuvenli, vitrinSupheliCihazlar, vitrinCevrimiciMusteriler, radarTrendleriOku, radarKaynaklariOku, radarKanitlariOku, radarTumKanitlariOku, radarTrendGuncelle, radarTrendSil, radarManuelKanitEkle } from "./supabase.js";
 import { useState, useEffect, useCallback, useMemo, useRef, Fragment } from "react";
 
-const SURUM_TARIH = "26 Kas 19:55"; // her yeni App.jsx tesliminde güncellenir — ekranın yenilendiğini anlamak için sağ üstte görünür
+const SURUM_TARIH = "26 Kas 20:15"; // her yeni App.jsx tesliminde güncellenir — ekranın yenilendiğini anlamak için sağ üstte görünür
 const uid = () => "x" + Date.now() + Math.random().toString(36).substr(2, 5);
 // ═══ ÇALIŞAN AUTH OTURUMU — yerel şifre kontrolünün ardından gerçek Supabase Auth oturumu açar ═══
 // (RLS politikaları "authenticated" rolüne dayanacak; hesap Supabase Dashboard'da manuel oluşturuldu)
@@ -16951,7 +16951,9 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
   })();
   const aylarGorunum = (() => {
     const bugun = new Date(); const bk = ayAnahtar(bugun.getTime());
-    const planAy = s => s.planAy || ayAnahtar(s.tarih);
+    // Aşama: Tamamlandı/Teslim seçiliyken sipariş, bittiği ayın sekmesinde görünür (planlanan ay değil)
+    const bitisTarih = s => { const g = s.durumGecmisi || []; for (let i = g.length - 1; i >= 0; i--) if (["tamam","teslim"].includes(g[i].durum) && g[i].tarih) return g[i].tarih; return 0; };
+    const planAy = s => { if (sipAsama==="tamam" || sipAsama==="teslim") { const bt = bitisTarih(s); if (bt) return ayAnahtar(bt); } return s.planAy || ayAnahtar(s.tarih); };
     const keys = new Set(liste.map(planAy)); keys.add(bk);
     for (let i=1;i<=2;i++) keys.add(ayAnahtar(new Date(bugun.getFullYear(),bugun.getMonth()+i,1).getTime()));
     const sirKeys = [...keys].sort();
@@ -16998,7 +17000,7 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
 @media(max-width:700px){.sm-grid{grid-template-columns:minmax(0,1fr)!important;gap:10px!important}.sm-oc{zoom:1!important;padding:12px 14px!important}.sm-oc-eski{display:none!important}.sm-oc-yeni{display:block}.sm-mbar{height:6px!important}.sm-mgr{flex-wrap:nowrap!important;overflow-x:auto;gap:8px!important;-webkit-overflow-scrolling:touch}.sm-mgr>div{flex:0 0 auto;background:rgba(128,128,128,.12);border-radius:10px;padding:5px 10px}.sm-mgr>div[style*="margin-left"]{margin-left:0!important;text-align:left!important}}`}</style>
       <div style={{ display:"flex", gap:12, paddingBottom:10, alignItems:"stretch", minHeight:"calc(100vh - 340px)" }}>
         {gorKeys.map(key => {
-          const sl = liste.filter(s=>planAy(s)===key).sort((a,b)=>((grupNo(a)===3)-(grupNo(b)===3)) || (b.tarih-a.tarih)); // tamamlananlar en sonda
+          const sl = liste.filter(s=>planAy(s)===key).sort((a,b)=> tamAsamaF ? ((bitisTarih(b)||b.tarih||0)-(bitisTarih(a)||a.tarih||0)) : (((grupNo(a)===3)-(grupNo(b)===3)) || (b.tarih-a.tarih))); // tamamlananlar en sonda (Tamamlandı filtresinde: en yeni biten üstte)
           const oz = sl.map(s=>ozet(s));
           const nTam = sl.filter(s=>grupNo(s)===3).length, tamAcikAy = !!sipTamAcik[key] || tamAsamaF;
           const ozAcik = oz.filter((o,ix)=>grupNo(sl[ix])!==3); // ay toplamı: tamamlananlar düşülür
@@ -17054,11 +17056,14 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
                   const teslimT = s.teslimTarihi ? new Date(s.teslimTarihi).getTime() : 0;
                   const gecikti = o.gecikti;
                   const kdK = s.kalemDurumlar||{}; const kismi = !tamSip && o.acikKalem>0 && o.acikKalem<o.aktif && s.onayDurum!=="red" && s.onayDurum!=="iptal"; const kismiOzet = kismi && !sipTamKalem[s.id];
-                  const oG = kismiOzet ? { ...o, altin:o.acikAltin, gumus:o.acikGumus, adet:o.acikAdet, ayarlar:o.acikAyarlar } : o;
-                  const fotoHepsi = (s.kalemler||[]).filter(k=>k.foto && (!kismiOzet || !["tamam","teslim","hurda"].includes(kdK[k.id]||k.durum||"baslanmadi"))); const fotolar = fotoHepsi.slice(0,8);
+                  const bitKalem = (k) => ["tamam","teslim","hurda"].includes(kdK[k.id]||k.durum||"baslanmadi");
+                  const oG = !kismiOzet ? o : tamAsamaF
+                    ? { ...o, altin:Math.max(0,o.altin-o.acikAltin), gumus:Math.max(0,o.gumus-o.acikGumus), adet:o.adet-o.acikAdet, ayarlar:Object.fromEntries(Object.entries(o.ayarlar).map(([a,g])=>[a,Math.max(0,g-(o.acikAyarlar[a]||0))]).filter(([,g])=>g>0.0001)) }
+                    : { ...o, altin:o.acikAltin, gumus:o.acikGumus, adet:o.acikAdet, ayarlar:o.acikAyarlar };
+                  const fotoHepsi = (s.kalemler||[]).filter(k=>k.foto && (!kismiOzet || (tamAsamaF ? bitKalem(k) : !bitKalem(k)))); const fotolar = fotoHepsi.slice(0,8);
                   return (
                     <Fragment key={s.id}>
-                    {tamSip && i===sl.length-nTam && <button onClick={()=>setSipTamAcik(p=>({...p,[key]:false}))} style={{ gridColumn:"1 / -1", background:"transparent", border:"1px dashed "+T.border, borderRadius:10, padding:"10px 14px", color:T.sub, fontSize:13, fontWeight:600, cursor:"pointer", textAlign:"left" }}>▾ Tamamlanan ({nTam}) — gizlemek için tıkla</button>}
+                    {tamSip && !tamAsamaF && i===sl.length-nTam && <button onClick={()=>setSipTamAcik(p=>({...p,[key]:false}))} style={{ gridColumn:"1 / -1", background:"transparent", border:"1px dashed "+T.border, borderRadius:10, padding:"10px 14px", color:T.sub, fontSize:13, fontWeight:600, cursor:"pointer", textAlign:"left" }}>▾ Tamamlanan ({nTam}) — gizlemek için tıkla</button>}
                     <div draggable={!bitti(s)} onDragStart={e=>{ setSipSurukle(s.id); e.dataTransfer.setData("text/plain", s.id); e.dataTransfer.effectAllowed="move"; }} onDragEnd={()=>{ setSipSurukle(""); setSipHedefAy(""); }}
                       onClick={()=>setSipDrawer(s.id)}
                       className="sm-oc" style={{ display:"flex", flexDirection:"column", cursor:bitti(s)?"default":"grab", opacity:sipSurukle===s.id?0.4:1, zoom:kartZoom, padding:"12px 14px", borderRadius:12, background:_acikTema?"#f8f8f9":"#0c0c0c", color:_yazi, ...isik(c.c), border:"1px solid "+(_acikTema?T.border:"#2c2c2c"), borderLeft:"3px solid "+c.c }}>
@@ -17121,7 +17126,7 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
                       {(() => { const t = !bitti(s) && teslimMetin(s); return t ? <div style={{ marginTop:6, fontSize:12.1, color:t.c, fontWeight:600 }}>{t.m}</div> : null; })()}
                       </div>
 
-                      {kismi && <div className="sm-oc-eski" onClick={e=>e.stopPropagation()} style={{ marginTop:8, fontSize:12.1, color:T.sub, display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}><span>{kismiOzet ? o.acikKalem+" kalem tezgahta · "+(o.adet-o.acikAdet)+" adet tamamlandı (toplam "+o.adet+" adet, "+fN(o.gram,1)+" gr)" : "Tüm kalemler gösteriliyor"}</span><span onClick={()=>setSipTamKalem(p=>({...p,[s.id]:!p[s.id]}))} style={{ cursor:"pointer", textDecoration:"underline" }}>{kismiOzet ? "Tamamlananları da göster" : "Yalnız tezgahtakileri göster"}</span></div>}
+                      {kismi && <div className="sm-oc-eski" onClick={e=>e.stopPropagation()} style={{ marginTop:8, fontSize:12.1, color:T.sub, display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}><span>{kismiOzet ? (tamAsamaF ? (o.aktif-o.acikKalem)+" kalem tamamlandı · "+o.acikAdet+" adet hâlâ tezgahta (toplam "+o.adet+" adet, "+fN(o.gram,1)+" gr)" : o.acikKalem+" kalem tezgahta · "+(o.adet-o.acikAdet)+" adet tamamlandı (toplam "+o.adet+" adet, "+fN(o.gram,1)+" gr)") : "Tüm kalemler gösteriliyor"}</span><span onClick={()=>setSipTamKalem(p=>({...p,[s.id]:!p[s.id]}))} style={{ cursor:"pointer", textDecoration:"underline" }}>{kismiOzet ? (tamAsamaF ? "Tüm kalemleri göster" : "Tamamlananları da göster") : (tamAsamaF ? "Yalnız tamamlananları göster" : "Yalnız tezgahtakileri göster")}</span></div>}
                       {fotolar.length>0 && <div className="sm-oc-eski" style={{ display:"grid", gridTemplateColumns:"repeat(4, minmax(0,1fr))", gap:5, marginTop:8 }}>{fotolar.map((k,ix)=><div key={k.id} title={(k.kod||"")+" "+(k.ad||"")+" — model kartını aç"} onClick={e=>{ const mm=modeller.find(x=>x.id===k.id) || modeller.find(x=>k.kod && x.kod===k.kod); if (mm) { e.stopPropagation(); openEM(mm); } }} style={{ position:"relative", aspectRatio:"1 / 1", borderRadius:8, overflow:"hidden", background:"rgba(0,0,0,0.06)", cursor:"zoom-in" }}><img loading="lazy" decoding="async" src={k.foto} alt="" draggable={false} style={{ width:"100%", height:"100%", objectFit:"cover", display:"block" }}/>{ix===7 && fotoHepsi.length>8 && <div style={{ position:"absolute", inset:0, background:"rgba(0,0,0,0.5)", color:"#fff", fontSize:15, fontWeight:600, display:"flex", alignItems:"center", justifyContent:"center" }}>+{fotoHepsi.length-7}</div>}</div>)}</div>}
                     </div>
                     </Fragment>
