@@ -1,7 +1,7 @@
 import { supabase, dbLoad, dbSave, fotoYukleStorage, yedekKaydet, yedekListesi, yedekGetir, bugunYedekVarMi, tabloModelleriSenkron, tabloModelleriToplu, tabloModelSil, tabloSiparisleriSenkron, tabloSiparisleriToplu, tabloSiparisSil, tabloMusterileriYaz, akilliModelOku, akilliSiparisOku, akilliMusteriOku, islemKaydet, islemGecmisiGetir, realtimeBaslat, tabloKoleksiyonlariYaz, tabloKasaYaz, akilliKoleksiyonOku, akilliKasaOku, tabloKoleksiyonlariOku, tabloKasaOku, saglikDenetimi, ekranSunucuFarki, toptanciKaydet, toptancilariGetir, toptanciSil, vitrinGecmisiGetir, vitrinEnCokBakilan, vitrinOzetGetir, vitrinAnaliz, vitrinGetirGuvenli, siparisOlusturGuvenli, siparislerimGetirGuvenli, siparisIptalGuvenli, siparisGuncelleGuvenli, siparisMusteriGizleGuvenli, vitrinAktiviteKaydetGuvenli, vitrinSupheliCihazlar, vitrinCevrimiciMusteriler, radarTrendleriOku, radarKaynaklariOku, radarKanitlariOku, radarTumKanitlariOku, radarTrendGuncelle, radarTrendSil, radarManuelKanitEkle } from "./supabase.js";
 import { useState, useEffect, useCallback, useMemo, useRef, Fragment } from "react";
 
-const SURUM_TARIH = "26 Kas 20:15"; // her yeni App.jsx tesliminde güncellenir — ekranın yenilendiğini anlamak için sağ üstte görünür
+const SURUM_TARIH = "26 Kas 20:35"; // her yeni App.jsx tesliminde güncellenir — ekranın yenilendiğini anlamak için sağ üstte görünür
 const uid = () => "x" + Date.now() + Math.random().toString(36).substr(2, 5);
 // ═══ ÇALIŞAN AUTH OTURUMU — yerel şifre kontrolünün ardından gerçek Supabase Auth oturumu açar ═══
 // (RLS politikaları "authenticated" rolüne dayanacak; hesap Supabase Dashboard'da manuel oluşturuldu)
@@ -17055,7 +17055,7 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
                   const o = oz[i], c = chip(s);
                   const teslimT = s.teslimTarihi ? new Date(s.teslimTarihi).getTime() : 0;
                   const gecikti = o.gecikti;
-                  const kdK = s.kalemDurumlar||{}; const kismi = !tamSip && o.acikKalem>0 && o.acikKalem<o.aktif && s.onayDurum!=="red" && s.onayDurum!=="iptal"; const kismiOzet = kismi && !sipTamKalem[s.id];
+                  const kdK = s.kalemDurumlar||{}; const kismi = o.acikKalem>0 && o.acikKalem<o.aktif && s.onayDurum!=="red" && s.onayDurum!=="iptal"; const kismiOzet = kismi && !sipTamKalem[s.id];
                   const bitKalem = (k) => ["tamam","teslim","hurda"].includes(kdK[k.id]||k.durum||"baslanmadi");
                   const oG = !kismiOzet ? o : tamAsamaF
                     ? { ...o, altin:Math.max(0,o.altin-o.acikAltin), gumus:Math.max(0,o.gumus-o.acikGumus), adet:o.adet-o.acikAdet, ayarlar:Object.fromEntries(Object.entries(o.ayarlar).map(([a,g])=>[a,Math.max(0,g-(o.acikAyarlar[a]||0))]).filter(([,g])=>g>0.0001)) }
