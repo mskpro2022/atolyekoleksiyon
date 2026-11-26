@@ -1,7 +1,7 @@
 import { supabase, dbLoad, dbSave, fotoYukleStorage, yedekKaydet, yedekListesi, yedekGetir, bugunYedekVarMi, tabloModelleriSenkron, tabloModelleriToplu, tabloModelSil, tabloSiparisleriSenkron, tabloSiparisleriToplu, tabloSiparisSil, tabloMusterileriYaz, akilliModelOku, akilliSiparisOku, akilliMusteriOku, islemKaydet, islemGecmisiGetir, realtimeBaslat, tabloKoleksiyonlariYaz, tabloKasaYaz, akilliKoleksiyonOku, akilliKasaOku, tabloKoleksiyonlariOku, tabloKasaOku, saglikDenetimi, ekranSunucuFarki, toptanciKaydet, toptancilariGetir, toptanciSil, vitrinGecmisiGetir, vitrinEnCokBakilan, vitrinOzetGetir, vitrinAnaliz, vitrinGetirGuvenli, siparisOlusturGuvenli, siparislerimGetirGuvenli, siparisIptalGuvenli, siparisGuncelleGuvenli, siparisMusteriGizleGuvenli, vitrinAktiviteKaydetGuvenli, vitrinSupheliCihazlar, vitrinCevrimiciMusteriler, radarTrendleriOku, radarKaynaklariOku, radarKanitlariOku, radarTumKanitlariOku, radarTrendGuncelle, radarTrendSil, radarManuelKanitEkle } from "./supabase.js";
 import { useState, useEffect, useCallback, useMemo, useRef, Fragment } from "react";
 
-const SURUM_TARIH = "26 Kas 18:00"; // her yeni App.jsx tesliminde güncellenir — ekranın yenilendiğini anlamak için sağ üstte görünür
+const SURUM_TARIH = "26 Kas 19:00"; // her yeni App.jsx tesliminde güncellenir — ekranın yenilendiğini anlamak için sağ üstte görünür
 const uid = () => "x" + Date.now() + Math.random().toString(36).substr(2, 5);
 // ═══ ÇALIŞAN AUTH OTURUMU — yerel şifre kontrolünün ardından gerçek Supabase Auth oturumu açar ═══
 // (RLS politikaları "authenticated" rolüne dayanacak; hesap Supabase Dashboard'da manuel oluşturuldu)
@@ -13503,20 +13503,34 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
     islemKaydet(AKTIF_SIRKET_ONEK, "ekle", "sipariş", (sp.siparisNo || sp.musteri || "") + " · kalem iptali geri alındı: " + (k.kod || k.ad || ""));
     toastGoster("ok", (k.kod || k.ad || "Model") + " geri eklendi");
   };
-  const devirAc = (sipId, kalemId, kalemAd, adet) => {
+  const devretAc = (s, k, hA, iA, tA) => {
+    if ((k.boyListesi || []).length) { toastGoster("hata", "Boy listeli kalem devredilemez"); return; }
+    const maks = (k.adet || 1) - (hA || 0) - (iA || 0) - (tA || 0);
+    if (maks <= 0) { toastGoster("hata", "Devredilecek açık adet yok"); return; }
+    if (maks === (k.adet || 1) && (s.kalemler || []).length <= 1) { toastGoster("hata", "Siparişteki tek kalemin tamamı devredilemez; adedi azaltın veya siparişi tamamlayın"); return; }
+    devirAc(s.id, k.id, k.ad, maks, "devret", maks);
+  };
+  const devirAc = (sipId, kalemId, kalemAd, adet, tur, maks) => {
     const kay = siparisler.find(x => x.id === sipId);
     let tarih = "";
     try { const d = kay && kay.teslimTarihi ? new Date(kay.teslimTarihi) : new Date(); if (isNaN(d.getTime())) throw 0; d.setDate(d.getDate() + 7); tarih = d.toISOString().slice(0, 10); } catch (e) { const d = new Date(); d.setDate(d.getDate() + 7); tarih = d.toISOString().slice(0, 10); }
-    setDevirModal({ sipId, kalemId, kalemAd, adet, hedef: "yeni", tarih });
+    setDevirModal({ sipId, kalemId, kalemAd, adet, hedef: "yeni", tarih, ...(tur === "devret" ? { tur, maks } : {}) });
   };
   const devirAcikSiparisler = (kay) => (siparisler || []).filter(x => x.id !== kay.id && (x.musKod ? x.musKod === kay.musKod : x.musteri === kay.musteri) && x.onayDurum !== "red" && x.onayDurum !== "iptal" && !(() => { const son = (x.durumGecmisi || []).slice(-1)[0]; return !!son && ["tamam", "teslim"].includes(son.durum); })());
   const devirUygula = () => {
     const dm = devirModal; if (!dm) return;
     const kay = siparisler.find(x => x.id === dm.sipId); if (!kay) { setDevirModal(null); return; }
     const kal = (kay.kalemler || []).find(k => k.id === dm.kalemId); if (!kal) { setDevirModal(null); return; }
-    const n = Number(dm.adet) || 0; if (n <= 0) { setDevirModal(null); return; }
+    const n = Math.floor(Number(dm.adet) || 0); if (n <= 0) { setDevirModal(null); return; }
+    const devretMi = dm.tur === "devret";
+    if (devretMi) {
+      const hA0 = (kay.kalemHurda || {})[kal.id] || 0, iA0 = (kay.kalemIade || {})[kal.id] || 0, tA0 = (kay.kalemTamir || {})[kal.id] || 0;
+      const mk = (kal.adet || 1) - hA0 - iA0 - tA0;
+      if (n > mk) { toastGoster("hata", "En fazla " + mk + " adet devredilebilir"); return; }
+      if (n === (kal.adet || 1) && (kay.kalemler || []).length <= 1) { toastGoster("hata", "Siparişteki tek kalemin tamamı devredilemez"); return; }
+    }
     const kaynakNo = kay.siparisNo || kay.musteri || "";
-    const notM = "Devir: " + kaynakNo + " (hurda)";
+    const notM = "Devir: " + kaynakNo + (devretMi ? "" : " (hurda)");
     const kopya = (() => { const c = { ...kal, adet: n, sipNot: [kal.sipNot, notM].filter(Boolean).join(" · ") }; delete c.durum; delete c.boyListesi; return c; })();
     let liste;
     let hedefNo = "";
@@ -13534,10 +13548,14 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
       liste = siparisler.map(x => x.id === hed.id ? { ...x, kalemler: yeniKalemler } : x);
       hedefNo = hed.siparisNo || "açık sipariş";
     }
-    liste = liste.map(x => x.id === kay.id ? { ...x, kalemDevir: { ...(x.kalemDevir || {}), [kal.id]: ((x.kalemDevir || {})[kal.id] || 0) + n } } : x);
+    if (devretMi) {
+      liste = liste.map(x => x.id !== kay.id ? x : { ...x, kalemler: (n >= (kal.adet || 1) ? (x.kalemler || []).filter(k => k.id !== kal.id) : (x.kalemler || []).map(k => k.id === kal.id ? { ...k, adet: (k.adet || 1) - n, sipNot: [k.sipNot, "Devredilen: " + n + " → " + hedefNo].filter(Boolean).join(" · ") } : k)) });
+    } else {
+      liste = liste.map(x => x.id === kay.id ? { ...x, kalemDevir: { ...(x.kalemDevir || {}), [kal.id]: ((x.kalemDevir || {})[kal.id] || 0) + n } } : x);
+    }
     svS(liste);
-    islemKaydet(AKTIF_SIRKET_ONEK, "ekle", "sipariş", "Hurda devri: " + (kal.kod || kal.ad || "") + " ×" + n + " → " + hedefNo);
-    toastGoster("ok", n + " adet haftaya devredildi (" + hedefNo + ")");
+    islemKaydet(AKTIF_SIRKET_ONEK, "ekle", "sipariş", (devretMi ? "Devir: " : "Hurda devri: ") + (kal.kod || kal.ad || "") + " ×" + n + " → " + hedefNo);
+    toastGoster("ok", n + " adet devredildi (" + hedefNo + ")");
     setDevirModal(null);
   };
   const [tamirModal, setTamirModal] = useState(null); // {sipId, kalemId, kalemAd, maxAdet, mevcAdet}
@@ -16861,6 +16879,7 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
                     { l:"🗑 Hurda"+(hA>0?" ("+hA+")":""), c:"#e85a4f", f:()=>setHurdaModal({sipId:s.id,kalemId:k.id,kalemAd:k.ad,maxAdet:k.adet||1,mevcAdet:hA,mevcNeden:(s.kalemHurdaNeden||{})[k.id]||""}) },
                     { l:"↩ İade"+(iA>0?" ("+iA+")":""), c:"#a78bfa", f:()=>setIadeModal({sipId:s.id,kalemId:k.id,kalemAd:k.ad,kalemKod:k.kod,maxAdet:k.adet||1,mevcAdet:iA,mevcNeden:(s.kalemIadeNeden||{})[k.id]||"",iadeTuru:(s.kalemIadeTuru||{})[k.id]||"para"}) },
                     { l:"✏️ Adet düzenle ("+(k.adet||1)+")", c:"#d4a017", f:()=>setAdetModal({ sipId:s.id, kalemId:k.id, kalemAd:k.ad, kalemKod:k.kod, eski:k.adet||1, yeni:String(k.adet||1), alt:hA+iA+tA }) },
+                    { l:"Devret", c:"#c9a84c", f:()=>devretAc(s,k,hA,iA,tA) },
                     { l:"🔧 Tamir"+(tA>0?" ("+tA+")":""), c:"#5b9bd5", f:()=>setTamirModal({sipId:s.id,kalemId:k.id,kalemAd:k.ad,kalemKod:k.kod,maxAdet:k.adet||1,mevcAdet:tA,mevcNeden:tamirAciklamaOku(s,k.id), mevcNedenler:tamirNedenCoz(s,k.id,true)}) },
                     ...(yoneticiMi ? [{ l:"✕ Müşteri iptal etti — siparişten çıkar", c:"#e85a4f", f:()=>kalemIptalEt(s,k) }] : []),
                   ])}
@@ -21047,8 +21066,13 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
         const kutu = (aktif) => ({ border:"1px solid", borderColor: aktif ? "var(--goldtext)" : "rgba(153,138,110,0.25)", background: aktif ? "rgba(201,168,76,0.10)" : "transparent", borderRadius:8, padding:"9px 12px", cursor:"pointer", marginBottom:6, fontSize:11, color:"inherit" });
         return (
           <Modal open={true} onClose={()=>setDevirModal(null)} title="Haftaya devir" T={T}>
-            <div style={{ fontSize:12, fontWeight:700, marginBottom:4 }}>{devirModal.adet} adet haftaya devredilsin mi?</div>
-            <div style={{ fontSize:10, color:"#998a6e", marginBottom:12 }}>{devirModal.kalemAd} · {kay.musteri}{kay.siparisNo ? " · " + kay.siparisNo : ""}<br/>Aynı işçilik fiyatıyla eklenir. Bu siparişteki net adet zaten hurdayı düşüyor, çift sayılmaz.</div>
+            {devirModal.tur === "devret" ? (
+              <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:4 }}>
+                <input type="number" min="1" max={devirModal.maks} value={devirModal.adet} onChange={e=>setDevirModal(p=>({...p,adet:e.target.value}))} style={{ ...IS, width:70, padding:"4px 8px", fontSize:12 }}/>
+                <span style={{ fontSize:12, fontWeight:700 }}>adet devredilsin (en fazla {devirModal.maks})</span>
+              </div>
+            ) : <div style={{ fontSize:12, fontWeight:700, marginBottom:4 }}>{devirModal.adet} adet haftaya devredilsin mi?</div>}
+            <div style={{ fontSize:10, color:"#998a6e", marginBottom:12 }}>{devirModal.kalemAd} · {kay.musteri}{kay.siparisNo ? " · " + kay.siparisNo : ""}<br/>{devirModal.tur === "devret" ? "Aynı işçilik fiyatıyla hedefe eklenir; bu siparişten düşer." : "Aynı işçilik fiyatıyla eklenir. Bu siparişteki net adet zaten hurdayı düşüyor, çift sayılmaz."}</div>
             <div onClick={()=>sec("yeni")} style={kutu(devirModal.hedef === "yeni")}>
               <div style={{ fontWeight:700 }}>Yeni sipariş oluştur</div>
               {devirModal.hedef === "yeni" && (
