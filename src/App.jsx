@@ -1,7 +1,7 @@
 import { supabase, dbLoad, dbSave, fotoYukleStorage, yedekKaydet, yedekListesi, yedekGetir, bugunYedekVarMi, tabloModelleriSenkron, tabloModelleriToplu, tabloModelSil, tabloSiparisleriSenkron, tabloSiparisleriToplu, tabloSiparisSil, tabloMusterileriYaz, akilliModelOku, akilliSiparisOku, akilliMusteriOku, islemKaydet, islemGecmisiGetir, realtimeBaslat, tabloKoleksiyonlariYaz, tabloKasaYaz, akilliKoleksiyonOku, akilliKasaOku, tabloKoleksiyonlariOku, tabloKasaOku, saglikDenetimi, ekranSunucuFarki, toptanciKaydet, toptancilariGetir, toptanciSil, vitrinGecmisiGetir, vitrinEnCokBakilan, vitrinOzetGetir, vitrinAnaliz, vitrinGetirGuvenli, siparisOlusturGuvenli, siparislerimGetirGuvenli, siparisIptalGuvenli, siparisGuncelleGuvenli, siparisMusteriGizleGuvenli, vitrinAktiviteKaydetGuvenli, vitrinSupheliCihazlar, vitrinCevrimiciMusteriler, radarTrendleriOku, radarKaynaklariOku, radarKanitlariOku, radarTumKanitlariOku, radarTrendGuncelle, radarTrendSil, radarManuelKanitEkle } from "./supabase.js";
 import { useState, useEffect, useCallback, useMemo, useRef, Fragment } from "react";
 
-const SURUM_TARIH = "25 Kas 22:30"; // her yeni App.jsx tesliminde güncellenir — ekranın yenilendiğini anlamak için sağ üstte görünür
+const SURUM_TARIH = "26 Kas 16:30"; // her yeni App.jsx tesliminde güncellenir — ekranın yenilendiğini anlamak için sağ üstte görünür
 const uid = () => "x" + Date.now() + Math.random().toString(36).substr(2, 5);
 // ═══ ÇALIŞAN AUTH OTURUMU — yerel şifre kontrolünün ardından gerçek Supabase Auth oturumu açar ═══
 // (RLS politikaları "authenticated" rolüne dayanacak; hesap Supabase Dashboard'da manuel oluşturuldu)
@@ -249,6 +249,13 @@ function iscilikOtoCoz(m, ayar, puan) {
   const hg = (Number(ISCILIK_CTX.altinKgUSD) || 0) / 1000;
   if ((m.iscilikBirim || "dolar") === "dolar" && hg > 0) return { dolar: Math.ceil(x * hg * 1000) / 1000, birim: "dolar" };
   return { dolar: x, birim: "milyem" };
+}
+// Birim değişince TUTAR da çevrilir (3 $/gr → 0.03 milyem/gr). Altın fiyatı yoksa null (çevrilemez)
+function iscilikBirimDonustur(deger, eski, yeni, altinKgUSD) {
+  if (eski === yeni || deger === "" || deger == null) return deger;
+  const d = Number(deger); if (!isFinite(d) || d === 0) return deger;
+  const hg = (Number(altinKgUSD) || 0) / 1000; if (!(hg > 0)) return null;
+  return String(yeni === "milyem" ? Math.round(d / hg * 1e6) / 1e6 : Math.round(d * hg * 1e4) / 1e4);
 }
 // Karşılık yazısı: $ / gr ise "≈ milyem", milyem / gr ise "≈ $"
 function iscilikKarsilik(deger, birim, altinKgUSD) {
@@ -14892,6 +14899,24 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
   // yan yana sıralanır. Grupların kendi sırası, o koleksiyonun listeye İLK girdiği ana göre belirlenir;
   // aynı koleksiyon içindeki modellerin kendi ekleniş sırası korunur (stabil sıralama).
   const siraliKonfListe = (liste, mod) => konfSiralaListe(liste, mod || konfSira, m => konfAyarlar[m.id] || konfAyar);
+  // Siparişi KOPYALA → konfirmasyona (orijinal sipariş silinmez; kod/ayar/adet düzenlenip yeni sipariş olarak gönderilir)
+  const konfKopyala = s => {
+    if (konfList.length > 0 && !window.confirm("Konfirmasyonda yarım kalmış bir liste var; kopya onun yerine geçecek. Devam edilsin mi?")) return;
+    const bm = [], gor = new Set();
+    (s.kalemler||[]).forEach(k => { if (!gor.has(k.id)) { gor.add(k.id); bm.push((modeller||[]).find(x => x.id === k.id) || k); } });
+    setKonfList(siraliKonfListe(bm)); setKonfMus(s.musteri||""); setKonfTeslim(s.teslimTarihi||""); setKonfSipAciklama(s.aciklama||"");
+    setKonfAyar(s.kalemler?.[0]?.secilenAyar||"14K");
+    const yA={}, yN={}, yR={}, yB={};
+    (s.kalemler||[]).forEach(k=>{
+      yN[k.id]=k.sipNot||""; yR[k.id]=k.renk||"Sari";
+      if (k.boyListesi && k.boyListesi.length) { yB[k.id]=k.boyListesi.map(b=>({ ...b })); }
+      else if (k.boy && k._boyIdx !== undefined) { (yB[k.id] = yB[k.id] || []).push({ ...k.boy }); }
+      else yA[k.id]=k.adet||1;
+    });
+    setKonfAdet(yA); setKonfNot(yN); setKonfRenkler(yR); setKonfBoylar(yB); setKonfFiyatlar({});
+    setSayfa("konfirmasyon");
+    toastGoster("ok","Sipariş konfirmasyona kopyalandı — kodu / ayarı düzenleyip gönderebilirsiniz");
+  };
   const konfSiraDegistir = (yeniMod) => { setKonfSira(yeniMod); setKonfList(p => konfSiralaListe(p, yeniMod, m => konfAyarlar[m.id] || konfAyar)); };
   // Listedeki bir modeli, YERİNİ ve ayar/renk/adet/not/boy seçimlerini koruyarak başka bir modelle değiştirir
   const konfModelDegistir = (eski) => {
@@ -16550,24 +16575,6 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
     (s.kalemler||[]).forEach(k=>{ yA[k.id]=k.adet||1; yN[k.id]=k.sipNot||""; yR[k.id]=k.renk||"Sari"; });
     setKonfAdet(yA); setKonfNot(yN); setKonfRenkler(yR);
     delSip(s.id); setSayfa("konfirmasyon");
-  };
-  // Siparişi KOPYALA → konfirmasyona (orijinal sipariş silinmez; kod/ayar/adet düzenlenip yeni sipariş olarak gönderilir)
-  const konfKopyala = s => {
-    if (konfList.length > 0 && !window.confirm("Konfirmasyonda yarım kalmış bir liste var; kopya onun yerine geçecek. Devam edilsin mi?")) return;
-    const bm = [], gor = new Set();
-    (s.kalemler||[]).forEach(k => { if (!gor.has(k.id)) { gor.add(k.id); bm.push((modeller||[]).find(x => x.id === k.id) || k); } });
-    setKonfList(siraliKonfListe(bm)); setKonfMus(s.musteri||""); setKonfTeslim(s.teslimTarihi||""); setKonfSipAciklama(s.aciklama||"");
-    setKonfAyar(s.kalemler?.[0]?.secilenAyar||"14K");
-    const yA={}, yN={}, yR={}, yB={};
-    (s.kalemler||[]).forEach(k=>{
-      yN[k.id]=k.sipNot||""; yR[k.id]=k.renk||"Sari";
-      if (k.boyListesi && k.boyListesi.length) { yB[k.id]=k.boyListesi.map(b=>({ ...b })); }
-      else if (k.boy && k._boyIdx !== undefined) { (yB[k.id] = yB[k.id] || []).push({ ...k.boy }); }
-      else yA[k.id]=k.adet||1;
-    });
-    setKonfAdet(yA); setKonfNot(yN); setKonfRenkler(yR); setKonfBoylar(yB); setKonfFiyatlar({});
-    setSayfa("konfirmasyon");
-    toastGoster("ok","Sipariş konfirmasyona kopyalandı — kodu / ayarı düzenleyip gönderebilirsiniz");
   };
   const menu = (id, items) => (
     <div style={{ position:"relative" }} onClick={e=>e.stopPropagation()}>
@@ -22346,7 +22353,7 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
           <div style={{ fontSize:9, fontWeight:700, color:"#e8833a", marginBottom:8 }}>ISCILIK</div>
           <Fl label="Iscilik birim ve tutar (varsayilan)" hint={fGram&&fIscilikDolar ? (fIscilikBirim==="milyem" ? fN(Number(fGram))+" x "+fN(Number(fIscilikDolar),3)+" mly = "+fN(Number(fGram)*Number(fIscilikDolar),3)+" has" : fN(Number(fGram))+" x "+fUSD(Number(fIscilikDolar))+" = "+fUSD(Number(fGram)*Number(fIscilikDolar))) : ""} T={T}>
             <div style={{ display:"flex", gap:6 }}>
-              <select value={fIscilikBirim} onChange={e=>setFIscilikBirim(e.target.value)} style={{ ...IS, width:130, padding:"8px 6px", fontSize:11, flexShrink:0 }}>
+              <select value={fIscilikBirim} onChange={e=>{ const yb = e.target.value; const y = iscilikBirimDonustur(fIscilikDolar, fIscilikBirim, yb, altinKgUSD); if (y === null) { toastGoster("hata","Altın fiyatı yok: birim çevrilemedi"); return; } setFIscilikBirim(yb); setFIscilikDolar(y); }} style={{ ...IS, width:130, padding:"8px 6px", fontSize:11, flexShrink:0 }}>
                 <option value="dolar">$ / gr</option>
                 <option value="milyem">milyem / gr</option>
               </select>
@@ -22398,7 +22405,7 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
                           <span style={{ fontSize:7, fontWeight:700, color: ozel?"#e8833a":"#8a7d64" }}>{ozel?"ÖZEL":(vr.oto?"OTOMATİK":(vr.std?"STANDART":"VARSAYILAN"))}</span>
                         </div>
                         <input type="number" value={ozel?val.dolar:""} onChange={e=>kutuYaz(ay,e.target.value)} placeholder={vr.dolar} style={{ ...IS, width:"100%", boxSizing:"border-box", padding:"5px 6px", fontSize:12, fontWeight:700 }}/>
-                        <div onClick={()=>{ if (!ozel) return; setFIscilikAyarlar(p=>({ ...p, [ay]:{ ...p[ay], birim: birim==="milyem" ? "dolar" : "milyem" } })); }} title={ozel ? "Birimi değiştir ($ / gr ↔ milyem / gr)" : "Değer girince birim değiştirilebilir"} style={{ fontSize:7, color: ozel ? "#e8833a" : "#8a7d64", marginTop:2, cursor: ozel ? "pointer" : "default", textDecoration: ozel ? "underline dotted" : "none" }}>{birim==="milyem"?"milyem / gr":"$ / gr"}{ozel && " ⇄"}</div>
+                        <div onClick={()=>{ if (!ozel) return; const yb = birim==="milyem" ? "dolar" : "milyem"; const y = iscilikBirimDonustur(val.dolar, birim, yb, altinKgUSD); if (y === null) { toastGoster("hata","Altın fiyatı yok: birim çevrilemedi"); return; } setFIscilikAyarlar(p=>({ ...p, [ay]:{ ...p[ay], birim: yb, dolar: y } })); }} title={ozel ? "Birimi değiştir ($ / gr ↔ milyem / gr)" : "Değer girince birim değiştirilebilir"} style={{ fontSize:7, color: ozel ? "#e8833a" : "#8a7d64", marginTop:2, cursor: ozel ? "pointer" : "default", textDecoration: ozel ? "underline dotted" : "none" }}>{birim==="milyem"?"milyem / gr":"$ / gr"}{ozel && " ⇄"}</div>
                         {iscilikKarsilik(ozel?val.dolar:vr.dolar, birim, altinKgUSD) && <div style={{ fontSize:8, color:"#c9a46a", marginTop:1 }}>{iscilikKarsilik(ozel?val.dolar:vr.dolar, birim, altinKgUSD)}</div>}
                       </div>
                     );
@@ -22422,7 +22429,7 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
                 {digerler.map(([ayar,val]) => (
                   <div key={ayar} style={{ display:"flex", gap:5, alignItems:"center", marginBottom:5 }}>
                     <span style={{ fontSize:9, fontWeight:700, color:GOLD, width:30, flexShrink:0 }}>{ayar}</span>
-                    <select value={val.birim||"dolar"} onChange={e=>setFIscilikAyarlar(p=>({...p,[ayar]:{...p[ayar],birim:e.target.value}}))} style={{ ...IS, width:100, padding:"4px 5px", fontSize:10 }}>
+                    <select value={val.birim||"dolar"} onChange={e=>{ const yb = e.target.value; const y = iscilikBirimDonustur(val.dolar, val.birim||"dolar", yb, altinKgUSD); if (y === null) { toastGoster("hata","Altın fiyatı yok: birim çevrilemedi"); return; } setFIscilikAyarlar(p=>({...p,[ayar]:{...p[ayar],birim:yb,dolar:y}})); }} style={{ ...IS, width:100, padding:"4px 5px", fontSize:10 }}>
                       <option value="dolar">$ / gr</option>
                       <option value="milyem">milyem / gr</option>
                     </select>
