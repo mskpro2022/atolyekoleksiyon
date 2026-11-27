@@ -1,7 +1,7 @@
 import { supabase, dbLoad, dbSave, fotoYukleStorage, yedekKaydet, yedekListesi, yedekGetir, bugunYedekVarMi, tabloModelleriSenkron, tabloModelleriToplu, tabloModelSil, tabloSiparisleriSenkron, tabloSiparisleriToplu, tabloSiparisSil, tabloMusterileriYaz, akilliModelOku, akilliSiparisOku, akilliMusteriOku, islemKaydet, islemGecmisiGetir, realtimeBaslat, tabloKoleksiyonlariYaz, tabloKasaYaz, akilliKoleksiyonOku, akilliKasaOku, tabloKoleksiyonlariOku, tabloKasaOku, saglikDenetimi, ekranSunucuFarki, toptanciKaydet, toptancilariGetir, toptanciSil, vitrinGecmisiGetir, vitrinEnCokBakilan, vitrinOzetGetir, vitrinAnaliz, vitrinGetirGuvenli, siparisOlusturGuvenli, siparislerimGetirGuvenli, siparisIptalGuvenli, siparisGuncelleGuvenli, siparisMusteriGizleGuvenli, vitrinAktiviteKaydetGuvenli, vitrinSupheliCihazlar, vitrinCevrimiciMusteriler, radarTrendleriOku, radarKaynaklariOku, radarKanitlariOku, radarTumKanitlariOku, radarTrendGuncelle, radarTrendSil, radarManuelKanitEkle } from "./supabase.js";
 import { useState, useEffect, useCallback, useMemo, useRef, Fragment } from "react";
 
-const SURUM_TARIH = "26 Kas 20:35"; // her yeni App.jsx tesliminde güncellenir — ekranın yenilendiğini anlamak için sağ üstte görünür
+const SURUM_TARIH = "27 Kas 17:00"; // her yeni App.jsx tesliminde güncellenir — ekranın yenilendiğini anlamak için sağ üstte görünür
 const uid = () => "x" + Date.now() + Math.random().toString(36).substr(2, 5);
 // ═══ ÇALIŞAN AUTH OTURUMU — yerel şifre kontrolünün ardından gerçek Supabase Auth oturumu açar ═══
 // (RLS politikaları "authenticated" rolüne dayanacak; hesap Supabase Dashboard'da manuel oluşturuldu)
@@ -6202,7 +6202,7 @@ function OngoruPaneli({ T, GH, siparisler, kasa, altinKgUSD, mc, onAc }) {
   // Tahmin ↔ gerçekleşen: Rhino satış satırları (EVRAK NOTU / ÜRÜN AÇK2 içinde bizim no ya da müşteri Ref/PO)
   const gercek = useMemo(() => {
     if (!v) return null;
-    const satirlar = (v.satislar || []).filter(r => !/GÜMÜŞ|GUMUS/i.test(String(r[2]))).map(r => ({ r, t: ongNorm((r[11] || "") + " " + (r[12] || "")) })).filter(x => x.t);
+    const satirlar = (v.satislar || []).filter(r => !/GÜMÜŞ|GUMUS/i.test(String(r[2]))).map(r => ({ r, t: ongNorm((r[11] || "") + " " + (r[12] || "")), e: ongNorm(r[1]) })).filter(x => x.t || x.e);
     const sonuc = [];
     let eslesmeyen = 0;
     H.tamamSip.forEach(o => {
@@ -6210,7 +6210,7 @@ function OngoruPaneli({ T, GH, siparisler, kasa, altinKgUSD, mc, onAc }) {
       if (sp.siparisNo) anah.push(ongNorm(sp.siparisNo));
       const ak = psPdfAnahtar(sp.aciklama); if (ak.ref) anah.push(ongNorm(ak.ref)); if (ak.po) anah.push(ongNorm(ak.po));
       const keys = anah.filter(k => k.length >= 4);
-      const rows = keys.length ? satirlar.filter(x => keys.some(k => x.t.includes(k))).map(x => x.r) : [];
+      const rows = keys.length ? satirlar.filter(x => keys.some(k => (x.t && x.t.includes(k)) || x.e === k)).map(x => x.r) : [];
       if (!rows.length) { eslesmeyen++; return; }
       const rh = rows.reduce((a, r) => a + (Number(r[3]) || 0), 0), ri = rows.reduce((a, r) => a + (Number(r[4]) || 0), 0), rm = rows.reduce((a, r) => a + (Number(r[6]) || 0), 0);
       sonuc.push({ sp, o, rhHas: rh, rhIsc: ri, rhMaden: rm, bekHas: o.tamHas, bekIsc: o.tamIsc, fark: ri - o.tamIsc, evrak: [...new Set(rows.map(r => r[1]))] });
@@ -13641,8 +13641,9 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
     if (ak.po) anah.push(["müşteri PO", rhinoNorm(ak.po)]);
     const keys = anah.filter(([, k]) => k.length >= 4);
     const gumus = r => /GÜMÜŞ|GUMUS/i.test(String(r[2]));
-    const rows = keys.length ? rhinoSat.filter(r => { const t = rhinoNorm((r[11] || "") + " " + (r[12] || "")); return t && !gumus(r) && keys.some(([, k]) => t.includes(k)); }) : [];
-    const bulunan = [...new Set(rows.flatMap(r => { const t = rhinoNorm((r[11] || "") + " " + (r[12] || "")); return keys.filter(([, k]) => t.includes(k)).map(([ad]) => ad); }))];
+    const eslesir = (r, k) => { const t = rhinoNorm((r[11] || "") + " " + (r[12] || "")); return (t && t.includes(k)) || rhinoNorm(r[1]) === k; }; // EVRAK NOTU / ÜRÜN AÇK2 içinde geçer YA DA EVR.No tam eşittir
+    const rows = keys.length ? rhinoSat.filter(r => !gumus(r) && keys.some(([, k]) => eslesir(r, k))) : [];
+    const bulunan = [...new Set(rows.flatMap(r => keys.filter(([, k]) => eslesir(r, k)).map(([ad]) => ad)))];
     const rhino = rows.reduce((a, r) => a + (Number(r[3]) || 0), 0);
     const kd = sp.kalemDurumlar || {};
     let beklenen = 0, tamAdet = 0;
@@ -17152,9 +17153,13 @@ function Atolye({ onSirketDegis, onOnizle, onizlemeAdi, onOnizleCik }) {
           {sipFiltAcik && <div className="sm-back" onClick={()=>setSipFiltAcik(false)}/>}
           <div className={"sm-filt"+(sipFiltAcik?" ac":"")}>
           <div className="sm-only" style={{ fontSize:15, fontWeight:600, color:"var(--goldtext)" }}>Filtre</div>
-          <input type="date" value={sipTarih1} onChange={e=>setSipTarih1(e.target.value)} style={{ ...IS, width:130, padding:"7px 8px", fontSize:12 }}/>
+          <select value="" onChange={e=>{ const v=e.target.value; if (!v) return; const b=new Date(), iso=d=>d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); let a="", z=""; if (v==="bu") { a=iso(new Date(b.getFullYear(),b.getMonth(),1)); z=iso(new Date(b.getFullYear(),b.getMonth()+1,0)); } else if (v==="gecen") { a=iso(new Date(b.getFullYear(),b.getMonth()-1,1)); z=iso(new Date(b.getFullYear(),b.getMonth(),0)); } else if (v==="3ay") { a=iso(new Date(b.getFullYear(),b.getMonth()-2,1)); z=iso(new Date(b.getFullYear(),b.getMonth()+1,0)); } else if (v==="yil") { a=b.getFullYear()+"-01-01"; z=b.getFullYear()+"-12-31"; } setSipTarih1(a); setSipTarih2(z); e.target.value=""; }} title="Sipariş tarihine göre hazır aralık" style={{ ...IS, width:"auto", padding:"7px 8px", fontSize:12, fontWeight:(sipTarih1||sipTarih2)?600:400, borderColor:(sipTarih1||sipTarih2)?"rgba(var(--vurgu-rgb),0.6)":undefined }}>
+            <option value="">Sipariş tarihi: hazır aralık</option>
+            <option value="bu">Bu ay</option><option value="gecen">Geçen ay</option><option value="3ay">Son 3 ay</option><option value="yil">Bu yıl</option>
+          </select>
+          <input type="date" title="Sipariş tarihi — başlangıç" value={sipTarih1} onChange={e=>setSipTarih1(e.target.value)} style={{ ...IS, width:130, padding:"7px 8px", fontSize:12 }}/>
           <span className="sm-dash" style={{ color:"#665d4a" }}>—</span>
-          <input type="date" value={sipTarih2} onChange={e=>setSipTarih2(e.target.value)} style={{ ...IS, width:130, padding:"7px 8px", fontSize:12 }}/>
+          <input type="date" title="Sipariş tarihi — bitiş" value={sipTarih2} onChange={e=>setSipTarih2(e.target.value)} style={{ ...IS, width:130, padding:"7px 8px", fontSize:12 }}/>
           <select value={sipMus} onChange={e=>setSipMus(e.target.value)} title="Müşteriye göre filtrele" style={{ ...IS, width:"auto", maxWidth:220, padding:"7px 8px", fontSize:12, fontWeight:sipMus?600:400, borderColor:sipMus?"rgba(var(--vurgu-rgb),0.6)":undefined }}>
             <option value="">👤 Tüm müşteriler</option>
             {musSecenekleri.map(m=><option key={m} value={m}>{m}</option>)}
